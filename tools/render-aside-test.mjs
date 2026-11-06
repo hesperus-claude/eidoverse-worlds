@@ -5,6 +5,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
 import { plugin } from 'bun';
+import { suite } from "./protocol/suite.ts";
 const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
 plugin({ name: 'core-stub', setup(build) {
   build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('./core-stub.mjs') }));
@@ -22,8 +23,8 @@ renderer.render = (sc, cam) => { log.push(['render', cam?.name ?? null, 'xr=' + 
 renderer.xr = { enabled: false, isPresenting: false, updateCamera: (c) => log.push(['updateCamera', c === camera ? 'rig-camera' : 'other']), getCamera: () => null, addEventListener() {}, removeEventListener() {} };
 const { renderAside, renderWorld } = await import('../client/lib/render.js');
 
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+const S = suite("render-aside");
+const check = (name, ok, note) => S.check(name, ok, note);
 const sc = {}, cam = { name: 'aside-cam' }, rt = { name: 'bake-rt' }, prior = { name: 'prior-rt' };
 
 console.log('RENDER ASIDE — not presenting');
@@ -68,5 +69,4 @@ console.log('RENDER WORLD — not presenting: a stale bound target is unbound at
   check('the main pass renders to the canvas, not the stale target', iR >= 0 && log[iR][3] === 'target=null', JSON.stringify(log));
   check('no eye rebuild off-XR', !log.some((l) => l[0] === 'updateCamera')); }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

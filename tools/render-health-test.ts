@@ -10,12 +10,10 @@
 // the same check over real devtools against a real renderer page.
 
 import { judge, tally, PROBES, TIMEOUT, type Evaluate } from "../deploy/render-health.ts";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-function check(name: string, cond: boolean, detail = "") {
-  if (cond) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const S = suite("render-health");
+const check = (name: string, cond: unknown, detail?: unknown) => S.check(name, cond, detail);
 
 type Page = { alive?: unknown; frames?: unknown; joined?: unknown; capture?: unknown };
 /** A page that answers the four probes as given (by exact expression), records what was asked,
@@ -91,5 +89,4 @@ console.log("strikes");
   check("STRIKES=1 restarts on the first bad check", tally(0, bad, 1).restart);
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

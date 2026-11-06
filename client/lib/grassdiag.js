@@ -1,11 +1,8 @@
 // grassdiag — which part of the meadow is eating the GPU? (§22)
 //
-// tel0s's MacBook holds ~50fps with the meadow, 60 without — and suspects
-// the "physics" (the shader-side pusher displacement) rather than the fill.
-// On a vsync-bound machine the grass cost hides inside 'render' as GPU
-// time, invisible to the per-system CPU bill. So this measures by
-// DIFFERENCE: freeze one component at a time for a few seconds and watch
-// fps / frame-ms recover. Run from the console:
+// On a vsync-bound machine the grass cost hides inside 'render' as GPU time, invisible to the per-system CPU bill.
+// So this measures by DIFFERENCE: freeze one component at a time for a few seconds and watch fps / frame-ms
+// recover. Run from the console:
 //
 //   await EW.grassDiag()               // ~30s, prints a table, restores all
 //   await EW.grassDiag({ secsPer: 5 }) // longer phases on a noisy machine
@@ -71,10 +68,8 @@ export async function grassDiag({ secsPer = 4 } = {}) {
     out.push({ phase: name, ...(await sample(secsPer)) });
     off();
   };
-  // §22m: the diag stopped assuming grass owns the frame. Header prints the
-  // regime (pixel ratio, buffer size, render-scale dial, per-stroke material
-  // generation), and scene-level phases attribute the NON-grass draw too —
-  // "grass hidden barely helps" is an answer, not a dead end.
+  // §22m: the header prints the regime (pixel ratio, buffer size, render-scale dial, per-stroke material), and
+  // scene-level phases attribute the NON-grass draw too.
   const g = governorDebug();
   const size = renderer.getDrawingBufferSize?.(new THREE.Vector2()) ?? null;
   const strokes = grassTiles().strokes;
@@ -111,8 +106,7 @@ export async function grassDiag({ secsPer = 4 } = {}) {
     await run('blades far-LOD everywhere', () => forceBladeLod('far'), () => forceBladeLod(null));
     await run('density 35%', () => field.setDensity?.(0.35),
       () => field.setDensity?.(savedDensity));
-    // §22c second round — the full-window Air run acquitted blade volume and
-    // convicted something density-shaped: these three split WHERE and WHAT.
+    // §22c: density-shaped phases, split by WHERE and WHAT
     await run('near ring only @35%', () => setDiagDensityScope({ near: 0.35, far: 1 }),
       () => setDiagDensityScope(null));
     await run('far sea only @35%', () => setDiagDensityScope({ near: 1, far: 0.35 }),

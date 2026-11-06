@@ -1,22 +1,13 @@
 // voicesfu — the browser half of the in-process SFU, in plain WebRTC.
 //
-// Both rival transports are deleted — the external relay at 236c239, the mesh
-// at 25f61df — and this is the ONLY one. The shapes it standardized on (same
-// bus events, same speakers map, same relayDiag() surface) survive because the
-// smokes assert against them.
+// The ONLY voice transport. The shapes it shares with its deleted predecessors
+// (same bus events, same speakers map, same relayDiag() surface) survive because
+// the smokes assert against them. The playback half (per-speaker <audio>,
+// rolloff, hush, the analyser behind relayPeerLevels) is transport-agnostic.
 //
-// 🔴 WHY THIS FILE IS SHORT (and why that is the argument, not a shortcut):
-// only 5 of the deleted SDK client's 200 lines were actually SDK calls.
-// Everything else (per-speaker <audio> elements, distance rolloff, hush, the
-// analyser feeding relayPeerLevels for mouth flap, the askOnce join-race
-// guard) is generic browser code that works unchanged against any transport.
-// The SDK was never carrying the hard part.
-//
-// 🔴 THE SERVER OFFERS, ALWAYS. A browser publishing its mic offers `sendonly`;
-// an answer cannot add a receive direction the offer never proposed, so a
-// server that answers silently forwards into a track nobody receives
-// (measured: forwarded=20, heard=0). Every renegotiation here is
-// server-initiated: we only ever setRemoteDescription(offer) → answer.
+// THE SERVER OFFERS, ALWAYS: every renegotiation is server-initiated; we only
+// ever setRemoteDescription(offer) → answer. Rationale for the negotiation,
+// transceiver and acquisition rules below: docs/research/sfu-client-negotiation.md.
 import { bus } from './base.js';
 import { audioContext } from './audioctx.js';
 // A dead media path must be visible to the PERSON, not only in the console —
@@ -67,80 +58,41 @@ function attach(id, track) {
 
 export async function sfuConnect(credential, send) {
   cred = credential;
-  // 🔴 A MIC TRACK BELONGS TO THE PC THAT PUBLISHED IT (2026-08-15, found live
-  // — R's mic read ON and published NOTHING for an entire session while a
-  // freshly-loaded tab worked fine).
-  //
-  // On a reconnect this function builds a NEW pc, but `micStream` still named
-  // the OLD one's stream. The bridge then replays the wanted mic (`if
-  // (sfuMicWanted()) await sfuMic(true)`), which hits sfuMic's early return:
-  //     if (micStream) { …enable tracks…; return; }
-  // …so it re-enabled tracks on a stream attached to a CLOSED peer connection
-  // and never called addTrack on the live one. sfuMicOn() is
-  // `!!micStream && wantMic` — both true — so the badge lit, the panel
-  // ticked, and the server saw publishing=false with rx=0 forever.
-  //
-  // The old stream's tracks must also be STOPPED, or the mic hardware light
-  // stays on for a connection nobody is listening to.
+  // A MIC TRACK BELONGS TO THE PC THAT PUBLISHED IT: a new pc must not inherit
+  // the old one's stream, or the bridge's replay re-enables tracks on a closed pc
+  // and never publishes on the live one. Stop the old tracks too (the hardware
+  // light).
   if (micStream) {
     for (const t of micStream.getTracks()) { try { t.stop(); } catch { /* already dead */ } }
     micStream = null;      // wantMic is deliberately KEPT: intent survives a
                            // reconnect, the stream does not. The bridge's
                            // replay then takes the real addTrack path.
   }
-  // 🔴 CLOSE THE PREDECESSOR (review agent, 2026-08-17). The old stream was
-  // stopped but the old PC was left alive with its handlers attached — and
-  // because those handlers close over the MODULE-LEVEL `pc`, a ghost pc
-  // reaching 'failed' (or its still-armed 8s stall timer firing) read the NEW
-  // pc's state, logged "connection failed" for a healthy leg, and emitted
-  // sfu-media-dead — burning the bridge's 3-attempt recovery budget on a
-  // corpse and replacing a working credential each time. Null the handlers
-  // first (close() does not fire a state change, so the handlers would not
-  // run — but the stall timer would), then close.
+  // CLOSE THE PREDECESSOR, handlers nulled first: they close over the module-level
+  // `pc`, so a ghost reaching 'failed' (or its stall timer) would diagnose the new
+  // pc and burn the bridge's recovery budget.
   if (pc) {
     try { pc.onicecandidate = pc.ontrack = pc.oniceconnectionstatechange = null; pc.close(); }
     catch { /* already closed */ }
   }
   pendingIce.length = 0;            // candidates for the dead pc are meaningless
   _myAn = null; _myStream = null;   // the analyser was bound to the dead stream
-  // 🔴 THE SERVER CHOOSES THE ICE CONFIG, not this file (2026-08-16). This was
-  // `iceServers: []` with the comment "same host: no STUN needed" — true of the
-  // loopback pairs it was written against, and the reason a PHONE could not be
-  // heard: with no STUN there is no reflexive candidate, so a peer on another
-  // network has no viable pair and ICE stalls in 'checking' forever without
-  // throwing. The mesh never had this problem because voice.js:33 always
-  // carried a STUN server.
-  //
-  // It comes from the credential (SFU-SPEC.md:113's `iceServers?`) so the
-  // operator can point at their own STUN/TURN without a client rebuild. The
-  // fallback stays [] — a credential from a server that predates this field
-  // behaves exactly as before rather than silently acquiring a public
-  // dependency.
+  // THE SERVER CHOOSES THE ICE CONFIG (the credential's `iceServers?`), so an
+  // operator can point at their own STUN/TURN; without STUN a peer on another
+  // network stalls in 'checking'. The fallback stays [] (an older server's
+  // credential behaves as before, with no public dependency).
   pc = new RTCPeerConnection({ iceServers: credential?.iceServers ?? [] });
 
-  // The server names each route by the speaker it carries, in the transceiver's
-  // mid → we cannot read that portably, so the SERVER tells us via a sideband
-  // `sfu-route` message before the offer that adds it. ontrack then pairs the
-  // arriving track with the speaker id in arrival order.
-  //
-  // 🔴 ONE SUBSCRIPTION FOR THE MODULE'S LIFETIME, not one per connect. core.js
-  // exposes on/emit and NO `off`, so subscribing inside sfuConnect() leaked a
-  // listener on every voice-leg reconnect — each bound to a dead pc's array,
-  // all of them receiving every announcement while only the newest ontrack
-  // consumed one. pending.shift() then desyncs and tracks attach to the WRONG
-  // speaker id. The module-level array is rebound here instead.
+  // The server names each route by the speaker it carries via a sideband
+  // `sfu-route` message before the offer that adds it; ontrack pairs arriving
+  // tracks with speaker ids in arrival order. ONE SUBSCRIPTION FOR THE MODULE'S
+  // LIFETIME (core.js has no `off`, so a per-connect listener would leak and
+  // desync the queue); the module-level array is rebound here instead.
   routeQueue.length = 0;
   pc.ontrack = (e) => {
-    // 🔴 PREFER THE TRACK'S OWN IDENTITY. The server now names each outbound
-    // stream after the speaker it carries (sfu.ts ensureRoute), so msid gives
-    // us identity that CANNOT desync — the id arrives welded to the media
-    // instead of correlated with it by arrival order. Basis's principle:
-    // ServerAudioSegmentMessage carries {playerId, audioData} together.
-    //
-    // The queue stays as a fallback for a server that predates this, but it is
-    // no longer the load-bearing path. When both are present and DISAGREE, msid
-    // wins and we say so loudly — that disagreement is exactly the silent
-    // wrong-avatar bug we could never see before.
+    // PREFER THE TRACK'S OWN IDENTITY: the server names each outbound stream
+    // after its speaker (sfu.ts ensureRoute), so msid cannot desync. The queue is
+    // a fallback for an older server; when both DISAGREE, msid wins, loudly.
     const viaMsid = e.streams?.[0]?.id;
     const viaQueue = routeQueue.shift();
     const id = (viaMsid && viaMsid !== 'default') ? viaMsid : viaQueue;
@@ -158,31 +110,17 @@ export async function sfuConnect(credential, send) {
   pc.onicecandidate = (e) => {
     if (!e.candidate) return;
     if (e.candidate.type && e.candidate.type !== 'host') _sawNonHostCandidate = true;
-    // 🔴 ICE names its generation, exactly as the answer does (#130 item 4):
-    // the server refuses a candidate that cannot prove which leg it belongs
-    // to, so a stale predecessor tab cannot trickle into its successor's pc.
+    // ICE names its generation, exactly as the answer does: the server refuses
+    // a candidate that cannot prove which leg it belongs to, so a stale
+    // predecessor tab cannot trickle into its successor's pc.
     send({ type: 'sfu-ice', candidate: e.candidate, gen: cred?.mediaGen });
   };
 
-  // 🔴 A CONNECTION THAT NEVER CONNECTS MUST SAY SO (R, 2026-08-16, from a real
-  // phone on a real network: "that probably shouldn't be a silent failure").
-  //
-  // Nothing here watched connectionState, so the ONLY signal of a dead media
-  // path was rxPackets=0 in server-side diag — invisible to the person holding
-  // the phone, who sees a gold mic meter (the LOCAL analyser, which is happily
-  // reading a live capture) and concludes the mic works. It does. The packets
-  // just never leave.
-  //
-  // The specific failure this caught: `iceServers: []` above is correct for
-  // same-host peers and CANNOT work across networks — no STUN means no
-  // server-reflexive candidate, no TURN means no relay, so a phone on cellular
-  // or another subnet has no viable candidate pair and ICE simply never
-  // completes. No exception is thrown; the state machine just stops at
-  // 'checking' and sits there.
-  //
-  // 'disconnected' is deliberately NOT treated as failure — it is often
-  // transient and recovers on its own (webrtc-mesh-gotchas: disconnected ≠
-  // failed). 'failed' and a stall in 'checking' are the real reports.
+  // A CONNECTION THAT NEVER CONNECTS MUST SAY SO, to the person: the local mic
+  // meter reads a live capture whether or not packets ever leave. Without a
+  // viable candidate pair (no STUN/TURN across networks) ICE throws nothing; it
+  // just sits in 'checking'. 'disconnected' is deliberately NOT failure (often
+  // transient); 'failed' and a stall in 'checking' are the real reports.
   let iceStallTimer = null;
   const clearStall = () => { if (iceStallTimer) { clearTimeout(iceStallTimer); iceStallTimer = null; } };
   // Which pc THIS closure serves. The handlers and the stall timer must judge
@@ -223,11 +161,9 @@ export async function sfuConnect(credential, send) {
       console.error('[voice] 🔴 ICE FAILED — no media path to the server. '
         + 'Mic capture is unaffected and still looks healthy; nothing is reaching anyone.');
       logChat('*', 'voice: connection failed — reconnecting voice…');
-      // 🔴 RECOVER, don't just report (2026-08-16). A media-only death — the
-      // world socket fine, ICE gone (network switch, sleep/wake, carrier NAT
-      // rebind) — used to be terminal until a full page reload: the bridge only
-      // re-asks for a credential when the WORLD socket rejoins. The bridge owns
-      // the retry budget; this only names the corpse.
+      // RECOVER, don't just report: a media-only death (world socket fine, ICE
+      // gone: network switch, sleep/wake, NAT rebind) emits sfu-media-dead; the
+      // bridge owns the retry budget; this only names the corpse.
       bus.emit('sfu-media-dead', { reason: 'ice-failed' });
     } else if (st === 'closed') {
       clearStall();
@@ -239,9 +175,8 @@ export async function sfuConnect(credential, send) {
 /** Server-initiated renegotiation. The ONLY negotiation path — see the header. */
 export async function sfuOnOffer(sdp, send) {
   if (!pc) return;
-  // The connection this offer was FOR (review agent, round 2): a reconnect
-  // mid-await swaps the module-level pc, and finishing this exchange against
-  // the fresh one means createAnswer() with no remote offer — an unhandled
+  // The connection this offer was FOR: a reconnect mid-await swaps the
+  // module-level pc, and answering on the fresh one (no remote offer) throws
   // InvalidStateError. Same snapshot pattern as the state handler.
   const myPc = pc;
   await myPc.setRemoteDescription({ type: 'offer', sdp });
@@ -257,14 +192,11 @@ export async function sfuOnOffer(sdp, send) {
   if (myPc !== pc) return;
   await myPc.setLocalDescription(answer);
   if (myPc !== pc) return;
-  // 🔴 RESCUE A STRANDED PUBLISH (round-3 review). The common path the
-  // sendrecv fix defends — a publish that beat the first offer, other
-  // speakers present — leaves the published track on a transceiver JSEP
-  // associated with a recv route: the hunt now correctly EXCLUDES it, but
-  // nothing re-published, so a join-into-occupied-room stayed silent until
-  // the first manual toggle. currentDirection is authoritative here (the
-  // answer we just set applied it): if we hold a live outbound track and no
-  // m-line is actually sending, move the track to the floor and re-negotiate.
+  // RESCUE A STRANDED PUBLISH: a publish that beat the first offer into an
+  // occupied room can sit on a transceiver JSEP associated with a recv route.
+  // currentDirection is authoritative here (the answer just applied it): a live
+  // outbound track with no m-line actually sending moves to the floor and we
+  // re-negotiate.
   const outTrack = micStream?.getTracks?.()[0];
   if (outTrack && outTrack.readyState === 'live'
       && !myPc.getTransceivers().some((t) => t.currentDirection === 'sendonly')) {
@@ -278,10 +210,8 @@ export async function sfuOnOffer(sdp, send) {
       bus.emit('sfu-want-negotiate', {});
     }
   }
-  // 🔴 PRESENT THE CREDENTIAL (amendment 1). The nonce was minted, handed to
-  // us, and never sent back — so the server's replay check had nothing to
-  // check and usedNonces was never populated in production. The seven refusals
-  // existed and could not run. An admission gate the client never addresses is
+  // PRESENT THE CREDENTIAL: send the nonce back so the server's replay check
+  // (usedNonces) and its refusals can run. A gate the client never addresses is
   // not a gate.
   // The generation this answer is FOR — the server drops it if the leg has
   // been replaced since the offer (A2 generation binding).
@@ -290,13 +220,9 @@ export async function sfuOnOffer(sdp, send) {
     mediaGen: cred.mediaGen ?? cred.gen, incarnation: cred.incarnation, nonce: cred.nonce } });
 }
 
-// 🔴 EARLY CANDIDATES ARE NOT GARBAGE (review agent, 2026-08-17). The server
-// sends its offer and then trickles candidates on the same socket; while
-// sfuOnOffer is still awaiting setRemoteDescription, addIceCandidate throws
-// InvalidStateError — and the bare catch destroyed the candidate. Host
-// candidates arrive in exactly that window, so on a constrained network the
-// one viable pair could be the one we discarded: the "stalls in checking"
-// symptom, self-inflicted. Queue until a remote description exists.
+// EARLY CANDIDATES ARE NOT GARBAGE: while sfuOnOffer is still applying the
+// offer, addIceCandidate throws, and the one viable pair can arrive in exactly
+// that window. Queue until a remote description exists.
 const pendingIce = [];
 export async function sfuOnIce(candidate) {
   if (!pc) return;
@@ -304,64 +230,33 @@ export async function sfuOnIce(candidate) {
   try { await pc.addIceCandidate(candidate); } catch { /* stale/dup candidate */ }
 }
 
-/** Publish the mic. Plain getUserMedia — no SDK wrapper. The constraints match
- *  what the browser's own AGC/NS/AEC expect.
- *
- *  🔴 CORRECTED 2026-08-15 (read the tree, don't repeat your own summary). This
- *  comment used to say "Basis hand-builds all three". Two-thirds wrong:
- *    • AGC — hand-built and SERIOUS. BasisMicrophoneAgc.cs is a speech-level
- *      normalizer with a minimum-statistics noise-floor tracker, asymmetric
- *      attack/release, and gain HELD across pauses so the next utterance starts
- *      at level. 588 lines of tests (BasisMicrophoneAgcTests.cs), whose names
- *      are the best available checklist for judging ours.
- *    • NS  — NOT hand-built: a native RNNoise binding (com.xiph.rnnoise,
- *      prebuilt librnnoise per platform). Defaults OFF.
- *    • AEC — DOES NOT EXIST in their tree. Zero hits for echo-cancel/AEC/
- *      SpeexDSP/aec3 across every .cs. They rely on OS AEC or headphones.
- *  So the honest version of our argument is narrower and still holds: the
- *  browser hands us AGC+NS+AEC for free, and AEC is the one Basis never got at
- *  all. Their real declined cost for us is the 745-line jitter buffer. */
-// 🔴 ONE ACQUISITION AT A TIME (review, 2026-08-15). getUserMedia is SLOW — a
-// permission prompt is seconds — and two callers can be inside it at once: the
-// user pressing V, and the relay-cred replay that honours a pre-connection
-// press. Both saw `micStream == null`, both awaited, and both ran addTrack:
-// TWO audio senders, two negotiations, the user published twice (echoing to
-// every listener), and the first stream orphaned — `sfuClose` cannot stop it
-// because micStream no longer names it, so THE MIC HARDWARE LIGHT STAYS ON
-// AFTER LEAVING. The guard is the promise, not a boolean: late callers await
-// the same acquisition instead of starting a second one.
+/** Publish the mic. Plain getUserMedia — no SDK wrapper. The constraints ask for
+ *  the browser's own AGC/NS/AEC, which come free here (docs/research/sfu-client-negotiation.md). */
+// ONE ACQUISITION AT A TIME: getUserMedia can sit on a permission prompt for
+// seconds, and two callers inside it at once would publish twice and orphan a
+// stream whose hardware light never goes off. The guard is the promise, not a
+// boolean: late callers await the same acquisition.
 let micPending = null;
-// Which pc the pending acquisition was FOR (round-3 review): a reconnect
-// mints a new pc while getUserMedia is still up, and the bridge's replay then
-// COALESCED onto the old acquisition — whose superseded-guard dropped the
-// publish — so nobody ever published on the new pc. A stale pending is
-// awaited (never raced) and then treated as absent.
+// Which pc the pending acquisition was FOR: a reconnect mints a new pc while
+// getUserMedia is still up, and a publish must not coalesce onto the old one.
+// A stale pending is awaited (never raced) and then treated as absent.
 let micPendingPc = null;
 
 export async function sfuMic(on = true) {
   wantMic = on;
   if (!pc) return;
   if (!on) {
-    // 🔴 MIC OFF MUST NOT MEAN VOICE OFF when a synth provider is speaking for
-    // you. Disabling the tracks was right for a microphone and wrong for a body
-    // whose voice is synthesized: it silenced TTS along with the mic, which is
-    // why "mic off" produced no packets at all rather than falling back.
-    // Swap the SOURCE instead of muting it, so the sender keeps publishing.
+    // MIC OFF MUST NOT MEAN VOICE OFF when a synth provider speaks for you:
+    // swap the SOURCE instead of muting it, so the sender keeps publishing.
     const { synthProvider } = await import('./voicesource.js');
-    // 🔴 SAY WHY THE SWAP DID OR DID NOT HAPPEN. Three rounds of "still zero
-    // packets" with no way to tell whether this branch ran, whether the
-    // provider was available, or whether publishing failed afterwards. Same
-    // lesson as the panel teardown: a path that can decline silently turns the
-    // next report into another guess.
+    // say why the swap did or did not happen
     const prov = synthProvider();
     why('publish', `mic off · provider=${prov ? 'registered' : 'NONE'}`
       + (prov ? ` · available=${!!prov.available?.()}` : ''));
     if (prov?.available?.()) {
-      // Drop the device stream and let the publish path below re-acquire from
-      // voiceSource(), which now returns the synth when micWanted is false.
-      // Re-entering rather than duplicating that block keeps ONE place where a
-      // track is chosen and attached — the transceiver hunt below is subtle
-      // enough that a second copy would drift.
+      // Drop the device stream and re-enter the publish path below, which
+      // re-acquires from voiceSource() (the synth, now micWanted is false):
+      // ONE place where a track is chosen and attached.
       if (micStream) {
         for (const t of micStream.getTracks()) { try { t.stop(); } catch { /* gone */ } }
         micStream = null;
@@ -373,23 +268,10 @@ export async function sfuMic(on = true) {
     try { (await import('./micstate.js')).setMicLive(false); } catch { /* module may be absent in probes */ }
     return;
   }
-  // 🔴 A SYNTH STREAM IS NOT A MIC TO RE-ENABLE (regression fix, 2026-08-16).
-  // Turning the mic OFF now SWAPS the published source to the synthesizer, so
-  // `micStream` may hold synthetic frames. This path re-enabled its tracks and
-  // returned — lighting the badge, publishing happily, and never acquiring the
-  // microphone. From the server the leg looks identical (same leg, packets
-  // flowing) while the mic is not actually captured, so STT transcribes nothing
-  // and the only visible symptom is "STT stopped working".
-  //
-  // I introduced that an hour ago by making mic-off swap rather than mute.
-  // Re-acquire whenever the current stream is not a real device.
-  // 🔴 TELL micstate THE DEVICE IS BACK, in the same synchronous breath as
-  // the re-enable. This path set track.enabled and returned; the only
-  // setMicLive(true) lived in sfuPublish, so after OFF→ON here micstate still
-  // believed the device was off — and since device liveness now gates the
-  // lane's authority (micstate.js drive closure), the gate would have stayed
-  // shut for good. Static import, no await between the enable and the
-  // report: that gap is a window the mode already promised away.
+  // A SYNTH STREAM IS NOT A MIC TO RE-ENABLE: after a swap, micStream may hold
+  // synthetic frames; re-acquire whenever the current stream is not a real device.
+  // A real device re-enabled here tells micstate it is back in the same
+  // synchronous breath (device liveness gates the lane: micstate.js).
   if (micStream && !micStream.synthetic) {
     micStream.getTracks().forEach((t) => (t.enabled = true));
     setMicLive(true);
@@ -400,19 +282,13 @@ export async function sfuMic(on = true) {
     micStream = null;                      // force a real getUserMedia below
   }
   if (micPending && micPendingPc === pc) {
-    // 🔴 NOTHING TO APPLY AFTER THIS AWAIT (round-4 review). This branch used
-    // to re-enable the tracks and report liveness once the shared
-    // acquisition settled — a second, STALER answer: the user could turn the
-    // mic OFF while the permission prompt was up, and this waiter then
-    // re-enabled the device and told micstate it was live. The publish we
-    // are waiting on re-reads wantMic after its own await (sfuPublish) and
-    // acts on the intent current at that moment; the only correct thing for
-    // a waiter to do is wait.
+    // NOTHING TO APPLY AFTER THIS AWAIT: the publish we wait on re-reads wantMic
+    // after its own await and acts on the intent current then; acting here would
+    // be a second, staler answer. A waiter only waits.
     await micPending;
     return;
   }
-  // A stale pending is sfuPublish's problem now — its entry loop re-checks
-  // after every await (round-4: two waiters resuming past taken checks).
+  // A stale pending is sfuPublish's problem: its entry loop re-checks after every await.
   return sfuPublish();
 }
 
@@ -421,12 +297,9 @@ export async function sfuMic(on = true) {
  *  rather than carrying a second copy of the transceiver logic below. */
 async function sfuPublish() {
   if (!pc) return;
-  // 🔴 RE-CHECK AFTER EVERY STALE AWAIT (round-4 review): two callers parked
-  // on the same stale pending both resumed past their checks and minted TWO
-  // concurrent acquisitions — the exact two-senders/mic-light-stays-on bug
-  // the promise guard exists to prevent, reintroduced by the guard's own
-  // stale-handling. The loop makes each waiter re-inspect the world it woke
-  // into: a fresh same-pc pending is joined, a stale one is awaited again.
+  // RE-CHECK AFTER EVERY STALE AWAIT, or two waiters on the same stale pending
+  // both resume and mint two acquisitions: a fresh same-pc pending is joined,
+  // a stale one is awaited again.
   while (micPending) {
     if (micPendingPc === pc) return micPending;
     try { await micPending; } catch { /* the old one's problem */ }
@@ -437,31 +310,15 @@ async function sfuPublish() {
   const myPc = pc;
   micPendingPc = myPc;
   micPending = (async () => {
-    // 🔴 ASK THE SEAM, NOT THE DEVICE (R, 2026-08-16 — her TTS reached nobody).
-    // This called getUserMedia directly, bypassing voiceSource() entirely. The
-    // MESH asks the seam (voice.js:551) and therefore gets a synthesized track
-    // for free; the SFU never asked, so on this transport a TTS provider had no
-    // route to a sender at all — mic on, TTS refuses by design (tts.js:591);
-    // mic off, nothing publishes. Her typed lines could not leave the machine
-    // in either state, and /relay-diag showed pub=false with rx=0 throughout.
-    //
-    // voiceSource() returns the microphone when one is available and wanted,
-    // and the synth provider otherwise, marking synthetic streams so the gate
-    // is skipped. Everything below — addTrack, the transceiver hunt,
-    // replaceTrack — is source-agnostic and unchanged.
+    // ASK THE SEAM, NOT THE DEVICE: voiceSource() returns the microphone when one
+    // is available and wanted, and the synth provider otherwise (marking synthetic
+    // streams so the gate is skipped). Everything below is source-agnostic.
     const { voiceSource } = await import('./voicesource.js');
     const asked = wantMic;
     const raw = await voiceSource({ micWanted: asked });
-    // 🔴 RE-READ INTENT AFTER THE AWAIT (round-4 review). getUserMedia can
-    // sit on a permission prompt for seconds; a mic OFF in that window set
-    // wantMic=false and found nothing to disable (no stream yet), so this
-    // path went on to publish a live device the person had just turned off
-    // — and the synth swap the OFF path wanted never happened, because its
-    // own sfuPublish merely joined this pending. The mirror image holds for
-    // a mic ON during a synth acquisition. Whatever arrived is the answer to
-    // a question nobody is asking any more: stop it (a device keeps the
-    // hardware light on; a synth track is a generator someone will start
-    // again) and let the outer function ask the current question.
+    // RE-READ INTENT AFTER THE AWAIT: a mic toggled during the prompt means what
+    // arrived answers a question nobody is asking any more. Stop it (a device
+    // keeps the hardware light on) and let the outer function ask the current one.
     if (wantMic !== asked) {
       why('publish', `intent changed during acquisition (asked mic=${asked}, now ${wantMic}) — dropping ${raw?.synthetic ? 'synth' : 'device'}`);
       for (const t of raw?.getTracks?.() ?? []) { try { t.enabled = false; t.stop(); } catch { /* gone */ } }
@@ -470,14 +327,9 @@ async function sfuPublish() {
       if (!raw?.synthetic) { try { (await import('./micstate.js')).setMicLive(false); } catch { /* probe env */ } }
       return 'intent-changed';
     }
-    // 🔴 GATE IT BEFORE THE SENDER SEES IT (2026-08-16). This published `raw`
-    // directly, so the SFU sent the unprocessed device stream: continuous room
-    // tone, with the panel's sensitivity slider driving nothing at all. The
-    // mesh gated at voice.js:615 ("GATE THE STREAM BEFORE WEBRTC EVER SEES
-    // IT") and voice.js was the gate's only caller, so the transport we
-    // actually ship was the ungated one. gateFor() passes a synthetic source
-    // through untouched — no room noise to gate, and the gate's graph cannot
-    // run on a headless stalled clock.
+    // GATE IT BEFORE THE SENDER SEES IT, or the room tone goes out continuously and
+    // the sensitivity slider drives nothing. gateFor() passes a synthetic source
+    // through untouched (nothing to gate; the graph can't run on a stalled clock).
     const { gateFor, gateIsUnavailable, ungatedAllowed, setMicLive } = await import('./micstate.js');
     const s = gateFor(raw);
     // Tell micstate whether a DEVICE is capturing — the third state micOn()
@@ -505,64 +357,15 @@ async function sfuPublish() {
     why('publish', `published ${s?.synthetic ? 'SYNTH' : 'mic'}`
       + ` · tracks=${s?.getTracks?.().length ?? 0}` + ` · wantMic=${wantMic}`);
     micStream = s;
-    // 🔴 addTrack PICKS A TRANSCEIVER FOR YOU, AND IT PICKS THE WRONG ONE.
-    //
-    // Root-caused 2026-08-15 with a 40-line isolation harness
-    // (tools/mini-sfu-test.mjs — keep it, it reproduces this in seconds without
-    // a world). With anyone else in the room our pc holds, in order:
-    //     [sendonly route → speakerA] [sendonly route → speakerB] [recvonly floor]
-    // The FLOOR is the m-line the server offers to receive OUR mic. addTrack
-    // reuses the first *compatible* transceiver, which is a speaker ROUTE, so
-    // the mic lands there (locally sendrecv, answered a=recvonly because the
-    // server offered that m-line sendonly) and the floor is answered a=inactive
-    // forever. Measured, both ends:
-    //     a=recvonly,a=recvonly,a=inactive | trx: sendrecv+track,recvonly,recvonly
-    // werift fires ontrack only for sendonly|sendrecv with a non-zero port
-    // (transceiverManager.js:288), so the server NEVER subscribes: diag says
-    // publishing:false / rxPackets:0 while this client honestly says
-    // micPublished:true with thousands of packets sent. Both true, different
-    // m-lines.
-    //
-    // Only reproduces with 2+ people — a lone client has no routes to mis-pick,
-    // which is why every single-client probe passed while two humans heard
-    // nothing all day.
-    //
-    // The fix: put the track on the transceiver the SERVER offered FOR it. The
-    // floor is the one sitting inactive (nothing has ever been sent on it).
-    // Verified in isolation: a=recvonly,a=recvonly,a=sendonly.
+    // addTrack PICKS A TRANSCEIVER FOR YOU, AND WITH 2+ PEOPLE IT PICKS A SPEAKER
+    // ROUTE, so the server never subscribes. Put the track on the one the SERVER
+    // offered for it, the floor (docs/research/sfu-client-negotiation.md; repro: tools/mini-sfu-repro.mjs).
     const track = s.getTracks()[0];
-    // 🔴 THE SENDER WE ALREADY OWN WINS (R, phone test 2026-08-16: "TTS —
-    // can hear locally but not at the endpoint, and toggling mic back on =
-    // silence forever"). After the FIRST publish the floor is sendonly, so a
-    // hunt that only knows 'inactive' fell through to addTrack — which
-    // HIJACKS a recvonly route transceiver (its sender slot is empty, so it
-    // is "compatible"), and the answer for that m-line can only ever say
-    // recvonly: the swapped source plays into the local monitor and never
-    // enters the SDP. Every later swap repeats it — mic→TTS→mic each landed
-    // on a sender that cannot transmit, which read as "activating TTS
-    // destroys the pair forever". Reproduced and both halves proven in
-    // tools/mini-sfu-test.mjs stage 3.
-    //
-    // Order: the sendonly sender we already own (a SWAP — replaceTrack on the
-    // same m-line, no renegotiation at all) → the inactive floor (first
-    // publish) → bare addTrack only when neither exists (solo, pre-offer).
-    // 🔴 sendrecv IS ALSO OURS — BUT ONLY BEFORE NEGOTIATION (round-1 review
-    // found the sendonly-only miss; round-2 found the round-1 fix's own hole).
-    // A publish that BEAT the server's first offer goes through addTrack
-    // (sendrecv transceiver — the bridge's mic replay at credential time, the
-    // COMMON path). Round 1 matched `direction sendonly||sendrecv` — but
-    // `direction` is only OUR ASK. When the first offer lands with other
-    // speakers in the room, JSEP associates that addTrack transceiver with the
-    // offer's FIRST audio m-line — a speaker ROUTE — so it answers
-    // currentDirection='recvonly' while its direction still reads 'sendrecv':
-    // the round-1 hunt latched onto it forever, replaceTrack-ing into an
-    // m-line that can never send. The same permanent silence, re-pinned.
-    //
-    // currentDirection is what the NEGOTIATION actually agreed, so it is the
-    // authority wherever it exists: a transceiver whose currentDirection is
-    // 'sendonly' is our live sender, whatever its history. direction is
-    // consulted only while currentDirection is null (created by our addTrack,
-    // never yet negotiated — the only phase where the ask is all there is).
+    // Order: the sender we already own (a SWAP: replaceTrack, no renegotiation)
+    // → the inactive floor (first publish) → bare addTrack only when neither
+    // exists (solo, pre-offer). "Already own" is judged by currentDirection, what
+    // the negotiation agreed; direction (only our ask) counts only while
+    // currentDirection is null (never yet negotiated).
     const mine = pc.getTransceivers().find((t) =>
       t.currentDirection === 'sendonly'
       || (t.currentDirection == null && (t.direction === 'sendonly' || t.direction === 'sendrecv')));
@@ -581,19 +384,16 @@ async function sfuPublish() {
       }
     }
   })();
-  // A DENIED permission prompt is a normal answer, not a crash. getUserMedia
-  // rejects, and no caller catches: the relay-cred replay (voicesfubridge:47)
-  // would take an unhandled rejection into a bus handler. Clear the intent so
-  // the state stays honest — sfuMicOn() is `!!micStream && wantMic`, so leaving
-  // wantMic true after a denial would be a claim we did not earn.
+  // A DENIED permission prompt is a normal answer, not a crash: no caller catches
+  // (the bridge's replay runs in a bus handler), so clear the intent here and keep
+  // sfuMicOn() (`!!micStream && wantMic`) honest.
   const own = micPending;
   let outcome;
   try {
     outcome = await own;
   } catch (e) {
-    // Only OUR intent may be cleared: a superseded invocation's rejection was
-    // running `wantMic = false` AFTER a fresh sfuMic(true) had set it — the
-    // user's new press silently downgraded to nothing (round-4 review).
+    // Only OUR intent may be cleared: a superseded invocation's rejection must not
+    // undo a fresh sfuMic(true).
     if (myPc === pc) wantMic = false;
     console.warn('[sfu] mic not granted:', e?.name || e);
     return;
@@ -619,30 +419,14 @@ async function sfuPublish() {
   bus.emit('sfu-want-negotiate', {});
 }
 
-/** MY OWN level, for my own mouth flap and the 🎙 glyph.
- *
- *  The mesh has had this since the beginning (voice.js micAnalyserLevel) and
- *  the SFU never did, so on an SFU client the speaker's own avatar sat
- *  slack-jawed while everyone else's moved — voicemouths.js asked voice.js,
- *  whose micStream is null on this transport, and got a flat 0. Same analyser
- *  shape as sfuPeerLevels below, on the outbound stream instead of an inbound
- *  one. (2026-08-15.)
- *
- *  Reads the RAW mic, deliberately: the question a mouth answers is "are you
- *  making sound", not "is the gate currently forwarding it" — a gated-shut
- *  syllable still moves your face. */
+/** MY OWN level, for my own mouth flap and the 🎙 glyph (voicemouths.js): the
+ *  same analyser shape as sfuPeerLevels below, on the outbound side. */
 export function sfuMyLevel() {
   if (!micStream || !wantMic) return 0;
   try {
-    // 🔴 MEASURE THE RAW DEVICE, NOT THE LANE (R, 2026-08-16: "the mic
-    // sensitivity monitor seems to be pegged to zero until the sound rises
-    // over the threshold"). When the gate was wired in, micStream became the
-    // GATED stream — so this analyser silently became a gate-OUTPUT meter:
-    // zero while the gate is closed, live while open, zero again after the
-    // 700ms hang. A sensitivity meter that only moves once you are already
-    // over the threshold cannot help you SET the threshold, which is its one
-    // job. micstate measures the raw side for exactly this reason
-    // (micstate.js:218: "the gate needs the true input level"); so do we.
+    // MEASURE THE RAW DEVICE, NOT THE LANE: micStream is the GATED stream, and a
+    // mouth (or a sensitivity meter) must move below the threshold too, as
+    // micstate's does.
     const src = rawMicStream() ?? micStream;
     if (!_myAn || _myStream !== src) {
       const ctx = audioContext();
@@ -687,12 +471,8 @@ export function sfuDiagClient() {
     active: sfuActive(),
     identity: cred?.identity ?? null,
     micPublished: sfuMicOn(),
-    // 🔴 THE RAW ICE/CONNECTION STATES, not just the derived boolean (added
-    // 2026-08-16). `active` collapses to false for a peer that is still
-    // 'checking', one that has 'failed', and one that never existed — three
-    // different problems with three different fixes, reported as one bit. The
-    // morning's phone bug was a peer stuck in 'checking' forever, and nothing
-    // in this blob could say so.
+    // THE RAW ICE/CONNECTION STATES, not just `active`: still 'checking', 'failed'
+    // and never-existed are three problems with three fixes.
     iceConnectionState: pc?.iceConnectionState ?? null,
     connectionState: pc?.connectionState ?? null,
     iceGatheringState: pc?.iceGatheringState ?? null,
@@ -706,12 +486,10 @@ export function sfuDiagClient() {
  *  speakers behind ontrack's back. */
 export function sfuSpeakerEntries() { return [...speakers.entries()]; }
 
-/** Live inbound-audio stats — the browser's NetEq telling us what it is doing.
- *  Exposed because #104's measurement hygiene wants delivered AND destroyed
- *  counted separately, and because these fields ARE the evidence that we do not
- *  need Basis's 745-line jitter buffer: jitterBufferTargetDelay is NetEq's
- *  adaptive depth, inserted/removedSamples are its time-stretching, and
- *  concealedSamples is its PLC. All of it for free, on the receive side. */
+/** Live inbound-audio stats — the browser's NetEq telling us what it is doing:
+ *  delivered AND destroyed counted separately. jitterBufferTargetDelay is NetEq's
+ *  adaptive depth, inserted/removedSamples its time-stretching, concealedSamples
+ *  its PLC: the jitter buffer we don't have to build. */
 export async function sfuInboundStats() {
   if (!pc) return [];
   const out = [];

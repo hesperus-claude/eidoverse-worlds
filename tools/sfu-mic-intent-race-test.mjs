@@ -57,7 +57,7 @@ const watchdog = setTimeout(() => {
   console.log(`\n${ok} ok, ${bad + 1} failed`);
   process.exit(1);
 }, 5000);
-const flush = () => new Promise((r) => setTimeout(r, 0));
+const flush = () => new Promise((r) => setImmediate(r));
 const mkTrack = () => ({ kind: 'audio', enabled: true, stopped: false, stop() { this.stopped = true; } });
 const mkDevice = () => { const tr = mkTrack(); return { track: tr, getTracks: () => [tr], getAudioTracks: () => [tr] }; };
 const mkSynth  = () => { const tr = mkTrack(); return { synthetic: true, track: tr, getTracks: () => [tr], getAudioTracks: () => [tr] }; };

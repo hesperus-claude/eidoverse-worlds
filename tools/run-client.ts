@@ -43,8 +43,6 @@ const SLOW: Record<string, string> = {
   "object-lod-test.ts": "decimates real models",
   "seat-lifecycle-test.ts": "a real server, seat by seat",
   "support-lifecycle-test.ts": "a real server, support by support",
-  "lite-weight-test.mjs": "a headless browser bundle",
-  "transport-check.mjs": "real sockets, reconnect timers",
   "contact-mutation-test.ts": "nine mutations, each a full run of a reach/walk suite (~minutes)",
 };
 
@@ -88,7 +86,7 @@ const run = (file: string): Promise<Res> => new Promise((done) => {
   if (!importOnly && SLOW[name] && !flag("--slow")) return done({ file, kind: "skip", why: `slow: ${SLOW[name]} (--slow runs it)`, ms: 0 });
   if (importOnly && flag("--skip-suites") && gateSuite.has(rel(file))) return done({ file, kind: "skip", why: `the gate runs it in full as ${gateSuite.get(rel(file))}`, ms: 0 });
   if (needsMcpl(src) && !mcplDeps) return done({ file, kind: "env", why: "mcpl/node_modules missing: ln -s <a checkout with deps>/mcpl/node_modules mcpl/", ms: 0 });
-  const ch = spawn("bun", [file], { cwd: ROOT, detached: true, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, stdio: ["ignore", "pipe", "pipe"] });
+  const ch = spawn(process.execPath, [file], { cwd: ROOT, detached: true, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, stdio: ["ignore", "pipe", "pipe"] });
   live.add(ch.pid!); inFlight.set(ch.pid!, [rel(file), t0]); let out = ""; let timedOut = false;
   ch.stdout.on("data", (d) => { out += d; }); ch.stderr.on("data", (d) => { out += d; });
   // killSuiteAsync, not process.kill(-pid): a negative pid throws on Windows, so a child past its budget was never killed,

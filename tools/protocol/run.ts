@@ -2,6 +2,7 @@
 //   bun tools/protocol/run.ts                 the declared gate (= bun run test:protocol): core, then main, then browser
 //   bun tools/protocol/run.ts hostile phys    only the named suites (a PARTIAL run: it says so, and it is not the gate)
 //   bun tools/protocol/run.ts --lane core     only one lane (core | main | browser), also PARTIAL
+//   bun tools/protocol/run.ts --shard 2/4     shard 2 of 4 (1-based; shard.ts packs SUITES); the gate is all 4 merged by merge-receipts.ts
 //   bun tools/protocol/run.ts --manifest      print the suite table docs/GATE-MANIFEST.md carries (generated from here)
 //   bun tools/protocol/run.ts --check-manifest   exit 1 if the doc's table is not what --manifest prints
 //   bun tools/protocol/run.ts --siblings      fetch, pin and build the sibling repos (SIBLINGS, below) beside this checkout
@@ -32,7 +33,8 @@ import fs from "node:fs"; import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { ENGINE, controlNote, siblingBuiltAt } from "./common.ts";
-import { failLines, outputKeeper, setAside, type Lane, SUITES, CORE, BROWSER, browserLauncher, laneOf, localImports, suitePath } from "./suites.ts";
+import { failLines, outputKeeper, setAside, type Lane, SUITES, CORE, BROWSER, ORDER, browserLauncher, laneOf, localImports, suitePath } from "./suites.ts";
+import { loadTimes, parseShard, partition, partitionHash } from "./shard.ts";
 
 
 // what a suite needs beyond bun and this checkout (a scratch dir, loopback ports: every suite may use those)
@@ -42,24 +44,47 @@ for (const n of BROWSER) NEEDS[n] = "Chromium";
 // hermetic env; the browser lane from the house gate's run the same day). The timeout
 // is 5x that, at least 180 s: a slow host gets room, a hung suite is still killed.
 const EXPECT: Record<string, number> = {
-  "agent-mesh-collision": 92, "kernel": 0.5, "hygiene": 0.4, "trig": 0.2, "laws": 0.3, "engine": 0.6, "nov1": 0.7, "vocab": 3.5, "nonumber": 1.4, "hostile": 0.3, "attack": 1.5,
+  "water-preview": 3, "seatlab-measure": 1,
+  "agent-mesh-collision": 92, "kernel": 0.5, "hygiene": 0.4, "shard": 1, "trig": 0.2, "laws": 0.3, "engine": 0.6, "nov1": 0.7, "vocab": 3.5, "nonumber": 1.4, "hostile": 0.3, "attack": 1.5,
+  "determinism": 0.1,
   "libfile": 0.1, "gaps": 5.6, "phys": 3.9, "physlive": 1.2, "phystick": 5.7, "sclock": 2.8, "physseeds": 2.1,
   "eidosim": 12, "eidosim-live": 1.5, "mover": 4.5, "zone-water": 0.6, "climb-env": 0.5, "drive": 0.6, "physics-area": 0.5, "water-vectors": 0.2, "avatar": 1, "remotes-limp-edge": 0.5, "colliders": 0.2, "collider-off-bodies": 2, "lying-support": 16, "replay": 0.4,
   "conformance": 2.9, "sweep": 0.3, "oracle": 0.4, "importer": 1.2, "translate": 6, "eidosim-v1": 0.2, "inplace": 15, "migrate-identities": 1.7, "oldworlds": 1.2, "browser": 1.5, "descriptors": 0.1,
-  "light-readers": 0.4, "ghost-mesh-size": 12, "boot-init": 0.5, "editor-range": 0.3, "editschema": 0.5, "scriptnew-expect": 0.5, "grant-command": 0.3, "custody-save": 0.1, "migrate-minor-1": 3, "consent-scripts-list": 2, "killz-slumped": 32, "grant-until": 1, "lite-graph": 1, "say-live": 1, "presence-actor": 1, "first-name-account": 1, "retired-commands": 1, "animnames-retry": 2.5, "panels": 1, "surface-hold": 19, "particles": 1, "shadow-fade": 1, "frames-layout": 1, "models-field": 1, "environment-realizer": 0.3, "lookat-forward": 0.5,
+  "light-readers": 0.4, "ghost-mesh-size": 12, "boot-init": 0.5, "editor-range": 0.3, "editschema": 0.5, "scriptnew-expect": 0.5, "grant-command": 0.3, "custody-save": 0.1, "migrate-minor-1": 3, "consent-scripts-list": 2, "killz-slumped": 32, "grant-until": 1, "lite-graph": 1, "first-name-account": 1, "retired-commands": 1, "animnames-retry": 2.5, "panels": 1, "surface-hold": 19, "particles": 1, "shadow-fade": 1, "frames-layout": 1, "models-field": 1, "environment-realizer": 0.3,
   "role-grammar": 0.3, "rot": 0.1, "onepose": 0.3, "msgrate": 0.1, "clientlog": 3, "dismount-height": 0.2, "helm-leave": 0.2, "build-gate": 0.3,
   "capsule-recovery": 10, "debug-tabs": 0.3, "governor-xr": 0.2, "unknown-comp": 1.1, "reach-order": 1.5,
   "editcommit": 0.8, "hierarchy-commit": 0.6, "verbclasses": 0.0, "authority-layers": 0.0, "authority": 9.0,
   "ids": 1.4, "scars": 1.0, "r8": 0.9, "r9": 1.5, "r10": 1.7, "r11": 0.6, "names": 2.1, "parity": 5.4,
   "directory": 13, "keyhints": 0.0, "client": 60, "refusedjoin": 150, "upgrade": 70, "server": 40, "identity": 42,
-  "fork-reset": 6.0, "reset-race": 0.4, "txn": 0.8, "txn-mutants": 11, "blockers-mutants": 420, "scripts": 48, "scripting": 2, "grab": 3.8, "shove": 2.0, "shove-walker": 0.1,
+  "fork-reset": 6.0, "reset-race": 0.4, "txn": 0.8, "txn-mutants": 11, "scripts": 48, "scripting": 2, "grab": 3.8, "shove": 2.0, "shove-walker": 0.1,
   "agentshove": 165, "hands": 1.2, "reset": 1.7, "settle": 5.4, "disabled": 1.2, "histdiff": 0.3, "reachgate": 22,
   "consent": 0.0, "gates": 0.1, "consent-client": 0.2, "media-trust-tabs": 0.1, "confirmcenter": 0.5, "windows-guard": 0.5, "history-rows": 0.6, "scale": 125, "roles": 3.1, "access": 8.3, "batch2": 1.9,
   "describe-particles": 1.1, "client-b2": 19, "build": 1.5, "counter": 2.2, "build-client": 8.1, "shiplist": 1.7,
   "shiplist-probe": 197, "agenttools": 20, "presence": 10, "modhole": 0.1, "xss-probe": 15, "pretrans": 2.8,
   "soundclock": 0.2, "eidomodel": 0.7, "party-probe": 486, "colour-picker": 8.1, "lock-strength": 10, "swim-lists": 10, "alias": 0.4, "navgrid": 64,
-  "navgrid-edge": 0.6, "places": 130, "places-scale": 6.3, "storey-walk": 1.5, "shape-attach": 0.7, "shape-physics": 0.7,
-  "shape-import": 0.4, "buildcheck": 18, "buildcheck-queue": 7.4, "buildcheck-route": 22, "client-tools": 202, "door-is-error": 280, "history-request": 0.3, "wing-fold-presence": 0.3, "skystamp": 0.5, "normative": 0.2, "predict-pending": 0.5, "last-world": 0.6, "event-wire": 0.1, "setup": 3
+ "places": 130, "storey-walk": 1.5, "shape-attach": 0.7, "shape-physics": 0.7,
+  "shape-import": 0.4, "buildcheck": 18, "buildcheck-queue": 7.4, "buildcheck-route": 22, "client-tools": 202, "door-is-error": 280, "history-request": 0.3, "skystamp": 0.5, "normative": 0.2, "predict-pending": 0.5, "last-world": 0.6, "event-wire": 0.1, "setup": 3, "named-pose": 2.6, "net-send-shape": 1, "navgrid-rows": 6.3, "one-binding": 0.3, "blockers-mutants-a": 110, "blockers-mutants-b": 110, "blockers-mutants-c": 110, "blockers-mutants-d": 110, "screenshots": 9, "snapframe-render": 0.1, "anim-backpressure": 0.3,
+  "remotes-lifecycle": 1,
+  "bodygate": 0.5,
+  "anim-wire": 6,
+  "lod-policy": 0.3, "lod-client": 20,
+  "simmath": 1, "settled-pose": 0.5, "pose-provenance": 0.5,
+  "selfpose": 0.2, "ammodoll": 8.4, "armsolve": 0.2, "avatar-perf": 0.5, "body-shadow-gate": 0.3, "body-state-bundle": 0.2, "bodyscale": 0.7, "firstperson-plate": 0.5, "flight": 0.5, "plateanchor": 0.3, "pose-handler": 0.2, "poseclip-parity": 0.2, "posture-tiles": 0.5, "reach": 0.2, "reachwire": 0.2,
+  "glbperf-file": 0.3, "image-lie": 0.2, "ktx2-tf-purge": 0.3, "optimize-pump": 1.0, "variant-status": 0.2, "attention": 0.7, "chat-log": 0.2, "chat-resync-wire": 0.2, "components-inspector": 0.8, "edittheme": 0.3, "seats-store": 0.9, "forecast": 0.2, "captions": 0.2,
+  "body-state": 8, "kind": 2, "replica-freeze": 0.5, "transmission": 0.5,
+  "actions": 0.2, "audioctx": 0.2, "author-wire": 0.2, "backend-choice": 0.2, "blank-part-uvs": 0.3, "blueprint": 1.2, "buoyancy": 0.2, "bus-events": 0.2, "component-needs": 0.6, "components-corpus": 0.2, "config-env": 0.2, "door-bone-list": 0.3, "door-media-whitelist": 0.2, "drag-q": 0.2, "dwell": 0.2, "fetchbytes": 0.5, "finger-curl": 0.2, "flora": 0.2, "fp-view": 0.2, "frames-resize": 0.2, "full-detail": 0.2, "headset-seen": 0.2, "heightmap-route": 1.2, "icons": 0.2, "idle-stall": 22.8, "lamp-skin": 0.3, "lamp-slot-policy": 0.5, "library-decode": 2.6, "lite-choice": 0.2, "locomotion-clip": 0.2, "look": 0.2, "mention-regex": 0.2, "mkconfig": 0.3, "motioneval": 0.2, "namereveal": 0.2, "native-login": 0.2, "particles-host": 0.2, "parts": 0.2, "put-settle": 0.2, "quadcolour": 1.1, "render-aside": 0.3, "render-health": 0.2, "renderer-join": 0.2, "selection": 0.2, "server-clock-readers": 0.2, "splash-lifecycle": 0.5, "structure-collider": 0.2, "structure-edit": 0.2, "structure-field": 0.2, "structure-route": 0.3, "structure-threshold": 0.3, "support": 0.3, "supportclass": 0.2, "terrainshape": 0.2, "token-registry": 0.2, "track-teleport": 0.2, "underwater-presence": 0.2,
+  "sfu-adapter": 0.5, "tts-fault": 0.5, "snapframe": 2, "sky-bakelock": 0.3, "sky-swapchain": 0.3, "gpulost": 0.3, "sfu-mic-intent-race": 0.3, "ttsrow": 0.5, "mic-ptt": 7.2, "relay-decision": 0.2, "spoken-form": 0.2, "voice-wire": 2, "sky-lifecycle": 5.2,
+  "seatcore": 0.3, "dock": 2.5, "dropdown": 0.3, "settings-panels": 0.5, "bodies-wear": 1, "clickuse": 0.3, "perfscope": 0.5, "served-routes": 2.5, "tick": 1, "framebudget": 1, "draw-batches": 0.3, "bodysim": 0.5, "scheduler": 0.3, "server-clock": 1.5, "route-shape": 1.2, "clientlog": 3.5, "lantern": 1, "gputime": 2.6, "euler": 0.3, "layers": 0.2, "other-body-pose": 6, "presence-session": 1.5, "chat-scrollback": 10.5,
+  "xr-entry-effects": 0.2, "xr-session-lifecycle": 0.2, "xrpanels": 0.3, "xrpass": 0.3, "xrpixelratio": 0.2, "xrpointer": 0.2, "xrshadow": 0.2, "voice-wire-mutation": 10.5, "voicesource-real": 0.2, "vrmheight": 0.6, "waterkind": 0.5, "wiring": 0.2, "worldentity": 1.4, "manifest": 0.2, "hierarchy": 17, "worn-name": 0.1, "voicebot": 3, "water-lifecycle": 1.8, "walk-support-lifecycle": 0.8, "worlds-route": 2.8,
+  "xr-lifecycle": 60, "xr-res": 70, "xr-debug-live": 60, "xr-eye-binding": 10, "htmlmesh-pick": 6, "vrmic-exec": 0.5, "xr-nullfb": 0.3,
+  "reexport-binding": 0.3, "schema-layers": 0.3, "picture-note": 0.3, "realized-lifecycle": 0.7, "components-wire": 1.2, "grass-quality": 0.3, "rebuild": 1,
+  "skywatch": 1.3,
+  "stdio-door": 14,
+  "xr-desktop-banner": 80, "sky-bake-time": 75, "sky-bakegraph": 95, "panels-schema": 0.3,
+  "xr-quad-softswap": 60,
+  "join-rfc005": 20,
+  "denoise": 6,
+  "micstate": 0.6,
 };
 // PROTOCOL_TIMEOUT_SCALE=<factor> stretches (or, to test the kill, shrinks) every timeout; the manifest shows factor 1
 const TIMEOUT_SCALE = Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) > 0 ? Number(process.env.PROTOCOL_TIMEOUT_SCALE ?? 1) : 1;
@@ -93,7 +118,7 @@ function manifestDrift(): string | null {
 }
 
 const argv = process.argv.slice(2);
-const VALUED = ["--lane", "--receipt", "--scratch-out", "--library"];
+const VALUED = ["--lane", "--receipt", "--scratch-out", "--library", "--shard"];
 const valueOf = (flag: string) => argv.includes(flag) ? argv[argv.indexOf(flag) + 1] ?? null : null;
 const headOf = (dir: string) => { const r = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }); return r.status === 0 ? r.stdout.trim() : null; };
 // The browser pages load the asset library (Skye's toolkit modules, sky, avatars): a separate public repo, pinned here.
@@ -157,8 +182,12 @@ const laneArg = valueOf("--lane");
 const only = argv.filter((a, i) => !a.startsWith("--") && !VALUED.includes(argv[i - 1]));
 for (const n of only) if (!SUITES.some(([s]) => s === n)) { console.log(`protocol gate: no suite named "${n}" (bun tools/protocol/run.ts --manifest lists them)`); process.exit(2); }
 if (laneArg && !["core", "main", "browser"].includes(laneArg)) { console.log(`protocol gate: no lane "${laneArg}" (core | main | browser)`); process.exit(2); }
-const selected = (name: string) => (!only.length || only.includes(name)) && (!laneArg || laneOf(name) === laneArg);
-const partial = only.length > 0 || !!laneArg;
+const shardArg = valueOf("--shard"), shard = argv.includes("--shard") ? parseShard(shardArg) : null;
+if (typeof shard === "string") { console.log(`protocol gate: ${shard}`); process.exit(2); }
+if (shard && (only.length || laneArg)) { console.log("protocol gate: --shard takes no suite names or --lane (a shard is its whole bin)"); process.exit(2); }
+const bins = shard ? partition(SUITES.map(([n]) => n), loadTimes(), shard.of) : [], assigned = shard ? bins[shard.index - 1] : [];
+const selected = (name: string) => shard ? assigned.includes(name) : (!only.length || only.includes(name)) && (!laneArg || laneOf(name) === laneArg);
+const partial = only.length > 0 || !!laneArg;   // a shard is not partial: it checks the manifest, and the merge checks coverage
 
 // ---- preflight: the gate's own shape, then the runtimes. Any problem here stops the gate before a suite runs ----
 const problems: string[] = [];
@@ -181,6 +210,7 @@ if (needSiblings) for (const [dir, , commit] of SIBLINGS) { const h = siblingHea
 for (const dir of ["", "client/", ...(needSiblings ? ["mcpl/"] : [])]) if (!fs.existsSync(ENGINE + dir + "node_modules")) problems.push(`${dir || "./"}node_modules is missing: run \`bun install --frozen-lockfile\` in ${dir || "the checkout root"}`);
 
 console.log(`protocol gate @ ${ENGINE}`);
+if (shard) console.log(`  shard     ${shard.index}/${shard.of}: ${assigned.length} of ${SUITES.length} suites, partition ${partitionHash(bins).slice(0, 12)}`);
 const RUNTIMES: Record<string, { found: string | null; declared?: string; where?: string }> = {};   // for --receipt
 const runtime = (label: string, found: string | null, want: string | undefined, rule: "major" | "min-major", extra = "") => {
   RUNTIMES[label] = { found, declared: want, where: extra || undefined };
@@ -308,7 +338,7 @@ async function run(name: string, file: string): Promise<{ code: number | null; s
 
 // ---- the gate ----
 const results: Result[] = []; const t0 = performance.now();
-const order = [...CORE, ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "main"), ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "browser")];
+const order = ORDER;
 let stopped = "";
 for (const name of order) {
   if (!selected(name)) continue;
@@ -355,7 +385,8 @@ console.log(`  optional, not run: ${optional.size}${optional.size ? "" : " (none
 const left = results.reduce((a, r) => a + r.leftovers, 0); if (left) console.log(`  leftover processes killed with their suite's group: ${left}`);
 const bad = count(null, "fail") + count(null, "skip");
 const notRun = SUITES.filter(([n]) => !selected(n)).length;
-console.log(`protocol gate: ${bad ? "FAILED" : partial ? `PARTIAL PASS (${notRun} suite(s) not selected: this is not the gate)` : "PASS"}`);
+console.log(`protocol gate: ${shard ? `SHARD ${shard.index}/${shard.of} ${bad ? "FAILED" : "PASS"} (${assigned.length} of ${SUITES.length} suites: the gate is all ${shard.of} shards, merged by tools/protocol/merge-receipts.ts)`
+  : bad ? "FAILED" : partial ? `PARTIAL PASS (${notRun} suite(s) not selected: this is not the gate)` : "PASS"}`);
 // --receipt <file>: a machine-readable record of THIS run at THIS head (review #260 rereview: "a durable exact-head gate
 // receipt: environment/runtime identities, source head, pinned library head, tally, and log/artifact hash")
 const receiptAt = valueOf("--receipt");
@@ -363,7 +394,7 @@ if (receiptAt) {
   const git = (a: string[]) => spawnSync("git", ["-C", ENGINE, ...a], { encoding: "utf8" }).stdout?.trim() ?? "";
   const suites = results.map(({ name, lane, status, why, ms, leftovers, outSha256 }) => ({ name, lane, status, why, ms: Math.round(ms), leftovers, outSha256 }));
   const receipt = {
-    v: 1, verdict: bad ? "FAILED" : partial ? "PARTIAL" : "PASS", head: git(["rev-parse", "HEAD"]),
+    v: 1, verdict: bad ? "FAILED" : shard ? "SHARD" : partial ? "PARTIAL" : "PASS", head: git(["rev-parse", "HEAD"]),
     // a pull_request run checks out GitHub's merge commit: `head` is that, `prHead` the PR's own head, `mergeOf` HEAD's parents
     prHead: process.env.GATE_PR_HEAD || null, mergeOf: process.env.GATE_PR_HEAD ? git(["rev-list", "--parents", "-n", "1", "HEAD"]).split(" ").slice(1) : null, dirty: git(["status", "--porcelain"]) !== "",
     os: { platform: process.platform, release: os.release(), arch: process.arch }, runtimes: { ...RUNTIMES, bun: { ...RUNTIMES.bun, found: Bun.version } },
@@ -372,6 +403,7 @@ if (receiptAt) {
     notSelected: notRun, suites, optional: Object.fromEntries(optional),
     // one hash over every suite's kept output (its tail and every verdict line, outputKeeper), in run order: the log this verdict rests on
     logSha256: createHash("sha256").update(suites.map((x) => `${x.name}\t${x.outSha256 ?? ""}`).join("\n")).digest("hex"),
+    ...(shard ? { shard: { index: shard.index, of: shard.of, hash: partitionHash(bins), assigned } } : {}),
   };
   fs.writeFileSync(receiptAt, JSON.stringify(receipt, null, 1) + "\n");
   console.log(`receipt: ${receiptAt} (head ${receipt.head.slice(0, 12)}${receipt.dirty ? ", DIRTY tree" : ""}, ${receipt.verdict})`);

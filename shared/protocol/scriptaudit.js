@@ -1,6 +1,5 @@
-// shared/protocol/scriptaudit.js — a READER's view of behaviour results (research 41 §3.6, §3.7, §7 #14, #15; ported from the
-// lab's audit.js). It needs only the log, the fold, the source blobs and the sandbox: never the authority. For every
-// `script:<id>` act (verb `script`) it checks
+// shared/protocol/scriptaudit.js — a READER's view of behaviour results (research 41 §3.6, §3.7). It needs only the
+// log, the fold, the source blobs and the sandbox: never the authority. For every `script:<id>` act (verb `script`) it checks
 //   sponsor — the act's `sponsor` / `sponsorAt` equal the sponsor view of `script:<name>` at that point (§5 "Two views":
 //             whose rights admitted the LATEST write to the key in its current life). An authority that names someone else is caught.
 //   depth   — the number of behaviour acts in its cause chain (41 §3.9), recomputed here, and the limit (8 by default).
@@ -9,28 +8,25 @@
 //             drop no-ops (scriptrules.elide, the authority's own rule), and compare with the change entry the act caused and
 //             with its says. An authority that altered one op, or a script whose result depended on anything else, is caught.
 //   reads   — an act records what its presence reads ASKED and how much came back ({near: [{r, n}], count, names: k}), never
-//             who (consent gaps 6b): the ids near a script and display names stay out of the log. So a re-run answers each
+//             who: the ids near a script and display names stay out of the log. So a re-run answers each
 //             near() with n opaque stand-ins and each name() with null. The reads are inputs the auditor can't replay, and
 //             it treats them so: (1) the re-run must ask the SAME reads (radii, counts, how many names) — a different shape
 //             is flagged `reads`; (2) when the re-run's writes and says equal the logged ones, the act is verified: a re-run
 //             with stand-ins matched the log (not proof the result is the same whoever was there); (3) when they differ and the act read who was near or what someone
 //             is called, the act is `skipped` with that reason, never flagged and never counted verified. An act with no
 //             such reads that differs is still flagged `rerun`. Soundness: everything but the identities is still checked
-//             (sponsor, depth, seed, src, the read shape), and a result matched with stand-ins is checked in full.
-//   arrivals — an `enter` / `leave` activation records no identity (review r8 M4): the script heard `by` live, the act keeps
-//             neither a trigger actor nor event.by. A re-run gets a stand-in identity; one that matches the log is verified
-//             (it can't show the result is the same whoever came). One that differs from the log is re-run again with a SECOND stand-in of another shape (a minted-
-//             shaped one, then one of another valid shape; review r9 M2, r10 M3), and each part that differs from the log
-//             (writes, says, world.use calls) is judged on its own: a part the two re-runs agree on is flagged `rerun-anon`,
-//             naming it (never `rerun`: two inputs can't prove a result is the same for every identity, so it is a mismatch to
-//             look at, not proof of a forgery). The act is `skipped` when every differing part differs between the two, when the
-//             two read differently (they took different paths through the script), or when the second re-run fails. An unlogged
-//             grab or release is the same.
+//             (sponsor, depth, seed, src, the read shape), and an identity-independent result is checked in full.
+//   arrivals — an `enter` / `leave` activation records no identity: the script heard `by` live, the act keeps
+//             neither a trigger actor nor event.by. A re-run gets a stand-in identity; a result that doesn't depend on who
+//             came is verified. One that differs from the log is re-run again with a SECOND stand-in of another shape (a
+//             minted-shaped one, then one of another valid shape): if the two re-runs differ from each other it is
+//             `skipped`; if they agree, the mismatch is flagged `rerun-anon` (never `rerun`: two inputs can't prove a result is
+//             the same for every identity, so it is a mismatch to look at, not proof of a forgery).
 // Replay of the WORLD never runs code (L1); this re-run is an optional audit view.
 import { fold, opsOf, cascadeOf, jcs, redactedBodies } from "./fold.js";
 import { elide, seedOf, stampMotions } from "./scriptrules.js";
 
-const isE = (e) => e && typeof e === "object" && typeof e.kind === "string";
+const isKinded = (e) => e && typeof e === "object" && typeof e.kind === "string";
 const isScriptActor = (a) => typeof a === "string" && a.startsWith("script:");
 const quiet = (e) => { try { return opsOf(e); } catch { return []; } };
 // a purged cause act (§12: its body is the {commitment} stub, or a purge entry names it) says nothing about whose rights admitted
@@ -38,14 +34,14 @@ const quiet = (e) => { try { return opsOf(e); } catch { return []; } };
 const stub = (b) => !!b && typeof b === "object" && Object.keys(b).length > 0 && Object.keys(b).every((k) => k === "commitment" || k === "salt");
 const PURGED_OF = new WeakMap();
 function by(L, seq) { const e = L[seq], c = L[e.cause];
-  if (isE(c) && c.kind === "request") { let P = PURGED_OF.get(L); if (!P) PURGED_OF.set(L, (P = redactedBodies(L)));
+  if (isKinded(c) && c.kind === "request") { let P = PURGED_OF.get(L); if (!P) PURGED_OF.set(L, (P = redactedBodies(L)));
     if (P.has(e.cause) || stub(c.body)) return { seq, rights: null }; }
-  const rights = isE(c) && c.kind === "request" ? (c.body?.capability?.author || (isScriptActor(c.actor) && c.body?.sponsor) || c.actor) : e.actor;
+  const rights = isKinded(c) && c.kind === "request" ? (c.body?.capability?.author || (isScriptActor(c.actor) && c.body?.sponsor) || c.actor) : e.actor;
   return { seq, rights }; }
 /** creator of (id, comp) as of seq `upto` (inclusive): { seq, rights } or null */
 export function creatorAt(L, id, comp, upto) {
   let found = null, restored = false;
-  for (let i = upto; i >= 0; i--) { const e = L[i]; if (!isE(e) || e.kind !== "change") continue; const ops = quiet(e); const fu = cascadeOf(e);
+  for (let i = upto; i >= 0; i--) { const e = L[i]; if (!isKinded(e) || e.kind !== "change") continue; const ops = quiet(e); const fu = cascadeOf(e);
     for (let k = ops.length - 1; k >= 0; k--) { const o = ops[k]; if (o.id !== id) continue;
       if (o.op === "set" && fu.has(k)) { if (o.comp === comp) restored = true; continue; }   // the authority's follow-up authors nothing (the entry's cascade, review r9 H1)
       if (o.op === "delete" && fu.has(k) && restored && (o.comp === comp || o.comp === undefined)) { restored = false; continue; }   // reversed by a follow-up restore (r10 M2)
@@ -54,12 +50,12 @@ export function creatorAt(L, id, comp, upto) {
   return found === null ? null : by(L, found);
 }
 /** sponsor of script key (id, comp) as of seq `upto`: the latest write to it in its current life that changed more than
- *  `paused` (§5 "Two views"; R on lab 49 F4: pausing adopts nothing). The authority's own rule (authority.js sponsorOf). */
+ *  `paused` (§5 "Two views": pausing adopts nothing). The authority's own rule (authority.js sponsorOf). */
 export function sponsorAt(L, id, comp, upto) {
   if (!creatorAt(L, id, comp, upto)) return null;
   const W = []; // newest first, current life only
   let restored = false;
-  scan: for (let i = upto; i >= 0; i--) { const e = L[i]; if (!isE(e) || e.kind !== "change") continue; const ops = quiet(e); const fu = cascadeOf(e);
+  scan: for (let i = upto; i >= 0; i--) { const e = L[i]; if (!isKinded(e) || e.kind !== "change") continue; const ops = quiet(e); const fu = cascadeOf(e);
     for (let k = ops.length - 1; k >= 0; k--) { const o = ops[k]; if (o.id !== id) continue;
       if (o.op === "set" && fu.has(k)) { if (o.comp === comp) restored = true; continue; }
       if (o.op === "delete" && fu.has(k) && restored && (o.comp === comp || o.comp === undefined)) { restored = false; continue; }   // r10 M2
@@ -69,7 +65,7 @@ export function sponsorAt(L, id, comp, upto) {
   for (let k = 0; k < W.length; k++) if (k === W.length - 1 || W[k].value === undefined || W[k + 1].value === undefined || jcs(unp(W[k].value)) !== jcs(unp(W[k + 1].value))) return by(L, W[k].seq);
   return null;
 }
-export function depthOf(L, seq) { let n = 0, e = L[seq], g = 0; while (isE(e) && isScriptActor(e.actor) && g++ < 10000) { if (e.kind === "request" && e.verb === "script") n++; e = L[e.cause]; } return n; }
+export function depthOf(L, seq) { let n = 0, e = L[seq], g = 0; while (isKinded(e) && isScriptActor(e.actor) && g++ < 10000) { if (e.kind === "request" && e.verb === "script") n++; e = L[e.cause]; } return n; }
 const norm = (ops) => jcs(ops.map(({ op, id, comp, value }) => ({ op, id, ...(comp !== undefined ? { comp } : {}), ...(value !== undefined ? { value } : {}) })));
 
 /**
@@ -79,7 +75,7 @@ const norm = (ops) => jcs(ops.map(({ op, id, comp, value }) => ({ op, id, ...(co
  */
 const readShape = (r) => ({ near: (r?.near ?? []).map((x) => [x.r, Array.isArray(x.ids) ? x.ids.length : x.n]), count: r?.count ?? [], names: Array.isArray(r?.names) ? r.names.length : r?.names ?? 0 });
 /** did these recorded reads ask who was near, or what someone is called? (inputs a re-run gets only as stand-ins) */
-// Two stand-ins of different SHAPES (review r10 M3, L3): a minted-shaped one (u- and 20 lowercase, as the directory mints) and
+// Two stand-ins of different SHAPES: a minted-shaped one (u- and 20 lowercase, as the directory mints) and
 // one of another valid shape (a short lowercase name, no u-: an imported name, another server's id). Both are valid
 // identities (§3.1) and nobody's, and neither says what holds it (§6a rule 2), so a script that treats ids of one shape
 // differently, or reads an identity's length or prefix, answers differently for the two and is listed as not re-runnable.
@@ -90,7 +86,7 @@ const WHO_WHY = "its result depends on who was near or what someone is called, w
 export function auditScripts(L, getBlob, { run = null, depth: maxD = 8 } = {}) {
   const flags = [], skipped = []; let acts = 0, maxDepth = 0, reran = 0;
   L.forEach((a, seq) => {
-    if (!isE(a) || a.kind !== "request" || !isScriptActor(a.actor) || a.verb !== "script") return; acts++;
+    if (!isKinded(a) || a.kind !== "request" || !isScriptActor(a.actor) || a.verb !== "script") return; acts++;
     const id = a.actor.slice("script:".length), b = a.body ?? {};
     const c = sponsorAt(L, id, b.script, seq - 1);
     if (!c || c.rights !== b.sponsor || c.seq !== b.sponsorAt) flags.push({ seq, check: "sponsor", claimed: { sponsor: b.sponsor, sponsorAt: b.sponsorAt }, view: c });
@@ -104,10 +100,10 @@ export function auditScripts(L, getBlob, { run = null, depth: maxD = 8 } = {}) {
     let blob; try { blob = getBlob(b.src); } catch { flags.push({ seq, check: "src", why: "the source blob is missing" }); return; }
     // the event as recorded, plus what the act points at instead of copying (a say's text, a use's args: purgeable there)
     const trig = Number.isInteger(b.trigger?.seq) ? L[b.trigger.seq] : null; const event = { ...b.event };
-    if (b.on === "say") { if (!isE(trig) || typeof trig.body?.text !== "string") { flags.push({ seq, check: "input", why: "the say it heard is gone (purged?): it can't be re-run" }); return; }
+    if (b.on === "say") { if (!isKinded(trig) || typeof trig.body?.text !== "string") { flags.push({ seq, check: "input", why: "the say it heard is gone (purged?): it can't be re-run" }); return; }
       event.text = trig.body.text; if (trig.body.to !== undefined) event.to = trig.body.to; }
-    if (b.on === "use" && isE(trig) && trig.body?.args?.args !== undefined) event.args = trig.body.args.args;
-    const anonWho = ["enter", "leave", "grab", "release"].includes(b.on) && event.by === undefined; if (anonWho) event.by = ARRIVAL_STAND_IN;   // an unlogged grab records no identity either (r9 O2)
+    if (b.on === "use" && isKinded(trig) && trig.body?.args?.args !== undefined) event.args = trig.body.args.args;
+    const anonWho = ["enter", "leave", "grab", "release"].includes(b.on) && event.by === undefined; if (anonWho) event.by = ARRIVAL_STAND_IN;   // an unlogged grab records no identity either
     // no wall clock on a re-run: fuel (deterministic) is the limit; the auditor's machine may be slower than the authority's
     const rerun = (ev) => run({ text: blob.text, self: id, key: b.script, event: ev, knobs: v.knobs ?? {}, now: a.ts, seed: b.seed, api: b.api ?? 1, st, reads: b.reads ?? { near: [], count: [], names: 0 }, limits: { wallMs: 10000 } });
     const res = rerun(event);
@@ -117,7 +113,7 @@ export function auditScripts(L, getBlob, { run = null, depth: maxD = 8 } = {}) {
     if (jcs(readShape(res.reads)) !== jcs(readShape(b.reads))) { if (named && readShape(res.reads).names > 0) { skipped.push({ seq, why: WHO_WHY }); return; }   // a re-run that never asked a name was steered by nothing: its recorded names are forged
       flags.push({ seq, check: "reads", why: "the re-run asked different presence reads than the act records", want: readShape(res.reads), got: readShape(b.reads) }); return; }
     const want = elide(st, stampMotions(st, res.ops, a.ts));   // as the authority stamped and elided it (scriptrun)
-    const outs = []; for (let i = seq + 1; i < L.length; i++) if (isE(L[i]) && L[i].cause === seq) outs.push(L[i]);
+    const outs = []; for (let i = seq + 1; i < L.length; i++) if (isKinded(L[i]) && L[i].cause === seq) outs.push(L[i]);
     const state = outs.find((e) => e.kind === "change");
     const got = state ? quiet(state) : [];
     const says = outs.filter((e) => e.kind === "say").map((e) => e.body?.text);

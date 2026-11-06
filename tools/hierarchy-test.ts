@@ -25,10 +25,10 @@ import { inspectSchema, editOps, fieldAt, describeSchema } from '../shared/edits
 import { qNorm, qFromYaw, qHeading } from '../shared/rot.js';
 import { scratchWorld, flat } from './protocol/scratchworld.ts';
 import { enc } from '../shared/protocol/names.js';
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const fails: string[] = [];
-const check = (name: string, ok: boolean, detail = '') => { if (ok) pass++; else { fail++; if (fails.length < 40) fails.push(`${name}  — ${detail}`); } };
+const S = suite("hierarchy", { quiet: true });   // hundreds of door cases: only the fails print
+const check = (name: string, ok: boolean, detail = '') => S.check(name, ok, detail);
 const rnd = (() => { let s = 777; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); })();
 const near = (a: number[], b: number[], eps: number) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= eps);
 const sameRot = (a: number[], b: number[], eps: number) => near(a, b, eps) || near(a, b.map((v) => -v), eps);
@@ -277,5 +277,4 @@ console.log('a parent edit undoes to exactly what it was (the door\'s undo)');
   const order = treeOf(w).roots;
   check('things are ordered by their names, numbers as numbers (Apple, b-7, domino 2, domino 3, domino 11)', JSON.stringify(order) === JSON.stringify(['zz', 'b-7', 'domino-2', 'domino-3', 'domino-11']), JSON.stringify(order));
 }
-console.log(`\n${pass} passed, ${fail} failed`);
-if (fails.length) { console.log(fails.map((f) => '  ✗ ' + f).join('\n')); process.exit(1); }
+S.done();

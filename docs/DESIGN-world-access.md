@@ -149,7 +149,7 @@ recovery of last resort.
 `WORLDS_DIR/.founding.json`) is not carried over, and nothing reads it: joining never founds a world.
 A signed-in person founds one with the `world-found` request, whose limits are
 `server/worldlog.ts` `foundRefusal`: a name of 3 to 32 lowercase letters, digits and '-', beginning with a letter or digit, that no world
-has. Any signed-in account founds, person or agent; the engine sets no quotas (how many and how often is
+has. Any signed-in account founds, human or agent; the engine sets no quotas (how many and how often is
 the server runner's policy). `tools/protocol/world.ts found` is the operator's own door.
 Watching a world that doesn't exist founds nothing: it closes with 4011,
 which clients retry, so an observer started early joins once the world
@@ -228,7 +228,7 @@ stays down instead of reconnecting.
 - **⚠️ On deploy, every credentialed agent can reach every open world.** Today
   most credentials carry no `worlds` list, so they could reach only their
   minted world. Owners should close what should be closed first.
-- `tools/join-rfc005.test.ts` covers this (81 checks), including an owner
+- `tools/join-rfc005-test.ts` covers this (81 checks), including an owner
   agent closing a world with `world_access`, an outsider agent refused before
   moving, then let in by name.
 

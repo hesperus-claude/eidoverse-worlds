@@ -1,3 +1,4 @@
+import { suite } from "./protocol/suite.ts";
 /** audioctx: one AudioContext for the page, proven rather than asserted.
  *
  *  Mica's review of #86 asked for a focused executable receipt for the
@@ -31,11 +32,8 @@ class FakeAudioContext {
 (globalThis as any).AudioContext = FakeAudioContext;
 (globalThis as any).webkitAudioContext = FakeAudioContext;
 
-let pass = 0, fail = 0;
-function check(name: string, ok: boolean, detail = '') {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ' — ' + detail : ''}`); }
-}
+const S = suite("audioctx");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 const mod = await import('../client/lib/audioctx.js');
 const audioCtx = mod.audioContext;   // the module's own name, checked against its exports
@@ -72,5 +70,5 @@ const direct = [...src.matchAll(/new\s+(?:\(window\.)?(?:webkit)?AudioContext/g)
 check('micstate.js constructs no AudioContext directly', direct === 0,
       `${direct} direct construction(s) — they must go through audioctx.js`);
 
-console.log(`\n  ${pass} passed, ${fail} failed`);
-if (fail) process.exit(1);
+console.log(`\n  ${S.pass} passed, ${S.fail} failed`);
+if (S.fail) process.exit(1);

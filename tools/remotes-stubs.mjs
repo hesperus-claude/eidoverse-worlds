@@ -11,7 +11,7 @@ export const bus = {
   on(t, f) { if (!handlers.has(t)) handlers.set(t, []); handlers.get(t).push(f); },
   emit(t, p) { for (const f of [...(handlers.get(t) ?? [])]) f(p); },
 };
-export const CONFIG = { name: 'tester', world: 'testworld' };
+export const CONFIG = { name: 'tester', world: 'testworld', params: new URLSearchParams() };
 export const camera = { position: new THREE_REAL.Vector3(0, 1.6, 0) };
 export const scene = { add() {}, remove() {} };
 export const renderer = {};
@@ -55,6 +55,7 @@ export const noteTyping = () => {};
 export const noteHistoryContext = () => {};
 export const resyncCalls = [];   // chat-resync-wire-test reads what net.js asked for
 export const resyncChatAfter = async (seq) => { resyncCalls.push(seq); };
+export const moderatorHeader = (w) => `From a moderator of world ‹${w}›, not from Eidoverse`;
 export const composeFirstPerson = () => {};
 export const markPhase = () => {};
 export const refuseBoot = () => {};

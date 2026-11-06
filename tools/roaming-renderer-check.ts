@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { health } from '../deploy/render-health.ts';
 import { ownedWorld } from './probe-harness.mjs';
+import { playwrightArgs } from './protocol/chrome.ts';
 import { helloOf } from '../shared/protocol/hello.js';
 const live = process.argv[2] ?? null;
 const shot = process.env.SHOT;
@@ -33,7 +34,7 @@ let ws: WebSocket | null = null, keepPose: ReturnType<typeof setInterval> | unde
 const profile = mkdtempSync(join(tmpdir(), 'roam-check-'));
 const exe = process.env.SFU_TEST_CHROME;   // probe-harness's override; else the installed Chrome
 const browser = await chromium.launchPersistentContext(profile, { headless: true, ...(exe ? { executablePath: exe } : { channel: 'chrome' }), viewport: { width: 960, height: 540 },
-  args: ['--enable-unsafe-webgpu', '--use-angle=metal', '--remote-debugging-port=0'] });
+  args: playwrightArgs({ extra: ['--enable-unsafe-webgpu', ...(process.platform === 'darwin' ? ['--use-angle=metal'] : [])] }) });
 let dbg = 0;
 try {
   for (let i = 0; i < 50 && !dbg; i++) {

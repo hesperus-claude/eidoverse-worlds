@@ -139,6 +139,26 @@ for (const kind of ["track", "clip"]) {
     "say (ambient and addressed) and act from a declared agent carry chat:from-agent; \"ai\" or no word, none", { say, knock, act, plain });
   ok(JSON.stringify(MCPL_ADVERTISEMENT).includes("chat:from-agent"), "the advertisement lists chat:from-agent among the core tags it emits"); }
 
+// a ping's channel frame (ping-wire.ts): approach, reach and touch address you; depart is ambient and a system notice;
+// a mention rides the say event; and the pending_pings lines
+{ const { pingDelivery, pingLine } = await import("./ping-wire.ts"); const { CHAT, EIDO } = await import("./declaration.ts");
+  const P = (kind: string, text?: string) => ({ ts: 1, kind, who: "digi", ...(text != null ? { text } : {}) }) as any;
+  const a = pingDelivery(P("approach"), null)!;
+  ok(a.tags.includes(CHAT.addressed) && a.tags.includes(EIDO.approach) && a.mentioned === true && !a.tags.includes(CHAT.ambient) && !a.tags.includes(CHAT.system)
+    && a.text === "* digi walked up to you", "approach is addressed + mentioned, not ambient or system, worded 'walked up to you'", a);
+  const d = pingDelivery(P("depart", "walked away"), null)!, n = pingDelivery(P("depart", "is no longer nearby"), null)!;
+  ok(d.tags.includes(CHAT.ambient) && d.tags.includes(CHAT.system) && d.tags.includes(EIDO.depart) && !d.tags.includes(CHAT.addressed) && d.mentioned === undefined
+    && d.text === "* digi walked away" && n.text === "* digi is no longer nearby", "depart is ambient + system, never addressed or mentioned, in the agent's own who-moved words", [d, n]);
+  const r = pingDelivery(P("reach", "reaches toward your shoulder_l (right hand)"), null)!, t = pingDelivery(P("touch", "touches your head_top (left hand)"), "ai")!;
+  ok(r.tags.includes(CHAT.addressed) && r.tags.includes(EIDO.reach) && r.mentioned === true && r.text === "* digi reaches toward your shoulder_l (right hand)"
+    && t.tags.includes(CHAT.addressed) && t.tags.includes(EIDO.touch) && t.mentioned === true, "reach and touch are addressed + mentioned, worded by the agent", [r, t]);
+  ok(r.declares === undefined && ![...r.tags, ...t.tags].some((x: string) => /from-/.test(x)), "an undeclared sender carries no declares, and no from- tag is read from a word", [r, t]);
+  ok(pingDelivery(P("mention", "hi"), null) === null, "mention pings ride the say event, never this path");
+  const lines = [pingLine(P("mention", "come look at this")), pingLine(P("approach")), pingLine(P("depart", "walked away")), pingLine(P("depart", "is no longer nearby")),
+    pingLine(P("touch", "touches your head_top (left hand)"))];
+  ok(JSON.stringify(lines) === JSON.stringify(["@ digi: come look at this", "≈ digi walked up to you", "≈ digi walked away", "≈ digi is no longer nearby",
+    "≈ digi touches your head_top (left hand)"]), "the pending_pings lines: mention, approach, depart (both wordings), touch", lines); }
+
 // edit pins what its plan read, taken before the plan awaits anything, so a change that lands
 // meanwhile is refused as changed instead of overwritten
 { let comps: any = { label: "old" }; const sent: any[] = [];
@@ -210,5 +230,15 @@ for (const [status, err] of [["ran", false], ["nothing", false], ["would-run", f
   const beside = b.besideThing({ id: "cup-1", pos: [0, 0, 0] });
   const says = (t: string) => /part geometry unavailable here/.test(t) && /asking again won't change that/.test(t) && /face \{x, z\}|move \{to: \[x, z\]\}/.test(t);
   ok(!r.ok && !faced.length && out.isError && says(out.content[0].text) && says(beside.refusal ?? ""), "on a part-riding socket, face and beside say a retry won't help and coordinates near it will", { face: out.content[0].text, beside }); }
+
+// a world server that takes the request and never answers: the door's read is bounded (tools.ts HTTP_READ_MS), and the
+// tool answers as a failed call instead of hanging the agent's turn
+{ const { HTTP_READ_MS } = await import("./tools.ts"); const { pause } = await import("../tools/protocol/wait.ts");
+  const hung = Bun.serve({ port: 0, fetch: () => new Promise<Response>(() => {}) });
+  const ag: any = { httpBase: `http://127.0.0.1:${hung.port}`, readHeaders: {} };
+  const t0 = Date.now();
+  const out: any = await Promise.race([handleTool({ agent: ag } as any, "set_avatar", { avatar: "x" }), pause("the hang guard: past the read bound and its slack, the tool hung", HTTP_READ_MS + 5_000).then(() => "hung")]);
+  ok(Number.isFinite(HTTP_READ_MS) && out !== "hung" && out.isError && Date.now() - t0 < HTTP_READ_MS + 5_000, "a world server that never answers: set_avatar fails within the read bound, it doesn't hang", out);
+  hung.stop(true); }
 
 console.log(`door-unit-test: ${fails ? `${fails} failed` : "all ok"}`); process.exit(fails ? 1 : 0);

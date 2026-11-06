@@ -104,7 +104,7 @@ GPU passes, and runs only when requested.
 ```sh
 bun tools/draw-batches-test.ts
 bun tools/drawbench.ts --out /tmp/ew-drawbench
-bun tools/draw-world-probe.ts
+bun tools/draw-world-measure.ts
 bun tools/models-field-test.ts
 ```
 

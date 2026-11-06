@@ -58,7 +58,7 @@ a code received from someone else (standard device-pairing phishing risk).
 
 - `bun tools/native-login-test.ts`: isolated handler safety/expiry/replay/rate tests;
   no session/world files or production traffic.
-- `bun tools/native-login-wire-test.ts`: scratch issuer, real HTTP and WS on
+- `bun tools/native-login-test.ts`: scratch issuer, real HTTP and WS on
   loopback :18997, scratch worlds/session/optimizer/relay state. Verifies independent
   sessions, verified joins in three worlds, a session paired before this flow joining
   another world and answered there over HTTP as the browser's session is, no

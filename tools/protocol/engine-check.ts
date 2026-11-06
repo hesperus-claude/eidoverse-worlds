@@ -18,10 +18,10 @@ import { r3 } from "../../shared/protocol/round.js";
 import * as PH from "./pinhistory.ts";
 import * as FR from "./fixture-repin.ts";
 import { fileURLToPath } from "node:url";
+import { suite } from "./suite.ts";
 
 const DIR = fileURLToPath(new URL("../../spec/conformance/physics/", import.meta.url)), DIG = `${DIR}digests.json`, EXACT = `${DIR}digests-exact.json`;
-let pass = 0, fail = 0;
-const check = (n: string, ok: boolean, info?: unknown) => { if (ok) { pass++; console.log(`ok   ${n}`); } else { fail++; console.log(`FAIL ${n}`); if (info !== undefined) console.log("     ", JSON.stringify(info).slice(0, 400)); } };
+const { check, done } = suite("engine-check");
 const scenarios = fs.readdirSync(DIR).filter((f) => f.endsWith(".jsonl")).map((f) => f.slice(0, -6)).sort();
 
 /** a scenario replayed as `version`: its epoch is set to that engine; the fold at the scenario's end + 30 s */
@@ -135,4 +135,4 @@ else { const a = inForce, ver = a.engine, s = "crate-slide", x = a.scenarios[s],
     ["the bounds set moved after the epoch", () => un(txt(moveAfter), x.map.map((j: number | null) => (j === null || j < ins[0] ? j : j - 2 <= FR.epochOf(drop(L, ins)) ? j - 2 : j)))],
   ];
   for (const [what, f] of rows) { const got = f(); check(`EN8 ${s}: ${what} is not covered by the acknowledgement`, got.length > 0, got.slice(0, 3)); } }
-console.log(`[engine-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+done();

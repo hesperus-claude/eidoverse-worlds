@@ -16,7 +16,7 @@
 //   in VR    three swapped in the XR camera, so the call built the XR variant → also compile with the main camera
 //            into a 1×1 twin of the desktop framebuffer target (same attachment key, so the same render context
 //            the desktop frames use; binding it is also what keeps three from swapping the XR camera back in)
-// tools/xr-dual-warm-probe.mjs measures it: enter and exit build nothing for content that arrived in the other mode.
+// tools/xr-dual-warm-measure.mjs measures it: enter and exit build nothing for content that arrived in the other mode.
 import { withXREyes } from './xrpass.js';
 
 export function installDualWarm({ THREE, renderer, camera, presenting }) {
@@ -27,10 +27,9 @@ export function installDualWarm({ THREE, renderer, camera, presenting }) {
   const desktopTwin = () => (twin ??= new THREE.RenderTarget(1, 1, {
     type: renderer._outputBufferType, samples: renderer.samples, depthBuffer: renderer.depth, stencilBuffer: renderer.stencil }));
   // Frustum culling is off only for the compile's SYNCHRONOUS walk: once three is initialised compileAsync reads
-  // frustumCulled in _projectObject before its first await and never again — the awaited rest is the pipeline link.
-  // Restoring at the promise's end instead left warmed objects already in the scene drawing unculled every frame for
-  // the whole link (seconds; in a session too). An uninitialised renderer awaits init() BEFORE the walk: keep the flag
-  // down until the promise settles then.
+  // frustumCulled in _projectObject before its first await and never again, so restoring later would leave warmed
+  // objects drawing unculled for the whole link. An uninitialised renderer awaits init() BEFORE the walk: keep the
+  // flag down until the promise settles then.
   const unculled = (obj, fn) => {
     const off = []; obj.traverse?.((o) => { if (o.isMesh && o.frustumCulled) { off.push(o); o.frustumCulled = false; } });
     const restore = () => { for (const o of off) o.frustumCulled = true; };
@@ -52,13 +51,11 @@ export function installDualWarm({ THREE, renderer, camera, presenting }) {
     return unculled(obj, () => withXREyes(renderer, (eyes) => compile(obj, eyes, target)));
   };
   // THE LEAK (three r186): after an XR frame Renderer._renderScene "restores" the bound target to
-  // `_renderTarget || _outputRenderTarget`, i.e. it leaves the eye buffer bound. render() still draws through the
-  // tone-mapping target, but compileAsync takes `_renderTarget === null` as its test and compiles STRAIGHT INTO the eye
-  // buffer — a different render context. So every compile during a session (content warms, the entry curtain) prepared
-  // render objects (node builds, bindings) the headset's frames never used, and the frames built them again at draw time.
-  // The GPU pipelines were NOT wasted (the pipeline cache is keyed on formats, so both contexts share them) — measured in a
-  // pure-three A/B on r186 and dev: 12 render objects rebuilt by the next render(), 0 pipelines. A bound target that is
-  // just the leaked output target is treated as unbound for the compile's synchronous pass (tools/xr-dual-warm-probe.mjs).
+  // `_renderTarget || _outputRenderTarget`, i.e. it leaves the eye buffer bound, and compileAsync (testing
+  // `_renderTarget === null`) would compile STRAIGHT INTO the eye buffer — a render context the headset's frames
+  // never use, so they rebuilt every render object at draw time (pipelines are shared: keyed on formats). A bound
+  // target that is just the leaked output target is treated as unbound for the compile's synchronous pass
+  // (tools/xr-dual-warm-measure.mjs).
   const compileAsRendered = (obj, cam, target, onProgress) => {
     const rt = renderer.getRenderTarget(), out = renderer.getOutputRenderTarget();
     if (rt === null || rt !== out) return compile(obj, cam, target, onProgress);

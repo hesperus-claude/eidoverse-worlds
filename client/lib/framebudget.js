@@ -1,9 +1,7 @@
 // framebudget — one per-frame budget for background work, shared by every producer.
 //
-// warmqueue (pipeline warms), loadwork (parse/compile slices) and the baked sky (band renders) each used to pace
-// themselves: one item per rAF, a private 6 ms slice per work record, one band per frame. None knew what the others
-// spent, so they stacked in the same frame (owner's jank lines: "sky build + xr pipelines + compile ×5 + depth ×8").
-// This is the shape Unity (asyncUploadTimeSlice, backgroundLoadingPriority) and React's scheduler use:
+// warmqueue (pipeline warms), loadwork (parse/compile slices) and the baked sky (band renders) share it, so their
+// work never stacks in one frame. The shape Unity (asyncUploadTimeSlice) and React's scheduler use:
 //
 //   - ONE budget per frame: a governor-set share of the measured frame period, never more than the old 6 ms slice
 //     (MAX_MS); a fixed SPLASH_MS while the splash covers the screen.
@@ -114,11 +112,9 @@ export function ask(lane, { gpu = false, waited = 0 } = {}) {
   return { held: l.ewma, frame: frameNo };
 }
 
-/** Charge measured main-thread time, releasing `grant`'s hold if it was taken this frame (a hold from an earlier
- *  frame was cleared by the roll). With `since` (when the slice began): a slice that began before this frame resumed
- *  from an await (a fetch, a worker, a queue) and its main-thread share is unknowable — it charges nothing and leaves
- *  the lane's estimate alone, rather than bill this frame for the render loop's own time. The undercount is at most
- *  one slice per resumption. */
+/** Charge measured main-thread time, releasing `grant`'s hold if it was taken this frame. With `since` (when the slice
+ *  began): a slice that began before this frame resumed from an await and its main-thread share is unknowable, so it
+ *  charges nothing and leaves the lane's estimate alone (an undercount of at most one slice per resumption). */
 export function spent(lane, ms, since = null, grant = null) {
   const unknown = since != null && since < frameStart;
   const v = unknown ? 0 : since == null ? Math.max(0, ms) : Math.max(0, Math.min(ms, performance.now() - since));

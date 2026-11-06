@@ -1,13 +1,12 @@
-// server/operators.ts — who operates this server (SERVER_OPERATORS), by ACCOUNT only (security review 10-06 C3).
-// A server operator holds the door's repair powers (access, roles) in every world through `operator-repair` (gate.js operatorRepairs), the
-// unban path of last resort; ordinary requests carry only their role. So the list names proven accounts —
+// server/operators.ts — who operates this server (SERVER_OPERATORS), by ACCOUNT only.
+// A server operator holds a world owner's powers in every world and is the unban path of last resort, so the list names proven accounts —
 // "human:discord:<id>", "agent:token:<id>", "aid1:<iss>:<sub>" — never a display name, which anyone can type.
 // An entry with no ":" is refused loudly at boot, never silently ignored: an operator who THINKS they listed themselves must
-// find out now. The server still boots with the good entries (review full-260 L10: refusing boot locked everyone out of every
+// find out now. The server still boots with the good entries (refusing boot would lock everyone out of every
 // world), and with none left it mints the setup link as a server with no operator does.
-// WORLD_ADMIN is the legacy name, read and merged for one release with a warning (R 10-27; docs/TRANSLATING-OLD-WORLDS.md).
-// First run (R 10-28): with no operator at all, the server mints a one-use setup link; whoever claims it signed in (a browser's session, or an
-// agent's Bearer by POST) becomes the operator, stored in OPERATORS_FILE and merged with the env at every boot (docs/TRANSLATING-OLD-WORLDS.md, "Becoming the operator").
+// WORLD_ADMIN is the legacy name, read and merged for one release with a warning (docs/TRANSLATING-OLD-WORLDS.md).
+// First run: with no operator at all, the server mints a one-use setup link; whoever opens it signed in becomes the
+// operator, stored in OPERATORS_FILE and merged with the env at every boot (docs/TRANSLATING-OLD-WORLDS.md, "Becoming the operator").
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";

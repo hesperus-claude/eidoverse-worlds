@@ -51,13 +51,10 @@ export function paintGround(body) {
     if (pal.grassDensity[st.density] == null) st.density = def.density;
     if (!pal.plantings[st.plant]) st.plant = def.plant;
 
-    // the args are shared/grounddefs.js's — the Build tab's World section
-    // writes the same ones for the same pick
-    // Each control changes ITS key over the world's current terrain bag, never the whole bag: rebuilding it
-    // from the panel's dials dropped everything the panel doesn't own — placed features, a heightmap, a seed
-    // or size set from the console. (Changing the tint flattened a shaped world back to plain noise.) A world
-    // with no terrain yet gets the panel's full default bag (terrainArgs), as before. The patch builds on
-    // terrainEditBase() (a sent-but-unechoed edit counts), so two quick clicks compose.
+    // the args are shared/grounddefs.js's (the Build tab's World section writes the same ones for the same pick).
+    // Each control changes ITS key over the world's current terrain bag, never the whole bag, so what the panel
+    // doesn't own (placed features, a heightmap, a console-set seed) survives. A world with no terrain gets the full
+    // default bag. The patch builds on terrainEditBase() (a sent-but-unechoed edit counts), so quick clicks compose.
     const fresh = () => terrainArgs(pal, { seed: st.seed, shape: st.shape, tint: st.tint });
     const growTerrain = (patch = {}) => {
       const cur = terrainEditBase();
@@ -142,10 +139,7 @@ export function paintGround(body) {
     });
     body.appendChild(plant.row);
 
-    // blade length — a BLADE-grass control. Structural species (shrubs,
-    // yucca, corn) carry their own size, and the engine ignores `height` for
-    // them, so the row hides rather than sitting there as a dial that does
-    // nothing.
+    // blade length — BLADE grass only: structural species carry their own size and ignore `height`, so the row hides
     const h = selectRow('height', Object.keys(pal.grassHeight), st.height, (v) => {
       st.height = v;
       if (st.grass && isBlade()) growGrass();
@@ -177,11 +171,10 @@ export function paintGround(body) {
     body.appendChild(tint.row);
   };
 
-  // ⛰ heightmap: the ground as an image, out and back (server/heightmap.ts). Export samples the world's CURRENT
-  // ground — noise, heightmap and placed features together — into a 16-bit grayscale PNG that carries its own
-  // height range; import uploads one and makes it the ground. Because an export already contains the features,
-  // importing replaces them too (no hill counted twice). If an editor drops the range chunk, the low/high
-  // fields say which heights black and white mean; they start at the current ground's range.
+  // ⛰ heightmap: the ground as an image, out and back (server/heightmap.ts). Export samples the CURRENT ground (noise,
+  // heightmap and features together) into a 16-bit grayscale PNG carrying its height range; import makes one the
+  // ground and replaces the features too (no hill counted twice). The low/high fields cover an editor that drops the
+  // range chunk; they start at the current ground's range.
   function heightmapRow() {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;flex-direction:column;gap:3px;padding:2px 0';

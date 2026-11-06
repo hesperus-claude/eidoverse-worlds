@@ -14,7 +14,8 @@
 // call the agent's acts as main's tools did, answered as the door answers an
 // act, and FLIGHT THROUGH THE DOOR checks the door's own calls.
 import { tryUntil } from './protocol/wait.ts';
-const { WorldAgent } = await import('../mcpl/agent.ts');
+import { noWorldUrl } from './no-world.ts';
+const { WorldAgent, GLIDE_ARRIVE_M } = await import('../mcpl/agent.ts');
 const { handleTool } = await import('../mcpl/tools.ts');
 
 let pass = 0, fail = 0;
@@ -48,7 +49,7 @@ const WINGED = [
   'L_Wing_Upper', 'L_Wing_Upper_1', 'R_Wing_Upper', 'R_Wing_Upper_1',
   'L_Wing_Lower', 'R_Wing_Lower',
 ];
-const ag: any = new WorldAgent({ name: 'mythos', world: 'is-error-bench' });
+const ag: any = new WorldAgent({ name: 'mythos', world: 'is-error-bench', url: noWorldUrl() });
 // a world's bounds fence flight and cap it at their top (shared/flight.js bounds): the founded stage's, ±110 m under 60 m
 const STAGE_BOX = { min: [-110, -10, -110], max: [110, 60, 110] }; ag.worldBox = () => STAGE_BOX;
 ag.bodyBoneNames = WINGED;
@@ -362,6 +363,12 @@ for (const [x, done] of [[8.1, true], [7.9, false]] as const) {
   check(`a touchdown ${(10 - x).toFixed(1)} m from the target is ${done ? 'done' : 'failed as short'}`,
     done ? ok(r) && /at the target$/.test(said(r)) : failed(r) && /^landed short at /.test(said(r)), said(r));
 }
+// one radius for both arrivals: the touchdown rows above are at 2 m, and an arrival in the air just inside it counts
+check('the glide arrival radius is 2 m', GLIDE_ARRIVE_M === 2, String(GLIDE_ARRIVE_M));
+await relaunch();
+ag.flight.pos.x = ag.flight.pos.z = 0;
+r = await midway(ag, call('glide_to', { x: 10, z: 0 }), () => { ag.flight.pos.x = 10 - (GLIDE_ARRIVE_M - 0.1); });
+check('a glide in the air just inside the arrival radius has arrived', ok(r) && /^arrived at \(8\.1, 0\.0\)/.test(said(r)), said(r));
 r = await glides(3, 0);
 check('a glide that lands short is failed', failed(r) && /^landed short at .*7\.0m short/.test(said(r)), said(r));
 r = await glides(4, 0, 'LEAF');
@@ -711,7 +718,7 @@ check('a fold that finds the flight\'s wings folded, with the rig known, is done
 ag.wingsFolded = false; ag.flight = null;
 
 console.log('\nBONES NOT KNOWN');
-const unread: any = new WorldAgent({ name: 'unread', world: 'is-error-bench' });
+const unread: any = new WorldAgent({ name: 'unread', world: 'is-error-bench', url: noWorldUrl() });
 unread.bodyBoneNames = null;
 unread.loadBodyBones = async () => null;
 unread.myRights = { role: 'builder', fly: true };
@@ -737,7 +744,7 @@ r = await callU('fold_wings');
 check('a fold in the air of wings the flight holds folded, while the bones are unknown, is done, and the posture follows, saying so',
   ok(r) && said(r) === 'wings are already folded; the posture now shows them folded' && unread.wingsFolded === true, `${said(r)}; wingsFolded ${unread.wingsFolded}`);
 unread.flight = null; unread.wingsFolded = false;
-const wingless: any = new WorldAgent({ name: 'wingless', world: 'is-error-bench' });
+const wingless: any = new WorldAgent({ name: 'wingless', world: 'is-error-bench', url: noWorldUrl() });
 wingless.bodyBoneNames = ['Hip', 'Spine02', 'Head'];
 wingless.loadBodyBones = async () => wingless.bodyBoneNames;
 r = await callOn(wingless, 'unfold_wings');
@@ -748,7 +755,7 @@ console.log('\nFLIGHT THROUGH THE DOOR');
 // The door's flight calls answer each act's {ok} as isError (tools.ts act()), and a fly-mode move stops at the first
 // step that didn't do what it asked, with where the flight stands after it.
 {
-  const pilot: any = new WorldAgent({ name: 'pilot', world: 'is-error-bench' });
+  const pilot: any = new WorldAgent({ name: 'pilot', world: 'is-error-bench', url: noWorldUrl() });
   pilot.bodyBoneNames = WINGED;
   pilot.loadBodyBones = async () => pilot.bodyBoneNames;
   const fly = (name: string, a: Record<string, unknown> = {}) => settle(handleTool({ agent: pilot } as any, name, a));
@@ -804,8 +811,8 @@ console.log('\nFLIGHT THROUGH THE DOOR');
   pilot.flight = null;
   r = await fly('act', { verb: 'land', args: { to: [5, 5] } });
   check('act {verb: "land"} on the ground is failed', failed(r) && said(r) === 'land: you are on the ground — move {mode: "fly"} gets you up', said(r));
-  // A wingless body's fold didn't happen, so nothing plays.
-  const bare: any = new WorldAgent({ name: 'bare', world: 'is-error-bench' });
+  // a wingless body's fold didn't happen, so nothing plays
+  const bare: any = new WorldAgent({ name: 'bare', world: 'is-error-bench', url: noWorldUrl() });
   bare.bodyBoneNames = ['Hip', 'Spine02', 'Head'];
   bare.loadBodyBones = async () => bare.bodyBoneNames;
   r = await settle(handleTool({ agent: bare } as any, 'anim', { name: 'wings-folded' }));
@@ -854,10 +861,15 @@ r = await call('reach', { release: true });
 check('...and with nothing reaching it changes nothing, and is done', ok(r) && said(r) === "you weren't reaching for anything", said(r));
 r = await call('body_state', { who: 'nobody-here' });
 check('body_state of someone not here is failed', failed(r), said(r).slice(0, 200));
+// the rig's read fails at once: a library that answers 404, not the default door's address (unanswered here, a ~135 s wait)
+const noRig = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response('no', { status: 404 }) });
+const realUrl = ag.url;
+ag.url = `ws://127.0.0.1:${noRig.port}/ws`;
 r = await call('anim', { joints: { leftUpperArm: [0, 0, 1] } });
 check('a pose with nothing usable is failed', failed(r) && /^no pose set — nothing usable/.test(said(r)), said(r));
 r = await call('anim', {});
 check('a bare anim that cannot read the rig to list its bones is failed', failed(r) && /^can't read your rig to list its bones/.test(said(r)), said(r));
+ag.url = realUrl; noRig.stop(true);
 const TRACKS = { leftUpperArm: [{ t: 0, q: [0, 0, 0, 1] }, { t: 0.5, q: [0, 0, -0.7, 0.7] }] };
 r = await call('anim', { tracks: TRACKS });
 check('an animation with no duration is failed', failed(r) && /^animate needs dur/.test(said(r)), said(r));

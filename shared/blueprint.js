@@ -28,14 +28,15 @@
 // overridesOf / rebase compare copies against records; placing copies (6b) and
 // offering updates (6c) build on these.
 //
-// Pure: no DOM, no I/O. The door (server/verbs.ts), the fold (shared/protocol/fold.js),
-// the agent and the editor all ask the same questions here.
+// Pure: no DOM, no I/O. The editor asks these questions here; the authority's blueprint rules are
+// shared/protocol/authority/blueprints.js.
 
 import { canon, sha256hex, entityOf, componentsOf, compRefusal, RECORDS, socketQ } from './components.js';
 import { worldPose, childrenOf, socketOf } from './hierarchy.js';
 import { qNorm, qHeading } from './rot.js';
 
 import { recordComponents } from './protocol/view.js';
+import { r9 } from './protocol/round.js';
 export const BLUEPRINT_KIND = 'eido.blueprint';
 /** What the door accepts. A component is written to the world as one `comp`
  *  (≤ 8 KB, PROTOCOL §3), so one instance may not exceed that either. */
@@ -324,10 +325,10 @@ const DEFAULT_KEY = {
   Sockets: 'sockets', Reactions: 'reactions', Structure: 'structure', Captions: 'captions',
   LookAt: 'look', Stage: 'stage', Particles: 'particles', Picture: 'picture', Sound: 'sound',
 };
-const COLLIDER_SHAPES = new Set(['mesh', 'exact', 'box']);   // exact: the stored word before 10-16 (the door stores mesh)
+const COLLIDER_SHAPES = new Set(['mesh', 'exact', 'box']);   // exact: an older stored word (the door stores mesh)
 
-/** A node's components in the spelling every NEW write uses (owner,
- *  2026-10-02: "everything should go out under the new comp system"):
+/** A node's components in the spelling every NEW write uses (every write goes
+ *  out under the comp system):
  *  - a keyless Light (the legacy `kind:"light"` entity) becomes the Light
  *    component `comp.light` — unless the part also holds one, when the two
  *    spellings would collide (placeRefusal names it);
@@ -381,7 +382,6 @@ export const isLink = (v) => isBagV(v) && typeof v.hash === 'string' && HEX64.te
 export const isPartMarker = (v) => isBagV(v) && typeof v.part === 'string' && !!v.part && !isLink(v);
 
 const r4 = (v) => +(+v).toFixed(4);
-const r9 = (v) => +(+v).toFixed(9);
 const upright = (q) => Math.abs(q[0]) < 1e-9 && Math.abs(q[2]) < 1e-9;
 const slug = (s) => String(s).replace(/[^A-Za-z0-9_.-]+/g, '_').slice(0, 24) || 'part';
 /** The comp entries a component writes, as `[key, data]` (entityOf's bytes). */

@@ -9,9 +9,9 @@ import { worldPose as treePose } from "../../shared/hierarchy.js";
 import * as particlesim from "../../shared/particlesim.js";
 import * as motioneval from "../../client/lib/motioneval.js";
 import * as reach from "../../shared/reach.js";
+import { suite } from "./suite.ts";
 
-let pass = 0, fail = 0;
-const check = (n: string, ok: boolean, info?: unknown) => { if (ok) { pass++; console.log(`ok   ${n}`); } else { fail++; console.log(`FAIL ${n}`); if (info !== undefined) console.log("     ", JSON.stringify(info).slice(0, 600)); } };
+const { check, done } = suite("onepose-check", { cap: 600 });
 
 let seed = 0x0e1d0f5e;
 const rnd = () => { seed = (seed + 0x6d2b79f5) | 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -100,4 +100,4 @@ for (const [name, f] of helpers) {
   check(`OQ ${name} is rot.js's, bit for bit on ${N} inputs`, !missing && !differ, missing ? "rot.js has no such function" : { differ, worstAbs: worst, within1e12: worst <= 1e-12, example });
 }
 
-console.log(`[onepose-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+done();

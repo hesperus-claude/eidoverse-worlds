@@ -4,11 +4,9 @@
 // voicebox synthesizer available. Opt-in via ?tts=<port> (default 8927) so an
 // ordinary human client never opens this socket and never changes behaviour.
 //
-// This is the ONLY thing the voicebox process does now: turn text into samples.
-// It used to be a whole WebRTC client joining the world under the agent's own
-// name, which put two sockets on one identity and produced 543 server-side
-// takeovers in a single session (2026-08-08). A synthesizer is not a
-// participant.
+// This is the ONLY thing the voicebox process does: turn text into samples. It
+// must never join the world itself (two sockets on one identity means endless
+// takeovers). A synthesizer is not a participant.
 
 import { setTtsSource, setTtsEnabled } from './tts.js';
 import { report } from './base.js';

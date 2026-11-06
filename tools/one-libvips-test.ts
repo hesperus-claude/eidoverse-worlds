@@ -32,12 +32,11 @@
 // specifier" and "loads one libvips" are different claims, and only the
 // second is the fix.
 
-import { existsSync } from "node:fs";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { Document, NodeIO } from "@gltf-transform/core";
 import { optimizeGlb } from "../server/optimize.ts";
+import { suite } from "./protocol/suite.ts";
 
 // getSharp does not exist on main — pull it dynamically so this file still
 // RUNS there and demonstrates the failure, rather than dying at import and
@@ -48,11 +47,7 @@ const OPT = await import("../server/optimize.ts") as {
 const getSharp = OPT.getSharp
   ?? (async () => ({ sharp: (await import("sharp")).default, from: "sharp (bare specifier)" }));
 
-let failures = 0;
-const check = (label: string, ok: boolean, detail?: string) => {
-  console.log(ok ? `  \x1b[32m✓\x1b[0m ${label}` : `  \x1b[31m✗ ${label}${detail ? ` — ${detail}` : ""}\x1b[0m`);
-  if (!ok) failures++;
-};
+const { check, done } = suite("one-libvips");
 
 const MAGIC: [number[], string][] = [
   [[0x89, 0x50, 0x4e, 0x47], "image/png"],
@@ -105,8 +100,7 @@ const fixtureSharp = await (async () => {
 })();
 const { from } = await getSharp();
 const sharp = fixtureSharp;
-const tmp = mkdtempSync(join(tmpdir(), "ew-libvips-"));
-try {
+{
   // A 256² gradient, encoded as JPEG — real image data, deterministic. It has
   // to VARY: prune() folds a solid-colour texture into baseColorFactor and
   // drops it, which would leave the pass under test nothing to encode.
@@ -161,8 +155,6 @@ try {
         /^\d+x\d+$/.test(decoded), decoded);
     }
   }
-} finally {
-  rmSync(tmp, { recursive: true, force: true });
 }
 
 // ------------------------------------------- 2. the structure, not the luck
@@ -181,7 +173,7 @@ if (nested && existsSync(nested)) {
       || from.includes("ndarray-pixels"), `from=${from}`);
 } else {
   // Not a failure: a deduped install is the state this fix is chasing.
-  console.log("  \x1b[36m—\x1b[0m single sharp install; the bare specifier is safe here");
+  console.log("  — single sharp install; the bare specifier is safe here");
   console.log(`     resolved: ${from}`);
 }
 
@@ -190,24 +182,15 @@ if (nested && existsSync(nested)) {
 // the process actually LOADED, which is the only claim that matters: the fix
 // is "one libvips per optimize process", so count the libvips.
 //
-// process.report.getReport().sharedObjects lists the native binaries mapped
-// into this process by absolute path. Two distinct install roots holding a
-// sharp binding means two libvips, whatever the resolver intended. Measured
-// AFTER case 1's real optimizeGlb run, so it covers the actual optimize path
-// and not a synthetic import.
-const report = (process as any).report?.getReport?.();
-if (!report || !Array.isArray(report.sharedObjects)) {
-  console.log("  [36m—[0m process.report unavailable on this runtime; skipping the load census");
-} else {
-  const installs = [...new Set((report.sharedObjects as string[])
-    .filter((s) => /sharp/i.test(s) && s.endsWith(".node"))
-    .map((s) => dirname(s)))];
-  check("exactly one sharp install is loaded in this process",
-    installs.length === 1,
-    installs.length === 0
-      ? "none loaded — the texture pass never ran, so this proves nothing"
-      : `${installs.length} loaded:${installs.map((i) => `
-     ${i}`).join("")}`);
+// The census reads /proc/self/maps (Bun's process.report lists no shared objects): every libvips mapped into this
+// process by path, measured AFTER case 1's real optimizeGlb run. The fixture loads gltf-transform's copy on purpose,
+// so a root-copy import anywhere on the optimize path makes two.
+if (process.platform !== "linux") console.log("  — no /proc/self/maps off Linux; the load census runs in the gate (Linux)");
+else {
+  const libvips = [...new Set(readFileSync("/proc/self/maps", "utf8").split("\n")
+    .map((l) => l.trim().split(/\s+/).slice(5).join(" ")).filter((f) => /libvips[^/]*\.so/.test(f)))];
+  check("exactly one libvips is mapped in this process, after a real optimize",
+    libvips.length === 1, `${libvips.length} mapped: ${libvips.join(", ") || "(none: the census proves nothing)"}`);
 }
 
 
@@ -260,5 +243,4 @@ if (typeof (OPT as any).pickSharp !== "function") {
 }
 
 
-console.log(`\n${failures === 0 ? "\x1b[32m" : "\x1b[31m"}${failures} failed\x1b[0m\n`);
-process.exit(failures ? 1 : 0);
+done();

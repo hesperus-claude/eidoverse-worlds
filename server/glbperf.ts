@@ -1,10 +1,10 @@
-// glbperf — a model's loupe rank read from its GLB, without rendering it (library cards; owner, 09-24).
+// glbperf — a model's loupe rank read from its GLB, without rendering it (library cards).
 //
 // Mirrors what the client does: three's GLTFLoader turns every triangle primitive of every mesh-bearing node in the
 // default scene into ONE Mesh (EXT_mesh_gpu_instancing → an InstancedMesh of `count`), and perfscope's accumulate()
 // bills per Mesh: tris = index (or position) count / 3 × instances, one draw, its material into a unique set, one
 // alpha tick per BLEND material occurrence; textures once per unique texture, w×h×4 bytes (×4/3 with mips); bones =
-// the largest skin a skinned mesh in the ranked scene uses. The rule and thresholds are shared/perfrank.js — the loupe's own. tools/glbperf-parity-probe
+// the largest skin a skinned mesh in the ranked scene uses. The rule and thresholds are shared/perfrank.js — the loupe's own. tools/glbperf-parity
 // loads real library models through the client's loader and checks these numbers against perfscope.statsOf().
 //
 // Known approximations, disclosed on the card: KTX2/basis images are billed at 1 byte/texel — the desktop worst case
@@ -32,8 +32,7 @@ function webpDims(b: Uint8Array): [number, number] | null {
 }
 /** KTX2 size + the bytes/texel the GPU holds after transcode. three's KTX2Loader (priorityETC1S) takes ETC2 first,
  *  then BC7: a desktop with BPTC and no ETC2 (most Windows/Linux GPUs) holds ETC1S as BC7, so the CARD bills the worst
- *  case: 1 B/texel for
- *  everything. `bptc:false` is the regime of a device without it (ETC1S → BC1 0.5, or BC3 1 with an alpha sample) —
+ *  case: 1 B/texel for everything. `bptc:false` is the regime of a device without it (ETC1S → BC1 0.5, or BC3 1 with an alpha sample) —
  *  the parity probe passes the regime its headless loader actually got. UASTC → BC7 (1) either way. An uncompressed
  *  fallback would be 4 — the card says "estimated". Samples are counted from the DFD's basic descriptor block. */
 function ktx2Info(b: Uint8Array, bptc = true): { dims: [number, number]; bpp: number } | null {
@@ -52,7 +51,7 @@ function ktx2Info(b: Uint8Array, bptc = true): { dims: [number, number]; bpp: nu
 type ViewReader = (bv: any, max: number) => Uint8Array | null;
 const IMAGE_HEAD = 65536;   // PNG/WebP/KTX2 headers are < 1 KB; only a JPEG's SOF can sit past this (it retries, bounded)
 // the JPEG retry's ceiling: a SOF behind big EXIF/ICC blocks is found, but a pathological (or hostile) upload can't make
-// a catalog request read a whole multi-MB image on the sequencer thread (Greptile #207). Past it: billed unsized.
+// a catalog request read a whole multi-MB image on the sequencer thread. Past it: billed unsized.
 const JPEG_RETRY_MAX = 1 << 20;
 
 export function glbPerf(bytes: Uint8Array, opts: { bptc?: boolean } = {}): GlbPerf {
@@ -78,7 +77,7 @@ function perfOf(json: any, view: ViewReader, { bptc = true }: { bptc?: boolean }
         const mode = p.mode ?? MODE_TRIANGLES;
         if (mode !== MODE_TRIANGLES && mode !== MODE_STRIP && mode !== MODE_FAN) continue;   // lines/points: not a Mesh
         // a skin counts only where GLTFLoader builds a SkinnedMesh from it: a triangle primitive on a node of the ranked
-        // scene that references the skin (the loupe's max over loaded skinned meshes). Unused skins cost nothing (Greptile #207).
+        // scene that references the skin (the loupe's max over loaded skinned meshes). Unused skins cost nothing.
         if (n.skin != null) bones = Math.max(bones, json.skins?.[n.skin]?.joints?.length ?? 0);
         const n0 = p.indices != null ? accessors[p.indices]?.count ?? 0 : accessors[p.attributes?.POSITION]?.count ?? 0;
         const idx = mode === MODE_TRIANGLES ? n0 : Math.max(0, n0 - 2) * 3;   // GLTFLoader re-indexes strips/fans

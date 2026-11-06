@@ -2,10 +2,11 @@
 // arrival where the authority's table differs, and what it holds when the read comes back is what is sent, so a change made
 // while that read is out isn't overwritten by the old one (house 6340433633, on b1ea081b; R 10-28: the same model as a person)
 import { WorldAgent } from "../mcpl/agent.ts";
+import { noWorldUrl } from "./no-world.ts";
 let pass = 0, fail = 0; const ok = (c: boolean, n: string, info?: unknown) => { if (c) { pass++; console.log(`ok   ${n}`); } else { fail++; console.log(`FAIL ${n}`, info === undefined ? "" : JSON.stringify(info)); } };
 type Held = { move: boolean | null; touch: boolean | null; allow: string[]; block: string[] };
 function agent(held: Held, during?: (ag: any) => void) {
-  const ag = new WorldAgent({ name: "replay" }) as any; const sent: any[] = [];
+  const ag = new WorldAgent({ url: noWorldUrl(), name: "replay" }) as any; const sent: any[] = [];
   ag.request = async (verb: string, args: any) => { sent.push([verb, args]);
     if (verb !== "consent") return { ok: false };
     if (!Object.keys(args).length) { await new Promise((r) => setTimeout(r, 20)); during?.(ag); return { ok: true, table: JSON.parse(JSON.stringify(held)) }; }
@@ -32,12 +33,12 @@ const H = (o: Partial<Held> = {}): Held => ({ move: null, touch: null, allow: []
   const p = t.ag.replayConsent(); const tt = t as any; await new Promise((r) => setTimeout(r, 5)); await tt.ag.request("consent", { move: true });
   await p; ok(t.held().move === true, "R4 a gate set while the replay's read is out stands: the old one isn't sent after it", { held: t.held(), sent: t.sent }); }
 // R7 (parity with main): a refused act on the agent's body is said to it as an act event, naming who and the gate
-{ const ag = new WorldAgent({ name: "told" }) as any; const ev: any[] = []; ag.onEvent = (e: any) => ev.push(e); ag.actorIds.set("Wren", "u-wren");
+{ const ag = new WorldAgent({ url: noWorldUrl(), name: "told" }) as any; const ev: any[] = []; ag.onEvent = (e: any) => ev.push(e); ag.actorIds.set("Wren", "u-wren");
   ag.bodyInbox([{ type: "body-refused", from: "u-wren", gate: "move", class: "shove" }, { type: "body-refused", from: "u-kit", gate: null, class: "pose" }]);
   ok(ev.length === 2 && ev[0].kind === "act" && ev[0].who === "Wren" && /^tried to move you/.test(ev[0].text) && /move gate is off/.test(ev[0].text) && /block list/.test(ev[1].text) && ag.inbox.length === 2,
     "R7 a refused act on the agent's body is an event in its inbox: who tried (by name), and its move gate (or its block list) turned it away", ev); }
 // R8: every body-inbox row reads `* <name> <rest>` (look, net-server): the actor's name once, never its id
-{ const ag = new WorldAgent({ name: "told" }) as any; ag.actorIds.set("Mira", "u-mira");
+{ const ag = new WorldAgent({ url: noWorldUrl(), name: "told" }) as any; ag.actorIds.set("Mira", "u-mira");
   ag.bodyInbox([{ type: "body-revoked", by: "u-mira", class: "touch" }, { type: "body", from: "u-mira", kind: "pose", consent: "touch" }]);
   const lines = ag.inbox.map((m: any) => `* ${m.who} ${m.text}`);
   ok(lines.length === 2 && /^\* Mira withdrew consent for touch/.test(lines[0]) && /^\* Mira reached your body \(pose\)/.test(lines[1]) && !lines.some((l: string) => /u-mira/.test(l)),

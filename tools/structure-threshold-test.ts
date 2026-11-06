@@ -1,124 +1,32 @@
-// bun tools/structure-threshold-test.ts — real planner, WorldAgent ticks and tool.
-// Renderer/server-free. The route oracle computes wall crossings independently
-// of the planner, from authored edges, so a shared predicate bug cannot pass it.
-import { strict as assert } from "node:assert";
-import { planStructure, planRouteLocal, prepareRouteLocal, routeLocal, localizePoint } from "../shared/structure.js";
-import { NON_FINITE_ENDPOINT } from "../shared/structure-route.js";
+// bun tools/structure-threshold-test.ts — the agent half of structure routing: WorldAgent ticks and the move tool over
+// real plans, renderer/server-free. The planner's own rows are tools/structure-route-test.ts's table; walks are checked
+// against the oracle in tools/structure-oracle.ts. Also (merged): the authored-plan cache through the agent's fold
+// (from route-preparation-test) and real bodies over transformed structures' support (from structure-route-support-test).
+import { noWorldUrl } from "./no-world.ts";
+import { planStructure, localizePoint, prepareRouteLocal } from "../shared/structure.js";
+import { routeGeometryFor } from "../shared/structure-route.js";
+import { addWall, removeWall, setAperture, setTile, removeTile, drawRoom, eraseRoom, labelCell } from "../shared/structure_edit.js";
 import { WorldAgent, WALK_ARGS_REASON } from "../mcpl/agent.ts";
 import { handleTool } from "../mcpl/tools.ts";
+import { valid, walk, type P } from "./structure-oracle.ts";
+import { agentOnDoor } from "./agent-scratch.ts";
+import { qFromYaw } from "../shared/rot.js";
+import { suite } from "./protocol/suite.ts";
 process.env.AGENT_BODY_ENGINE = "verlet";
-let checks = 0;
-function check(ok: unknown, name: string) { assert.ok(ok, name); checks++; console.log("✓ " + name); }
+const S = suite("structure-threshold");
+const check = (ok: unknown, name: string, detail?: unknown) => S.check(name, ok, detail);
 const house = { levels: [{ y: 0,
   tiles: Array.from({ length: 8 }, (_, i) => [i % 4, Math.floor(i / 4)]),
   walls: [...Array.from({ length: 4 }, (_, x) => [0,x,0]), ...Array.from({ length: 4 }, (_, x) => [0,x,2]),
     [1,0,0],[1,0,1],[1,4,0],[1,4,1],[1,2,0],[1,2,1]],
   apertures: [[0,0,0,"door"],[1,2,0,"door"]],
 }] };
-type P = [number, number];
-function crosses(data: any, a: P, b: P) {
-  const tile = data.tile ?? 1;
-  return data.levels[0].walls.some(([axis,x,z]: number[]) => {
-    if (data.levels[0].apertures?.some(([k,i,j,kind]: any[]) => k===axis && i===x && j===z && (kind==="door" || kind==="arch"))) return false;
-    // Parametric line at the wall, checked against the wall's closed span.
-    const A = axis === 0 ? 0 : 1;
-    const B = axis === 0 ? 1 : axis === 1 ? 0 : axis === 2 ? -1 : 1;
-    const C = (axis === 0 ? z : axis === 1 ? x : axis === 2 ? x-z : x+z+1) * tile;
-    const v0 = A*a[0]+B*a[1]-C, v1 = A*b[0]+B*b[1]-C;
-    if (v0*v1 > 0 || Math.abs(v0-v1)<1e-10) return false;
-    const t = v0/(v0-v1), px = a[0]+t*(b[0]-a[0]), pz = a[1]+t*(b[1]-a[1]);
-    if (t < -1e-8 || t > 1+1e-8) return false;
-    return axis===0 ? px>=x*tile-1e-8 && px<=(x+1)*tile+1e-8 :
-      axis===1 ? pz>=z*tile-1e-8 && pz<=(z+1)*tile+1e-8 :
-      px>=x*tile-1e-8 && px<=(x+1)*tile+1e-8 && pz>=z*tile-1e-8 && pz<=(z+1)*tile+1e-8;
-  });
-}
-function valid(data: any, points: number[][]) {
-  return points.slice(1).every((p,i) => !crosses(data,points[i] as P,p as P));
-}
-function route(data: any, from: P, to: P, name: string) {
-  const result = planRouteLocal(planStructure(data),...from,...to);
-  check(result.kind !== "blocked", name + ": finds a route");
-  check(result.points[0][0]===from[0] && result.points[0][1]===from[1] && result.points.at(-1)![0]===to[0] && result.points.at(-1)![1]===to[1], name + ": preserves endpoints");
-  check(valid(data,result.points), name + ": every actual leg respects authored walls");
-  return result.points;
-}
-const p = planStructure(house);
-route(house,[.5,-3],[3.5,.5],"north entry");
-route(house,[3.5,3],[3.5,.5],"far-side door approach");
-route(house,[3.5,.5],[3.5,3],"exit to far side");
-route(house,[-1,1.5],[5,1.5],"both outside across building");
-route(house,[.15,1.88],[3.85,1.12],"off-center interior endpoints");
-route(house,[-100000,1.5],[3.5,.5],"distant start uses bounded local region");
-route(house,[3.5,.5],[100000,1.5],"distant destination uses bounded local region");
-check(planRouteLocal(p,-2,-2,-1,-1).kind==="clear","unobstructed outdoors is a direct leg");
-
 const sealed = structuredClone(house); sealed.levels[0].apertures = [[0,0,0,"window"],[1,2,0,"door"]];
-check(planRouteLocal(planStructure(sealed),.5,-3,3.5,.5).kind==="blocked","window-only exterior refuses entry");
-check(routeLocal(planStructure(sealed),.5,-3,3.5,.5)===null,"compatibility route returns null for refusal");
 const sparse = { levels: [{ tiles: [], walls: [[1,0,0],[1,100000000,0]], apertures: [] }] };
-const sparseResult = planRouteLocal(planStructure(sparse),-1,.5,1,.5);
-check(sparseResult.kind==="blocked" && sparseResult.reason!.includes("over the 16384-cell routing limit") && sparseResult.reason!.includes("nearer endpoints won't help"),
-  "huge sparse bounds return a named budget refusal that says nearer endpoints won't help");
-check(planRouteLocal(planStructure(sparse),-1,-1,-2,-2).kind==="clear","clear path remains possible beside huge sparse geometry");
-const wallOnly = { levels: [{ tiles: [], walls: [[1,0,0]], apertures: [] }] };
-route(wallOnly,[-.5,.5],[.5,.5],"unfloored exterior wall");
-for (const axis of [2,3]) {
-  // One triangular room, with the other half genuinely outdoors.
-  const north = [0,0,0];
-  const side = axis===2 ? [1,1,0] : [1,0,0];
-  const d = { levels: [{ tiles: [[0,0,"floor","A"]], walls: [[axis,0,0],north,side],
-    apertures: [[axis,0,0,"door"]] }] };
-  const target: P = axis===2 ? [.8,.2] : [.2,.2];
-  route(d,[.5,2],target,"diagonal " + axis + " exterior doorway");
-  d.levels[0].apertures = [[axis,0,0,"window"]];
-  check(planRouteLocal(planStructure(d),.5,2,...target).kind==="blocked","diagonal " + axis + " window refuses passage");
-}
-for (const axis of [2,3]) {
-  const d = { levels: [{ tiles: [[0,0]], walls: [[axis,0,0]], apertures: [] }] };
-  route(d, axis===2 ? [.8,.2] : [.2,.2], axis===2 ? [.2,.8] : [.8,.8], "around solid diagonal " + axis);
-}
-const concave = { levels: [{ tiles: [[0,0],[1,0],[0,1]],
-  walls: [[0,0,0],[0,1,0],[1,0,0],[1,0,1],[0,0,2],[1,1,1],[0,1,1],[1,2,0]],
-  apertures: [[0,1,1,"arch"]] }] };
-route(concave,[2.5,1.5],[.25,1.75],"concave outline to reentrant arch");
-const courtyard = { levels: [{ tiles: [[0,0],[1,0],[2,0],[0,1],[2,1],[0,2],[1,2],[2,2]],
-  walls: [[0,1,1],[0,1,2],[1,1,1],[1,2,1]], apertures: [[0,1,1,"door"]] }] };
-route(courtyard,[1.5,1.5],[3.5,1.5],"unfloored courtyard through its door");
-check(planRouteLocal(p,NaN,0,1,1).kind==="blocked"&&planRouteLocal(p,NaN,0,1,1).reason===NON_FINITE_ENDPOINT,"non-finite endpoints are refused, with the router's one reason for them");
-// A terrain leg along a wall's projection is refused even when the wall is
-// overhead: point queries can't bound the terrain over the whole overlap. The
-// walk is routed away from the wall's line instead.
-const overhead={levels:[{y:3,tiles:[],walls:[[0,0,0]],apertures:[]}]};
-check(planRouteLocal(planStructure(overhead),-1,.5,2,.5).kind==="clear","an overhead wall's crossing leaves a terrain leg clear");
-const along=planRouteLocal(planStructure(overhead),-1,0,2,0);
-check(along.kind==="routed"&&!along.points.some((q:number[],i:number)=>i>0&&along.points[i-1][1]===0&&q[1]===0
-  &&Math.min(along.points[i-1][0],q[0])<1&&Math.max(along.points[i-1][0],q[0])>0),
-  "a terrain leg along a projected wall is routed away from its line");
-
-// Floor-mode tests supply an explicit support owner/height, so the router's
-// floor mode is tested apart from the standing that selects it.
-const upper = structuredClone(house.levels[0]); upper.y = 3;
-const stacked = { levels: [{ ...structuredClone(house.levels[0]), y: 0 }, upper] };
-const floorRoute = (data: any, from: P, to: P, level=1, height=3.1) =>
-  prepareRouteLocal(planStructure(data),{kind:"floor",level,height,step:.5}).route(...from,...to);
-const upstairs = floorRoute(stacked,[.5,1.5],[3.5,1.5]);
-check(upstairs.kind === "routed" && upstairs.points.every(([x,z])=>x>=0&&x<=4&&z>=0&&z<=2),
-  "upper-storey routes stay on the floor instead of using an outdoor shortcut");
-upper.apertures = [[0,0,0,"door"]]; // a ground-level exterior exit is air upstairs
-check(floorRoute(stacked,[.5,1.5],[3.5,1.5]).kind === "blocked",
-  "upper-storey sealed partition cannot be bypassed across air");
-check(floorRoute(stacked,[.5,1.5],[.5,-2]).kind === "blocked",
-  "upper-storey exterior destination is a refusal, not vertical navigation");
-
-check(floorRoute(stacked,[.2,.2],[.2,.2]).kind === "clear",
-  "same upper-floor point does not detour through the cell center");
-check(floorRoute(stacked,[.2,.2],[.4,.3]).kind === "clear",
-  "clear same-cell upper-floor positioning keeps its direct segment");
 
 const agents: WorldAgent[] = [];
 function agent() {
-  const a = new WorldAgent({ name: "walker", avatar: "", world: "test" });
+  const a = new WorldAgent({ url: noWorldUrl(), name: "walker", avatar: "", world: "test" });
   agents.push(a); a.joined = true; return a;
 }
 function entity(data=house, id="house", pos=[0,0,0], yaw=0, scale=1): any {
@@ -128,17 +36,6 @@ function worldPoint(e: any, p: P): P {
   const c=Math.cos(e.yaw),s=Math.sin(e.yaw);
   return [e.pos[0]+(p[0]*c+p[1]*s)*e.scale,e.pos[2]+(-p[0]*s+p[1]*c)*e.scale];
 }
-async function walk(a: WorldAgent, to: P, tolerance=0, iterations=2000) {
-  const samples: P[] = [[a.pos.x,a.pos.z]];
-  const promise=a.walkTo(...to,true,10000,tolerance);
-  // The waypoints as planned: the first target, then the legs after it.
-  const planned: P[] = (a as any).target ? [(a as any).target,...(a as any).legs].map((q:any)=>[q.x,q.z] as P) : [];
-  for (let i=0;i<iterations && (a as any).target;i++) {
-    (a as any).tick(); samples.push([a.pos.x,a.pos.z]);
-  }
-  if ((a as any).target) { a.stop(); throw new Error("walk failed to finish within bounded ticks"); }
-  return { arrived: await promise, samples, planned };
-}
 // A body held on an upper floor, given the floor support walkSupport answers
 // there, so the router's floor branch is tested apart from the standing that
 // selects it; walkTo's floor branch serves that answer.
@@ -146,10 +43,189 @@ function standOn(a: WorldAgent, entity: string, level: number, height: number) {
   (a as any).walkSupport=()=>({kind:"floor",height,entity,level});
 }
 try {
+  // these run FIRST: after the foreign-wall block below, process-wide headless state turns two of their rows red (undiagnosed)
+  // ============================================================ the authored-plan cache (from route-preparation-test)
+  // its boundaries through real editor operations and the received-entry fold; the cap rows are tools/structure-route-test.ts's
+  console.log("\nSTRUCTURE — the authored-plan cache through the agent's fold");
+  {
+const terrain=(height=0)=>({kind:"terrain",heightAt:()=>height,step:.5});
+const base:any={levels:[{y:0,tiles:[[0,0],[1,0]],walls:[[1,1,0]],apertures:[]}],labels:{}};
+const agent=new WorldAgent({ url: noWorldUrl(), name:"cache-test",avatar:"",world:"cache-test"}); agents.push(agent);
+(agent as any).syncSupport=async()=>{}; // the fold/cache, not remote asset support, is under test
+// the agent folds the authority's log itself, so each old hand-written entry is the current write doing the same (spawn →
+// create, comp → set/delete a component, place → set transform) through the real door (tools/agent-scratch.ts agentOnDoor)
+const door=agentOnDoor(agent,"route-prep");
+async function receive(verb:string,args:any) {
+ const a=JSON.parse(JSON.stringify(args));
+ const now=agent.entities.get(a.id) as any;
+ const tf=(r:any)=>{const s=r.scale??now?.scale??1;return {pos:r.pos??now?.pos??[0,0,0],q:qFromYaw(r.yaw??now?.yaw??0),scale:[s,s,s]};};
+ let r:any;
+ if(verb==="spawn"){
+  if(now){
+   // the authority never reuses an id: the old thing is deleted and the door refuses the id's return ("reused"), structure or not
+   const gone=await door.act("delete",{id:a.id});
+   if(!gone.ok) throw new Error("delete refused: "+JSON.stringify(gone.refused));
+   r=door.call("create",{id:a.id,model:a.lib,components:{transform:tf(a)}});
+   if(r.ok||r.refused?.code!=="reused") throw new Error("the authority let an id be reused: "+JSON.stringify(r));
+   return {verb,args:a};
+  }
+  r=await door.act("create",{id:a.id,model:a.lib,components:{transform:tf(a)}});
+ } else if(verb==="comp") r=await door.act(a.data===null?"delete":"set",a.data===null?{id:a.id,component:a.type}:{id:a.id,component:a.type,value:a.data});
+ else if(verb==="place") r=await door.act("set",{id:a.id,component:"transform",value:tf(a)});
+ else throw new Error("no current write for old "+verb);
+ if(!r.ok) throw new Error(verb+" refused: "+JSON.stringify(r.refused));
+ return {verb,args:a};
+}
+/** The same value: the fold hands the agent a copy of what was written, never the writer's object. */
+const same=(x:any,y:any)=>JSON.stringify(x)===JSON.stringify(y);
+const data=()=>agent.entities.get("house")?.structure;
+const cached=(d:any)=>(agent as any).planOf(d);
+async function planned(target:[number,number]) {
+ const promise=agent.walkTo(...target,true,1000,0);
+ const result={refusal:agent.walkRefusal,legs:(agent as any).legs.length,target:(agent as any).target};
+ agent.stop();await promise;return result;
+}
+/** An accepted straight walk: no refusal, no legs, and the destination as its target. */
+const straight=(r:any,[x,z]:[number,number])=>r.refusal===null&&r.legs===0&&r.target?.x===x&&r.target?.z===z;
+/** An accepted detour: no refusal, and waypoints before the destination. */
+const detour=(r:any)=>r.refusal===null&&r.legs>0&&!!r.target;
+{
+
+ await receive("spawn",{id:"house",lib:"fixture.glb",pos:[0,0,0],yaw:0});
+ await receive("comp",{id:"house",type:"structure",data:base});
+ const original=data(), initial=cached(original), originalJSON=JSON.stringify(original);
+ check(cached(original)===initial,"same received component identity reuses its pure local plan");
+ const geometry=routeGeometryFor(initial);
+ check(routeGeometryFor(initial)===geometry,"same immutable plan reuses wall spans and terrain topology");
+ const low=prepareRouteLocal(initial,terrain(0)), high=prepareRouteLocal(initial,terrain(4));
+ check(low!==high&&!low.clear(.5,.5,1.5,.5)&&high.clear(.5,.5,1.5,.5),"same cached geometry gets fresh terrain/support checkers");
+
+ const edge={axis:1,x:1,z:0}, cell={x:0,z:0};
+ const edits:[string,(d:any)=>any][]=[
+  ["add wall",d=>addWall(d,{axis:0,x:0,z:0})],
+  ["remove wall",d=>removeWall(d,edge)],
+  ["door",d=>setAperture(d,edge,"door")],
+  ["window",d=>setAperture(d,edge,"window")],
+  ["clear aperture",d=>setAperture(setAperture(d,edge,"door"),edge,null)],
+  ["tile/half",d=>setTile(d,cell,"floor","A")],
+  ["remove tile",d=>removeTile(d,cell)],
+  ["draw room",d=>drawRoom(d,cell,{x:1,z:1})],
+  ["erase room",d=>eraseRoom(d,cell,cell)],
+  ["label",d=>labelCell(d,cell,"kitchen")],
+ ];
+ for(const [name,edit] of edits){
+  const next=edit(original);
+  check(next!==original&&JSON.stringify(original)===originalJSON,name+": editor returns new identity and preserves the old value");
+  const previous=data();
+  const packet=await receive("comp",{id:"house",type:"structure",data:next});
+  check(data()!==previous&&same(data(),packet.args.data),name+": received comp replaces data identity in the actual agent fold");
+  check(cached(data())!==initial,name+": changed component gets a different plan");
+ }
+ const door=setAperture(base,edge,"door");
+ await receive("comp",{id:"house",type:"structure",data:door});
+ const doorPlan=cached(data());
+ check(prepareRouteLocal(doorPlan,terrain()).clear(.5,.5,1.5,.5),"replacement opening invalidates old blocking geometry");
+ // the editor clearing that door: the wall it leaves blocks again
+ await receive("comp",{id:"house",type:"structure",data:setAperture(door,edge,null)});
+ const clearedPlan=cached(data());
+ check(clearedPlan!==doorPlan&&!prepareRouteLocal(clearedPlan,terrain()).clear(.5,.5,1.5,.5),"clearing an existing door through the editor closes the opening");
+ await receive("comp",{id:"house",type:"structure",data:door});
+ await receive("comp",{id:"house",type:"structure",data:base}); // UI undo: send the previous value through comp
+ const undone=data(), undonePlan=cached(undone);
+ check(undonePlan!==doorPlan&&!prepareRouteLocal(undonePlan,terrain()).clear(.5,.5,1.5,.5),"undo restores the prior wall without reusing the changed geometry");
+
+ agent.pos={x:.5,y:0,z:.5};
+ check(detour(await planned([1.5,.5])),"cached wall produces a real walk detour");
+ await receive("place",{id:"house",pos:[10,0,0]});
+ check(same(data(),undone)&&cached(data())===undonePlan,"entity translation preserves authored-cache identity");
+ check(straight(await planned([1.5,.5]),[1.5,.5]),"new walk uses fresh translation rather than an old transformed checker");
+ await receive("place",{id:"house",pos:[10,1,-5],yaw:Math.PI/2,scale:2});
+ (agent as any).terrain={heightAt:()=>1};agent.pos={x:11,y:1,z:-6};
+ check(cached(data())===undonePlan&&detour(await planned([11,-8])),"same geometry uses fresh rotation, scale and terrain origin");
+ (agent as any).terrain={heightAt:()=>8};
+ check(straight(await planned([11,-8]),[11,-8]),"later walk uses changed terrain height with the same authored plan");
+ // walkTo plans each received revision once: a second walk over the same component reads none of its data again
+ let reads=0;
+ const counted={levels:[{y:0,tiles:[[0,0],[1,0]],walls:[[1,1,0]],apertures:[]}]};
+ const watched={get levels(){reads++;return counted.levels;}};
+ agent.entities.set("watched",{id:"watched",model:"",pos:[20,0,0],yaw:0,scale:1,structure:watched} as any);
+ (agent as any).terrain={heightAt:()=>1};agent.pos={x:20.5,y:1,z:.5};
+ check(detour(await planned([21.5,.5]))&&reads>0,"a walk past a new revision plans it");
+ const readsAfterFirst=reads;
+ check(detour(await planned([21.5,.5]))&&reads===readsAfterFirst,"a second walk over the same revision reads none of it again");
+ agent.entities.delete("watched");
+ await receive("comp",{id:"house",type:"structure",data:null});
+ agent.pos={x:11,y:1,z:-6};
+ { const r=await planned([11,-8]); check(data()===undefined&&straight(r,[11,-8]),"component removal drops the obstacle rather than reviving cached data",{data:data(),...r}); }
+ await receive("comp",{id:"house",type:"structure",data:base});
+ check(data()!==undone&&cached(data())!==undonePlan,"re-attach creates its own received revision");
+ for(const primitive of ["junk",true,7,null]){
+  const first=cached(primitive);
+  check(first.levels.length===0&&cached(primitive)!==first,"malformed primitive "+JSON.stringify(primitive)+" plans empty, afresh each time (uncached)");
+ }
+ await receive("spawn",{id:"house",lib:"fixture.glb",pos:[0,0,0]});
+ check(data()===undefined,"same-id spawn replacement does not inherit cached structure data");
+ }
+  }
+
+  // ============================================================ real bodies over transformed structures' support (from structure-route-support-test)
+  // the support mode, the band and the crossing height in world metres; legs drive the real tick
+  console.log("\nSTRUCTURE — real bodies over transformed structures");
+  {
+const upper={y:3,tiles:[[0,0],[2,0]],walls:[],apertures:[]};
+const ground={y:0,tiles:[[0,0],[1,0],[2,0]],walls:[[1,1,0]],apertures:[[1,1,0,"door"]]};
+const basement={y:-3,tiles:[[0,0]],walls:[],apertures:[]};
+const wall={levels:[{y:0,tiles:[],walls:[[1,1,0]],apertures:[]}]};
+
+function bodyS(entity:any,height:(x:number,z:number)=>number,from:[number,number]) {
+ const a=new WorldAgent({ url: noWorldUrl(), name:"walker",avatar:"",world:"support-test"});agents.push(a);a.joined=true;
+ a.entities.set(entity.id,entity);(a as any).terrain={heightAt:height};
+ a.pos={x:from[0],y:height(...from),z:from[1]};return a;
+}
+function transformS(e:any,x:number,z:number):[number,number] {
+ const c=Math.cos(e.yaw),s=Math.sin(e.yaw);
+ return [e.pos[0]+(x*c+z*s)*e.scale,e.pos[2]+(-x*s+z*c)*e.scale];
+}
+{
+
+ for(const e of [
+  {id:"world",pos:[0,0,0],yaw:0,scale:1,structure:{levels:[basement,ground]}},
+  {id:"shift",pos:[10,2,-5],yaw:Math.PI/3,scale:2,structure:{levels:[ground,basement]}},
+ ]) {
+  const a=bodyS(e,()=>e.pos[1],transformS(e,.5,.5));
+  const r=await walk(a,transformS(e,3.5,.5));
+  check(r.arrived&&r.points.every(p=>p.y===e.pos[1]),"real terrain-mode body exits ground above basement with translated/scaled frame");
+ }
+ const e={id:"overhead",pos:[10,1,-5],yaw:.6,scale:2,structure:{levels:[upper]}};
+ const a=bodyS(e,()=>1,transformS(e,.5,.5));
+ check((await walk(a,transformS(e,2.5,.5))).arrived,"real ground body walks beneath translated/scaled overhead floor without confinement");
+
+ // the obstruction band is 0.5 WORLD metres: at scale 2, y 0.4 the wall's base is 0.6 m up, above the band
+ const raised={id:"band",pos:[0,.4,0],yaw:0,scale:2,structure:wall};
+ const b=bodyS(raised,()=>0,[0,1]);
+ const r=await walk(b,[4,1]);
+ check(r.arrived&&r.points.every(p=>Math.abs(p.z-1)<1e-10),"world-scaled step band leaves a 0.6m raised wall above a terrain walk");
+
+ const sole={id:"sole",pos:[0,0,0],yaw:0,scale:1,structure:{levels:[upper]}};
+ const soleBody=bodyS(sole,()=>0,[.5,.5]);soleBody.pos.y=3.1;
+ const soleWalk=await walk(soleBody,[2.5,.5]);
+ check(!soleWalk.arrived && /no path across this floor connects the start to the destination/.test(String((soleBody as any).walkRefusal)) && soleBody.pos.y===3.1,"a body on a sole raised floor stands on it, and a walk across the floor's gap is refused rather than taken on the terrain, for its own reason: the hole divides the floor");
+ const slope={id:"slope",pos:[10,2,-5],yaw:Math.PI/2,scale:2,structure:wall};
+ const highAtCross=(wx:number,wz:number)=>{const [lx]=localizePoint(slope,wx,0,wz);return 2+8*lx;};
+ const c=bodyS(slope,highAtCross,transformS(slope,0,.5));
+ // walked, not run: shared/mover.js refuses a stride rising over a step (0.8 m); a run's stride here rises 1.6 m, a walk's 0.62 m
+ const high=await walk(c,transformS(slope,2,.5),{run:false});
+ check(high.arrived&&high.points.every(p=>Math.abs(localizePoint(slope,p.x,p.y,p.z)[2]-.5)<1e-8),
+   "transformed real body uses terrain at wall crossing rather than origin height",{arrived:high.arrived,refusal:(c as any).walkRefusal});
+ }
+  }
+
+  // ============================================================ WorldAgent ticks and the move tool over real plans
+  console.log("\nSTRUCTURE — the agent half of routing");
   for (const [label, e] of [["base",entity()],["transformed",entity(house,"house",[10,0,-5],Math.PI/3,2)]] as const) {
     const a=agent(); a.entities.set(e.id,e);
     const from=worldPoint(e,[3.5,3]), to=worldPoint(e,[3.5,.5]); a.pos.x=from[0]; a.pos.z=from[1];
-    const w=await walk(a,to,.4);
+    const w=await walk(a,to,{tolerance:.4});
     check(w.arrived,label+": actual walkTo/ticks arrive");
     const local=w.samples.map(([x,z])=>{const [lx,,lz]=localizePoint(e,x,0,z);return [lx,lz];});
     check(valid(house,local),label+": actual tick trajectory with tolerance 0.4 crosses no wall");
@@ -219,10 +295,6 @@ try {
   const free=agent(); free.pos={x:5,y:0,z:5};
   free.entities.set("distant",entity(oneFloor as any,"distant",[100,0,100]));
   check((await walk(free,[5.2,5.2])).arrived,"unrelated upper floor alone cannot veto a clear ground walk");
-  const upperWall=structuredClone(oneFloor);
-  upperWall.levels[1].tiles=[[10,10]]; upperWall.levels[1].walls=[[1,1,0]];
-  check(prepareRouteLocal(planStructure(upperWall),{kind:"floor",height:3.1}).route(.5,.5,2.5,.5).kind==="blocked",
-    "an upper floor not supporting the origin still reports a real wall obstruction");
 
   }
   // Two structures offer individually legal but mutually conflicting routes.
@@ -310,6 +382,6 @@ try {
   check(!nowhere.arrived && stuck.walkRefusal!.startsWith("the body stands in a wall, and from beside it:\n") && stuck.walkRefusal!.includes("[vault]")
     && stuck.walkRefusal!.includes("\nfrom another side: "),
     "a body in a wall with no route from either side gives each side's reason, each on its own line: "+stuck.walkRefusal);
-  console.log("PASS " + checks + " threshold routing checks");
+
 } finally { for (const a of agents) a.close(); }
-process.exit(0);
+S.done();

@@ -11,9 +11,7 @@
 // someone else changed it since, the authority refuses (`changed`) rather than one
 // edit silently eating the other. Undo is the editor's one undo (Ctrl+Z: the
 // door's undo of MY act, editwrites.js), so it always lands on the building that
-// act changed, and keeps theirs where someone changed it since. (Review 10-07:
-// this file used to keep its own stack and write the popped plan into whatever
-// building was current, with expect: false.)
+// act changed, and keeps theirs where someone changed it since.
 
 import * as OP from '../../shared/requests.js';
 import { sendOps } from './editwrites.js';
@@ -81,7 +79,7 @@ function onFootprint(b, at) {
   for (const [tx, tz] of b.data?.levels?.[0]?.tiles ?? []) { x0 = Math.min(x0, tx); x1 = Math.max(x1, tx + 1); z0 = Math.min(z0, tz); z1 = Math.max(z1, tz + 1); }
   return at.lx >= (x0 - PAD) * t && at.lx <= (x1 + PAD) * t && at.lz >= (z0 - PAD) * t && at.lz <= (z1 + PAD) * t;
 }
-/** The building to edit, never a guess among many (review 10-07: it used to be the first building in the world):
+/** The building to edit, never a guess among many:
  *  the selected building; else the one under the pointer (its footprint, PAD cells out; the nearest anchor if two
  *  overlap); else the one last edited here; else the world's only one. Null otherwise: the tool says to select one. */
 function target(ev = null) {
@@ -186,7 +184,7 @@ export function newBuilding(ev) {
   ray.setFromCamera(ndc, camera);
   const hit = new THREE.Vector3();
   if (!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit)) return;
-  // the authority mints its id (R 10-17: writers never choose ids); the reply's ids map says what it became
+  // the authority mints its id (writers never choose ids); the reply's ids map says what it became
   sendOps([OP.create('$house', { model: 'eidoverse/assets/models/crate_large_red.glb', transform: { pos: [Math.round(hit.x), 0, Math.round(hit.z)] },
     components: { structure: emptyStructure() } })], { what: 'a new building', expect: false }).then((r) => {
     const id = r?.ids?.$house; if (id) { editing = id; selectedId = id; }   // the new building is the one the tools edit now (until something else is selected)
@@ -241,9 +239,8 @@ export function setTool(t) {
 }
 
 // ---- the grid overlay -------------------------------------------------------
-// You cannot snap to something you cannot see. The overlay draws the lattice a
-// click will actually land on, in the building's own frame — which is also the
-// only honest way to show a grid that may be rotated or diagonal to the world.
+// The lattice a click will actually land on, drawn in the building's own frame
+// (the grid may be rotated or diagonal to the world).
 
 let gridHelp = null;
 

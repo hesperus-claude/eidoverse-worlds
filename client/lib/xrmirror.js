@@ -1,22 +1,15 @@
-// Desktop view while presenting (owner, 09-05 18:22: "mirror VR view to desktop, and 3rd person as an option"). By
-// default the desktop canvas goes black in VR — WebXR owns the framebuffer. This system draws the scene once more, onto
-// the canvas, from a desktop camera: 'first' = where the headset looks, 'third' = behind-and-above the body, looking at
-// it. porch-old's pattern, which worked: after the eye render, renderer.xr.enabled OFF, render
-// the scene to the canvas, restore.
+// Desktop view while presenting. By default the desktop canvas goes black in VR — WebXR owns the framebuffer. This
+// system draws the scene once more, onto the canvas, from a desktop camera: 'first' = where the headset looks,
+// 'third' = behind-and-above the body, looking at it. After the eye render: renderer.xr.enabled OFF, render the scene
+// to the canvas, restore.
 //
-// Why it never worked HERE (found 2026-09-26): three's WebGPURenderer (unlike porch-old's WebGLRenderer) renders the
-// canvas through an intermediate target sized from its CanvasTarget, and XRManager._setXRLayerSize overwrites that
-// CanvasTarget's size with the XR LAYER's for the whole session (Renderer.js "TODO: Find a better solution to resize
-// the canvas when in XR"). So every canvas pass in a session — the 09-20 scene pass, the eye quad before it — drew
-// through a target the size of BOTH EYES (5920×2960 on the owner's headset, MSAA ×4) with a viewport of that size on
-// a ~1920×1080 canvas: the scene pass cost a second stereo frame ("chugging VERY hard… loud fan"), and the quad drew
-// its corner. The fix is the one field three's own TODO names: for this pass only, the CanvasTarget gets the canvas's
-// real size back, and the XR size is restored before the next eye frame.
-//
-// Earlier attempts, kept short: 'first' sampled three's eye intermediate target through a quad (black: it drew through
-// the same oversized path) and before that read the XR layer's framebuffer with blitFramebuffer (two GPU freezes: on
-// Windows that surface belongs to the SteamVR compositor — never touch it). 'third' rendered into a small target and
-// blitted it with raw GL. One path now serves both.
+// The catch: three's WebGPURenderer renders the canvas through an intermediate target sized from its CanvasTarget,
+// and XRManager._setXRLayerSize overwrites that CanvasTarget's size with the XR LAYER's for the whole session
+// (Renderer.js "TODO: Find a better solution to resize the canvas when in XR") — so a canvas pass would draw through
+// a target the size of BOTH EYES and cost a second stereo frame. For this pass only, the CanvasTarget gets the
+// canvas's real size back, and the XR size is restored before the next eye frame.
+// Never read the XR layer's framebuffer (blitFramebuffer): on Windows that surface belongs to the SteamVR
+// compositor, and touching it froze the GPU.
 import { THREE, renderer, scene, camera } from './core.js';
 import { isPresenting, xrPrefs, withHeadShown } from './xr.js';
 import { myState } from './controller.js';
@@ -81,15 +74,13 @@ function casters() {
 let slowFrames = 0, lastTick = 0, mirrorKilled = false, teed = false, failed = false;
 const stats = (globalThis.__xrMirror = { passes: 0, last: null });   // harness: xr-mirror-probe counts the mirror's own passes
 // holdKill: a HARNESS switch (xr-mirror-probe) so the killswitch can't end the specimen mid-sample on a slow headless
-// frame clock (antra's #206 review: on a slower host it killed the mirror before the screenshot). It still counts and
-// records wouldKill; the probe checks the switch itself in a separate run with the hold off.
+// frame clock. It still counts and records wouldKill; the probe checks the switch itself in a separate run.
 
-// WHY THE DESKTOP STOPPED, said for as long as it's true (owner, 09-27: an 8 s toast 'isn't on the screen for very long
-// and could be easily missed'). A banner centred on the desktop from the moment the mirror switches itself off until
-// the session ends; nobody in the headset sees it, and whoever is at the monitor can't miss it.
+// WHY THE DESKTOP STOPPED, said for as long as it's true: a banner centred on the desktop from the moment the mirror
+// switches itself off until the session ends (a toast is too easily missed by whoever is at the monitor).
 let banner = null, bannerKind = null;
 // Mirror set to OFF by choice: the desktop is black for the whole session, which reads as a crash to whoever's at the
-// monitor (owner, 09-27: 'a generic in VR label … same style'). Neutral colour; the self-kill banner above outranks it.
+// monitor, so it gets a neutral 'in VR' label. The self-kill banner above outranks it.
 function showInVRLabel() {
   if (typeof document === 'undefined' || bannerKind === 'killed') return;
   showMirrorBanner(null, 'inVR');
@@ -123,11 +114,10 @@ bus.on('xr:state', (on) => { if (on) { mirrorKilled = false; failed = false; slo
 export function tickXRMirror() {
   if (!isPresenting() || xrPrefs.mirror === 'off' || mirrorKilled || failed) return;
   if (xrCurtainOn()) return;   // entry: the curtain is up and pipelines are building; no desktop pass on top of that
-  // THE MIRROR MUST NEVER COST THE HEADSET (owner, 09-08 01:19: fps 17 → frozen with the mirror on). 30 consecutive
-  // frames over 30 ms while it runs → off for the session, said out loud. The pref is untouched.
+  // THE MIRROR MUST NEVER COST THE HEADSET: 30 consecutive frames over 30 ms while it runs → off for the session,
+  // said out loud. The pref is untouched.
   { const now = performance.now(); if (lastTick && now - lastTick > 30) { if (++slowFrames >= 30 && !(stats.wouldKill = stats.holdKill)) { mirrorKilled = true; stats.killed = true; tee(`[xr] mirror: OFF for this session — 30 frames over 30 ms (mode ${xrPrefs.mirror})`); showMirrorBanner('Mirroring your eyes to this screen was costing the headset frames, so it switched itself off to keep VR smooth.'); return; } } else slowFrames = 0; lastTick = now; }
-  // every frame, as porch-old did: a skipped frame risks the desktop presenting a cleared buffer (a flicker). The pass
-  // is desktop-sized now, which was the whole cost; the killswitch above still guards the headset.
+  // Every frame: a skipped frame risks the desktop presenting a cleared buffer (a flicker).
   const cw = renderer.domElement.width || 1, ch = renderer.domElement.height || 1;
   if (cw / ch !== lastAspect) { lastAspect = cw / ch; deskCam.aspect = lastAspect; deskCam.updateProjectionMatrix(); }
   const xrCam = renderer.xr.getCamera();

@@ -28,6 +28,7 @@ import { entities } from './world.js';
 import { boxOf, previewMesh, previewLight } from './realize/models.js';
 import { state } from './state.js';
 import { net, sendDrag, replica } from './net.js';
+import { serverNow } from './serverclock.js';   // the sky's and roles' stamps are the authority's
 import { trustedOf } from '../../shared/drafts.js';
 import { enc } from '../../shared/protocol/names.js';
 import { THREE } from './core.js';
@@ -108,15 +109,15 @@ export function liveFor(id) {
     trusted: trustedHere(), mayTrust: mayTrust(),
   };
 }
-export const trustedHere = () => trustedOf(replica.st?.entities?.['@world']?.c);
+const trustedHere = () => trustedOf(replica.st?.entities?.['@world']?.c);
 export const mayTrust = () => (net.myRights?.role === undefined ? undefined : isOwner(net.myRights));
 // The world entity `@world` (design §3, shared/worldentity.js): an alias of
 // state.sky/terrain/grass, edited through the sky/weather/terrain/grass verbs.
 // Those are owner-rank: false = this viewer is known not to be the owner
 // (server operators fold to owner), undefined = not known yet.
-// shaping the world's look is the editWorld switch (research roles S2); the owner's on an older server
+// shaping the world's look is the editWorld switch; the owner's on an older server
 export const mayShape = () => { const r = net.myRights; if (Array.isArray(r?.permissions)) return r.permissions.includes('editWorld'); return r?.role === undefined ? undefined : isOwner(r); };
-export const worldLive = () => ({ now: Date.now(), mayShape: mayShape(), trusted: trustedHere(), mayTrust: mayTrust() });
+export const worldLive = () => ({ now: serverNow(), mayShape: mayShape(), trusted: trustedHere(), mayTrust: mayTrust() });
 export function schemaFor(id) {
   if (id === WORLD_ID) return worldSchema(state.st, worldLive());
   const rec = recordFor(id); if (!rec) return { id, groups: [] };
@@ -144,7 +145,7 @@ export function planEdit(id, key, value) {
 /** Keep a rotate-order pick (a planEdit's rotOrder) as this viewer's: nothing is sent. */
 export const keepView = (id, plan) => { if (plan?.rotOrder) setRotOrder(id, plan.rotOrder); };
 /** Does this plan write a transform (a move/turn/scale)? The euler hint follows the pose. */
-export const movesPose = (ops) => ops.some((o) => (o.verb === 'batch' ? o.args.requests : [o]).some((x) => x.args?.component === 'transform'));
+const movesPose = (ops) => ops.some((o) => (o.verb === 'batch' ? o.args.requests : [o]).some((x) => x.args?.component === 'transform'));
 
 // a scrubbed transform is a live drag for everyone else (E2: the same presence lane the gizmo uses, so co-builders see the
 // number move and the claim badge); the release's commit sends the last sample with end
@@ -175,7 +176,7 @@ export function commitEdit(id, key, value, opts = {}) {
   const baseComps = gesture?.id === id ? gesture.comps : null;   // the components before the drag began
   gesture = null;
   // planEdit holds the two seam rules: the panel's steppers speak WIRE units (a deg field commits radians) while
-  // editOps' contract — a model's — is the FACE, converted once there (review B1: amp/phase/socket yaw landed at 1/57th);
+  // editOps' contract — a model's — is the FACE, converted once there (else degrees land as radians);
   // and a raw-JSON box cleared and blurred must not delete the component — 'remove <type>' (null) is the deliberate act.
   const { ops, errors, euler, asks, rotOrder } = planEdit(id, key, value);
   keepView(id, { rotOrder });
@@ -190,7 +191,7 @@ export function commitEdit(id, key, value, opts = {}) {
  *  for rotate), as editOps takes them. The transform's reset keys use it. */
 // `id` may be an array (a multi-select: each thing edited from its own record) or WORLD_ID (worldEditOps over every field
 // at once, so two fields of one component are one write, not two that each set the whole of it): a scrubbed run of
-// channels edits whatever the Inspector shows (house review I23). Either way ONE request, one Ctrl+Z.
+// channels edits whatever the Inspector shows. Either way ONE request, one Ctrl+Z.
 export function commitMany(id, edits, what) {
   if (id === WORLD_ID) {
     const { ops, errors } = worldEditOps(state.st, edits, worldLive());

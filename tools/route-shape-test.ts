@@ -9,64 +9,17 @@
 //   B. every field of viewOf(c) — computed here from the client's own fold of the log stream — is in the body, equal:
 //      the route is the view, not a sixth shape of the entity
 //   C. the whole-scene body (/geom?world) carries the same record per entity, plus `kind`
-// Port discipline per the stale-listener incident: nonce file served from THIS tree before any assertion counts.
-import { spawn, type ChildProcess } from "node:child_process";
-import { join } from "node:path";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { foundWorlds } from "./harness.ts";
+// harness.scratchSequencer: a scratch WORLDS_DIR, the child proven ours by its nonce before any assertion counts.
+import { mkCheck, scratchSequencer } from "./harness.ts";
 import { makeReplica } from "../shared/protocol/replica.js";
 import { viewOf } from "../shared/protocol/view.js";
 import { idAliases } from "./protocol/idalias.ts";
+import { tryUntil } from "./protocol/wait.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 const IDS = idAliases();   // R 10-17: the suite's names ride as placeholders and minted ids
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const { check, tally } = mkCheck();
 const J = (v: unknown) => JSON.stringify(v);
-
-const REPO = join(import.meta.dir, "..");
-const children: ChildProcess[] = [];
-const nonces: string[] = [];
-process.on("exit", () => {
-  for (const c of children) { try { c.kill(); } catch { /* gone */ } }
-  for (const n of nonces) { try { rmSync(n); } catch { /* ok */ } }
-});
-
-async function freePort(): Promise<number> {
-  for (let i = 0; i < 20; i++) {
-    const cand = 20000 + Math.floor(Math.random() * 20000);
-    try { await fetch(`http://127.0.0.1:${cand}/`, { signal: AbortSignal.timeout(400) }); }
-    catch { return cand; }
-  }
-  throw new Error("no free port");
-}
-
-const worldsDir = mkdtempSync(join(tmpdir(), "route-shape-"));
-foundWorlds(worldsDir, ["yard"], "Ann");
-mkdirSync(join(worldsDir, ".clientlogs"), { recursive: true });
-
-async function spawnServer(): Promise<{ port: number }> {
-  const port = await freePort();
-  const nonce = `rs-nonce-${crypto.randomUUID().slice(0, 8)}`;
-  const noncePath = join(REPO, "client", `${nonce}.txt`);
-  writeFileSync(noncePath, nonce); nonces.push(noncePath);
-  const child = spawn(process.execPath, [join(REPO, "server", "server.ts")], {
-    env: { HOME: process.env.HOME, PATH: process.env.PATH, PORT: String(port), WORLDS_DIR: worldsDir, SKIP_OPT_SWEEP: "1", TRUST_NAMES: "1", JOIN_TOKEN: "", BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" },
-    stdio: "ignore",
-  });
-  children.push(child);
-  for (let i = 0; i < 40; i++) {
-    try { await fetch(`http://127.0.0.1:${port}/`); break; }
-    catch { await new Promise((r) => setTimeout(r, 250)); }
-  }
-  const own = await fetch(`http://127.0.0.1:${port}/${nonce}.txt`).then((r) => r.ok && r.text()).catch(() => false);
-  if (own !== nonce) throw new Error(`listener on :${port} is not our child — refusing to test it`);
-  return { port };
-}
 
 /** A client that folds the log it is sent (the page's own replica) and sends requests. */
 async function client(port: number, world: string, id: string) {
@@ -74,12 +27,12 @@ async function client(port: number, world: string, id: string) {
   const msgs: any[] = []; const waiters = new Map<string, (r: any) => void>(); let n = 0;
   const rep = makeReplica();
   ws.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); msgs.push(m);
-    if (m.type === "snapshot" && m.cut) rep.adopt(m);
+    if (m.type === "snapshot" && m.state) rep.adopt(m);
     if (m.type === "log") rep.ingest(m.entries, m.from, m.names);
     if (m.type === "reply") { const f = waiters.get(m.id); if (f) { waiters.delete(m.id); f(m.reply); } } };
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
   ws.send(J({ type: "join", hello: helloOf(), world, id, avatar: "", replica: true }));
-  for (let i = 0; i < 60 && !msgs.some((m) => m.type === "snapshot" || m.type === "error"); i++) await new Promise((r) => setTimeout(r, 50));
+  await tryUntil("a snapshot or an error", () => msgs.some((m) => m.type === "snapshot" || m.type === "error"), { ms: 3000, step: 50 });
   const err = msgs.find((m) => m.type === "error"); if (err) throw new Error(`join ${id}@${world}: ${err.error}`);
   return {
     rep,
@@ -88,11 +41,12 @@ async function client(port: number, world: string, id: string) {
   };
 }
 
-const { port } = await spawnServer();
+const seq = await scratchSequencer("route-shape", { worlds: ["yard"], owner: "Ann", serverEnv: { SKIP_OPT_SWEEP: "1", TRUST_NAMES: "1" } });
+const port = seq.PORT;
 const ann = await client(port, "yard", "Ann");
 const made = await ann.req("create", { id: "crate", model: "test/crate.glb", components: { transform: { pos: [1, 0, 2], q: [0, 0, 0, 1], scale: [1, 2, 1] }, label: "tall crate" } });
 check("the owner makes a crate scaled [1,2,1]", made.ok === true, J(made.refused));
-await new Promise((r) => setTimeout(r, 300));
+await tryUntil("the crate reaches Ann's replica", () => ann.rep.st?.entities?.[IDS.of("crate")], { ms: 3000 });
 const cid = IDS.of("crate");   // the authority mints the id; "crate" rode as a placeholder
 const c = ann.rep.st?.entities?.[cid]?.c;
 check("…and this client's own fold has it", !!c && J(c.transform?.scale) === "[1,2,1]", J(c));
@@ -121,5 +75,6 @@ console.log("\n— C. the whole scene —");
 }
 
 ann.close();
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+console.log(`\n${tally.passed} passed, ${tally.failed} failed`);
+await seq.cleanup();
+process.exit(tally.failed ? 1 : 0);

@@ -23,13 +23,13 @@ import { enc } from "../../shared/protocol/names.js";
 import { worldPose } from "../../shared/hierarchy.js";
 import { idAliases } from "./idalias.ts";
 import { shellWord } from "../../server/oldworlds.ts";
+import { suite } from "./suite.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 const IDS = idAliases();
 
 
 const root = scratch("server");
-let pass = 0, fail = 0;
-const ok = (cond: any, what: string, detail?: any) => { if (cond) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 500)}` : ""}`); } };
+const { ok, done } = suite("server-check", { quiet: true, cap: 500 });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ---- a measured model: a 1.2 × 0.75 × 0.8 m box, origin at its base centre, written as a real GLB ----
@@ -48,6 +48,7 @@ async function writeBoxGlb(file: string, [sx, sy, sz]: number[]) {
 }
 
 // ---- servers ----
+// callers start at a random port in a 2,000-port window: suites run side by side raced for the same first one (probe, release, bind)
 async function freePort(from: number) { for (let p = from; p < from + 200; p++) { if (p === 8968 || p === 8970) continue;
   const ok2 = await new Promise((res) => { try { const s = Bun.listen({ hostname: "0.0.0.0", port: p, socket: { data() {} } }); s.stop(true); res(true); } catch { res(false); } }); if (ok2) return p; } throw new Error("no free port"); }
 const procs: any[] = [];
@@ -55,7 +56,7 @@ process.on("exit", () => { for (const p of procs) try { p.kill(); } catch {} });
 // S6's operator (an enrolled agent): an old-format world is said only to the operator and its owner (F23, Mica 11-05)
 const OPTOK = path.join(root, "op-tokens.json"); fs.writeFileSync(OPTOK, JSON.stringify({ "tok-opal": { id: "Opal" } }));
 async function startServer(tree: string, worlds: string, opt: string, tag: string) {
-  const port = await freePort(8990 + procs.length * 7);
+  const port = await freePort(8990 + procs.length * 7 + Math.floor(Math.random() * 2000));
   const logf = path.join(root, `${tag}.log`);
   const p = Bun.spawn(["bun", "server/server.ts"], { cwd: tree, env: { ...process.env, PORT: String(port), WORLDS_DIR: worlds, OPT_DIR: opt, SKIP_OPT_SWEEP: "1", TRUST_NAMES: "1", RENAME_COOLDOWN_DAYS: "0.001",
     BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0", JOIN_TOKEN: "", SERVER_OPERATORS: "agent:token:opal", AGENT_TOKENS_PATH: OPTOK, EIDO_FLIGHT_REHEARSAL: "" }, stdout: Bun.file(logf), stderr: Bun.file(logf + ".err") });
@@ -639,5 +640,4 @@ srv.proc.kill();
   ok(!Object.keys(c.snapshot?.holds ?? {}).length && bodies.includes(IDS.of("ball")) && bodies.includes(IDS.of("torch")), "SK2 …nobody holds them, and a joiner's engine has them back (colliders again)", [c.snapshot?.holds, bodies]);
   c.close(); srvB.proc.kill(); }
 
-console.log(`[server-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

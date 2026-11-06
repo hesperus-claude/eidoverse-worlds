@@ -11,33 +11,17 @@
 
 import { bus } from './base.js';
 
-// TODO(mobile): ONE SAVED LAYOUT SERVES EVERY SURFACE, AND IT SHOULD NOT.
-// This key carries the frame id and nothing else, so an arrangement made on a desktop
-// is replayed verbatim onto a phone. A layout is not portable across surfaces — the
-// viewport that produced it is part of what it means — and every symptom of that is a
-// separate patch that fights the last one:
-//   · a bar the owner widened to 352 at 1280x800 reopens at 390x844 with `sit` and
-//     `stand` under #micbtn/#earbtn, unreachable (measured 2026-09-12; actionbar.js
-//     show() has the detail and why no local fix is worth taking)
-//   · the width and height ratchets fixed in bcbe9f7/cdca5c2 are both the same shape:
-//     a value derived under one viewport outliving the condition that produced it
-// The fix is to key the record by surface class (desktop / mobile at minimum) so a
-// deliberate arrangement is never replayed onto a viewport that cannot hold it.
-// Owner's call, 2026-09-12: mobile is being picked up separately, so the surface
-// taxonomy is theirs to design rather than ours to guess at. Disclosed in PR #185.
+// TODO(mobile): one saved layout serves every surface, and it should not. This key
+// carries the frame id only, so an arrangement made on a desktop is replayed onto a
+// phone (actionbar.js show() has an example). The fix is to key the record by surface
+// class (desktop / mobile at minimum); the surface taxonomy belongs to the mobile work.
 const LS = (id) => `ew-frame-${id}`;
 
 // Layout-version guard. DEFAULT_LAYOUT is a hand-arranged default (edge-anchored). A frame's own
-// saved moves win over it — but that means when the DEFAULT changes, anyone with older per-frame saves
-// stays stuck on stale positions (live 09-07: maximized and found world/settings NOT right-docked because an
-// old save overrode the re-baked default). Bump this whenever DEFAULT_LAYOUT changes materially: on load,
-// a mismatch discards every ew-frame-* save ONCE, so the new default actually takes, then stamps the new
-// version. A user's deliberate arrangement after the bump is saved and kept as normal.
-const LAYOUT_VERSION = '2026-09-12-chrome-clearance';   // bumped: tonight's intermediate builds
-// wrote poisoned saves. A frame nudged aside by the buggy chrome-clearance pass was persisted with
-// placed:true, so every later fix correctly HONOURED a position a bug had invented. Reproduced exactly:
-// seeding ew-frame-chat {x:42, placed:true} at 360x643 gives chat [42,326,352,633], R's rect digit for
-// digit; a fresh profile gives [8,326,352,633]. This is what the version key is for.
+// saved moves win over it — so when the DEFAULT changes, older per-frame saves would keep stale
+// positions. Bump this whenever DEFAULT_LAYOUT changes materially (or a build wrote bad saves): on
+// load, a mismatch discards every ew-frame-* save ONCE, then stamps the new version.
+const LAYOUT_VERSION = '2026-09-12-chrome-clearance';
 const LAYOUT_VER_KEY = 'ew-frame-layout-ver';
 (() => {
   try {
@@ -57,13 +41,8 @@ const frames = new Map();
 // pixels belong to content — scrollbars and buttons always win (we test the
 // real element under the pointer, not geometry alone).
 const _resizables = [];
-const _BAND = 4, _REACH = 6;   // band was 2, widened to 4 after a live
-                               // report (edge target was ~8px total and
-                               // half of that hung in the air)
-const _CORNER = 15;            // the corner is the hardest 2D target on the
-                               // frame and USED to be the intersection of two
-                               // 2px bands — invisible in practice. It gets
-                               // its own square, sized like the old SE grip.
+const _BAND = 4, _REACH = 6;   // px: grab band inside the border, reach outside it
+const _CORNER = 15;            // px: the corner is the hardest 2D target, so it gets its own square
 /** A frame element's resize floors, {minW, minH}, or null when it is not resizable or the layout is locked — VR's
  *  panel resize (domquad.js) asks here, so a headset resizes exactly the frames the mouse can. */
 export function frameResizeInfo(root) {
@@ -103,11 +82,9 @@ function _zoneFor(f, e) {
   return z;
 }
 function _contentClaims(e) {
-  // whatever really sits under the pointer: a scrollbar strip, a button, an
-  // input — interactive content beats the grab; bare frame chrome does not
-  // Element, not HTMLElement: the topmost thing over a glyph button is its SVG <path>, and an HTMLElement-only walk
-  // never reached the <button> — so a pin in the ∃ menu's flyout that hung over a frame's edge band lost its press to
-  // the resize (measured 10-01, tools/frames-resize-test.ts)
+  // whatever really sits under the pointer: a scrollbar strip, a button, an input — interactive content beats the
+  // grab; bare frame chrome does not. Walk Element, not HTMLElement: over a glyph button the topmost thing is its SVG
+  // <path> (tools/frames-resize-test.ts).
   for (let t = document.elementFromPoint(e.clientX, e.clientY); t instanceof Element; t = t.parentElement) {
     if (['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT', 'A'].includes(t.tagName)) return true;
     if (!(t instanceof HTMLElement)) continue;   // an SVG part has no scrollbars of its own
@@ -134,7 +111,7 @@ function _grabbableAt(e) {
   for (let t = e.target; t instanceof HTMLElement; t = t.parentElement) {
     if (t.tagName === 'LABEL') return false;
     const cs = getComputedStyle(t);
-    if (cs.cursor === 'pointer' || cs.cursor.endsWith('resize')) return false;   // a resize-cursor element is a HANDLE, not a grab surface (chat's pane grip moved the whole frame;)
+    if (cs.cursor === 'pointer' || cs.cursor.endsWith('resize')) return false;   // a resize-cursor element is a HANDLE, not a grab surface
     if ((cs.userSelect || cs.webkitUserSelect) === 'text') return false;
     if (t.classList?.contains('frame')) return true;   // reached bare chrome
   }
@@ -165,20 +142,15 @@ document.addEventListener('pointerdown', (e) => {
   _resizing = true;
   const sx = e.clientX, sy = e.clientY;
   const s0 = { x: f.state.x, y: f.state.y, w: f.state.w, h: f.state.h };
-  // state.h is the BODY's height; the frame renders taller by the title bar and
-  // .fr-body's padding. fit() already knows this (`const chrome = hh - state.h`)
-  // and clamps against root.offsetHeight — the south clamp below did not, so it
-  // budgeted in body space while subtracting a viewport margin and let a resize
-  // end past the bottom edge, unreachable under html,body{overflow:hidden}.
-  // Measured before the fix: budget 729, rendered bottom 794, viewport 768.
-  // fit() would correct it, but finish() never calls fit. (round 6)
+  // state.h is the BODY's height; the frame renders taller by the title bar and .fr-body's padding, so the south
+  // clamp budgets that chrome too (finish() never calls fit(), which would otherwise correct it).
   const s0chrome = Math.max(0, (f.root.offsetHeight || 0) - s0.h);
   const move = (ev) => {
     const dx = ev.clientX - sx, dy = ev.clientY - sy;
     // grows are clamped so no edge ever leaves the viewport
     // (windows stay inside the active area, full stop)
     if (z.includes('e')) f.state.w = clamp(s0.w + dx, f.minW, innerWidth - s0.x - 8);
-    if (z.includes('s')) f.state.h = clamp(s0.h + dy, f.minH, innerHeight - s0.y - 4 - s0chrome);   // 4 px above the bottom edge, CHROME-AWARE; a drag clamps at 8 (below) — a resize may end 4 px lower; the old −40 stopped a resize 36 px short of where a drag could go (live 09-07 23:25)
+    if (z.includes('s')) f.state.h = clamp(s0.h + dy, f.minH, innerHeight - s0.y - 4 - s0chrome);   // 4 px above the bottom edge, CHROME-AWARE; a drag clamps at 8 (below)
     if (z.includes('w')) {
       const maxW = s0.x + s0.w - 8;                // west edge stops at x=8
       f.state.w = clamp(s0.w - dx, f.minW, maxW);
@@ -191,12 +163,8 @@ document.addEventListener('pointerdown', (e) => {
     }
     f.paint();
   };
-  // ONE idempotent finish, shared by every way a drag can end. `pointerup`
-  // alone is not enough: release the button outside the browser and `up` never
-  // arrives, so `_resizing` stays true and the move/up listeners stay
-  // installed — hover detection and all future resizes are dead until reload.
-  // (The title-bar drag path has always taken pointer capture; this one was
-  // written without it. Found in review.)
+  // ONE idempotent finish, shared by every way a drag can end. `pointerup` alone is not enough: release the button
+  // outside the browser and `up` never arrives, leaving `_resizing` stuck and the listeners installed.
   let captureEl = null;          // whoever ACQUIRED the capture releases it
   let done = false;
   const finish = () => {
@@ -206,9 +174,7 @@ document.addEventListener('pointerdown', (e) => {
     document.removeEventListener('pointerup', finish, true);
     document.removeEventListener('pointercancel', finish, true);
     removeEventListener('blur', finish);
-    // release on the element that ACQUIRED it. document.releasePointerCapture
-    // was a no-op — Document does not own the capture, documentElement does —
-    // so a blur/cancel could leave the capture live. (Review catch.)
+    // release on the element that ACQUIRED it (documentElement owns the capture, not Document)
     try {
       if (captureEl?.hasPointerCapture?.(e.pointerId)) captureEl.releasePointerCapture(e.pointerId);
     } catch { /* never captured, or gone */ }
@@ -221,10 +187,8 @@ document.addEventListener('pointerdown', (e) => {
     f.save();                              // a resize is deliberate too
 
   };
-  // capture keeps the stream coming while the pointer is outside the window;
-  // lostpointercapture is then one more road to the same finish
-  // one element owns the capture and the same one releases it; retained so
-  // finish() cannot guess wrong
+  // capture keeps the stream coming while the pointer is outside the window; lostpointercapture is one more road to
+  // the same finish. The capturing element is retained so finish() releases the same one.
   try {
     document.documentElement.setPointerCapture(e.pointerId);
     captureEl = document.documentElement;
@@ -261,72 +225,38 @@ document.body.classList.toggle('ui-locked', locked);
  *                   closable, hidden, onResize }
  *                 x/y accept negatives to anchor from the right/bottom edge.
  */
-// The newcomer's layout is a hand-arranged one, not the panels' individual guesses: the tester's desktop
-// (a 1904×844 window, 09-06) exported from a live session and anchored to edges so it holds on
-// other screens. Chat and the action bar are open; everything else is closed but pinned to the dock.
-// World starts CLOSED (the quiet defaults): on arrival it is eight collapsed section names on
-// a third of the screen of glass — nothing to show until you ask, and the rail button or the lantern
-// ("sky", "build") opens it. A frame's own saved state (its owner's moves) still wins; resetLayout returns HERE.
+// The newcomer's layout: a hand-arranged desktop exported from a live session and anchored to edges so it holds on
+// other screens. Chat and the action bar are open; everything else is closed but pinned to the dock (World opens from
+// the rail button or the lantern). A frame's own saved state still wins; resetLayout returns HERE.
 const DEFAULT_LAYOUT = {
   world:    { x: -8,  y: 8,   w: 407, h: 363, hidden: true },
   chat:     { x: 10,  y: -10, w: 545, h: 307, hidden: false },
   settings: { x: -8,  y: 381, w: 407, h: 443, hidden: true },
   profile:  { x: 48,  y: 46,  w: 505, h: 452, hidden: true },
   debug:    { x: -414, y: 8,  w: 342, h: 453, hidden: true },
-  actions:  { x: 'center', y: 10, h: 32, hidden: false },  // one bar across the TOP, OPEN by default — moved from y:-10 on 2026-09-11 because the hint bar and toasts live at the bottom (owner: "all the helper notifications display at the bottom where it currently is"); the bar sizes its WIDTH itself (actionbar.js snapTo) and its ROWS from a dragged height, but ROW_H is fixed — carried here so fitsDefaults stops counting the bar as zero-height (round 4)
+  actions:  { x: 'center', y: 10, h: 32, hidden: false },  // one bar across the TOP (hint bar and toasts live at the bottom); it sizes its WIDTH itself (actionbar.js snapTo), and h is one row so fitsDefaults doesn't count it as zero-height
 };
-// Can this viewport hold the hand-arranged default at all? Derived from
-// DEFAULT_LAYOUT rather than a hardcoded breakpoint, so it stays true if the
-// defaults change: the arrangement needs room for its widest frame, and for its
-// open frames stacked. A phone fails on width, a 1280x720 desktop on height —
-// this is NOT a mobile special case (live 09-10 23:53: world, gestures and the
-// world palette stacked on top of chat on a phone, every rect legally inside the
-// viewport and none overlapping, because the palette is makeSection mounting
-// into world's stack and no rect test can see it). CHROME is the title bar a
-// body height does not include.
+// Can this viewport hold the hand-arranged default at all? Derived from DEFAULT_LAYOUT rather than a hardcoded
+// breakpoint, so it stays true if the defaults change. A phone fails on width, a 1280x720 desktop on height — this is
+// NOT a mobile special case. CHROME is the title bar a body height does not include.
 const ACTION_BAR_W = 352;   // widthFor(9) in actionbar.js — the bar sizes itself, so DEFAULT_LAYOUT carries no w for it
 const CHROME = 26;
-// The open defaults are EDGE-ANCHORED ON OPPOSITE CORNERS — world x:-8 y:8
-// (top-right), chat x:10 y:-10 (bottom-left) — so they never share a column
-// and summing their heights modelled an arrangement that does not exist. That
-// over-reach made 1280x720 and 800x700 report "cannot fit", closing the world
-// panel and the action bar on ordinary laptops and split windows; and because
-// the LAYOUT_VERSION bump in this same PR purges saved layouts once, the
-// "a saved layout always wins" escape hatch could not protect anyone on the
-// upgrade. (agent review round 4; R handed me the call, 2026-09-11.)
-//
-// What actually has to fit: the widest open panel across, and the TALLEST open
-// panel plus the bottom bar down — the bar is the one thing every panel shares
-// a column with. Width alone was the other candidate and is wrong: it opens
-// 844x390 (phone landscape), where a 363px world plus the bar cannot coexist.
+// The open defaults are EDGE-ANCHORED ON OPPOSITE CORNERS — world x:-8 y:8 (top-right), chat x:10 y:-10
+// (bottom-left) — so they never share a column, and summing their heights would model an arrangement that does not
+// exist. What has to fit: the row of side-by-side panels across, and the TALLEST open panel plus the bar down (the
+// bar shares a column with every panel). Width alone is wrong: at 844x390 a 363px world plus the bar cannot coexist.
 function fitsDefaults() {
   const open = Object.values(DEFAULT_LAYOUT).filter((d) => d.hidden === false);
   const box = (d) => (d.h ?? 0) + CHROME;
   const bar = DEFAULT_LAYOUT.actions.hidden === false ? box(DEFAULT_LAYOUT.actions) : 0;
-  // WIDTH IS A ROW, NOT A FRAME. `Math.max(...widths)` asked whether the single
-  // widest panel fits — but chat is anchored LEFT (x:10) and world RIGHT (x:-8),
-  // so they must sit side by side and the arrangement needs the SUM. At 800px
-  // the widest frame (545) fits comfortably while 545+407=952 does not, so
-  // auto-minimize left both open and the top-docked bar landed on world:
-  // `actions [224,10,576,56] x world [385,8,792,381]`, 191x46px, both axes.
-  // Boot-check has been red at 800x700 since the bar moved to the top (288a5da)
-  // and I did not see it because I ran only 1280x720 and 390x844 all day.
+  // WIDTH IS A ROW, NOT A FRAME: chat is anchored LEFT and world RIGHT, so they sit side by side and the arrangement
+  // needs the SUM of their widths (at 800px the widest frame fits while 545+407 does not).
   const sideBySide = open
     .filter((d) => d !== DEFAULT_LAYOUT.actions && typeof d.x === 'number')
     .reduce((sum, d) => sum + (d.w ?? 0), 0);
-  // A CENTRED STRIP IS PART OF THE ROW TOO (2026-09-12, found because R asked
-  // whether a window can even get that small). sideBySide sums only frames with a
-  // NUMERIC x, so the action bar — x:'center' — was never counted: the predicate
-  // asked "do chat(545) and world(407) fit?" while a 352px bar sat across the
-  // middle of the same band. Below ~968 the sum already says no and the bar is
-  // hidden; above the threshold a centred bar clears a right-anchored panel on its
-  // own; BETWEEN them nothing protected it.
-  //
-  // Geometric, not a guess: bar_right = (vw + barW)/2, world_left = vw - M - worldW,
-  // so clearance needs vw >= barW + 2*(worldW + M). M=8 — the margin the clamp
-  // itself uses — gives 1182 and agrees with all seven measured widths. M=16 was
-  // tried and rejected: it hid world at 1200 where the arrangement measures clear
-  // by 9px, trading an overlap bug for a spurious-minimise one.
+  // A CENTRED STRIP IS PART OF THE ROW TOO: sideBySide counts only frames with a numeric x, so the x:'center' bar
+  // needs its own term. Geometric: bar_right = (vw + barW)/2, world_left = vw - M - worldW, so clearance needs
+  // vw >= barW + 2*(worldW + M), with M=8 — the margin the clamp itself uses.
 
   const centredW = open.filter((d) => d.x === 'center')
     .reduce((m, d) => Math.max(m, d.w ?? ACTION_BAR_W), 0);
@@ -369,32 +299,16 @@ export function makeFrame(id, opts = {}) {
 
   // ---- state
   const saved = readSaved(id);
-  // TRUE once the USER has placed this frame — set at the two deliberate acts
-  // (drag end, resize end), never by save() itself. save() is also called by
-  // show()/hide(), and latching there made `moved` mean "was persisted": opening
-  // the right-docked debug panel once was enough to strand it at its old x on
-  // the next maximize — verbatim the 09-07 bug these guards exist to prevent.
-  // Declared HERE, above the api object and fit(), because a const in the
-  // temporal dead zone throws at construction — node --check cannot see it.
+  // `moved`: TRUE once this frame must not be re-anchored — a frame rebuilt from a save, or placed by a deliberate
+  // act (drag end, resize end). Never latched by save() itself (show()/hide() call it too). Declared HERE, above the
+  // api object and fit(): a binding in the temporal dead zone throws at construction.
     let moved = !!saved;
-    // TWO QUESTIONS, ONE FLAG (agent review 2026-09-12, and my own regression).
-    // `moved` answers "do not re-anchor this frame" — and !!saved is RIGHT there:
-    // a frame rebuilt from a previous session must not snap back to its anchor
-    // (the 09-07 bug; frames-layout-test.ts:402 binds it deliberately). But the
-    // viewport-change rule asks a different question — "did the OWNER place this"
-    // — and !!saved answers that wrongly, because save() is called by show()/hide()
-    // so toggling any panel once exempted the frame forever. That needs its own
-    // signal, persisted with state and written only at the deliberate acts.
+    // `placed` is a separate question — "did the OWNER place this" — which !!saved answers wrongly (any show/hide
+    // saves). Persisted with state, written only at the deliberate acts.
     let placed = saved?.placed === true;
-    // `axes`: what the deliberate act chose. A drag chooses a position, never the size
-    // a squeezed window was imposing at the time (review C4); an edge-resize chooses
-    // the axes its zone moved.
+    // `axes`: what the deliberate act chose — a drag chooses a position, never the size a squeezed window was
+    // imposing at the time; an edge-resize chooses the axes its zone moved.
     const markMoved = (axes = 'xywh') => { moved = true; placed = true; state.placed = true; commitRest(axes); };
-  // R, 2026-09-11, on the bug this exists for: the action bar "will always pop
-  // sideways to the right regardless if there's room for it" — snapTo calls
-  // _fit() 180ms after every drag settles, and fit() re-centred an x:'center'
-  // frame each time because the guard tested `saved`, captured once at
-  // construction and never refreshed by a drag.
   const state = {
     x: saved?.x ?? resolveAnchor(opts.x, w, innerWidth),
     y: saved?.y ?? resolveAnchor(opts.y, h, innerHeight),
@@ -407,41 +321,19 @@ export function makeFrame(id, opts = {}) {
     // an build-mode frame (className 'edit') opens only with build mode: a reload comes back OUT of build mode, and its
     // saved 'shown' (taken while docked in the workspace's columns) would float it at its docked size (R 10-04)
     hidden: /\bedit\b/.test(className) ? true : saved?.hidden ?? (hidden || (id !== 'chat' && !fitsDefaults())),
-    // MUST be read back, not just written. save() serialises the whole state object,
-    // so `autoHidden` reached storage — but this initialiser never restored it, making
-    // it write-only across a reload. Consequence, measured: auto-hide at 900 persists
-    // {hidden:true, autoHidden:true}; a reload brings back `hidden` and drops
-    // `autoHidden`; widening to 1920 then finds the restore guard falsy and the frame
-    // is stranded hidden FOREVER. B1 traded "reopens a deliberately closed panel" for
-    // "never reopens an auto-hidden one".
+    // MUST be read back, not just written: without it an auto-hidden frame reloads `hidden` without `autoHidden` and
+    // is never auto-restored.
     autoHidden: saved?.autoHidden ?? false,
-    underDock: saved?.underDock ?? false,   // a deliberate drop under the dock survives a reload (pre-review S1)
-    // AND `placed`, for the same reason and by the same mistake. markMoved() sets
-    // `state.placed = true` ad-hoc and save() serialises the whole object, so the flag
-    // reaches storage once — but this literal had no `placed` key, so the NEXT
-    // construction built a state without it and the next save() erased it. Identical
-    // in shape to the autoHidden bug fixed in 2256cba, three lines above, which I
-    // fixed while leaving its twin in place.
-    //
-    // Measured at 1280x800 on the action bar: markMoved + save -> `_placed: true`;
-    // reload -> `_placed: false`; one hide/show -> storage carries no `placed` key at
-    // all. A bar the owner deliberately resized is forgotten by the next refresh and
-    // goes back to being auto-managed — losing the fit() re-derive exemption
-    // (`!placed && opts.w != null`), the chrome-clearance exemption
-    // (`!placed && chromeSettled`) and the viewport auto-minimize exemption
-    // (`id === 'chat' || !f._state || f._placed`) all at once. The exact failure
-    // `placed` was introduced to prevent.
+    underDock: saved?.underDock ?? false,   // a deliberate drop under the dock survives a reload
+    // AND `placed`, for the same reason: save() serialises the whole object, so a key missing here is erased by the
+    // next save — and `placed` gates the fit() re-derive, chrome-clearance and viewport auto-minimize exemptions.
     placed: saved?.placed === true,
   };
 
-  // THE REST RECT: where this frame belongs, and the viewport it was authored in. The
-  // displayed rect (`state`) is DERIVED from it on every viewport change and may be
-  // clamped freely; only a deliberate act (drag end, resize end, reset) or a self-sizer that
-  // owns the frame's size writes here. Clamping `state` directly was a ratchet: shrink
-  // the window until panels collide, grow it back, and they stayed collided, because
-  // the small viewport's answer had become the frame's layout (reported 2026-09-24).
-  // save() persists THIS, so a toggle while the window is small can't bake the squeeze
-  // into the next load either.
+  // THE REST RECT: where this frame belongs, and the viewport it was authored in. The displayed rect (`state`) is
+  // DERIVED from it on every viewport change and may be clamped freely; only a deliberate act (drag end, resize end,
+  // reset) or a self-sizer that owns the frame's size writes here. Clamping `state` directly was a ratchet (shrink the
+  // window, grow it back: the squeeze stayed). save() persists THIS.
   let rest = { x: state.x, y: state.y, w: state.w, h: state.h,
     vw: saved?.vw ?? innerWidth, vh: saved?.vh ?? innerHeight };
   // Each viewport dimension is stamped only with its own axis: project() judges x/w against vw and y/h
@@ -470,21 +362,17 @@ export function makeFrame(id, opts = {}) {
   // docking, the frame remembers only how it floats.
   const api = {
     id, el: root, body, head,
-    // live refs for self-sizers that own their own sizing (the action bar snaps itself
-    // to whole tiles). _fit is here because writing _state and calling _paint
-    // alone BYPASSES the viewport clamp: the bar reflowed to three rows and
-    // painted itself past the bottom edge (#185 review, 800x700).
+    // live refs for self-sizers that own their own sizing (the action bar snaps itself to whole tiles). _fit is here
+    // because writing _state and calling _paint alone BYPASSES the viewport clamp.
     _state: state, _paint: () => paint(), _markMoved: markMoved, _project: () => project(),
     // VR's size for this frame (domquad.js): set while staged, null to give the frame back its desktop size
     _setVrSize: (s) => { vrSize = s && Number.isFinite(s.w) && Number.isFinite(s.h) ? { w: s.w, h: s.h } : null; root.style.width = `${vrSize?.w ?? state.w}px`; body.style.height = `${vrSize?.h ?? state.h}px`; },
     get _vrSize() { return vrSize && { ...vrSize }; },
     // a self-sizer writing _state.w/h is setting the frame's size, so that is the rest size
     _fit: () => { rest.w = state.w; rest.h = state.h; fit(); },
-      // READER for the same flag (#185 B1): the api carried a SETTER only, so the
-      // viewport rule below had no way to ask whether the owner placed this frame.
-      // `moved` is !!saved at construction and latches on a real drag or resize.
+      // READERS for the viewport rule below: `moved` is !!saved at construction and latches on a real drag or resize.
       get _moved() { return moved; },
-      get _placed() { return placed; },   // B1 exemption reads THIS, not _moved
+      get _placed() { return placed; },   // the viewport exemption reads THIS, not _moved
       _save: save,
     get state() { return { ...state }; },
     get docked() { return docked; },
@@ -508,11 +396,8 @@ export function makeFrame(id, opts = {}) {
     show() {
       state.hidden = false; state.autoHidden = false;
       paint();
-      // A hidden element measures zero, so a frame created hidden never got a
-      // real position — it has to be fitted the first time it becomes visible.
-      // Re-project on EVERY show, not just the first: a hidden frame measures 0 tall,
-      // so edge-docking and fit() were blind to any resize it sat out (Esc, resize,
-      // Esc — review C1). Painted first, so it is measurable now.
+      // A hidden element measures zero, so re-project and fit on EVERY show (the first fits for the first time):
+      // edge-docking and fit() were blind to any resize it sat out. Painted first, so it is measurable now.
       if (!fitted) { fitted = true; fit(); } else { project(); fit(); }
       save(); raise(); clearColumns(); shown();
       return api;
@@ -540,34 +425,20 @@ export function makeFrame(id, opts = {}) {
     raise,
     resetLayout() {
       moved = false;                       // back under the anchors, or reset only half-works
-      // ...and UNPLACE it. antra-tess #185 rereview addendum, B1(b): `placed` is a
-      // separate latch (line ~360) set only by markMoved(), and the viewport rule
-      // reads THAT — `if (id === 'chat' || !f._state || f._placed) continue`. Reset
-      // cleared `moved` and left `placed` latched from whatever drag preceded it, so
-      // a reset frame stayed permanently exempt from viewport management: the one
-      // act that means "I am not arranging this any more" left the I-arranged-this
-      // flag standing. The comment at 358 asks for a signal "written only at the
-      // deliberate acts" — a reset is the deliberate act of un-placing.
+      // ...and UNPLACE it: a reset is the deliberate act of un-placing, or the frame stays exempt from viewport
+      // management.
       placed = false; state.placed = false;
       localStorage.removeItem(LS(id));
       Object.assign(state, {
         x: resolveAnchor(opts.x, w, innerWidth),
         y: resolveAnchor(opts.y, h, innerHeight),
         w, h,
-        // The SAME rule the construction path applies (see the hidden: line
-        // above). Reset removes the save first, so there is no arrangement to
-        // protect — and without this, one tap of "reset layout" on a phone
-        // reopened world and gestures stacked over chat: the precise state
-        // auto-minimize exists to prevent, reached through this PR's own
-        // reset button. (agent review round 2)
+        // the SAME rule the construction path applies (see the hidden: line above): the save is gone, so there is
+        // no arrangement to protect
         hidden: hidden || (id !== 'chat' && !fitsDefaults()),
       });
       commitRest();
-      // ...and through fit(), not paint() alone: paint skips every viewport
-      // clamp, so reset restored the authoring-viewport widths uncapped —
-      // chat right=555 in a 390px viewport, 173px unreachable under
-      // overflow:hidden. That is antra's original #185 finding, re-entered
-      // by the reset path.
+      // ...and through fit(), not paint() alone: paint skips every viewport clamp.
       fitted = true; fit();
       paint();
       if (!state.hidden) { raise(); shown(); }
@@ -591,10 +462,9 @@ export function makeFrame(id, opts = {}) {
       }
     }
     root.style.zIndex = String(Math.min(++zTop, Z_HI));
-    // builder mode: the workspace's columns are chrome at z 26 (editlayout.js), so a floating frame raised inside the
-    // band opened UNDER them (review 10-07 B3: World settings' role names hidden under the left column, a grid of
-    // unlabelled checkboxes). While the workspace is up a floating frame stacks above the columns, below the status
-    // strip (45) and the ∃ menu (50); it drops back into the band the next time it is raised outside it.
+    // builder mode: the workspace's columns are chrome at z 26 (editlayout.js). While the workspace is up a floating
+    // frame stacks above the columns, below the status strip (45) and the ∃ menu (50); it drops back into the band the
+    // next time it is raised outside it.
     if (!docked && inWorkspace()) root.style.zIndex = String(30 + Math.min(13, zTop - Z_LO));
   }
   function clearColumns() {
@@ -604,14 +474,11 @@ export function makeFrame(id, opts = {}) {
     const r = root.getBoundingClientRect();
     if (edge && r.left < edge) root.style.left = `${Math.round(Math.min(edge + 8, Math.max(8, innerWidth - r.width - 8)))}px`;
   }
-  // Plain persistence. It does NOT latch `moved` — that was the first design and
-  // it was wrong (show()/hide() call save() too, so it came to mean "was
-  // persisted"; see the note at the `moved` declaration). This comment used to
-  // describe that rejected version and survived the fix. (round 4: comment rot)
+  // Plain persistence. It does NOT latch `moved` (see the note at its declaration).
   function save() {
     localStorage.setItem(LS(id), JSON.stringify({ ...state, x: rest.x, y: rest.y, w: rest.w, h: rest.h, vw: rest.vw, vh: rest.vh }));
   }
-  // VR's OWN size for this frame (owner, 10-02: VR and desktop layouts are separate). Set by domquad.js while the frame is
+  // VR's OWN size for this frame (VR and desktop layouts are separate). Set by domquad.js while the frame is
   // staged for the headset and cleared when it comes back; paint honours it, so nothing that repaints the frame
   // mid-session puts the desktop size on the VR panel. Never saved here: the desktop layout (state) is untouched.
   let vrSize = null;   // { w, h } (h: the body's height, as state.h) or null
@@ -648,8 +515,7 @@ export function makeFrame(id, opts = {}) {
     onResize?.(state.w, state.h);
   }
 
-  // ---- buttons: name + ✕ only. (Collapse/minimize is GONE — chip, verb, state and the dblclick that
-  // still fired it; live: frames 'disappearing forever' were minimized to a title bar.)
+  // ---- buttons: name + ✕ only (no collapse/minimize: a frame minimized to a title bar read as gone).
   if (closable) {
     const b = document.createElement('button');
     b.className = 'fr-btn';
@@ -680,8 +546,7 @@ export function makeFrame(id, opts = {}) {
       head.removeEventListener('pointermove', move);
       head.removeEventListener('pointerup', up);
       root.classList.remove('lifting');
-      // a drop that ENDS under the dock is the one deliberate way to be there (owner, 09-19: 'unless a user
-      // deliberately stuck a window under the dock, there's never a situation we should allow this')
+      // a drop that ENDS under the dock is the one deliberate way to be there
       const d = document.querySelector('#dock')?.getBoundingClientRect(), hh = root.offsetHeight;
       state.underDock = !!(d && d.width && d.left < state.x + state.w && state.x < d.right && d.top < state.y + hh && state.y < d.bottom);
       markMoved('xy'); save();             // a drag IS the deliberate act — of position
@@ -701,9 +566,7 @@ export function makeFrame(id, opts = {}) {
   root.addEventListener('pointerdown', (e) => {
     if (locked || docked || !e.isTrusted) return;                // isTrusted: our own
     if (!e.altKey && (_hit(e) || !_grabbableAt(e))) return;
-    // re-dispatch below bubbles back through this capture handler — without
-    // the guard it recurses to stack overflow (exposed when heads went
-    // display:none and alt-drag became the only rest-state move).
+    // the re-dispatch below bubbles back through this capture handler: isTrusted guards the recursion
     e.preventDefault(); e.stopPropagation();
     head.dispatchEvent(new PointerEvent('pointerdown', e));
   }, true);
@@ -722,107 +585,56 @@ export function makeFrame(id, opts = {}) {
   // restored frames enter through raise() too, so boot order becomes z order
   // and the first click on any of them lands above the rest
   if (!state.hidden) raise();
-  // The anchor was computed from the BODY height, but a frame is also a title
-  // bar and whatever padding its content carries — so a bottom-anchored frame
-  // hung its composer off the screen. Measure once it exists and pull it back.
+  // The anchor was computed from the BODY height, but a frame is also a title bar and padding, so a bottom-anchored
+  // frame would hang its composer off screen: measure once it exists and pull it back.
   let fitted = false;
-  // A SAVED layout must be fitted too. It used to be skipped — the reasoning was
-  // that a save is the user's own arrangement and should be honoured verbatim — but
-  // a layout saved on a wide screen is not an arrangement for THIS viewport: it came
-  // back at full width on a narrow one and ran off the edge, unreachable under
-  // html,body{overflow:hidden} (#185 review). fit() only ever pulls a frame inside
-  // the viewport, so honouring a save and fitting it are not in conflict.
-  // A save carries the viewport it was made in: seat it for THIS one before the first
-  // fit, or a docked frame loads mid-air and jumps on the first resize (review C2).
+  // A SAVED layout is fitted too: fit() only ever pulls a frame inside the viewport, so honouring a save and fitting
+  // it don't conflict. A save carries the viewport it was made in: seat it for THIS one first (project()), or a
+  // docked frame loads mid-air and jumps on the first resize.
   if (saved && !state.hidden) { project(); paint(); }
   if (!state.hidden) { fitted = true; fit(); }
   addEventListener('resize', fit);
 
   function fit() {
     if (docked) return;                    // a docked frame is laid out by its container, not fitted
-    // WIDTH FIRST, and BEFORE the measurement guard below: a frame's width does not
-    // depend on its measured height, and at construction the element is not yet in a
-    // measurable state (offsetHeight 0), so anything behind that guard never runs on
-    // the creation path — which is exactly where a restored oversized layout lands.
+    // WIDTH FIRST, before the measurement guard below: width does not depend on height, and at construction the
+    // element is not measurable yet (offsetHeight 0) — exactly where a restored oversized layout lands.
     const maxW = Math.max(80, innerWidth - 16);
-    // RE-DERIVE BEFORE CLAMPING, for a frame the owner has not placed. The clamp
-    // below is a RATCHET — `Math.min(state.w, maxW)` can only ever shrink — so a
-    // width narrowed by one viewport's chrome was carried into every later one.
-    // Measured on a phone, rotating portrait -> landscape -> portrait: chat went
-    // 344 -> 240 -> 240, landing at x=112 instead of 8, with `saved: null` the
-    // whole time. Nothing was persisted; the live value simply never grew back.
-    // The owner's rule: "if a user saves a layout on a bigger screen, shrinks it,
-    // then expands it again without touching any panel, it should be identical."
-    // Store intent, derive presentation — the declared size IS the intent, and a
-    // frame that has never been dragged or resized has no other claim on a width.
-    // WIDTH ONLY, deliberately. `actions` (the action bar) is the one frame that declares a height
-    // without a width ({x:'center', y:10, h:32}) — and its height is DERIVED, not
-    // declared: heightFor(cols) = rowsFor(cols)*ROW_H + gaps (actionbar.js:37). The
-    // 32 is a one-row seed, so re-asserting it every pass fought the bar's own row
-    // computation, reflowed it wider, and slid keys 4-6 under the right-hand chrome
-    // — boot-check@390x844 went red on "point/salute/clap covered". Width is a
-    // standing intent; the bar's height is a computed consequence.
+    // RE-DERIVE BEFORE CLAMPING, for a frame the owner has not placed: the clamp below can only shrink, so a width
+    // narrowed by one viewport would be carried into every later one. Store intent, derive presentation — the
+    // declared size IS the intent. Width only: the action bar's height is derived (actionbar.js heightFor), and
+    // re-asserting its one-row seed would fight its row computation.
     if (!placed && opts.w != null) state.w = opts.w;
     state.w = Math.max(Math.min(state.w, maxW), Math.min(minW, maxW));
     const hh = root.offsetHeight;
     if (!hh) return;                       // the constructor paints right after this call
-    // SIZE BEFORE POSITION. DEFAULT_LAYOUT is hand-arranged at a wide authoring
-    // viewport, and a saved layout can be wider still; clamping only x/y pins the
-    // frame at the left margin and lets the rest run off the right edge — which
-    // html,body{overflow:hidden} makes unreachable rather than merely ugly
-    // (#185 review: chat w:545 at a 390px viewport = 163px lost). minW/minH are
-    // authoring floors, not guarantees: inside a viewport narrower than minW the
-    // floor has to yield or the frame can never fit at all.
+    // SIZE BEFORE POSITION: clamping only x/y would pin a too-wide frame at the left margin and let the rest run off
+    // the right edge, unreachable under html,body{overflow:hidden}. minW/minH are authoring floors, not guarantees:
+    // inside a viewport narrower than minW the floor yields.
     const chrome = hh - state.h;                       // title bar + padding: state.h is the BODY's height
     const maxH = Math.max(40, innerHeight - 16 - chrome);
     state.h = Math.max(Math.min(state.h, maxH), Math.min(minH, maxH));
-    // THE ANCHOR is gated on `moved`; the CLAMP below is NOT — that distinction is
-    // the whole fix. A frame placed by hand keeps its y; an untouched one still
-    // follows its edge through a resize. Gating the clamp too was tried and
-    // reverted: it stranded every ordinary bottom-anchored frame (rotate 700->500
-    // left an untouched bar at y=370 where 428 was wanted).
-    // R, 2026-09-11: "the action bar is a little broken now, it can't be
-    // arbitrarily placed anywhere."
+    // THE ANCHOR is gated on `moved`; the CLAMP below is NOT: a frame placed by hand keeps its y, an untouched one
+    // still follows its edge through a resize.
     if (!moved && opts.y != null && opts.y < 0) state.y = Math.max(8, innerHeight + opts.y - hh);
     state.y = clamp(state.y, 8, Math.max(8, innerHeight - hh - 8));
-    // A frame created hidden gets its x from resolveAnchor at CREATION width. If it's first shown after a
-    // resize/maximize, a negative-x (right-edge) anchor must re-resolve to the CURRENT width, or it strands
-    // at its old absolute x (live 09-07: debug, x:-414, opened after maximizing and sat far left instead of
-    // flush-left of the right-docked panels). Only when there's no saved override.
+    // A frame created hidden got its x from resolveAnchor at CREATION width: a negative-x (right-edge) anchor
+    // re-resolves to the CURRENT width when nothing has moved it.
     if (!moved && typeof opts.x === 'number' && opts.x < 0) state.x = Math.max(8, innerWidth + opts.x - state.w);
       if (opts.x === 'center' && !moved) state.x = Math.round((innerWidth - state.w) / 2);
     state.x = clamp(state.x, 8, Math.max(8, innerWidth - state.w - 8));
-      // EVERY DEFAULT-PLACED FRAME CLEARS THE FIXED CHROME, not just the centred
-      // bar. R, 2026-09-12: "make sure the other menus stay clear of the mic,
-      // headphones, and dock... If they're at default, just run a check to resize.
-      // If they're moved, then honor where they're moved to."
-      //
-      // Frames cap at Z_HI=25 while the chrome above them is 27 (#dock), 45
-      // (#micbtn/#earbtn) and 60 (.capnotice): a frame left underneath CANNOT win
-      // by stacking, so it must be placed or sized clear. Measured at 360x780 with
-      // the rule applied to the centred bar only: world, debug and profile all sat
-      // across the rail.
-      //
-      // Gated on `placed`: true once the owner has dragged or resized this frame,
-      // persisted in state. A hand-arranged layout is theirs to keep.
-      //
-      // AND ONLY CONSULT CHROME THAT IS ITSELF PLACED. At boot fit() can run while
-      // #dock is still a stub and the mic/ear pair sits unplaced at its origin, so a
-      // frame dodges glyphs that are about to move — and the one-shot latch freezes
-      // that wrong result. chromeSettled below is the gate: the dock carries no
-      // buttons until it has laid out.
+      // EVERY DEFAULT-PLACED FRAME CLEARS THE FIXED CHROME. Frames cap at Z_HI=25 while the chrome above them is 27
+      // (#dock), 45 (#micbtn/#earbtn) and 60 (.capnotice), so a frame underneath cannot win by stacking: it is placed
+      // or sized clear. Gated on `placed` (a hand-arranged layout is the owner's to keep), and only once the chrome is
+      // itself placed (chromeSettled: at boot #dock is a stub with no buttons yet).
       const chromeSettled = (document.querySelector('#dock')?.querySelectorAll('button[data-toggles]').length ?? 0) > 0;
       // THE DOCK IS CLEARED EVEN BY A PLACED FRAME — a saved position from an older dock geometry (or a moved
       // dock) is not a decision to sit under it; only a drop that ended there is (state.underDock, set at drag end).
       if (chromeSettled && (!placed || !state.underDock)) {
-        // ANCHOR-AWARE (antra-tess #185 B2). Each obstacle is charged to the side it
-        // is welded to, via its DECLARED anchor — the one thing computed style cannot
-        // supply. `.capnotice` is right-anchored and was being read as left-consuming,
-        // which is what drove `avail` to -6 and floored a 407px frame to its 210 minW.
+        // ANCHOR-AWARE: each obstacle is charged to the side it is welded to, via its DECLARED anchor (chromeCost).
         let clearRight = 0, clearFromRight = 0;
-        // .capnotice is NOT in this list: the card steps aside for frames (capnotice.js placeTop measures its span and
-        // drops below them); a frame yielding to the card as well drove the 1000×700 action bar to 313 px under the dock
-        // (round 3 B1 — its declared right anchor charged a centred card as 671 px of right chrome)
+        // .capnotice is NOT in this list: the card steps aside for frames (capnotice.js placeTop), so yielding to it
+        // as well would squeeze frames twice
         for (const sel of (placed ? ['#dock'] : ['#dock', '#micbtn', '#earbtn', '#hudstatus'])) {   // a placed frame yields to the DOCK only
           const g = document.querySelector(sel)?.getBoundingClientRect();
           if (g && g.width && g.left < state.x + state.w && state.x < g.right
@@ -835,13 +647,9 @@ export function makeFrame(id, opts = {}) {
         if (clearRight || clearFromRight) {
           const shifted = Math.round(clearRight + 8);
           if (!clearRight) {
-            // Right-side chrome only: do NOT shift left (that slams a right-anchored
-            // frame to x=8). Shrink from the frame's own right edge and re-seat it
-            // against its declared side.
-            // The span available to this frame is the viewport less both margins
-            // less the right-side chrome. NOT `- state.x` as well: that subtracts the
-            // frame's own left offset on top of the chrome, double-counting the same
-            // span (at 1280 with x=865 it gave 77, flooring a 407px frame to minW).
+            // Right-side chrome only: do NOT shift left (that slams a right-anchored frame to x=8). Shrink from the
+            // frame's own right edge and re-seat it against its declared side. The span available is the viewport
+            // less both margins less the right-side chrome (not `- state.x` as well: that double-counts).
             const avail = innerWidth - 16 - clearFromRight;
             if (avail < state.w) state.w = Math.max(Math.min(avail, maxW), Math.min(minW, maxW));
             state.x = Math.max(8, innerWidth - 8 - clearFromRight - state.w);
@@ -855,10 +663,8 @@ export function makeFrame(id, opts = {}) {
           }
           state.x = Math.max(8, Math.min(state.x, innerWidth - state.w - 8));
         }
-        // ...AND WHEN SIDEWAYS CANNOT CLEAR IT, DOWN. A phone is too narrow for a frame to step beside the
-        // top row (the status chips beside the ∃, the lantern's pill in the corner): measured at 390x844 the
-        // world frame's tabs sat under both and could not be pressed. An unplaced frame whose top still meets
-        // top-row chrome starts below it, and gives up height to stay on screen.
+        // ...AND WHEN SIDEWAYS CANNOT CLEAR IT, DOWN: a phone is too narrow to step beside the top row (status chips,
+        // the lantern's pill), so an unplaced frame whose top meets top-row chrome starts below it and gives up height.
         if (!placed) {
           let below = 0;
           for (const sel of ['#hudstatus', '#lantern-pill', '#micbtn', '#earbtn']) {
@@ -881,20 +687,11 @@ export function makeFrame(id, opts = {}) {
 
 // ── DECLARED ANCHORS ──────────────────────────────────────────────────────────
 // Which side of the viewport a piece of fixed chrome is welded to. DATA, not an
-// inference, because the platform will not tell us: CSSOM §9 resolves BOTH `left`
-// and `right` to used pixel values for a positioned element, so the authored side
-// is gone by the time getComputedStyle can be asked. Measured at 1280x800 — an
-// element declaring only `right:10px` reports `left:"950px"`; `inset-inline-end`
-// behaves identically. (One exemption: an OVER-constrained element, declaring both
-// sides, does report the authored values. `.capnotice` is over-constrained only
-// below 900px, so detection would work in one of its three states — useless.)
-//
-// This is what every layout system worth copying does: RectTransform.anchorMin/Max,
-// Auto Layout's leadingAnchor, Qt/WPF alignment. Geometry is layout's output, never
-// its input.
-//
-// LTR only, stated as a real limit: under `dir=rtl` a logical `inset-inline-end`
-// resolves to physical `left`, so these sides would need to flip.
+// inference: CSSOM resolves BOTH `left` and `right` to used pixel values for a
+// positioned element, so the authored side is gone by the time getComputedStyle can
+// be asked (cf. RectTransform anchors, Auto Layout's leadingAnchor). LTR only:
+// under `dir=rtl` a logical `inset-inline-end` resolves to physical `left`, so
+// these sides would need to flip.
 const CHROME_ANCHOR = {
   '#dock':      (el) => el?.dataset.edge || 'left',    // dynamic: ui.js applyDockEdge
   '#micbtn':    (el) => el?.dataset.edge || 'left',    // hangs off the rail, follows its edge
@@ -904,17 +701,11 @@ const CHROME_ANCHOR = {
 };
 
 // What a piece of chrome costs a frame, per side of the horizontal axis.
-//
 // A LEFT-anchored obstacle consumes from the left edge inward  -> its right edge.
 // A RIGHT-anchored one consumes from the right edge inward     -> width + its gap.
-//   NOT `extent - g.left`: that carries `extent` into the result, so
-//   room = extent - 16 - (extent - left) cancels the viewport and yields a constant.
 // STRETCH declares both sides and is charged to both.
-// TOP/BOTTOM is welded to a horizontal edge, which says nothing about the
-//   horizontal axis — a rail at [10..304] along the top is genuinely LEFT-positioned
-//   there. So it falls through to the positional test rather than costing zero.
-//   Returning {0,0} for it was the bug that put an action tile under a top-docked
-//   rail at 844x390 ("sit" covered by #dock, the corpus row-33 witness).
+// TOP/BOTTOM is welded to a horizontal edge, which says nothing about the horizontal
+//   axis, so it falls through to the positional test rather than costing zero.
 export function chromeCost(sel, g, extent) {
   const el = document.querySelector(sel);
   let a = CHROME_ANCHOR[sel]?.(el) ?? 'left';
@@ -949,7 +740,7 @@ function snapPosition(id, state, height) {
   for (const o of frames.values()) {
     if (o.id === id || !o.visible) continue;
     const r = o.el.getBoundingClientRect();
-    // neighbours snap EDGE TO EDGE — no 6 px gutter between panels (live 09-06 23:42: "directly stick edges together")
+    // neighbours snap EDGE TO EDGE — no gutter between panels
     edges.push({ x: r.left }, { x: r.right - state.w }, { x: r.right }, { x: r.left - state.w });
     edges.push({ y: r.top }, { y: r.bottom - height }, { y: r.bottom }, { y: r.top - height });
   }
@@ -975,7 +766,7 @@ function stickyEdges(state, height) {
     b: innerHeight - (state.y + height) <= 8 + STICKY,
   };
 }
-let _lastFits = null;   // B1: the fit verdict at the last viewport change
+let _lastFits = null;   // the fit verdict at the last viewport change
 
 // Ride the edges: frames sticky to right/bottom keep their edge gap when the
 // window resizes; everything is then clamped back inside regardless.
@@ -988,26 +779,15 @@ addEventListener('resize', () => {
     st.y = clamp(st.y, 8, Math.max(8, innerHeight - hgt - 8));
     f._paint?.();
   }
-  // RE-ASK WHETHER THE ARRANGEMENT STILL FITS (antra-tess #185 rereview B1).
-  // fitsDefaults() was consulted only at construction and in resetLayout() —
-  // both one-shot — while this listener clamped each frame's rect
-  // INDEPENDENTLY and never re-checked the arrangement. A session opened wide and
-  // then narrowed kept all three defaults open: measured gestures x world
-  // overlapping 352x46px at 390x844 and 136x46px at 844x390 after a live resize.
-  // Only frames the owner has NOT moved are minimized: a deliberately arranged
-  // layout is theirs, and yanking it around on a window drag would be worse than
-  // the overlap. Crossing back out re-opens them, so it is reversible.
+  // RE-ASK WHETHER THE ARRANGEMENT STILL FITS: the per-frame clamps above never re-check the arrangement, so a
+  // session opened wide and then narrowed would keep overlapping defaults open. Only frames the owner has NOT placed
+  // are minimized, and crossing back re-opens them.
   const fits = fitsDefaults();
   if (fits !== _lastFits) {
     for (const [id, f] of frames) {
       if (id === 'chat' || !f._state || f._placed) continue;
-      // WHO hid it decides whether it comes back (antra-tess #185 B1, addendum).
-      // `hidden` alone cannot answer that: the owner closing World and the viewport
-      // auto-hiding it produce the identical flag, so crossing the fits boundary
-      // reopened a deliberately closed panel. Reproduced at 1280x720: hide World,
-      // resize by 1px, it returns. `autoHidden` is the third state she asked for —
-      // set only here, cleared by a deliberate hide(), and read as the sole licence
-      // to auto-restore.
+      // WHO hid it decides whether it comes back: `autoHidden` is set only here, cleared by a deliberate hide(),
+      // and is the sole licence to auto-restore (a panel the owner closed stays closed).
       if (!fits && !f._state.hidden) {
         f._state.hidden = true; f._state.autoHidden = true;
         f.el.style.display = 'none'; f._paint?.(); f._save?.();
@@ -1052,7 +832,7 @@ addEventListener('keydown', (e) => {
   // steps aside for it) — frames imports no ui, so the gesture goes out on the bus (escapeHid says what went with it)
   bus.emit('esc-quiet', did);
 });
-// With no panel open Tab still goes quiet (owner, 10-01: "Basically only the dock should be visible"): an empty stash
+// With no panel open Tab still goes quiet (only the dock visible): an empty stash
 // is a quiet with nothing to reopen, so 'closed' takes the lantern's resting line away and the next Tab brings it back.
 export function panelsToggle() {
   const open = [...frames.values()].filter((f) => f.visible);

@@ -17,12 +17,12 @@ import { readLog, fold, opsOf, REDACTED } from "../../shared/protocol/fold.js";
 import { restsOf, digestOf } from "../../shared/protocol/simlayer.js";
 import { simFold } from "./labmodels.js";   // the sim over the lab table (its logs name lab models)
 import { makeReplica } from "../../shared/protocol/replica.js";
+import { suite } from "./suite.ts";
 import { openLive } from "./labhost.ts";
 import { clientSnapshotOf } from "../../shared/protocol/replica.js";
 
 const root = scratch("physlive");
-let pass = 0, fail = 0;
-const ok = (cond: any, what: string, detail?: any) => { if (cond) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 500)}` : ""}`); } };
+const { ok, done } = suite("physlive-check", { quiet: true, cap: 500 });
 const code = (r: any) => r?.refused?.code;
 let N = 0;
 /** A live world (server/livehost.ts) as the server opens it: no simModels, so the lab catalogue's colliders don't count.
@@ -260,5 +260,4 @@ function playground(clock = "pinned") {
   ok(digestOf(live.sim) === digestOf(fresh.sim), "U2 …and the two engines' digests agree after the purge", { live: digestOf(live.sim), fresh: digestOf(fresh.sim) });
 }
 
-console.log(`\n${fail ? `FAIL ${fail}` : "ok"}: ${pass} passed${fail ? `, ${fail} failed` : ""}`);
-process.exit(fail ? 1 : 0);
+done();

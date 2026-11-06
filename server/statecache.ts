@@ -3,7 +3,7 @@
 // rollbacks never carry it (the destination derives its own). The later signed in-log checkpoint (§2) is a different thing.
 import fs from "node:fs";
 import path from "node:path";
-import { REDACTED, checkEntry, opsOf, applyInPlace, cloneState, worldIdOf, jcs, sha256, Malformed } from "../shared/protocol/fold.js";
+import { REDACTED, checkEntry, opsOf, applyInPlace, cloneState, worldIdOf, jcs, sha256, isE } from "../shared/protocol/fold.js";
 import { replaceDurable } from "./durable.ts";
 import { VIEW_FILES } from "./foldviews.ts";
 
@@ -13,7 +13,6 @@ export const CACHE_FILE = "fold.cache.json";
 export const isCacheFile = (f: string) => f === CACHE_FILE || f.startsWith(`${CACHE_FILE}.`);
 const FORMAT = 2;   // this file's encoding (2: the views and byte offsets, server/foldviews.ts); also in the foldKey through these bytes
 
-const isE = (e: Any) => e && !(e instanceof Malformed) && typeof e === "object";
 let key: string | Error | null = null;
 /** hash(fold.js + its one import + registry-pin.json + this file + every file shaping a view + the runtime): any change and every
  *  cache is refused. Throws (memoised) when a source can't be read: the caller then neither reads nor writes a cache. */

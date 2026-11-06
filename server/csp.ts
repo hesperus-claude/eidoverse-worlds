@@ -1,12 +1,8 @@
-// csp — the Content-Security-Policy every HTML page this server serves carries (security pass 3, N3 / H1).
+// csp — the Content-Security-Policy every HTML page this server serves carries. The second wall behind escaping
+// (client/lib/markup.js): no inline script runs unless it is one of OUR page's own inline blocks (matched by hash), so an
+// injected handler, <script> or javascript: URL refuses, and the browser says so.
 //
-// WHY. H1 was a display name rendered as HTML: `<img src=x onerror=…>` ran in every browser its owner could knock over.
-// The sink is fixed (client/lib/markup.js), but the next one we miss should still not run. This policy is the second
-// wall: no inline script runs unless it is one of OUR page's own inline blocks (matched by hash), so an injected
-// handler (onerror=, onload=), an injected <script>, and a javascript: URL all refuse, and the browser says so
-// (securitypolicyviolation, the console).
-//
-// WHAT THE CLIENT NEEDS, and why each source is here (checked against the code, 2026-10-07):
+// WHAT THE CLIENT NEEDS, and why each source is here:
 //   script-src  'self'              the client's modules, /vendor, /node_modules (three, onnxruntime), /shared
 //               'sha256-…'          each inline <script> in the page served (index.html's boot scripts and import map,
 //                                   captions.html, the /auth landing page) — hashed from the file as served, so editing
@@ -26,7 +22,7 @@
 //                                   NOT https: in general — a picture link is loaded as an <img> (img-src), a sound as
 //                                   an <audio> (media-src). That keeps fetch/WebSocket to known hosts; it doesn't keep
 //                                   data in: img-src and media-src take any https host, and a URL can carry what a script
-//                                   read (review of #260, server I86). Inline scripts are hashed, so only our own run.
+//                                   read. Inline scripts are hashed, so only our own run.
 //   img-src / media-src  https:     media links (shared/mediasrc.js): a store file, an allowlisted host, or — per viewer,
 //                                   opted in — any https host; the opt-in gate is the client's, not the policy's
 //   style-src   'self' 'unsafe-inline'  style attributes and runtime <style> elements throughout the UI; CSS injection
@@ -60,7 +56,7 @@ function extraConnect(): string[] {
 
 /** The policy for an HTML page whose text is `html` (or none, for a page with no inline script of ours). */
 /** Pages that talk to a service of their own beyond what every page may reach: the captions page's default Portal socket
- *  (client/captions.html's URL_), which the blanket policy refused (review of #260, server I55). */
+ *  (client/captions.html's URL_). */
 const PAGE_CONNECT: Record<string, string[]> = { "captions.html": ["wss://portal.animalabs.ai"] };
 export function cspFor(html = "", connect: string[] = []): string {
   const hashes = inlineScriptHashes(html);

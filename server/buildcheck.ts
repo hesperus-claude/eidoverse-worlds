@@ -46,9 +46,8 @@ export type CheckReport = {
   ms: number;
 };
 
-/** The walking body is the mover's (shared/mover.js MOVER.body: the one the feet, the authority and the planner use —
- *  the protocol merge; the stack measured a 0.32 m × 1.9 m capsule); a slimmer one (THIN_R) tells "too narrow for a
- *  body" from "no way in". */
+/** The walking body is the mover's (shared/mover.js MOVER.body, as the feet, the authority and the planner use); a
+ *  slimmer one (THIN_R) tells "too narrow for a body" from "no way in". */
 const BODY_R = MOVER.body.radius, THIN_R = MOVER.body.radius * 0.6, TALL = MOVER.body.height, MARGIN = 1.6;
 /** Smallest unreachable floor area reported — smaller is a pocket behind furniture. */
 const MIN_AREA = 2.5;
@@ -61,12 +60,11 @@ const MAX_COLUMNS = 250_000, MAX_SIDE = Math.sqrt(MAX_COLUMNS) * NAV_CELL, MAX_H
 /** A surface a body can't step onto with a floor this close beneath it is
  *  furniture (a table, a counter, a bunk), not a floor of the building. */
 const FURNITURE_MAX = 1.2;
-/** ...and at least this far above it (a seat's height): the mover's step (0.8 m, shared/mover.js) climbs onto a table,
- *  so "can't be stepped onto" no longer tells a tabletop from a floor (protocol merge; it was NAV_STEP at 0.55 m). Open air
- *  beneath still does — a solid plinth is a floor at any height. */
+/** ...and at least this far above it (a seat's height): the mover's 0.8 m step climbs onto a table, so "can't be
+ *  stepped onto" doesn't tell a tabletop from a floor. Open air beneath does: a solid plinth is a floor at any height. */
 const FURNITURE_MIN = 0.45;
-/** How far under an eave a roof's shadow on the open ground reaches before it is a room's floor (protocol merge: with the
- *  mover's 0.2 m radius a body stands under a 0.2 m roof overhang, and the overhang's ground read as a third floor). */
+/** How far under an eave a roof's shadow on the open ground reaches before it is a room's floor (a 0.2 m-radius body
+ *  stands under a 0.2 m overhang; its ground is no floor). */
 const EAVE_M = 1.0;
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -210,8 +208,7 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
   }
   // furniture is a whole surface: a top over open air ALL of whose standing room is so (a tabletop). A floor that
   // overhangs something (an upper floor's edge over the top treads, a gallery over a hall) is still the floor it is
-  // part of (protocol merge: with the mover's 0.8 m step it takes a four-tread overhang to cut a floor off, and its overhang
-  // read as a table, so the cut-off floor's edge was nowhere near the stair it overhangs)
+  // part of
   const roomyCovered = [...nodes.values()].filter((n) => n.covered && n.roomy && !eaves.has(key(n.i, n.j, n.y)));
   const notFurniture = new Set<string>();
   for (const comp of components(roomyCovered, body, key, inside, true)) {
@@ -291,8 +288,8 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
         const adjacent = Math.abs(di) <= 1 && Math.abs(dj) <= 1;
         for (const y of body.layers(n.i + di, n.j + dj)) {
           if (!reach.has(key(n.i + di, n.j + dj, y))) continue;
-          // not through a wall: with the mover's 0.2 m radius, reachable ground outside a 0.2 m wall is three cells from
-          // the floor inside it (protocol merge) — beside it means nothing solid between, at the higher one's knees
+          // not through a wall (with a 0.2 m radius, ground outside a 0.2 m wall is three cells from the floor inside):
+          // beside it means nothing solid between, at the higher one's knees
           if (!adjacent) {
             const hy = Math.max(y, n.y) + 0.3, ax = body.at(n.i), az = body.at(n.j), bx = body.at(n.i + di), bz = body.at(n.j + dj), dl = Math.hypot(bx - ax, bz - az);
             if (C.raySegment(o.set(ax, hy, az), dirV.set((bx - ax) / dl, 0, (bz - az) / dl), dl) != null) continue;

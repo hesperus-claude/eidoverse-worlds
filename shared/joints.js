@@ -1,24 +1,11 @@
 // shared/joints.js — what a humanoid joint may do, as measured.
 //
-// These tables were measured against the shipped rigs by the ragdoll (see
-// tools/ragdoll-test.ts, which runs them on all 14). They lived in
-// client/lib/ragdoll.js until the reach solver needed the same numbers, and a
-// second copy would have been the exact "mirrored math" this directory exists
-// to retire: an arm that can REACH where it could never FALL is two different
-// bodies wearing one skin. One table, two consumers — the particle sim clamps
-// to it while tumbling, the IK clamps to it while reaching.
-//
-// Angles are DEGREES here, as authored and as commented. Consumers convert.
-// Pure data plus one derivation; no THREE, no scene graph.
+// One table, two consumers: the ragdoll's particle sim clamps to it while tumbling, the IK (shared/reach.js) while
+// reaching, so an arm can't REACH where it could never FALL. Measured against the shipped rigs (tools/ragdoll-test.ts
+// runs them all). Angles are DEGREES here, as authored; consumers convert. Pure data plus one derivation.
 
-// BEHIND — how far a limb may point behind the body's frontal plane.
-//
-// The CONE is circular, so it cannot express the one shape a hip actually has:
-// a long way forward, barely anything backward, and a moderate amount out to
-// the side. Tilting the cone forward far enough to bound the back also walls
-// off abduction, because it moves the whole envelope. A separate one-sided
-// plane says exactly the intended thing and nothing else. Without it the fleet
-// put its thighs 46° behind the body — the pose you would need a chair to hold.
+// BEHIND — how far a limb may point behind the body's frontal plane: a one-sided plane, because the circular CONE
+// can't give a hip its real shape (far forward, barely back, moderate out to the side) without walling off abduction.
 export const BEHIND = [
   ['leftUpperLeg', 'leftLowerLeg', 30],
   ['rightUpperLeg', 'rightLowerLeg', 30],
@@ -42,39 +29,12 @@ export const CONE = [
   ['rightUpperLeg', 'rightLowerLeg',  55,   25],
 ];
 
-// HINGE — a knee bends backward and an elbow bends forward, and neither bends
-// sideways. That is a SIGNED constraint, so it needs a handedness the particles
-// alone don't carry; _frame derives one from the rig. `dir` is which way the
-// joint is allowed to fold, along the body's forward axis.
-// `sideways` is slop, not a range — a hinge has no sideways travel at all, and
-// every degree given here shows up on screen as a knee bending out of its own
-// plane. It cannot go to zero: this model has no hip or shoulder ROTATION, so
-// a limb that has twisted has nowhere to put it but here. These are the
-// smallest values the fleet stays stable at.
-// TWIST — a bone's roll about its own length, as REAL STATE.
-//
-// The particle sim gives directions, never roll, so roll has to come from
-// somewhere. Deriving it against the WORLD (a fixed rest direction, or a
-// carried reference) drifts: parallel transport has holonomy, so a limb swung
-// around a loop comes back rotated by the solid angle it enclosed, and a
-// tumbling arm encloses a lot of sphere. Measured that way, upper arms ended a
-// tumble 144° rolled and stayed there.
-//
-// Deriving it against the PARENT does not drift, because it is a function of
-// the current state and not of the path taken to reach it. The one place that
-// construction could fail is a bone swung a full 180° from its parent, and the
-// joint limits above already forbid that — the hinges stop at 150°, the cones
-// at 55-85°, the spine at 25°. The limits are what make this well posed.
-//
-// What is left over is genuine twist, and it is a state variable with inertia,
-// damping, a spring back to neutral and a hard stop, like every other joint
-// quantity here. With no driver it sits at zero, which is the right answer for
-// a limp limb in a model that carries no angular momentum about a bone's own
-// axis — and zero is exactly what the parent-relative frame makes reachable.
-// Measured, limb twist at settle: 97° mean and 172° worst before, 0° now, on
-// every driven bone but the pelvis (whose "twist" is the body's own roll and
-// belongs there). `max` is the stop, in degrees: shoulders and forearms turn a
-// lot, spines and shins hardly at all.
+// TWIST — a bone's roll about its own length, as REAL STATE (the particle sim gives directions, never roll).
+// It is measured against the PARENT, not the world: a world reference drifts (parallel transport has holonomy, so a
+// tumbling limb comes back rolled), while a parent-relative one is a function of the current state. That is well posed
+// because the joint limits forbid a bone swinging 180° from its parent. What is left is genuine twist: a state variable
+// with inertia, damping, a spring to neutral and a hard stop; with no driver it sits at zero. `max` is the stop, in
+// degrees (the pelvis isn't here: its "twist" is the body's own roll).
 export const TWIST = {
   spine: 25, chest: 25, neck: 45,
   leftUpperArm: 75, rightUpperArm: 75,
@@ -92,6 +52,10 @@ export const TWIST_PARENT = {
   leftLowerLeg: 'leftUpperLeg', rightLowerLeg: 'rightUpperLeg',
 };
 
+// HINGE — a knee bends backward and an elbow forward, and neither sideways: a SIGNED constraint, so it needs a
+// handedness (the ragdoll's _frame derives one from the rig). `dir` is which way the joint folds, along the body's
+// forward axis. `sideways` is slop, not a range: the smallest values the fleet stays stable at (this model has no
+// hip or shoulder ROTATION, so a twisted limb has nowhere else to put it).
 export const HINGE = [
   // a               b                 c            dir  maxFlex°  sideways°
   ['leftUpperArm',  'leftLowerArm',  'leftHand',    +1,   145,      12],
@@ -162,13 +126,9 @@ export const REACH_CHAINS = {
 /**
  * The body's own axes from a set of rest bone positions: right, up, forward.
  *
- * Same construction as the ragdoll's `_frame` — the pelvis bar for right, hips
- * to head for up, their cross for forward, then re-orthogonalize right. It is
- * NOT the same function: the ragdoll's is stateful on purpose (it keeps the
- * last good forward through a fold where the spine lies along the pelvis bar,
- * because a hinge whose handedness jumps mid-tumble is how a knee decides it
- * bends the wrong way). A reach solves from the REST pose, which is never
- * degenerate, so this one is pure and has nothing to remember.
+ * Same construction as the ragdoll's `_frame` (the pelvis bar for right, hips to head for up, their cross for forward,
+ * then re-orthogonalize right), but pure: the ragdoll's keeps the last good forward through degenerate folds, and a
+ * reach solves from the REST pose, which is never degenerate.
  *
  * @param {Record<string, number[]>} P bone -> [x,y,z]
  * @returns {{r: number[], u: number[], f: number[]}|null}
@@ -248,22 +208,7 @@ export const GUARD_SEGMENTS = [
   ['leftLowerArm', 'leftHand'], ['rightLowerArm', 'rightHand'],
 ];
 
-// ACROSS — how far a limb may swing TOWARD the body's midline.
-//
-// A circular cone has one number for every direction, so the 85° that stops a
-// shoulder folding back over the spine also forbids the arm crossing the
-// chest. Measured with the reach audit, that left every cross-body contact
-// point 200-320mm short, and the failure looked like a locked outstretched
-// arm rather than a fold. Same problem BEHIND solves for hips ("the CONE is
-// circular, so it cannot express the one shape a hip actually has"), same
-// answer: one more number for one more direction.
-//
-// It is only safe alongside the torso projection in shared/reach.js. Widening
-// the envelope on its own moves the arm INTO the chest — clearance measured
-// at 831/840 before, 693/840 after — because an adducted upper bone points
-// through the body. The two belong together.
-//
-// Read by the REACH only. The ragdoll keeps the plain circular cone: a fall is
-// passive and a reach is active, and a muscle holds shapes gravity will not
-// produce. Whether a limp body should fold its arms across itself is a
-// separate judgement about how a corpse looks, and it has not been made.
+// ACROSS — how far a limb may swing TOWARD the body's midline: one more number for one more direction, as BEHIND is
+// for hips (the 85° cone that stops a shoulder folding back would also forbid crossing the chest). Only safe with the
+// torso projection in shared/reach.js: widened alone, an adducted upper arm points through the chest. Read by the REACH
+// only; the ragdoll keeps the plain cone (a fall is passive; a muscle holds shapes gravity won't produce).

@@ -10,12 +10,10 @@
 // are re-asked (store-variants.ts verdictStands). Content verdicts (a skinned body, 900 verts under the floor, no raster
 // images) are facts about the file and stand.
 //
-// What the CLI actually runs: gltf-transform (core/functions/extensions — the reader, weld/simplify wrappers, the
-// resample/prune/draco stages), meshoptimizer (the reducer), draco3dgltf (the encoder), sharp — the copy
-// gltf-transform ITSELF loads (resolveNestedSharp, #122's one-libvips rule), or "absent": its presence decides whether
-// the texel cap is honoured on a `ktx create` host — and the KTX encoder binary. The binary is identified by
-// basename + size + mtime of its real file, never by running `--version`: the probe must not execute a stand-in
-// encoder (a test's fake counts its calls), and a stat is what freshOver already trusts for identity.
+// What the CLI actually runs: gltf-transform (core/functions/extensions), meshoptimizer (the reducer), draco3dgltf (the
+// encoder), sharp (the copy gltf-transform ITSELF loads — resolveNestedSharp, the one-libvips rule — or "absent"), and
+// the KTX encoder binary, identified by basename + size + mtime of its real file, never by running `--version` (the
+// probe must not execute a stand-in encoder; a test's fake counts its calls).
 //
 // DOM-free; no heavy imports (the route reads this on the sequencer thread). Memoized for a minute, so an encoder
 // installed while the server runs is noticed without a restart.
@@ -24,10 +22,8 @@ import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 
-/** Encoder probe: KTX2_TOKTX env (absolute path) → toktx on PATH → ktx on
- *  PATH. Absent is an ENVIRONMENT, not a failure — the CLI exits 3 so the
- *  caller env-skips, never writing a .failed marker (the sharp-degrade
- *  pattern: the content is fine, this box just can't encode yet). */
+/** Encoder probe: KTX2_TOKTX env (absolute path) → toktx on PATH → ktx on PATH. Absent is an ENVIRONMENT, not a
+ *  failure: the CLI exits 3 so the caller env-skips, never writing a .failed marker. */
 export function findKtx2Encoder(): string | null {
   const env = process.env.KTX2_TOKTX;
   if (env && existsSync(env)) return env;
@@ -41,10 +37,8 @@ export function findKtx2Encoder(): string | null {
   return null;
 }
 
-/** Where gltf-transform's own sharp lives, or null when there is no nested
- *  copy at all (a deduped install — the state this whole fix is chasing).
- *  RESOLUTION ONLY: it must not import, because import failure and absence
- *  are different facts and only one of them makes a bare import safe. */
+/** Where gltf-transform's own sharp lives, or null when there is no nested copy (a deduped install).
+ *  RESOLUTION ONLY: import failure and absence are different facts, and only absence makes a bare import safe. */
 export function resolveNestedSharp(): string | null {
   try {
     const fnDir = dirname(Bun.resolveSync("@gltf-transform/functions", import.meta.dir));

@@ -2,10 +2,12 @@
 // starved lane is granted anyway, one gpu unit per frame, busy() from reported loading, the loop is the clock (with a
 // fallback that still rolls the books). `node tools/framebudget-test.mjs`
 import * as fb from '../client/lib/framebudget.js';
-let pass = 0, fail = 0;
-const ok = (n, c, d = '') => { if (c) pass++; else { fail++; console.log(`  FAIL ${n} ${d}`); } };
+import { pause } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
+const S = suite("framebudget");
+const ok = (n, c, d) => S.check(n, c, d);
 const near = (a, b, e = 0.05) => Math.abs(a - b) <= e;
-const settle = (ms = 0) => new Promise((r) => setTimeout(r, ms));
+const settle = (ms = 0) => pause('the frame clock\'s windows are what is tested', ms);
 
 fb.__resetForTest();
 ok('under the splash the budget is the big fixed bite', fb.budgetMs() === 14);
@@ -155,4 +157,4 @@ delete globalThis.requestAnimationFrame;
   await fb.nextFrame();
   ok('a yield with no loop yet still rolls the frame (boot loading proceeds before startFrame)', fb.ask('y')); }
 
-console.log(`${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+S.done();

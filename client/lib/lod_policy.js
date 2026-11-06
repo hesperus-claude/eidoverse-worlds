@@ -1,6 +1,5 @@
 // lod_policy — which geometry tier a placement fetches, decided BEFORE the
-// fetch (the #156 client contract), from three local inputs and nothing the
-// world shares:
+// fetch, from three local inputs and nothing the world shares:
 //
 //   the RESIDENT's dial     models⚙ — auto / full detail / eco (reduce
 //                           sooner: the pressured band, always). Persisted per
@@ -13,15 +12,10 @@
 //                           gpuPressure) and the frame governor's shed — a
 //                           6GB card and a 24GB card should not fetch alike.
 //
-// The answer is 'full' or 'lod'. 'lod' asks the running sequencer for the
-// recipe it PUBLISHED on /version (shared/ktx2.js lodFromVersion) — no
-// recipe published, no tier asked, ever: an older sequencer, or a failed
-// /version fetch, degrades to exactly today's behaviour. And a lod request
-// is never a WORSE model: the server answers with the variant when one
-// exists and the original chain otherwise (provisional), the loader records
-// which arrived (userData.tierServed), and colliders/support/raycast never
-// read the reduced mesh at all (models.js: a lod-tier placement owns no
-// collider until it upgrades on approach).
+// The answer is 'full' or 'lod'. 'lod' asks for the recipe the running sequencer PUBLISHED on /version
+// (shared/ktx2.js lodFromVersion); none published, no tier asked. The server answers with the variant or the original
+// (the loader records which: userData.tierServed), and colliders/support/raycast never read the reduced mesh
+// (models.js: a lod-tier placement owns no collider until it upgrades on approach).
 //
 // Hysteresis: a placement at the band edge must not flip tiers every sweep.
 // The upgrade edge sits inside the downgrade edge by LOD_HYST on each side.
@@ -80,10 +74,8 @@ export function makeModelQuality(store) {
  *  it); anything that isn't a positive finite number is 1. */
 export function chooseTier({ dist, radius, quality = 'auto', recipe = null, pressure = 0, shed = false, current = null, scale = 1 }) {
   if (!recipe || quality === 'full') return 'full';
-  // 'eco' is the pressured band, always: the edge halves. It does NOT reduce
-  // what you stand beside — the first field run did, and a 66m rig's girders
-  // at arm's length became slabs across the camera. Near stays full on every
-  // dial; only 'full' ignores distance (in the other direction).
+  // 'eco' is the pressured band, always: the edge halves. It never reduces what you stand beside (near stays full on
+  // every dial); only 'full' ignores distance (in the other direction).
   const squeezed = quality === 'eco' || pressure >= PRESSURE_AT || shed;
   const n = Number(scale), s = Number.isFinite(n) && n > 0 ? n : 1;
   const edge = Math.max((radius > 0 ? radius : 80) * LOD_FRACTION * (squeezed ? PRESSURE_EDGE : 1) * s,
@@ -94,11 +86,10 @@ export function chooseTier({ dist, radius, quality = 'auto', recipe = null, pres
 }
 
 /** Which tier a parsed GLB actually is — the server's word, read off the
- *  identity stamp the reducer writes (#156: asset.extras {lodOf, recipe,
- *  tools}) and bound to the RUNNING recipe. Not "any recipe extra": the
- *  reducer preserves source extras, and an authored model may carry an
- *  unrelated `recipe` of its own (review of #170, point 1) — reading that as
- *  a lod would strip a full source model of its collider. lodOf must be
+ *  identity stamp the reducer writes (asset.extras {lodOf, recipe,
+ *  tools}) and bound to the RUNNING recipe. Not "any recipe extra": an
+ *  authored model may carry an unrelated `recipe` of its own, and reading
+ *  that as a lod would strip a full source model of its collider. lodOf must be
  *  present and recipe must equal what /version published; anything else —
  *  a wrong-generation stamp, a bare recipe, the original chain answering a
  *  lod ask — is 'full', honestly. */
@@ -108,7 +99,7 @@ export function tierOf(gltfJson, recipe) {
   return typeof x.lodOf === 'string' && x.lodOf.length > 0 && x.recipe === recipe ? 'lod' : 'full';
 }
 
-/** The WIRE truth of a tier choice (review of #170, point 2): the URL a load
+/** The WIRE truth of a tier choice: the URL a load
  *  actually fetches and which tier that URL asks for. A lod ask rides the
  *  KTX2 negotiation because the reduced variant's textures ARE KTX2 — a
  *  browser without the transcoder (`capable` false), a sequencer that

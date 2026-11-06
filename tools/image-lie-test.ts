@@ -9,12 +9,10 @@
 //   bun run tools/image-lie-test.ts
 
 import { findImageLies } from "../server/optimize.ts";
+import { suite } from "./protocol/suite.ts";
 
-let passed = 0, failed = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { passed++; console.log(`  ✓ ${name}`); }
-  else { failed++; console.log(`  ✗ ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("image-lie");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 // ---- fixtures ---------------------------------------------------------------
 
@@ -102,5 +100,4 @@ check("a real webp declared as png is caught in the other direction",
 check("an image referenced by URI is left alone (not our bytes to vouch for)",
   findImageLies(makeGlb([{ bytes: new Uint8Array(0), mime: "image/png", uri: "tex.png" }])).length === 0);
 
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);
+S.done();

@@ -11,13 +11,12 @@
 // never needs a timeout.
 
 import { schedule, cancelOwner, pending, onIdle, laneStats, P } from "../client/lib/scheduler.js";
+import { pause, tryUntil } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
 
-let passed = 0, failed = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { passed++; console.log(`  ✓ ${name}`); }
-  else { failed++; console.log(`  ✗ ${name}${detail ? ` — ${detail}` : ""}`); }
-};
-const tick = () => new Promise((r) => setTimeout(r, 0));
+const S = suite("scheduler");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
+const tick = () => new Promise((r) => setImmediate(r));
 /** A job whose completion the test holds. */
 const gate = () => { let open: () => void; const p = new Promise<void>((r) => { open = r; }); return { open: open!, p }; };
 
@@ -98,14 +97,14 @@ console.log(`\nscheduler.js — the one loader\n`);
   let idleAt = -1;
   let cosmeticsDone = false;
   schedule({ key: "important", lane: "gpu", priority: P.BODY, run: () => g.p });
-  schedule({ key: "cosmetic", lane: "gpu", priority: P.COSMETIC, run: async () => { await new Promise((r) => setTimeout(r, 20)); cosmeticsDone = true; } });
+  schedule({ key: "cosmetic", lane: "gpu", priority: P.COSMETIC, run: async () => { await pause("a slow cosmetic job", 20); cosmeticsDone = true; } });
   await tick();
   onIdle(() => { idleAt = pending(P.BODY); }, P.BODY);
   g.open();
   await tick(); await tick();
   check("onIdle(band) fires when the band drains", idleAt === 0);
   check("…without waiting for lower bands", !cosmeticsDone || pending() === 0);
-  await new Promise((r) => setTimeout(r, 30));   // drain the cosmetic straggler
+  await tryUntil("the cosmetic straggler drains", () => cosmeticsDone, { ms: 2000 });
 }
 
 // 6. lanes are independent and capped
@@ -120,5 +119,5 @@ console.log(`\nscheduler.js — the one loader\n`);
   check("drained clean", pending() === 0, String(pending()));
 }
 
-console.log(`\n${passed} passed, ${failed} failed`);
-if (failed) process.exit(1);
+console.log(`\n${S.pass} passed, ${S.fail} failed`);
+if (S.fail) process.exit(1);

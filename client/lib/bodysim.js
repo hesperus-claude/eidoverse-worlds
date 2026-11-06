@@ -1,16 +1,9 @@
 // bodysim — the body-physics engine is a CHOICE, not a fact of the client.
 //
-// Engines, one interface (the contract prose lives in ammodoll.js's header;
-// it descends from the retired rapierdoll's — §24j retirement, survey B2):
-// the pure-JS Verlet that shipped first, and the Bullet (ammo.js) rig ported
-// from socketteer/ragdoll-physics. The Rapier articulated solver is RETIRED
-// (2026-08-27): panel-only reachability, no hair/finger/wing parity, flat
-// ground, and a permanent two-way divergence tax on every physics fix — its
-// one unshipped capability (decaying tone motors) is recoverable from git
-// history and tools/rapier-spike.ts if ever wanted. Everything
-// downstream — goLimp, drag, nails, the presence stream — asks this factory
-// and cannot tell which engine answered. A world mod can swap engines through
-// EW.bodysim: the lease thesis applied to our own house physics.
+// One interface (the contract is in bodyengine.js's header), two engines: the pure-JS Verlet and the Bullet
+// (ammo.js) rig ported from socketteer/ragdoll-physics. (The Rapier solver is retired, §24j; it lives in git history
+// and tools/rapier-spike.ts.) Everything downstream — goLimp, drag, nails, the presence stream — asks this factory
+// and cannot tell which engine answered. A world mod can swap engines through EW.bodysim.
 
 import { Ragdoll } from './ragdoll.js';
 import { report } from './base.js';
@@ -30,11 +23,8 @@ const ENGINES = new Map([
   }],
 ]);
 
-// The DEFAULT is the Bullet engine (antra, after a day of live falls across
-// old and new avatars: "these physics are just plainly better than anything
-// else we had so far"). The ladder below keeps every promise the old default
-// made: while the wasm warms — or if it never opens — falls run verlet, and
-// a stored choice always wins over the default.
+// The DEFAULT is the Bullet engine. While the wasm warms, or if it never opens, falls run verlet; a stored choice
+// always wins over the default.
 const stored = localStorage.getItem(KEY);
 let engine = ENGINES.has(stored) ? stored : 'ammo';
 
@@ -47,9 +37,7 @@ async function loadEngine(name) {
     const cls = await e.load();
     if (cls) { e.cls = cls; return true; }
   } catch (err) { report(`${name} load`, err); }
-  // A door that never opens must SAY so. Reporting "loading" forever is
-  // indistinguishable from a toggle that does not work, and that ambiguity
-  // cost a full round of debugging the wrong engine.
+  // A door that never opens must SAY so: "loading" forever is indistinguishable from a broken toggle.
   e.failed = true;
   return false;
 }
@@ -79,20 +67,12 @@ export function setBodyEngine(name) {
 }
 
 /** The one door every fall goes through. Same signature as `new Ragdoll`.
- *
- *  seedVel is LOAD-BEARING and was silently dropped here until 2026-08-04:
- *  main.js hands the drag-release handover through this door as the 4th
- *  argument (`msg?.sim ?? dragVel`), and a 3-parameter signature ate it. Both
- *  engines' snapshot()/seed paths were therefore unreachable in the shipped
- *  client — every release reset the body to zero velocity and re-baked the
- *  rendered bone positions as the new sim's shape, which is what "really bad
- *  with drags" was. A dropped optional argument is invisible in JS; the
- *  parity suites never saw it because they construct the engines directly. */
+ *  seedVel is LOAD-BEARING: main.js passes the drag-release handover as the 4th argument (`msg?.sim ?? dragVel`);
+ *  drop it and every release restarts the body at zero velocity. The parity suites construct engines directly and
+ *  would not notice. */
 export function makeRagdoll(avatar, lean = null, rest = null, seedVel = null) {
-  // A held pose that lowers the hips (kneeling) hands its drop to the root
-  // first (avatar.js bakeHipsIntoRoot). The caller's rest map was read with
-  // the drop still in the skeleton, so it is re-read — the sim measures its
-  // hips offset against it.
+  // A held pose that lowers the hips (kneeling) hands its drop to the root first (avatar.js bakeHipsIntoRoot); the
+  // caller's rest map was read before that, so re-read it.
   if (avatar.bakeHipsIntoRoot?.() && rest) rest = avatar.restBonePositions();
   const e = ENGINES.get(engine);
   if (e?.cls && e.cls !== Ragdoll) {

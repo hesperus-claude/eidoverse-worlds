@@ -1,33 +1,19 @@
 // fp_view — first-person view composition for a body seen from its own eyes.
 //
-// One module owns the snapshot renderer's answer to "where is this avatar's
-// eye and what must be hidden so it can see". Future first-person render paths
-// should reuse this contract rather than invent another private head-height
-// guess. Issue #75 is what happens when the guess drifts from the
-// rig: a mounted resident's fixed `root + 1.52` camera sat INSIDE their own
-// head geometry, and nothing hid that geometry, so the watchtower view was
-// their own petals.
+// One module owns the snapshot renderer's answer to "where is this avatar's eye and what must be hidden so it can
+// see"; other first-person render paths should reuse it rather than guess a head height. DOM- and import-free:
+// callers hand in live world-space numbers and callbacks (tools/fp-view-test.ts pins them).
 //
-// Deliberately DOM-free and import-free: callers hand in live world-space
-// numbers (head bone position, mesh bounds, root yaw) and callbacks (hide,
-// render). That keeps the eye/exclusion semantics runnable under bun with no
-// renderer — tools/fp-view-test.ts pins them.
-//
-// The contract (issue #75):
-//   - the eye anchors on the LIVE rig — head bone when the rig has one, mesh
-//     bounds when it doesn't — so it follows whatever drives the root,
+// The contract:
+//   - the eye anchors on the LIVE rig (head bone, else mesh bounds), so it follows whatever drives the root,
 //     including a socket on moving furniture;
-//   - the resident's whole own visual root (mesh plus labels/bubbles) is never
-//     in the snapshot frame;
-//   - other bodies are untouched — exclusion is scoped to the one avatar;
-//   - a rig offering neither anchor fails with a message naming the rig,
-//     not a frame from inside its chest.
+//   - the resident's whole own visual root (mesh plus labels/bubbles) is never in the frame;
+//   - other bodies are untouched;
+//   - a rig offering neither anchor fails with a message naming the rig, not a frame from inside its chest.
 
-// Eye placement. FORWARD matches the local first-person eye (controller.js
-// places the eye 0.16 ahead of the head so geometry behind the eye plane
-// can't clip); LIFT raises the head JOINT (a bone at the neck's top) to eye
-// height. GAZE_* reproduce the standing snap framing: level look, dropped
-// 0.6 over 8m so the frame holds ground and horizon both.
+// Eye placement. FORWARD matches the local first-person eye (controller.js: 0.16 ahead of the head so geometry
+// behind the eye plane can't clip); LIFT raises the head JOINT to eye height. GAZE_* reproduce the standing snap
+// framing: level look, dropped 0.6 over 8 m so the frame holds ground and horizon.
 export const FP_FORWARD = 0.16;
 export const FP_EYE_LIFT = 0.06;
 export const FP_GAZE_AHEAD = 8;

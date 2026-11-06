@@ -1,6 +1,5 @@
-// components-wire-test — step 2 of docs/DESIGN-build-mode-components.md §7:
-// light as a component, empty entities, collider as a component — each with
-// its alias, on every tier that gives it meaning.
+// components-wire-test — light, empty entities and collider as components,
+// each with its alias, on every tier that gives it meaning.
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/components-wire-test.ts
 //
@@ -17,6 +16,9 @@ import { fileURLToPath } from 'node:url';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { COMPONENTS } from '../shared/protocol/componentspec.js';
+const LD = COMPONENTS.light.defaults;   // the registry's light defaults (spec/registry-pin.json pins the numbers)
+import { suite } from "./protocol/suite.ts";
 
 // the realizer's renderer/network cone, stubbed exactly as unknown-comp-test does
 // (tools/lod-client-stub.mjs records light requests and collider fits)
@@ -37,11 +39,8 @@ plugin({
 const SCRATCH = mkdtempSync(join(tmpdir(), 'ew-comp-wire-'));
 process.env.WORLDS_DIR = join(SCRATCH, 'worlds');
 
-let passed = 0, failed = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { passed++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { failed++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? `\n      ${detail}` : ''}`); }
-};
+const T = suite("components-wire");
+const check = (name: string, ok: unknown, detail?: unknown) => T.check(name, ok, detail);
 const jeq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const entScaleOf = (e: any) => { const s = e?.scale3 ?? e?.scale ?? 1; return Array.isArray(s) && s.every((x: number) => x === s[0]) ? s[0] : s; };
 
@@ -53,8 +52,8 @@ console.log('\n3. the browser (client/lib/realize/models.js, real bus + state, s
 const stub: any = await import('./unknown-comp-stub.mjs');
 const M: any = await import('../client/lib/realize/models.js');
 const S: any = await import('../client/lib/state.js');
-const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
-const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.(); M.drainPromoteTail?.(); await sleep(15); } };
+// the realizer's work is microtasks (the scheduler pumps on queueMicrotask): a few loop turns, no timer
+const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.(); M.drainPromoteTail?.(); for (let k = 0; k < 4; k++) await new Promise((r) => setImmediate(r)); } };
 {
   // the world as a client holds it: a scratch world behind the real door; the realizer is fed the views a
   // client's own fold reaches (hydrate the cut's view, then applyView after every door write)
@@ -62,7 +61,7 @@ const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.();
   W.seed({
     pivot: { pos: [1, 2, 3], yaw: 0.5, light: { important: true, intensity: 30 } },
     lamp: { model: LAMP, pos: [2, 0, 0], collider: { shape: 'box' } },
-    'lamp-light': { pos: [0, 0, 0], parent: { to: 'lamp', offset: [0, 1, 0] }, light: { color: 0xff8800, range: 7, day: false } },
+    'lamp-light': { pos: [0, 0, 0], parent: { to: 'lamp', offset: [0, 1, 0] }, light: { color: 0xff8800, range: 7, daytime: 'full' } },
     crate: { model: 'eidoverse/assets/models/crate.glb', pos: [4, 0, 0], collider: { shape: 'box' } },
     plain: { model: 'eidoverse/assets/models/plain.glb', pos: [6, 0, 0] },
     farlamp: { model: LAMP, pos: [600, 0, 0] },
@@ -85,7 +84,7 @@ const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.();
   check('an Empty realizes at once as an invisible Group at its folded transform', !!piv && piv.isGroup && piv.userData.empty === true
     && jeq(piv.position.toArray().map((x: number) => +x.toFixed(9)), [1, 2, 3]) && Math.abs(piv.rotation.y - 0.5) < 1e-9, `${piv?.type} ${JSON.stringify(piv?.position)}`);
   check('…loads nothing (no asset request names it); its panel meta carries no model and no kind (read its components)',
-    !stub.loads.some((l: any) => l.lib == null || l.lib === 'undefined') && stub.metaOf('pivot')?.model === undefined && !('kind' in (stub.metaOf('pivot') ?? { kind: 1 })), JSON.stringify([stub.loads.map((l: any) => l.lib), stub.metaOf('pivot')]));   // loads: the loader's own record (its lib path, as userData.lib), not a view record
+    !stub.loads.some((l: any) => l.model == null || l.model === 'undefined') && stub.metaOf('pivot')?.model === undefined && !('kind' in (stub.metaOf('pivot') ?? { kind: 1 })), JSON.stringify([stub.loads.map((l: any) => l.model), stub.metaOf('pivot')]));   // loads: the loader's own record (its lib path, as userData.lib), not a view record
   check('…and owns no collider', !stub.colliderLog.some((e: any) => e[1] === 'pivot'), JSON.stringify(stub.colliderLog));
   const cup = stub.entities.get('cup');
   check('a model parented to an Empty rides it (parented into the Empty\'s Group at its offset)', !!cup && cup.parent === piv && jeq(cup.position.toArray().map((x: number) => +x.toFixed(9)), [0, 0.5, 0]), `${cup?.parent?.type} ${JSON.stringify(cup?.position)}`);
@@ -131,7 +130,7 @@ const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.();
   live('set', at('farlamp', [700, 0, 0]));
   check('live: moving a never-loaded lamp moves its child\'s light with it', jeq(lit('farlamp-light'), [700, 0, 0]), JSON.stringify(lit('farlamp-light')));
   const marks = stub.colliderLog.length;
-  live('set', { id: 'lamp', component: 'collider', value: { shape: 'exact' } });
+  live('set', { id: 'lamp', component: 'collider', value: { shape: 'mesh' } });
   check('live: a changed collider component re-decides the standing collider under the new shape',
     stub.colliders.get('lamp')?.pref === 'exact' && stub.colliderLog.slice(marks).some((e: any) => e[0] === 'refit' && e[1] === 'lamp'), JSON.stringify(stub.colliderLog.slice(marks)));
   const onModel = W.call('set', { id: 'plain', component: 'light', value: { intensity: 9 } }); S.applyView(structuredClone(W.view()));
@@ -298,8 +297,8 @@ console.log('\n5. the inspector (shared/editschema.js: reads either spelling, wr
     esch.sections.add.some((a: any) => a.name === 'Light' && !a.blocked) && !esch.sections.add.some((a: any) => a.name === 'Collider' && !a.blocked), JSON.stringify(esch.sections.add.map((a: any) => `${a.name}${a.blocked ? '(blocked)' : ''}`)));
   const al = door(empty, { 'add.Light': null });
   check('…add.Light writes set light with the fields spelled out (the log records the result, not a default)',
-    opsOf(al.r) === JSON.stringify([{ verb: 'set', args: { id: 'x', component: 'light', value: { color: 0xffd9a0, intensity: 25.93, range: 10 } } }]), opsOf(al.r));
-  check('…and through the door the Empty is a lamp with exactly those values', al.res.ok && al.after?.light?.color === 0xffd9a0 && al.after.light.intensity === 25.93 && al.after.light.range === 10 && al.after.model === undefined, JSON.stringify([al.res.refused, al.after]));
+    opsOf(al.r) === JSON.stringify([{ verb: 'set', args: { id: 'x', component: 'light', value: { color: LD.color, intensity: LD.intensity, range: LD.range } } }]), opsOf(al.r));
+  check('…and through the door the Empty is a lamp with exactly those values', al.res.ok && al.after?.light?.color === LD.color && al.after.light.intensity === LD.intensity && al.after.light.range === LD.range && al.after.model === undefined, JSON.stringify([al.res.refused, al.after]));
   check('…add.Collider is refused with a reason', (() => { const r = ed(empty, { 'add.Collider': null }); return r.ops.length === 0 && /needs a model/.test(r.errors[0] ?? ''); })());
   check('add.Light on a thing that already has a light is refused', (() => { const r = ed(lamp, { 'add.Light': null }); return r.ops.length === 0 && /already has a light/.test(r.errors[0] ?? ''); })());
 
@@ -323,5 +322,4 @@ console.log('\n5. the inspector (shared/editschema.js: reads either spelling, wr
 }
 
 rmSync(SCRATCH, { recursive: true, force: true });
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);
+T.done();

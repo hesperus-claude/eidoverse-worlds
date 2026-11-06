@@ -18,10 +18,10 @@
 //      recomposes to itself.
 import * as THREE from '../client/node_modules/three/build/three.module.js';
 import { qFromEuler, eulerFromQ, setEulerChannel, sameRotation, ROT_ORDERS, LOCK_EPS } from '../shared/euler.js';
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const fails: string[] = [];
-const ok = (name: string, cond: boolean, detail = '') => { if (cond) pass++; else { fail++; if (fails.length < 25) fails.push(`${name} ${detail}`); } };
+const S = suite("euler", { quiet: true });   // thousands of rows: only the fails print
+const ok = (name: string, cond: boolean, detail = '') => S.check(name, cond, detail);
 const D = Math.PI / 180;
 const rnd = (() => { let s = 987654321; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); })();
 const ang = () => (rnd() * 2 - 1) * Math.PI;
@@ -117,6 +117,4 @@ for (const order of ROT_ORDERS) for (const yaw of [0.3, 2.5, -2.9]) {
   ok(`${order}: a pure yaw of ${yaw} reads (0, yaw, 0) with the upright hint`, close(r[0], 0, 1e-12) && close(r[1], yaw, 1e-12) && close(r[2], 0, 1e-12), `${r}`);
 }
 
-for (const f of fails) console.log('  ✗', f);
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

@@ -14,6 +14,8 @@
 
 import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
+import { tryUntil } from "./protocol/wait.ts";
+import { suite } from "./protocol/suite.ts";
 const STUB = fileURLToPath(new URL('./core-stub.mjs', import.meta.url));
 plugin({
   name: 'core-stub',
@@ -38,11 +40,8 @@ const { AmmoRagdoll } = await import('../client/lib/ammodoll.js');
 const { BodyEngineBase } = await import('../client/lib/bodyengine.js');
 const { rigs, makeAvatar, toppleLean, fixtureRig, VRM_DIR } = await import('./rig-load.mjs');
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("bodysim");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 // the avatar library (assets/opt, untracked) when it is on disk; else the rig the repo carries (spec/fixtures), so a clean
 // checkout runs this suite instead of throwing ENOENT (#260 house I438)
@@ -68,10 +67,7 @@ console.log('selection and the verlet floor:');
 
 console.log('\nthe loaded engine answers:');
 {
-  const t0 = Date.now();
-  while (bs.bodyEngine() !== 'ammo' && Date.now() - t0 < 30000) {
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  await tryUntil('the ammo engine loads', () => bs.bodyEngine() === 'ammo', { ms: 30_000, step: 100 });
   check('ammo finishes loading', bs.bodyEngine() === 'ammo', bs.bodyEngine());
   const av = makeAvatar(rig.P);
   const rd: any = bs.makeRagdoll(av, null, av.restBonePositions());
@@ -130,5 +126,4 @@ console.log('\ninterface parity across the seam:');
   }
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

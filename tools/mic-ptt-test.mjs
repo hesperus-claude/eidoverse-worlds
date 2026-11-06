@@ -1,7 +1,7 @@
 // Push-to-talk: EXECUTE the gate decision under both regimes. Not a source
 // grep — the stubs stop at the browser boundary (AudioContext, bus, net) and
 // the code under test is the shipped code, same doctrine as
-// micstate-exec-test.mjs and for the same reason: every prior mic defect in
+// micstate-test.mjs and for the same reason: every prior mic defect in
 // this repo passed source-level checks and failed only when run.
 //
 // The observable is micgate's gateOpenness() — the gate's INTENT, the same
@@ -13,6 +13,7 @@
 import { fileURLToPath } from "node:url";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { mock } from "bun:test";
+import { pause } from "./protocol/wait.ts";
 GlobalRegistrator.register({ url: "http://localhost/?world=t&name=p" });
 
 // The bus is the REAL one (base.js), deliberately: micstate subscribes to
@@ -24,7 +25,7 @@ mock.module(fileURLToPath(new URL('../client/lib/net.js', import.meta.url)), () 
   sendTyping: () => { typed++; },
   say: () => {}, sendRequest: async () => ({ ok: true }), net: {},   // for mictoggle.js's graph (the stuck-key rows run it)
 }));
-// Full enough for the gate GRAPH to build (micstate-exec-test's stub lacks
+// Full enough for the gate GRAPH to build (micstate-test.mjs's "none" context lacks
 // createGain/createMediaStreamDestination, so its gate is always unavailable
 // — fine for its questions, blinding for these: an unbuilt gate reports
 // openness 0 forever and every assertion below would vacuously pass).
@@ -121,9 +122,8 @@ t('mode exit closes the gate', gate(0));
 //
 // The machine ticks on a real 20ms interval with a ~1s learn-before-judge
 // window, so these cases wait it out rather than poking its internals.
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const speak = async () => { room = 0.5; await sleep(2600); };   // settle + 60ms, and PAST the 1.5s 🎙 rate-limit left by the last press — or a missing guard hides behind it
-const hush  = async () => { room = 0;   await sleep(900);  };   // past the 700ms hang-time
+const speak = async () => { room = 0.5; await pause('settle + 60 ms, past the 1.5 s rate limit the last press left', 2600); };   // settle + 60ms, and PAST the 1.5s 🎙 rate-limit left by the last press — or a missing guard hides behind it
+const hush  = async () => { room = 0;   await pause('past the 700 ms hang time', 900);  };   // past the 700ms hang-time
 // Re-arm the lane so the machine restarts its learn window on a quiet room.
 ms.gateRelease(); room = 0; ms.gateFor(stream);
 vc.setPttMode(true);

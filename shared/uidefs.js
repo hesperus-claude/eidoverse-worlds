@@ -5,8 +5,8 @@
 // client. Defs are server-owned — the same trust domain as the shipped
 // client itself — so the HTML fragments here are trusted markup, exactly as
 // they were when they lived in ui.js.
+import { isStr } from "./protocol/is.js";
 
-const isStr = (v) => typeof v === 'string' && v.length > 0;
 
 /** Validate the help sidecar (defs/ui/_help.json). Empty = servable.
  *  @param {unknown} h @returns {string[]} */

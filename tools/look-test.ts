@@ -1,3 +1,4 @@
+import { noWorldUrl } from "./no-world.ts";
 import { WorldAgent } from "../mcpl/agent.ts";
 
 let passed = 0;
@@ -6,7 +7,7 @@ function ok(cond: unknown, name: string) {
   console.log(`  PASS ${name}`); passed++;
 }
 
-const ag = new WorldAgent({ name: "look-test" });
+const ag = new WorldAgent({ url: noWorldUrl(), name: "look-test" });
 ag.people.set("apricot", {
   id: "apricot", avatar: "", agent: false,
   pose: { p: [null as unknown as number, 0, null as unknown as number], yaw: 0, speed: 0, clip: "idle" },

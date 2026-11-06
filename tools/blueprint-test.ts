@@ -10,10 +10,9 @@
 //    (tools/protocol/scratchworld.ts): the record, the copy's tree, its local poses, one act, the door's undo
 // 7. the agent's blueprints / create {from} / look() over the library, its door the scratch door
 //
-// Sections 1–3 are pure functions of shared/blueprint.js and stay as they were (NOTE: expand/overridesOf/rebase have
-// no runtime caller today). The v1 sections went with the v1 runtime (protocol v1 removed, 2026-10-07): 4 (the v1
-// fold's state.blueprints store and its stateToEntries snapshot), 5 (server/verbs.ts's blueprint verb) and 8
-// (shared/pace.js against a model of the v1 door's 12-per-4-s verb window; pace.js has no runtime caller now).
+// Sections 1–3 are pure functions of shared/blueprint.js (expand/overridesOf/rebase have no runtime caller yet);
+// the v1 sections (4, 5, 8) went with protocol v1.
+import { noWorldUrl } from './no-world.ts';
 import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -21,15 +20,13 @@ import { join } from 'node:path';
 
 import { recordComponents } from "../shared/protocol/view.js";
 import { inspectSchema, fieldAt } from "../shared/editschema.js";
+import { suite } from "./protocol/suite.ts";
 // config.ts makes WORLDS_DIR at import: keep the bench out of the repo's worlds/
 const SCRATCH = mkdtempSync(join(tmpdir(), 'ew-blueprint-'));
 process.env.WORLDS_DIR = join(SCRATCH, 'worlds');
 
-let passed = 0, failed = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { passed++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { failed++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? `\n      ${detail}` : ''}`); }
-};
+const S = suite("blueprint");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const J = JSON.stringify;
 // a copy's parts are minted (R 10-17: opaque ids, never <copy>-<key>): the part with record key `key` under copy `copy`
 const partOf = (E: any, copy: string, key: string) => Object.keys(E).find((x) => { if (E[x]?.['copy-of']?.key !== key) return false; for (let p: any = x, n = 0; p && n < 64; p = E[p]?.parent?.to, n++) if (p === copy) return true; return false; }) ?? `${copy}-${key}`;
@@ -279,7 +276,7 @@ let HV = '';   // the record's hash, "sha256:<hex>"
     desk: { model: LAMP, pos: [50, 0, 50], scale: 2, collider: { shape: 'box' } },
     arm: { model: LAMP, parent: { to: 'desk', offset: [0.2, 0.5, 0], q: tilt }, scale: 0.5 },
     shade: { model: LAMP, parent: { to: 'arm', offset: [0, 1, 0] }, motion: { type: 'spin', axis: 'y', degPerSec: 20 }, lock: true },
-    glow: { parent: { to: 'shade', offset: [0, -0.1, 0] }, light: { color: 0xff8800, intensity: 6, range: 4, day: false } },
+    glow: { parent: { to: 'shade', offset: [0, -0.1, 0] }, light: { color: 0xff8800, intensity: 6, range: 4, daytime: 'full' } },
   });
   const p = W.call('publish', { from: 'desk', name: 'Desk' });
   const HD = p.notes?.find((n: any) => n.record)?.record;
@@ -317,7 +314,7 @@ console.log('\n7. the text tier — blueprints, create {from}, look() (mcpl), th
   const pub = W.call('publish', { from: 'lamp', name: 'Lamp' });
   const H = pub.notes.find((n: any) => n.record).record as string, hex = H.slice(7);
   W.call('create', { id: 'lampa', from: H, at: { pos: [2, 0, 2] } });
-  const ag: any = new WorldAgent({ name: 'eye' });
+  const ag: any = new WorldAgent({ url: noWorldUrl(), name: 'eye' });
   const sync = () => { ag.st = W.view(); ag.replica = { st: W.state(), active: true }; ag.reconcileFromFold(); };
   sync();
   // every handler reaches the authority through request() (10-14: there is no door()); here that is the in-process world
@@ -346,5 +343,4 @@ console.log('\n7. the text tier — blueprints, create {from}, look() (mcpl), th
 }
 
 rmSync(SCRATCH, { recursive: true, force: true });
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);
+S.done();

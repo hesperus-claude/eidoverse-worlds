@@ -6,13 +6,11 @@
 //   delete {id, component: "sound"}               # silence it
 //
 // A sound is an audio file playing FROM an entity: positional, in the world,
-// heard louder the closer you stand. The radio prop is the first carrier —
-// the music player of the projector ladder (anima_dev/eidoverse_projector_
-// design.md) with a file where the stream will be; the captions comp (#187)
-// rides the same entity and says what the words are.
+// heard louder the closer you stand. A captions component on the same entity
+// says what the words are.
 //
-// (Batch 2, R 10-07: an https link is a source too now; shared/mediasrc.js decides whose browser may fetch it,
-// and an untrusted host is fetched only for a viewer who opted in. What follows is the rule for the store paths.)
+// An https link is a source too: shared/mediasrc.js decides whose browser may fetch it (an untrusted host only for a
+// viewer who opted in). What follows is the rule for the store paths.
 // SOURCE ALLOW-LIST — the picture's rule, for audio: a library-relative path
 // under `eidoverse/assets/` (what the operator placed) or `store/audio/` (what
 // came in through `POST /upload?as=audio`, sniffed by bytes), never a URL. A
@@ -32,7 +30,7 @@
 // look() carries. Nothing about the waveform is ever claimed.
 
 import { mediaTier } from './mediasrc.js';
-import { graphemes, graphemeList, quoted } from './text.js';
+import { graphemes, quoted } from './text.js';
 
 export const SOUND_DIR = 'eidoverse/assets/';
 export const SOUND_STORE = 'store/audio/';
@@ -41,8 +39,8 @@ const AUDIO_EXT = /\.(mp3|ogg|opus|wav|webm|m4a)$/i;
 export const SOUND_DESCRIPTION_MAX = 200;
 /** The description field's tooltip, in plain words. */
 export const SOUND_DESCRIPTION_HINT = 'Describes what is playing in words, for people who can\'t hear it and for agents';
-export const SOUND_MAX_RADIUS = 200;   // m (R 10-28: 100 → 200); componentspec's sound ranges say the same
-// R 10-07: a placed sound plays (no start-paused); distance is what keeps it from covering the world
+export const SOUND_MAX_RADIUS = 200;   // m; componentspec's sound ranges say the same
+// a placed sound plays (no start-paused); distance is what keeps it from covering the world
 export const SOUND_DEFAULTS = Object.freeze({ playing: true, loop: true, volume: 0.8, pitch: 1, near: 1.5, radius: 12, spatial: true });
 const KNOWN_KEYS = new Set(['src', 'playing', 'loop', 'volume', 'pitch', 'near', 'radius', 'spatial', 't0', 'description']);
 
@@ -67,11 +65,10 @@ const num = (v, lo, hi, dflt) => {
   return v == null || !Number.isFinite(n) ? dflt : Math.min(hi, Math.max(lo, n));
 };
 
-// THE FALLOFF (batch 2, R 10-07: "silent at radius"). BasisVR's voice curve (BasisVoiceAcoustics.cs, developer @ eac8e38):
-// an inverse-distance law held at 1 inside near, times (1 − t)² over the last 5% of the range, so it reaches exactly 0 AT
-// radius. Web Audio's own `inverse` model CLAMPS at maxDistance instead: a 12 m radio was still heard at about 9% (−21 dB)
-// everywhere past 12 m, across the whole world. The panner keeps only the direction (rolloff 0); this gain is applied in
-// the tick (client/lib/sounds.js), so what you hear is silent where the editor's sphere says.
+// THE FALLOFF: silent at radius. BasisVR's voice curve (BasisVoiceAcoustics.cs): inverse-distance held at 1 inside near,
+// times (1 − t)² over the last 5% of the range, so exactly 0 AT radius (Web Audio's `inverse` CLAMPS at maxDistance and
+// is heard across the world). The panner keeps only the direction (rolloff 0); this gain is applied in the tick
+// (client/lib/sounds.js).
 export const TAPER_START = 0.95;
 /** The distance gain at d metres from a sound: 1 inside near, inverse beyond, 0 at radius and past it. */
 export function gainAt(d, near = SOUND_DEFAULTS.near, radius = SOUND_DEFAULTS.radius) {
@@ -114,8 +111,8 @@ export function normalizeSound(data) {
   } else if (sound.playing) notes.push('no t0 — the authority stamps one when it starts; without it each client starts from the top');
   if (data.description != null) {
     const d = String(data.description).replace(/\s+/g, ' ').trim();
-    if (graphemes(d) > SOUND_DESCRIPTION_MAX) { notes.push(`description clipped to ${SOUND_DESCRIPTION_MAX} characters`); sound.description = graphemeList(d).slice(0, SOUND_DESCRIPTION_MAX).join(''); }
-    else if (d) sound.description = d;
+    if (graphemes(d) > SOUND_DESCRIPTION_MAX) return { ok: false, why: `description is ${graphemes(d).toLocaleString('en')} characters (at most ${SOUND_DESCRIPTION_MAX})` };   // the door's bound, in the editor's words (mediasrc.js, editor-range-test)
+    if (d) sound.description = d;
   }
   if (!sound.description) notes.push('no description — anyone who can\'t hear it (or reads the world as text) gets only the file name; say what is playing');
   return { ok: true, sound, tier, notes };

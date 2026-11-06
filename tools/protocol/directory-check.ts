@@ -10,9 +10,10 @@ import { CUSTODY_FILE, DIRECTORY_FILE, OLD_NAMES, custodyFileIn } from "../../se
 import { custodyAt } from "../../server/custody.ts";
 import { openLive } from "./labhost.ts";
 import { request, actIndexOf, isBanned } from "../../shared/protocol/authority.js";
+import { suite } from "./suite.ts";
+import { COMPONENTS } from "../../shared/protocol/componentspec.js";
 
-let pass = 0, fail = 0;
-const ok = (c: unknown, what: string, why?: unknown) => { if (c) pass++; else { fail++; console.log(`  FAIL ${what}${why === undefined ? "" : ` — ${JSON.stringify(why).slice(0, 300)}`}`); } };
+const { ok, mode, done } = suite("directory-check", { quiet: true, cap: 300 });
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dir-check-"));
 const file = path.join(tmp, "worlds", ".directory.json");
 
@@ -32,8 +33,7 @@ const file = path.join(tmp, "worlds", ".directory.json");
   ok(d.resolve({ sub: "human:discord:333", name: "Bea" }) === leg, "D7 binding an account to a legacy identity lets that account wear it");
   let threw: string | null = null; try { d.bind(leg, "human:discord:111"); } catch (e) { threw = String((e as Error)?.message ?? e); }
   ok(threw && /alias/.test(threw) && /portable identity/.test(threw), "D8 an account can't wear two identities; the refusal names the path that joins two (an alias merge, with portable identity), not a bind", threw);
-  // Windows has no POSIX modes (stat reports 666 for any writable file; access is the profile's ACL), so this row is POSIX-only
-  if (process.platform !== "win32") ok((fs.statSync(file).mode & 0o777) === 0o600, "D9 the directory file is 0600", (fs.statSync(file).mode & 0o777).toString(8));
+  mode("D9 the directory file is 0600", file, 0o600);
   const again = directoryAt(file);
   ok(again.resolve({ sub: "human:discord:111", name: "Annie" }) === ann && again.nameOf(twin) === "Annie", "D10 it survives a reopen");
   ok(JSON.stringify(again.names([ann, twin, "u-nobody"])) === JSON.stringify({ [ann]: "Annie", [twin]: "Annie" }), "D11 names() gives display names only (never accounts), skipping unknown ids");
@@ -213,7 +213,7 @@ ok(foldName("Marígold") === foldName("marigold") && foldName("JOSÉ") === foldN
   ok(set("label", 42).refused?.code === "shape" && set("model", { x: 1 }).refused?.code === "shape", "S5 label and model are typed");
   ok(set("placer", { id: "me" }).refused?.code === "derived", "S6 placer is derived (L2): refused");
   const lit: any = request(w, me, "create", { id: "lamp", components: { transform: { pos: [2, 1, 2] }, light: {} } });
-  ok(lit.ok && w.state().entities.lamp.c.light.intensity === 25.93 && w.state().entities.lamp.c.light.range === 10, "S7 an agent's light {} gets the renderer's defaults (25.93, 10), as the editor's does (R9)", w.state().entities.lamp?.c.light);
+  ok(lit.ok && w.state().entities.lamp.c.light.intensity === COMPONENTS.light.defaults.intensity && w.state().entities.lamp.c.light.range === COMPONENTS.light.defaults.range, "S7 an agent's light {} gets the registry's defaults, as the editor's does (R9)", w.state().entities.lamp?.c.light);
   ok(request(w, me, "set", { id: "@world", component: "sky", value: { hours: 9, rate: 1, weathr: "rain" } }).refused?.code === "schema", "S8 sky is registered: its fields are checked"); }
 
 // ---- U: undo across people (F2 decided 10-05; round-2 R10, R11; round-1 F3) ----
@@ -344,7 +344,7 @@ ok(foldName("Marígold") === foldName("marigold") && foldName("JOSÉ") === foldN
 // eidosim@0.5.0 from seq 15641; translate-v1@9 kept each punt as an `imported` record and left the punted thing where it
 // was punted FROM, reporting "0 divergences" because it compared only against the instant fold (her sim rests it
 // elsewhere). The importer refused such logs until translate-v1@10 ran her sim beside the v1 fold. Each case goes
-// through the real importer (translateV1World, in a child with a scratch library: epoch-probe.ts), tier 0 empty (a translation names no founder),
+// through the real importer (translateV1World, in a child with a scratch library: epoch-child.ts), tier 0 empty (a translation names no founder),
 // directory identities and content addresses, and is compared with HER sim (shared/sim.js beside the v1 fold, as sweep §3).
 { const { emptyState: v1Empty, foldEntry } = await import("./import-v1/fold.js");
   const eidosim = await import("./import-v1/eidosim-v1.js");   // HER engine: what the v1 log means
@@ -366,7 +366,7 @@ ok(foldName("Marígold") === foldName("marigold") && foldName("JOSÉ") === foldN
     fs.mkdirSync(path.join(W, "worlds", "old"), { recursive: true }); fs.mkdirSync(OPT, { recursive: true });
     for (const [p, b] of Object.entries(lib)) { fs.mkdirSync(path.dirname(path.join(LIB, p)), { recursive: true }); fs.writeFileSync(path.join(LIB, p), b); }
     fs.writeFileSync(path.join(W, "worlds", "old", "log.jsonl"), L.map((e) => JSON.stringify(e)).join("\n") + "\n");
-    const run = Bun.spawnSync(["bun", path.join(import.meta.dir, "epoch-probe.ts"), path.join(W, "worlds", "old"), path.join(W, "worlds", "new")],
+    const run = Bun.spawnSync(["bun", path.join(import.meta.dir, "epoch-child.ts"), path.join(W, "worlds", "old"), path.join(W, "worlds", "new")],
       { env: { ...process.env, OPT_DIR: OPT, EIDOVERSE_DIR: LIB, TRUST_NAMES: "" }, stdout: "pipe", stderr: "pipe" });
     const line = run.stdout.toString().trim().split("\n").pop() ?? ""; let res: any; try { res = JSON.parse(line); } catch { res = { ok: false, err: `probe printed ${JSON.stringify(line.slice(0, 200))}; stderr ${run.stderr.toString().slice(-400)}` }; }
     const file = path.join(W, "worlds", "new", "world.jsonl");
@@ -657,5 +657,4 @@ fs.rmSync(tmp, { recursive: true, force: true });
   ok(isMinted("u-" + "a".repeat(20)) && !isMinted("w-" + "a".repeat(20)) && !isMinted("u-imported-" + "a".repeat(11)) && !isMinted("u-" + "a".repeat(21)),
     "D40b one id shape, u- and 20 base32 characters: nothing in it says a world, a name or a kind"); }
 
-console.log(`[directory-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

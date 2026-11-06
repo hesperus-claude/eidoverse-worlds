@@ -217,12 +217,10 @@ export function shapeHeight(base, S, size) {
 //
 // A body WADES until the water is at its chest, then SWIMS (waterStance): its feet leave the bed and it
 // floats with head and shoulders above the surface. Wading is slower the deeper it gets; swimming is
-// slower still. Nothing is walled off: the old 1 m wading wall is gone (wadeAllowed/waterBlocks now
-// always allow), and a planner prices water instead (waterCost). The client's controller and the agents'
-// walk both read these, from the body's own height.
-// THE LAW LIVES IN shared/mover.js (2026-10-15): the client's controller and the agents' walk step with the
-// one walker there, which reads the water through env.waterAt. These names are RE-EXPORTS of it, so a caller
-// that imported them from here reads the same numbers — never a second copy.
+// slower still. Nothing is walled off (wadeAllowed/waterBlocks always allow); a planner prices water
+// instead (waterCost).
+// THE LAW LIVES IN shared/mover.js (its one walker reads the water through env.waterAt); these names are
+// RE-EXPORTS of it, never a second copy.
 export { waterStance, waterCost };
 export const SWIM_AT = MOVER.swim.at;         // of body height: deeper than this at the feet, the body floats (the chest)
 export const SWIM_SPEED = MOVER.swim.speed;   // m/s, a steady stroke
@@ -231,8 +229,8 @@ export const WALK_SPEED = MOVER.walk.speed;   // the walking pace waterCost pric
 /** @deprecated wading has no depth limit now — kept so callers of the old rule still read one. */
 export const WADE_DEPTH = 1.0;
 const HEX = /^#[0-9a-fA-F]{6}$/;
-/** @world's water (shape audit 10-16: its own component, @world.water), or undefined. @param {Record<string, any>} c  @world's
- *  components (or a view: {water}) */
+/** @world's water (its own component, @world.water; an older world's terrain.water until the maintenance command moves
+ *  it), or undefined. @param {Record<string, any>} c  @world's components (or a view: {water, terrain}) */
 export const worldWater = (c) => c?.water;
 /** A world's water, normalized — or null when it has none. Its colour is an int (0xRRGGBB) or an older '#rrggbb'.
  *  @param {Record<string, any>} a  terrain-verb args carrying `water` (the water component riding on them) */

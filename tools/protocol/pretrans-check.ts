@@ -24,6 +24,7 @@ import { ENGINE, scratch } from "./common.ts";
 import { CAPACITY } from "../../shared/protocol/authority.js";
 import { translatorVersion } from "./import-v1/translate-v1.js";
 import { pin, LAB_EPOCH } from "./clock.ts";
+import { suite } from "./suite.ts";
 const require = createRequire(import.meta.url);
 
 const argv = process.argv.slice(2);
@@ -34,10 +35,8 @@ const imp = async (p: string) => await import(path.join(T, p));
 const FOLD = await imp("shared/protocol/fold.js"), D = await imp("shared/protocol/authority.js"), CAT = await imp("shared/protocol/componentspec.js");
 const SD = await imp("tools/protocol/scratchworld.ts");
 const PH = await imp("tools/protocol/pinhistory.ts");
-let pass = 0, fail = 0;
-const ok = (id: string, cond: any, what: string, detail?: any) => {
-  if (cond) { pass++; console.log(`  ok ${id} ${what}`); }
-  else { fail++; console.log(`  FAIL ${id} ${what}${detail !== undefined ? ` — ${JSON.stringify(detail)?.slice(0, 600)}` : ""}`); } };
+const S = suite("pretrans", { cap: 600 });
+const ok = (id: string, cond: any, what: string, detail?: any) => { if (S.runs(id)) S.ok(cond, `${id} ${what}`, detail); };
 async function C(id: string, what: string, fn: () => any) {
   if (only && !only.includes(id)) return;
   try { const r = await fn(); if (Array.isArray(r)) ok(id, r[0], what, r[1]); else ok(id, r, what); }
@@ -100,14 +99,14 @@ function literals(src: string) {   // string literals, comments skipped (a small
     i++; }
   return out;
 }
-await C("C1", "every § a person or agent reads names a section the spec has", () => {
+await C("C1", "every § a human or agent reads names a section the spec has", () => {
   const bad = [];
   for (const f of SAID) { if (!fs.existsSync(path.join(T, f))) continue;
     for (const s of literals(read(f))) for (const m of s.matchAll(/(PHYSICS )?§(\d+[a-z]?(?:\.\d+)?)/g))
       if (!(m[1] ? PHYS : HEAD).has(m[2])) bad.push(`${f}: ${m[0]} in "${s.slice(Math.max(0, m.index - 30), m.index + 30)}"`); }
   if (process.env.VERBOSE) for (const b of bad) console.log("    " + b);
   return [!bad.length, bad.slice(0, 8)]; });
-await C("C2", "no lab-era law names (L1–L7, R7, §3d…) in what a person or agent reads", () => {
+await C("C2", "no lab-era law names (L1–L7, R7, §3d…) in what a human or agent reads", () => {
   const bad = [];
   for (const f of SAID) { if (!fs.existsSync(path.join(T, f))) continue;
     for (const s of literals(read(f))) { const m = /\b(L[1-7]|R(?:7|8|9|10)|§3d)\b/.exec(s); if (m && /[a-z] /.test(s)) bad.push(`${f}: ${m[0]} in "${s.slice(Math.max(0, m.index - 30), m.index + 30)}"`); } }
@@ -644,7 +643,7 @@ await C("D1", "a spot light's cone is written into it (angle π/4, inner 0); a p
   const W = world(); for (const id of ["a", "b"]) if (!W.call("create", { id, components: { label: id } }).ok) throw new Error("create");   // bare things: a light never shares a thing with a model (one place per thing, 10-11)
   const ra = W.call("set", { id: "a", component: "light", value: { kind: "spot" } }), rb = W.call("set", { id: "b", component: "light", value: { kind: "point" } });
   const a = stored(W, "a", "light"), b = stored(W, "b", "light");
-  return [ra.ok && rb.ok && a.angle === Math.PI / 4 && a.inner === 0 && !("angle" in b) && a.important === false && a.daytime === "dim" && a.decay === 2 && b.intensity === 25.93, [a, b]]; });   // day → daytime, +decay (shape audit 10-16)
+  return [ra.ok && rb.ok && a.angle === Math.PI / 4 && a.inner === 0 && !("angle" in b) && a.important === false && a.daytime === "dim" && a.decay === 2 && b.intensity === CAT.COMPONENTS.light.defaults.intensity, [a, b]]; });   // day → daytime, +decay (shape audit 10-16)
 await C("D2", "an openable's turn is written (angle π/2, axis [0,1,0], time 1, locked false); a sliding one gets no turn", () => {
   const W = world(); mk(W, "d"); mk(W, "s");
   W.call("set", { id: "d", component: "openable", value: { open: false } }); W.call("set", { id: "s", component: "openable", value: { open: false, slide: [1, 0, 0] } });
@@ -887,5 +886,4 @@ await C("P4", "§5 says what touches the log and what doesn't: arrivals don't; a
   const g = SPEC.slice(SPEC.indexOf("## 5."), SPEC.indexOf("## 6.")); const need = ["Arriving is presence", "never logged", "client"];
   return [need.every((n) => g.includes(n)) && !/Arriving,\s+teleporting, putting something down/.test(g), need.filter((n) => !g.includes(n))]; });
 
-console.log(`\npretrans: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

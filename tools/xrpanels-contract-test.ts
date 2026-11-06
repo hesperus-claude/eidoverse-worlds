@@ -16,9 +16,16 @@ plugin({
     b.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here("./core-stub.mjs") }));
     // panels.js stays REAL — renderCanvas/hitRegion are the schema this seam speaks
     b.onResolve({ filter: /^\.\/domquad\.js$/ }, () => ({ path: here("./xrpanels-domquad-stub.mjs") }));
+    // quadcolour's node material is the WebGPU build's only: an identity here, as tools/edittheme-test.ts has it
+    b.onResolve({ filter: /^\.\/quadcolour\.js$/ }, () => ({ path: "quadcolour", namespace: "xrpanels-stub" }));
+    b.onLoad({ filter: /.*/, namespace: "xrpanels-stub" }, () => ({ contents: "export const quadMaterial = () => {};", loader: "js" }));
   },
 });
 GlobalRegistrator.register();
+(globalThis as any).Path2D ??= class Path2D {};
+(globalThis as any).requestAnimationFrame ??= (f: any) => setTimeout(f, 0);
+// a 2D context that paints nothing (the quads are painted when shown)
+(HTMLCanvasElement.prototype as any).getContext = () => new Proxy({ measureText: (t: string) => ({ width: t.length * 8 }) } as any, { get: (o, k) => (k in o ? o[k] : () => {}), set: () => true });
 const xr = await import("../client/lib/xrpanels.js");
 
 let pass = 0, fail = 0;
@@ -45,6 +52,21 @@ const after = xr.xrPanelIds().filter((i: string) => i === "modpanel");
 check("re-registering the same id does NOT duplicate", after.length === 1, JSON.stringify(xr.xrPanelIds()));
 xr.registerXRPanel({ id: "other", fields: () => [], dispatch: () => {} });
 check("a different id appends", xr.xrPanelIds().filter((i: string) => i === "other").length === 1 && xr.xrPanelIds().length >= 2, JSON.stringify(xr.xrPanelIds()));
+
+console.log("XRPANELS — the laser hits only the quads that are showing");
+{ const { THREE } = await import("./core-stub.mjs");
+  const rig = new THREE.Group(); xr.xrPanelsEnter(rig); rig.updateMatrixWorld(true);
+  const quads = rig.children as any[];
+  check("a quad per registered panel rides the rig", quads.length === xr.xrPanelIds().length, String(quads.length));
+  xr.showXRPanel("modpanel", true); xr.showXRPanel("other", false);
+  const [shownQ, hiddenQ] = ["modpanel", "other"].map((id) => quads[xr.xrPanelIds().indexOf(id)]);
+  check("the setup: one quad shown, one hidden", shownQ?.visible === true && hiddenQ?.visible === false);
+  const eye = new THREE.Vector3(0, 1.15, 0);
+  const rayAt = (q: any) => ({ matrixWorld: new THREE.Matrix4().lookAt(eye, q.getWorldPosition(new THREE.Vector3()), new THREE.Vector3(0, 1, 0)).setPosition(eye) });
+  const dShown = xr.xrPanelsPick(rayAt(shownQ));
+  check("aimed at the shown quad, the pick hits it", typeof dShown === "number" && dShown > 0.5 && dShown < 1.2, String(dShown));
+  check("aimed at the hidden quad, the pick hits nothing", xr.xrPanelsPick(rayAt(hiddenQ)) === null, String(xr.xrPanelsPick(rayAt(hiddenQ))));
+}
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

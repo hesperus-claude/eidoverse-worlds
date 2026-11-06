@@ -1,8 +1,6 @@
-// flora — the browser host for eidoverse-video's vegetation brush
-// (`createFlora`), which replaced `makeGrass` upstream. Real species with PBR
-// map sets — grass carpets with seasonal color, desert bunch grass, three
-// Mojave shrubs, yucca, corn with baked cobs and planted rows — GPU-instanced
-// whole plants, self-animating wind, pushers that part foliage around walkers.
+// flora — the browser host for the vegetation brush (`createFlora`, which replaced upstream `makeGrass`): real
+// species with PBR map sets, GPU-instanced whole plants, self-animating wind, pushers that part foliage around walkers.
+// Tiling, density and LOD rationale: docs/research/meadow-grass-rendering.md.
 //
 // This file owns the DOM/THREE-bound hosting. The pure logic lives beside it
 // so it can be unit-tested without a browser:
@@ -28,19 +26,13 @@ export { retireField } from './flora_field.js';
 // ---- module ----------------------------------------------------------------
 
 let floraMod = null;
-/** Import the vegetation engine. §24j: it is a FIRST-CLASS CLIENT MODULE now
- *  (client/lib/vegetation/) — the upstream-patched /library override retired
- *  with the braid (eidoverse-video is an asset library, not an engine peer).
- *  Still a lazy dynamic import: the module reads globalThis.THREE and the
- *  Deno asset shim, both of which exist by the time flora work starts, and
- *  its weight stays off the boot path. */
+/** Import the vegetation engine (client/lib/vegetation/, §24j). A lazy dynamic import: it reads globalThis.THREE and
+ *  the Deno asset shim, both present by the time flora work starts, and its weight stays off the boot path. */
 export async function loadFloraModule() {
   if (!floraMod) {
     floraMod = import('./vegetation/vegetation.js').then(async (m) => {
-      // §24 defs: species are data now — hydrate the registry from /defs
-      // BEFORE anyone resolves the module, so every FLORA_SPECIES read
-      // below and in the build path sees a populated table. Optional-chained
-      // so a cached pre-defs engine build still loads (its table is baked in).
+      // §24 defs: hydrate the species registry from /defs before anyone resolves the module. Optional-chained so a
+      // cached pre-defs engine build still loads (its table is baked in).
       await m.ensureFloraDefs?.();
       // engine parity: the loader shim registers these globally
       globalThis.createFlora = m.createFlora;
@@ -83,13 +75,9 @@ async function ensureFloraAssets(mod, species) {
 }
 
 // ---- interior clearings ----------------------------------------------------
-// Exact-collider interiors paint their footprints black into a mask; the
-// vertex stage sinks masked plants underground. ONE mask per FIELD, wired into
-// EVERY stroke's material and disposed with the field: a module-global mask
-// left earlier strokes pointing at an orphaned canvas (only the last stroke
-// stayed repaintable) and leaked a bus listener per stroke per re-grow.
-// The mask samples the PLANT's world XZ — the field's positionNode output —
-// because positionLocal is per-plant space under instancing.
+// Exact-collider interiors paint their footprints black into a mask; the vertex stage sinks masked plants
+// underground. ONE mask per FIELD, wired into every stroke's material and disposed with the field. It samples the
+// PLANT's world XZ (the positionNode output): positionLocal is per-plant space under instancing.
 const MASK = 256;
 
 function makeClearingMask(W, D) {
@@ -140,10 +128,8 @@ function makeClearingMask(W, D) {
 }
 
 // ---- density dial ----------------------------------------------------------
-// The perf governor thins the meadow before dropping resolution (Safari fill
-// rate). Instanced fields make this near-free: shuffle the per-instance
-// attribute arrays once (deterministic — a field must stay the same field),
-// and InstancedMesh.count becomes a uniform-density dial.
+// The perf governor thins the meadow before dropping resolution: the instanced attributes are shuffled once
+// (deterministically: a field must stay the same field), so InstancedMesh.count is a uniform-density dial.
 function wireDensityDial(field) {
   const geo = field.mesh.geometry;
   const attrs = ['aPosRot', 'aScaleVar', 'aPhase'].map((n) => geo.getAttribute(n)).filter(Boolean);
@@ -164,10 +150,9 @@ function wireDensityDial(field) {
     }
     a.needsUpdate = true;
   }
-  // the stem mesh (shrub wood) rides the same attribute OBJECTS, so the
-  // shuffle above already covers it — only the count needs mirroring
+  // the stem mesh (shrub wood) shares the same attribute OBJECTS, so only the count needs mirroring
   field.setDensity = (f) => {
-    // densityCount owns the clamp — including genuine zero for `off` (#60)
+    // densityCount owns the clamp, including genuine zero for `off`
     const keep = densityCount(n, f);
     field.mesh.count = keep;
     if (field.stemMesh) field.stemMesh.count = keep;
@@ -175,16 +160,8 @@ function wireDensityDial(field) {
 }
 
 // ---- frustum culling -------------------------------------------------------
-// Upstream ships frustumCulled = false, and it HAS to: the engine's
-// instanceMatrix is all identity (every transform rides the aPosRot/
-// aScaleVar/aPhase attributes inside positionNode), so three's own
-// computeBoundingSphere would union identity matrices into a half-meter
-// sphere at the world origin and the field would vanish whenever the origin
-// left the view. The adapter knows better: aPosRot IS the world placement
-// (heights baked at build), so a correct world-space sphere is one pass
-// over the attribute. Assign it explicitly — a non-null boundingSphere is
-// never recomputed — and culling turns on: looking away from the meadow
-// stops drawing every blade of it (§13.2 G1).
+// Upstream ships frustumCulled = false (instanceMatrix is all identity, so three's own sphere sits at the origin).
+// aPosRot IS the world placement, so one pass gives a correct sphere; assigned, it is never recomputed (§13.2 G1).
 function wireFieldCulling(field) {
   const geo = field.mesh.geometry;
   const posRot = geo.getAttribute('aPosRot');
@@ -217,125 +194,43 @@ function wireFieldCulling(field) {
 }
 
 // ---- tiling (§13.2 G2, re-cut §16.2.B) + blade LOD (§17b) -------------------
-// One monolithic InstancedMesh can never cull a blade behind you and pays
-// full fragment cost regardless of view. So a big stroke is re-cut into XZ
-// tiles AFTER the density shuffle: K geometries SHARING the vertex/index/aH
-// attribute objects (the backend keys GPU buffers on the attribute object —
-// uploaded once) with sliced copies of only the three instanced attributes
-// (~44 bytes/instance), K meshes sharing the ONE material (wind, clearing
-// mask, and the factory wrap are all material- or name-bound). Each tile
-// carries its own world sphere → three's frustum culling finally works —
-// and per-tile `count` becomes distance density for free, because bucketing
-// in stable order preserves the shuffle: any prefix of a tile is still a
-// uniform random subset of its plants.
-//
-// The grid derives from OCCUPANCY, not a fixed edge (§16.1b): a fixed ~12m
-// edge shredded 2912 sparse desert plants into 57 tiles averaging 51
-// instances — and every InstancedMesh is a full NodeBuilder codegen run,
-// because the material cache key carries object.uuid for any instanced
-// object (three.webgpu.js:30181). Aim ~THRESHOLD instances per tile so the
-// per-object costs amortise; cap the edge so the distance falloff keeps its
-// granularity; refuse to tile strokes that cannot fill tiles (their
-// whole-stroke sphere from wireFieldCulling already culls them).
-//
-// Every tile's instanceMatrix is ALLOCATED past the uniform-buffer limit —
-// the shader path reads the attribute ALLOCATION, never the live draw
-// count (three.webgpu.js:18031/:18041): at or below the limit the identity
-// matrices become a uniform array with the COUNT BAKED INTO THE WGSL TEXT,
-// a distinct program (and GPURenderPipeline) per tile size; above it they
-// ride an interleaved instanced attribute whose program is
-// count-independent, so every tile of a material shares ONE program and
-// pipelines dedupe by source (:32003/:32248). ≤65KB of identity matrices
-// per tile buys that, uploaded once — and the matrix data stays
-// semantically live (normalLocal transforms through it; identity is the
-// engine's contract). The sliced instanced attributes keep their REAL
-// counts: the draw's instanceCount comes from live object.count
-// (three.webgpu.js:29971-29973), which never exceeds them.
+// A big stroke is re-cut into XZ tiles after the density shuffle: shared vertex attributes and material, sliced
+// instanced attributes, a sphere per tile, and an allocation past the uniform-buffer limit so every tile shares one
+// program. Why each of those: docs/research/meadow-grass-rendering.md.
 
 // §22 grassdiag toggles — normal operation leaves all of these alone
 let pushersFrozen = false;
 let lodForce = null;               // null | 'near' | 'far'
 let diagScope = null;              // {near, far} density multipliers by diag band
-const DIAG_SCOPE_EDGE = 20;        // m — grassdiag's near/far split (was the LOD
-                                   // band edge until §22f retired the swap)
+const DIAG_SCOPE_EDGE = 20;        // m — grassdiag's near/far split
 export function freezePushers(on) { pushersFrozen = !!on; }
 export function forceBladeLod(mode) { lodForce = mode ?? null; }   // takes effect within one 300ms tile tick
-/** §22c: scope a density cut to the near ring or the far sea — the spatial
- *  discriminator (WHERE does a density win come from?). null restores. */
+/** §22c: scope a density cut to the near ring or the far sea (where does a density win come from?). null restores. */
 export function setDiagDensityScope(scope) { diagScope = scope ?? null; }
 
 const TILE_MIN_INSTANCES = 2000;   // shrubs/yucca are hundreds — stay whole
-const TILE_MAX_EDGE = 28;          // m — §22h: the nearest-edge budget over-submits
-                                   // by ~the tile radius's worth of curve, and
-                                   // dither-killed instances aren't free (the Air's
-                                   // round-6 regression) — smaller tiles halve the
-                                   // waste while the dither keeps them invisible
+const TILE_MAX_EDGE = 28;          // m — §22h: smaller tiles halve the nearest-edge budget's over-submission
 const TILE_MIN_OCC = 256;          // can't reach this per tile → stay whole
-// GLOBAL-RANK tiling (2026-09-24): a blades stroke the rules above refuse (the Commons meadow: 1729 tufts on 80×70 m →
-// 9 tiles of 192) stayed ONE InstancedMesh — never culled behind you, every tuft through the vertex program, far ones
-// killed there by the dither. It now tiles WITHOUT changing a blade: every tuft keeps the whole-stroke rank the untiled
-// path wrote (the shader's keep test is unchanged), and a tile's count is only a CEILING the shader then refines — the
-// tile's entries are in global order, so a count prefix drops exactly the tufts whose rank exceeds keep at the tile's
-// nearest XZ point (the shader's own distance: aPR.xz − cameraPosition.xz), less GR_MARGIN for the eye moving between
-// re-applies. Strokes the old rules already tile keep their per-tile rank untouched. ?grassgrank=0 = the old refusal.
+// GLOBAL-RANK tiling: a blades stroke the rules above refuse still tiles, every tuft keeping its whole-stroke rank;
+// a tile's count is only a CEILING the shader dither refines. ?grassgrank=0 = the old refusal. See the research doc.
 const GR_ON = CONFIG.params.get('grassgrank') !== '0';
 const GR_MIN_INSTANCES = 1000;
 const GR_MIN_OCC = 128;
-const GR_MARGIN = 2;               // m — re-applied whenever the eye has moved GR_MARGIN/2 (hooks run before the move
-                                   // systems, so the budget is one frame behind: exact below ~1 m/frame; a teleport can
-                                   // under-draw ONE frame)
-const TILE_MAX_AXIS = 12;          // §22n: was 8 (§13.2). Finer tiles pin the
-                                   // nearest-edge budget to the dither curve:
-                                   // measured on the lush meadow at 2×, 12×12
-                                   // submits 7.3k fewer instances for +2fps,
-                                   // visible density identical; 16 adds nothing
-                                   // (the residual waste is the curve's own
-                                   // integral, not tile granularity).
-// §22d: tel0s's Air convicted the FAR SEA's instance count outright —
-// far-only density 35% recovered 46→61fps/worst 17 (identical to
-// grass-hidden) while blade-thinning the same tiles bought +3. Distant
-// tufts are subpixel cards: near-pure per-instance overhead and 2×2
-// quad-overshading waste. At distance the meadow wants FEWER, not
-// thinner. The old linear 30→140m curve was inert on a field that fits
-// inside ~60m (tile centers all scored ~0.8) — quadratic, starting
-// closer, done sooner: d=40m → ~0.44, d=60m → ~0.16.
+const GR_MARGIN = 2;               // m — re-applied whenever the eye has moved GR_MARGIN/2 (the budget is one frame
+                                   // behind: a teleport can under-draw ONE frame)
+const TILE_MAX_AXIS = 12;          // §22n: finer tiles pin the budget to the dither curve; 16 measured no better
+// §22d: at distance the meadow wants FEWER tufts, not thinner ones (distant tufts are near-pure per-instance cost).
 const GRASS_NEAR = 15;             // full density inside this
 const GRASS_FAR = 90;              // invisible beyond this
-const GRASS_FALL_EXP = 2.5;        // the curve's bite — shared with the shader's
-                                   // per-instance dither (§22f) so the CPU budget
-                                   // and the visible density are the same law
+const GRASS_FALL_EXP = 2.5;        // the curve's bite, shared with the shader's dither (§22f): budget and visible
+                                   // density are the same law
 const BLADE_LOD_KEEP = 0.4;        // far tiles keep ceil(0.4 × perBunch) blades per tuft (§17b)
-// §22f: the per-tile blade-COUNT swap is RETIRED — it was the second visible
-// pop (a whole tile flipping 8→4 blades), and round 3 proved blade count
-// nearly free while the shader dither took over all density shaping.
-//
-// §22n: the swap machinery returns with a DIFFERENT far twin — the coarse
-// index keeps EVERY blade at 2 segments instead of 4 (loops 0→2→4, 6 of 10
-// verts referenced; no count change → no §22d pop). Built on the theory
-// that opaque blades (§22m) would shift the bill to the vertex program —
-// then MEASURED INERT on the Air (44/44 vs 44-45 at 2×, drift-controlled,
-// 22/60 tiles engaged and verified wearing the 96-entry twin): the M5's
-// vertex throughput acquits vertex count for the THIRD time (§22c blade
-// thinning +3, §22f swap retirement, now this). Default OFF on the
-// evidence; ?grassvlod=on is the opt-in for vertex-bound GPU tiers, and
-// the coarse twin doubles as a diag lever via forceBladeLod('far').
-// §22q: shaped resident density — tel0s's diag put the remaining grass cost
-// in the near/mid instance count (density 35% recovered 41→58fps while sky/
-// terrain/physics measured ≈free). Uniform thinning is the ugly version; the
-// shaped lever thins by DENSE_BASE at every distance through the §22h rank
-// dither, widens survivors by 1/√DENSE_BASE (width only — constant coverage,
-// unchanged height envelope), and holds a full-density guard ring at the
-// camera's feet where a missing tuft is individually legible. The CPU tile
-// budget follows the same law (denseAt at the tile's NEAREST point, so the
-// budget is never the bottleneck) — that's where the submitted-instance win
-// comes from. ?grassdense=N (0..1] overrides; 1 is the kill switch
-// (byte-identical shader, untouched budgets).
-const DENSE_DEFAULT = 0.65;        // §22q probe (real-meadow scale, 2940×1912
-                                   // @2×, drift-controlled): 1.0 → 52fps,
-                                   // 0.8 → 60 but dipping (lo 52), 0.65 → a
-                                   // locked 60-61 at 30% fewer submitted
-                                   // instances; screenshot means Δ ≤ 0.5 RGB.
-                                   // The least thinning that holds the cap.
+// Blade LOD (§17b, §22f, §22n): the far twin is a COARSE index (every blade, 2 segments). Measured inert, so OFF by
+// default; ?grassvlod=on opts in, and forceBladeLod('far') uses it as a diag lever.
+// §22q shaped resident density: DENSE_BASE thins at every distance through the rank dither, widens survivors by
+// 1/√DENSE_BASE, and keeps a full-density guard ring at the feet; the CPU tile budget follows the same law (denseAt).
+// ?grassdense=N (0..1] overrides; 1 is the kill switch (byte-identical shader).
+const DENSE_DEFAULT = 0.65;        // §22q: the least thinning that held 60 fps (measurements in the research doc)
 export const DENSE_BASE = (() => {
   const v = Number(CONFIG.params.get('grassdense'));
   return Number.isFinite(v) && v > 0 && v <= 1 ? v : DENSE_DEFAULT;
@@ -354,13 +249,9 @@ const BLADE_LOD_IN = VLOD_ON ? 38 : Infinity;    // m — and back only inside t
 const _tv = new THREE.Vector3();
 const _eye = new THREE.Vector3();   // the camera in WORLD space (see applyTiles)
 
-/** The uniform-vs-attribute fork for the identity instanceMatrix, read off
- *  the live backend (WebGPU: device.limits.maxUniformBufferBindingSize —
- *  65536 with three's default device request; WebGL2 fallback:
- *  MAX_UNIFORM_BLOCK_SIZE). `threshold` is the occupancy the grid aims for;
- *  `cross` is the smallest ALLOCATION that takes the shared-program
- *  attribute path — 0 when an exotic limit would make forcing it wasteful
- *  (tiles then keep per-size programs: degraded, never wrong). */
+/** The uniform-vs-attribute fork for the identity instanceMatrix, from the live backend's uniform-buffer limit.
+ *  `threshold` is the occupancy the grid aims for; `cross` the smallest allocation that takes the shared-program
+ *  attribute path (0 when an exotic limit makes forcing it wasteful: per-size programs, degraded, never wrong). */
 function matrixPathCaps() {
   let limit = 65536;
   try { limit = renderer.backend.capabilities.getUniformBufferLimit() || 65536; }
@@ -416,13 +307,8 @@ function tileField(f, bladeLod = false, globalRank = false) {
   src.computeBoundingBox();          // per-plant LOCAL bounds (tiny)
   const plantH = Math.max(0.5, src.boundingBox.max.y - Math.min(0, src.boundingBox.min.y));
   const pad = plantH * maxScale + 0.6;   // tallest plant + the wind/push lean ceiling
-  // §17b — ONE far-LOD index per STROKE: the count falloff thins INSTANCES;
-  // this thins BLADES PER TUFT on the instances that remain. Whole 24-entry
-  // blade runs, evenly strided, still pointing into the SHARED vertex
-  // buffers (flora_lod.js re-verifies the run layout entry by entry — a
-  // reshaped upstream degrades to no LOD, never a torn tuft). Every tile's
-  // far twin wears this same attribute object, so the whole stroke pays one
-  // extra GPU index buffer (~kept×24 entries) and nothing else.
+  // §17b: ONE far-LOD index per STROKE, shared by every tile's far twin (flora_lod.js verifies the run layout; a
+  // reshaped upstream degrades to no LOD, never a torn tuft).
   let farIndex = null;
   if (bladeLod) {
     const srcIdx = src.getIndex();
@@ -445,10 +331,7 @@ function tileField(f, bladeLod = false, globalRank = false) {
     for (const name of ['position', 'normal', 'uv', 'aH', 'color']) {
       const a = src.getAttribute(name);
       if (a) tg.setAttribute(name, a);   // SHARED objects — one GPU upload
-    }                                    // 'color': §22m opaque blades bake
-                                         // Sol's palette per vertex — a tile
-                                         // without it draws BLACK (attribute
-                                         // reads of a missing binding)
+    }                                    // ('color' too: opaque blades without it draw BLACK)
     const box = new THREE.Box3();
     names.forEach((name, j) => {
       const a = inst[j], sz = a.itemSize;
@@ -458,32 +341,22 @@ function tileField(f, bladeLod = false, globalRank = false) {
       }
       tg.setAttribute(name, new THREE.InstancedBufferAttribute(arr, sz));
     });
-    // §22f: draw-order rank into the flutter-phase lane, PER TILE — the
-    // shader dither (vegetation lodGrow.exp) keeps an instance iff
-    // rank < keep(distance), which is exactly this tile's count-prefix
-    // refined continuously: no double-thinning, no tile seams. The rank
-    // rides as phase (×2π) so the flutter stays uniform per location —
-    // the order IS the density shuffle, spatially random.
+    // §22f: draw-order rank into the flutter-phase lane, per tile: the shader dither keeps an instance iff
+    // rank < keep(distance), refining this tile's count-prefix with no double-thinning and no seams.
     if (!globalRank) {
       const ph = tg.getAttribute('aPhase');
       if (ph) for (let k = 0; k < idx.length; k++) ph.array[k * 3] = (Math.PI * 2 * k) / idx.length;
     }
     for (const i of idx) box.expandByPoint(_tv.set(posRot.getX(i), posRot.getY(i), posRot.getZ(i)));
     box.expandByScalar(pad);
-    // allocation crosses the uniform-buffer limit → one shared program for
-    // every tile of this material (see the section header)
+    // allocation crosses the uniform-buffer limit → one shared program for every tile of this material
     const alloc = Math.max(idx.length, cross);
     const tm = new THREE.InstancedMesh(tg, f.mesh.material, alloc);
     for (let k = 0; k < alloc; k++) tm.setMatrixAt(k, m4.identity());   // the engine's identity contract
     tm.count = idx.length;             // the DRAW count is live; the allocation is not
     const sphere = box.getBoundingSphere(new THREE.Sphere());
-    tm.boundingSphere = sphere;        // frustum culling (tiles carry identity
-    // transforms, so local == world) — and the SAME sphere on the geometry:
-    // the render sort reads geometry.boundingSphere, not the object's
-    // (three.webgpu.js:60872-60880), and the shared plant-local position
-    // attribute would sort every tile as co-located at the origin, leaving
-    // the alpha-tested meadow in arbitrary order. Both assigned non-null,
-    // so neither is ever recomputed (raycasts never touch grass).
+    tm.boundingSphere = sphere;        // frustum culling (identity transforms: local == world)
+    // …and on the geometry, which the render sort reads (else every tile sorts as if at the origin)
     tg.boundingSphere = sphere;
     tm.frustumCulled = true;
     Object.assign(tm.userData, f.mesh.userData);   // noWalkable/noSupportCheck/…
@@ -498,15 +371,8 @@ function tileField(f, bladeLod = false, globalRank = false) {
       }
       grTiles.set(tm, { gIdx: Int32Array.from(idx), x0, x1, z0, z1 });   // idx ascending: the stable scan
     }
-    // §17b — the tile's far-LOD twin: the same shared vertex attribute
-    // objects, the SAME sliced instanced attribute objects (zero copies —
-    // the density shuffle permuted instanced data before tiling, and an
-    // index addresses per-vertex data only), the stroke's one far index.
-    // The attribute LAYOUT is identical to the near twin's, and every
-    // layout key in the vendored renderer is built from names/formats plus
-    // an index PRESENCE flag — never the index object's identity
-    // (three.webgpu.js:30035-30081, :81752-81780) — so the swap re-keys
-    // nothing: zero new programs, zero new pipelines (see applyTiles).
+    // §17b: the tile's far twin shares every attribute object; layout keys never include the index object, so a swap
+    // compiles nothing (see applyTiles).
     if (farIndex) {
       const fg = new THREE.BufferGeometry();
       fg.setIndex(farIndex);           // per-STROKE object, shared by every tile
@@ -515,9 +381,7 @@ function tileField(f, bladeLod = false, globalRank = false) {
         if (a) fg.setAttribute(name, a);
       }
       for (const name of names) fg.setAttribute(name, tg.getAttribute(name));
-      // the render sort reads geometry.boundingSphere (:60872-60880) and
-      // culling reads the object's — the twin shares the SAME sphere object
-      // as the near geometry, so both stay true across every swap
+      // the twin shares the SAME sphere object (the render sort reads the geometry's)
       fg.boundingSphere = sphere;
       tm.userData.lodFar = false;      // observable per-tile state (EW.grass)
       lodGeos.set(tm, { near: tg, far: fg });
@@ -525,7 +389,7 @@ function tileField(f, bladeLod = false, globalRank = false) {
     container.add(tm);
     tiles.push(tm);
   }
-  // the container answers for the stroke: #74's applied-truth reads .count
+  // the container answers for the stroke: the applied-truth report reads .count
   Object.defineProperty(container, 'count', {
     get: () => tiles.reduce((s, t) => s + (t.visible ? t.count : 0), 0),
   });
@@ -536,9 +400,7 @@ function tileField(f, bladeLod = false, globalRank = false) {
   let eff = 1;
   let grEyeX = Infinity, grEyeZ = Infinity;   // where the global-rank budget was last evaluated
   const applyTiles = () => {
-    // WORLD position: in XR the camera is a child of the rig (xr.js rig.add(camera)) and three decomposes the head pose
-    // into the camera's LOCAL transform, so camera.position is rig-relative — every tiled meadow budgeted from the
-    // wrong point in VR (2026-09-24 audit). On the desktop the camera has no parent and this is the same number.
+    // WORLD position: in XR the camera is a child of the rig, so camera.position is rig-relative.
     camera.getWorldPosition(_eye);
     grEyeX = _eye.x; grEyeZ = _eye.z;
     for (const t of tiles) {
@@ -559,14 +421,8 @@ function tileField(f, bladeLod = false, globalRank = false) {
         continue;
       }
       const d = _tv.copy(t.boundingSphere.center).distanceTo(_eye);
-      // §22f: the CPU count is a BUDGET evaluated at the tile's NEAREST
-      // point (keep(dNearest) ≥ keep(d) for every instance in it), and the
-      // shader dither shapes the VISIBLE density per instance at the exact
-      // same curve (GRASS_FALL_EXP, vegetation lodGrow.exp) — the budget is
-      // never the bottleneck and tile seams vanish. Also fixes a subtle
-      // over-cull: a tile whose CENTER passed GRASS_FAR used to hide while
-      // its near half was still inside. Exponent 2.5 (§22e): round-4 diag
-      // measured both rings safe at 0.35; the shader grow covers the look.
+      // §22f: the CPU count is a BUDGET at the tile's NEAREST point (a ceiling for every instance in it); the shader
+      // dither shapes visible density on the same curve, so the budget is never the bottleneck and seams vanish.
       const dN = Math.max(0.01, d - t.boundingSphere.radius);
       const fall = dN >= GRASS_FAR ? 0
         : dN <= GRASS_NEAR ? 1
@@ -576,20 +432,11 @@ function tileField(f, bladeLod = false, globalRank = false) {
       // every instance in the tile — budget stays a ceiling, never a seam
       t.count = densityCount(t.userData.fullCount, eff * fall * scope * denseAt(dN));
       t.visible = t.count > 0;
-      // §17b — blade LOD rides the same distance one band later, with
-      // hysteresis. The swap is a pointer write, never a compile: the live
-      // render object mutates in place and keeps its pipeline outright
-      // (three.webgpu.js:30430-30434 setGeometry, :32305-32309 +
-      // :81690-81744 — the backend's needsRenderUpdate never looks at
-      // geometry), and even a cold re-key lands on the same cached
-      // program/pipeline because both twins share one attribute layout.
-      // t.count semantics are untouched (#74): instances ride the count,
-      // blades ride the index — independent dimensions.
+      // §17b: blade LOD one band later, with hysteresis. The swap is a pointer write, never a compile; t.count is
+      // untouched (instances follow the count, blades the index).
       const pair = lodGeos.get(t);
       if (pair) {
-        // lodForce (§22 grassdiag) overrides the distance bands; null = the
-        // normal hysteresis, restated: a far tile stays far until it comes
-        // inside IN, a near tile stays near until it passes OUT
+        // lodForce (§22 grassdiag) overrides the distance bands; null = the normal hysteresis
         const wantFar = lodForce ? lodForce === 'far'
           : (t.userData.lodFar ? d > BLADE_LOD_IN : d >= BLADE_LOD_OUT);
         if (wantFar && !t.userData.lodFar) {
@@ -631,8 +478,7 @@ function tileField(f, bladeLod = false, globalRank = false) {
 // remote presences. Per-frame and cheap (a uniform write).
 function wirePushers(field) {
   const R = 1.1;
-  // reused across frames — this hook ran every frame allocating two arrays
-  // and sorting all remotes to keep 4 pusher slots (§14.1 offender #4)
+  // reused across frames: no per-frame allocation or full sort (§14.1)
   const list = [];
   const cand = [];
   const hook = () => {
@@ -685,27 +531,13 @@ export async function buildFloraField(rawArgs, { scene, heightFn }) {
   const fields = [];
   try {
     for (const st of strokes) {
-      // §22e: blades-archetype strokes are the tileable ones the count
-      // falloff cuts — the shader's density-compensation grow (upstream
-      // opts.lodGrow) makes the survivors cover for the removed: constants
-      // MATCH the falloff's so the two halves of the trade stay coupled.
-      // Shrubs/yucca are untiled (no falloff) and get no grow.
-      //
-      // §22i A/B kill-switch (round-7 anomaly: density-35% stopped
-      // recovering — either the 22h shader costs more than it saves on
-      // Metal, or the Air was thermally throttled; two reloads on the same
-      // machine state decide):
-      //   ?grasslod=off       no lodGrow at all — the pre-§22e shader
-      //   ?grasslod=nodither  grow only (the §22e shader, no rank/blade dither)
-      //   (default)           the full §22h shader
+      // §22e: tileable blades strokes get the shader's density-compensation grow (lodGrow), its constants matching
+      // the falloff's. Shrubs/yucca are untiled and get none. A/B (§22i):
+      //   ?grasslod=off       no lodGrow    ?grasslod=nodither  grow only    (default) the full §22h shader
       const lodMode = CONFIG.params.get('grasslod') ?? 'full';
-      // §22l: the blades fragment diet (upstream opts.fastShade — one albedo
-      // sample; no relief/rough/SSS fetches a 4cm blade could never show).
-      // ?grassshade=full restores upstream's four-fetch material for A/B.
+      // §22l: blades fragment diet (one albedo sample); ?grassshade=full restores upstream's material for A/B.
       const shadeMode = CONFIG.params.get('grassshade') ?? 'fast';
-      // §22m (this branch): opaque geometry blades — Sol's silhouette via the
-      // fitted envelope, Sol's palette baked to vertex colors, zero alpha
-      // test. ?grassgeo=cards boots the atlas-card meadow for the A/B.
+      // §22m: opaque geometry blades (vertex-colour palette, no alpha test); ?grassgeo=cards for the A/B.
       const geoMode = CONFIG.params.get('grassgeo') ?? 'opaque';
       const isBladeSpecies = mod.FLORA_SPECIES?.[st.species]?.archetype === 'blades';
       const blades = isBladeSpecies && lodMode !== 'off';
@@ -713,8 +545,7 @@ export async function buildFloraField(rawArgs, { scene, heightFn }) {
         ...st, heightFn,
         ...(blades ? { lodGrow: { near: GRASS_NEAR, far: GRASS_FAR, cap: 1.7,
           ...(lodMode !== 'nodither' ? { exp: GRASS_FALL_EXP, vertsPerBlade: 10, bladeKeepFar: 0.4,
-            // §22q: the shaped resident density rides the dither — see the
-            // DENSE_BASE block above; absent (=1) the shader is byte-identical
+            // §22q: shaped resident density (DENSE_BASE above); absent, the shader is byte-identical
             ...(DENSE_BASE < 1 ? { baseKeep: DENSE_BASE,
               guardNear: DENSE_GUARD_NEAR, guardFar: DENSE_GUARD_FAR } : {}),
           } : {}),
@@ -722,30 +553,23 @@ export async function buildFloraField(rawArgs, { scene, heightFn }) {
         ...(isBladeSpecies && shadeMode === 'fast' ? { fastShade: true } : {}),
         ...(isBladeSpecies && geoMode === 'opaque' ? { opaqueBlades: true } : {}),
       });
-      // named so an applied-truth report (#74) can identify the stroke
+      // named so an applied-truth report can identify the stroke
       f.strokeLabel = `${fields.length}:${st.species ?? 'grass'}`;
-      // §22m: report the material generation the stroke ACTUALLY built —
-      // read from the material, never from the options (the palette
-      // sampler can fall back silently, and three screenshot rounds once
-      // compared cards to cards because nothing surfaced that)
+      // §22m: the mode the stroke ACTUALLY built, read from the material (the palette sampler can fall back silently)
       f.grassMode = !isBladeSpecies ? 'n/a'
         : f.material?.alphaTest === 0 ? 'opaque'
         : f.material?.type === 'MeshSSSNodeMaterial' ? 'cards-sss' : 'cards-fast';
       if (isBladeSpecies) console.log(`[flora] ${f.strokeLabel} blades mode: ${f.grassMode}`);
       wireDensityDial(f);
       mask.wire(f.material);
-      // big blade/corn strokes tile (per-tile culling + distance density);
-      // small ones keep the whole-stroke sphere from G1. Only the 'blades'
-      // archetype carries blade-LOD twins (§17b) — corn/shrub/yucca
-      // geometry has no per-blade run structure to subset
+      // big blade/corn strokes tile; small ones keep the whole-stroke sphere. Only 'blades' has per-blade runs
+      // for LOD twins (§17b).
       const arch = mod.FLORA_SPECIES[st.species ?? 'grass']?.archetype;
       // global-rank second chance: only while the shader dither owns density (it is what refines the ceiling)
       const grOk = GR_ON && blades && lodMode !== 'nodither';
       if (!tileField(f, arch === 'blades') && !(grOk && tileField(f, arch === 'blades', true))) {
         wireFieldCulling(f);
-        // §22f: untiled strokes get the whole-stroke draw-order rank in the
-        // flutter lane (the tiled path writes it per tile) — the shader
-        // dither needs it wherever lodGrow.exp rides
+        // §22f: untiled strokes get the whole-stroke draw-order rank in the flutter lane (the shader dither needs it)
         const ph = f.mesh?.geometry?.getAttribute?.('aPhase');
         if (ph && f.count) {
           for (let k = 0; k < f.count; k++) ph.array[k * 3] = (Math.PI * 2 * k) / f.count;
@@ -776,28 +600,9 @@ export async function buildFloraField(rawArgs, { scene, heightFn }) {
 }
 
 // ---- the warm (§16.2.B) -----------------------------------------------------
-// compileAsync skips visible=false and out-of-frustum objects
-// (three.webgpu.js:60819/:60869), and applyTiles has already run against the
-// boot camera by the time the field compiles — a field-level compileAsync
-// leaves every culled tile COLD, and a cold tile codegens SYNCHRONOUSLY
-// inside the first render() that looks at it: the jank that used to follow
-// the resident around the first minute. So the warm is per render object,
-// house pattern (sky.js:450-453): each object compiles detached with its
-// culling defeated, one real frame between objects. Three yields ~10 rAF
-// frames per object internally (NodeBuilder stage yields), so the field
-// warms in ~K×10 background frames — and NO tile is ever cold after.
-//
-// Blade-LOD twins (§17b) need no second pass: one warm per tile covers both
-// geometry variants. The node builder caches on the render object's initial
-// cache key, whose geometry part is LAYOUT-only — sorted attribute names/
-// formats plus an index PRESENCE flag, never the index object
-// (three.webgpu.js:30035-30081 via :54283-54286) — and the pipeline cache
-// key is stage ids + the same layout-keyed backend key (:32248-32251,
-// :81752-81780), so the far twin key-matches everything the near warm
-// already built; on the live swap the render object keeps its compiled
-// pipeline outright (:32305-32309, :81690-81744). The far index buffer
-// itself uploads at first use — a few hundred bytes per stroke, keyed on
-// the shared attribute object (:31031-31043), not a compile.
+// compileAsync skips invisible and out-of-frustum objects, and tiles are already culled against the boot camera, so a
+// field-level compile leaves tiles cold (a synchronous codegen in the first render that sees them). So: per render
+// object, culling defeated, one real frame between. One warm covers both LOD twins. docs/research/meadow-grass-rendering.md.
 
 /** Compile every render object of a built field (tiles, untiled stroke
  *  meshes, shrub stems) off the render path, then re-settle tile counts

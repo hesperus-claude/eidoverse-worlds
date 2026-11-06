@@ -1,6 +1,6 @@
-// plainwords — the authority's refusals and warnings as a PERSON reads them (ship list 10-07): what they tried and why, with
+// plainwords — the authority's refusals and warnings as a HUMAN reads them: what they tried and why, with
 // things named by their labels (or what they are), never hex ids or tool syntax. shared/protocol/refusal.js does the wording;
-// this file knows the world: which words are things here, and what people call them. Agents keep refusalText.
+// this file knows the world: which words are things here, and what humans call them. Agents keep refusalText.
 import { bagOf, entities } from './world.js';
 import { state } from './state.js';
 import { plainRefusal, warningText } from '../../shared/protocol/refusal.js';
@@ -18,7 +18,7 @@ export function nameOf(id) {
   const lib = rec?.model;
   return lib ? `the ${stem(lib)}` : 'that thing';
 }
-/** A thing in a person's sentence: what nameOf calls it, else its id (never an opaque id where a name exists; R 10-17). */
+/** A thing in a person's sentence: what nameOf calls it, else its id (never an opaque id where a name exists). */
 export const called = (id) => nameOf(id) ?? String(id);
 /** What a person can TYPE to name a thing in a chat command: its label when that names it alone, else its short handle. */
 export function typeable(id) {

@@ -14,13 +14,10 @@
 //   dual warm at load    → green (xrwarm.js path: a content warm on the desktop, then enter)
 //
 // Run: node tools/xr-eye-binding-probe.mjs   (~30 s; run it under a memory guard)
-import { fileURLToPath } from "node:url";
-import { chromium } from 'playwright';
-import { readFileSync, existsSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { raw3Page, RAW3_IMPORTMAP } from './probe-harness.mjs';
+import { suite } from './protocol/suite.ts';
 
-const ROOT = fileURLToPath(new URL('../client/', import.meta.url));
-const PAGE = `<!doctype html><html><body><script type="importmap">{"imports":{"three":"./node_modules/three/build/three.webgpu.js","three/webgpu":"./node_modules/three/build/three.webgpu.js","three/tsl":"./node_modules/three/build/three.tsl.js"}}</script>
+const PAGE = `<!doctype html><html><body>${RAW3_IMPORTMAP}
 <script type="module">
 import * as THREE from 'three';
 import { separateXRPass, withXREyes } from './lib/xrpass.js';
@@ -68,29 +65,19 @@ async function run(mode) {
 window.__probe = run(new URLSearchParams(location.search).get('mode')).catch((e) => ({ error: String(e && e.stack || e) }));
 </script></body></html>`;
 
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const R = await raw3Page(PAGE);
 let code = 1;
 try {
-  const page = await browser.newPage(); const errors = [];
-  page.on('pageerror', (e) => errors.push(String(e))); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  await page.route('http://probe.local/**', (route) => {
-    const path = decodeURIComponent(new URL(route.request().url()).pathname);
-    if (path === '/') return route.fulfill({ body: PAGE, contentType: 'text/html' });
-    const f = join(ROOT, path);
-    if (!f.startsWith(ROOT) || !existsSync(f)) return route.fulfill({ status: 404, body: 'nope' });
-    return route.fulfill({ body: readFileSync(f), contentType: extname(f) === '.html' ? 'text/html' : 'text/javascript' });
-  });
+  const { errors } = R;
   const res = [];
   for (const mode of ['no warm', 'look-alike warm', 'withXREyes warm', 'dual warm at load']) {
-    await page.goto('about:blank');
-    await page.goto('http://probe.local/?mode=' + encodeURIComponent(mode));
-    const r = await Promise.race([page.evaluate(() => window.__probe), new Promise((ok) => setTimeout(() => ok({ error: 'probe timed out (60 s)' }), 60000))]);
+    const r = await R.result(60000, 'mode=' + encodeURIComponent(mode));
     if (r.error) { res.error = r.error; break; }
     res.push(r);
   }
   if (errors.length) console.log('page errors:', errors.slice(0, 4));
-  let pass = 0, fail = 0;
-  const check = (n, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${n}`); } else { fail++; console.log(`  FAIL  ${n}${note ? `  -- ${note}` : ''}`); } };
+  const S = suite("xr-eye-binding");
+  const check = (n, ok, note) => S.check(n, ok, note);
   if (res.error) check('probe ran', false, res.error);
   else {
     for (const r of res) console.log(`  ${r.mode.padEnd(18)} eyes see ${r.leftEye}/${r.rightEye}  entry pipelines +${r.enterPipelines} ${JSON.stringify(r.enterBuilt)}  xr camera eyes after warm: ${r.warmedEyes}`);
@@ -104,7 +91,7 @@ try {
     check('withXREyes: three\'s XR camera is handed back with ZERO eyes (as before a session)', by['withXREyes warm'].warmedEyes === 0, JSON.stringify(by['withXREyes warm']));
     check('dual warm at load (xrwarm.js): the eyes see what they face (green)', green(by['dual warm at load']), JSON.stringify(by['dual warm at load']));
   }
-  console.log(`\n${pass} passed, ${fail} failed`);
-  code = fail ? 1 : 0;
-} finally { await browser.close(); }
+  console.log(`\n${S.pass} passed, ${S.fail} failed`);
+  code = S.fail ? 1 : 0;
+} finally { await R.close(); }
 process.exit(code);

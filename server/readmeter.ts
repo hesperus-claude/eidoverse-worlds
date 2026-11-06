@@ -1,4 +1,4 @@
-// server/readmeter.ts — reads are rate-limited per connection (security pass 2 H-A).
+// server/readmeter.ts — reads are rate-limited per connection.
 //
 // The authority rate-limits what goes INTO the log (writes, per identity). A read writes nothing, so nothing limited it: a
 // spectator (no identity, no login) could loop `lint {}` and hold the one thread every world shares. Each connection's
@@ -7,7 +7,7 @@
 // n: what an editor's own panels ask in a burst (each change re-reads the inspector and the history) stays far inside it;
 // ms is what protects the thread
 // EIDO_METER_SCALE (operator, default 1) multiplies the TIME limits only, for a host that is simply slower per request
-// (Windows CI: the same requests measured 3,076 ms where the cap is 3,000 — 10-19). Counts never scale.
+// (e.g. Windows CI). Counts never scale.
 export const METER_SCALE = Math.max(1, Number(globalThis.process?.env?.EIDO_METER_SCALE ?? 1) || 1);
 export const READ = { n: 300, ms: 1500 * METER_SCALE, window: 10_000 };
 

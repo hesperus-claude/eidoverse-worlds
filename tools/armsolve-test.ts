@@ -8,6 +8,7 @@
 // Recipe: `bun tools/armsolve-test.ts`
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
+import { suite } from "./protocol/suite.ts";
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 plugin({
   name: "armsolve-stubs",
@@ -23,8 +24,8 @@ const { THREE } = await import("./core-stub.mjs");
 const { solveArm, relaxArm, solveLeg, gaitInit, gaitTick } = await import("../client/lib/xrbody.js");
 const { makeCapsuleVrm } = await import("../client/lib/capsulebody.js");
 
-let pass = 0, fail = 0;
-const ok = (c: boolean, m: string) => { if (c) pass++; else { fail++; console.log("  FAIL", m); } };
+const S = suite("armsolve");
+const ok = (m: string, c: unknown) => S.check(m, c);
 
 // a VRM-shaped humanoid: hips→spine→chest→upperChest→neck→head; shoulders off upperChest; arms along ±X
 function humanoid(scale = 1) {
@@ -242,5 +243,4 @@ for (const u of [0.5, 1.5, 2]) {
   ok(err < 0.06 * u, `scale ${u}: foot near its target (err ${(err * 100).toFixed(1)} cm)`);
 }
 
-console.log(`${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

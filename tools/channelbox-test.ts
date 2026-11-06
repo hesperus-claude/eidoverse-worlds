@@ -96,36 +96,33 @@ console.log('an upright thing that carries a q (every record does)');
   }
 }
 
-console.log('one Rotate edit on a thing with q: the other two read back unchanged (sweep, every order, through the door)');
+console.log('one Rotate edit on a thing with q, each order × axis, through the door: the other two read back unchanged');
 {
-  let n = 0, skipped = 0;
-  for (const order of ROT_ORDERS) for (let i = 0; i < 60; i++) {
-    const e0 = [(rnd() * 2 - 1) * 170 * D, (rnd() * 2 - 1) * 80 * D, (rnd() * 2 - 1) * 170 * D];
+  // one off-axis start clear of gimbal lock; tools/euler-test.ts sweeps the decomposition itself (300 samples an order)
+  const e0 = [40 * D, -30 * D, 125 * D];
+  let n = 0;
+  for (const order of ROT_ORDERS) for (const ax of [0, 1, 2]) {
+    const typed = ax === 'XYZ'.indexOf(order[1]) ? 55.5 : -140.25;
     const q0 = qFromEuler(e0, order);
     const ent = { model: LIB, pos: [0, 0, 0], q: q0, yaw: qHeading(q0), actor: 'o', ts: 1 };
     const before = rotOf(ent, view(order));   // a fresh viewer's reading, in this order
     const id = seedOne(ent);
-    for (const ax of [0, 1, 2]) {
-      const typed = +(((rnd() * 2 - 1) * (ax === [...order].indexOf([...order][1]) ? 80 : 170)).toFixed(3));
-      const mid = 'XYZ'.indexOf(order[1]);
-      if (ax === mid && Math.abs(typed) > 85) { skipped++; continue; }
-      const r = editOps(ent, id, { [`rot.${'xyz'[ax]}`]: typed }, view(order));
-      const p = tfOf(r);
-      if (!p?.q) { check(`${order} #${i} ${'XYZ'[ax]}: writes q`, false, JSON.stringify(r)); continue; }
-      const res = W.send(r.ops[0]);
-      const after = W.rec(id);
-      const fresh = rotOf(after, view(order));            // another client in the same order, no hint
-      n++;
-      check(`${order} #${i}: the door takes it`, res.ok, JSON.stringify(res.refused));
-      check(`${order} #${i}: edit ${'XYZ'[ax]} → the other two unchanged for a fresh viewer`, [0, 1, 2].filter((x) => x !== ax).every((x) => close(fresh[x], before[x], 1e-8)),
-        `${before.map((v) => (v / D).toFixed(5))} → ${fresh.map((v) => (v / D).toFixed(5))}`);
-      check(`${order} #${i}: edit ${'XYZ'[ax]} → reads back as typed`, close(fresh[ax], typed * D, 1e-8), `${typed} vs ${fresh[ax] / D}`);
-      const t3 = new THREE.Euler().setFromQuaternion(new THREE.Quaternion(...after.q), [...order].reverse().join('') as THREE.EulerOrder);
-      check(`${order} #${i}: three reads the stored q as the same triple`, close(t3.x, fresh[0], 1e-8) && close(t3.y, fresh[1], 1e-8) && close(t3.z, fresh[2], 1e-8));
-      check(`${order} #${i}: the transform carries pos and scale unchanged`, JSON.stringify(p.pos) === '[0,0,0]' && JSON.stringify(p.scale) === '[1,1,1]' && JSON.stringify(after.pos) === '[0,0,0]' && after.scale === 1);
-    }
+    const r = editOps(ent, id, { [`rot.${'xyz'[ax]}`]: typed }, view(order));
+    const p = tfOf(r), tag = `${order} ${'XYZ'[ax]}`;
+    if (!p?.q) { check(`${tag}: writes q`, false, JSON.stringify(r)); continue; }
+    const res = W.send(r.ops[0]);
+    const after = W.rec(id);
+    const fresh = rotOf(after, view(order));            // another client in the same order, no hint
+    n++;
+    check(`${tag}: the door takes it`, res.ok, JSON.stringify(res.refused));
+    check(`${tag}: the other two unchanged for a fresh viewer`, [0, 1, 2].filter((x) => x !== ax).every((x) => close(fresh[x], before[x], 1e-8)),
+      `${before.map((v) => (v / D).toFixed(5))} → ${fresh.map((v) => (v / D).toFixed(5))}`);
+    check(`${tag}: reads back as typed`, close(fresh[ax], typed * D, 1e-8), `${typed} vs ${fresh[ax] / D}`);
+    const t3 = new THREE.Euler().setFromQuaternion(new THREE.Quaternion(...after.q), [...order].reverse().join('') as THREE.EulerOrder);
+    check(`${tag}: three reads the stored q as the same triple`, close(t3.x, fresh[0], 1e-8) && close(t3.y, fresh[1], 1e-8) && close(t3.z, fresh[2], 1e-8));
+    check(`${tag}: the transform carries pos and scale unchanged`, JSON.stringify(p.pos) === '[0,0,0]' && JSON.stringify(p.scale) === '[1,1,1]' && JSON.stringify(after.pos) === '[0,0,0]' && after.scale === 1);
   }
-  check(`(${n} edits swept, ${skipped} middle-axis draws past ±85° skipped)`, n > 900);
+  check(`(${n} edits: every order × axis)`, n === ROT_ORDERS.length * 3);
 }
 
 console.log('the Quaternion row');

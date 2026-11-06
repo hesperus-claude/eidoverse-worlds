@@ -24,8 +24,8 @@ const lib = fs.mkdtempSync(path.join(os.tmpdir(), "killz-slumped-library-"));
 fs.mkdirSync(path.join(lib, "fixtures")); fs.writeFileSync(path.join(lib, "fixtures/body.vrm"), fixture());
 const H = await scratchSequencer(W, { worlds: [W], owner: "keeper", serverEnv: { EIDOVERSE_DIR: lib, SKIP_OPT_SWEEP: "1", TRUST_NAMES: "1" } });
 const URL = `ws://127.0.0.1:${H.PORT}/ws`;
-let passed = 0, failed = 0;
-const check = (name: string, ok: boolean, detail = "") => { if (ok) { passed++; console.log(`  ✓ ${name}`); } else { failed++; console.log(`  ✗ ${name}${detail ? ` — ${detail}` : ""}`); } };
+const { suite } = await import("./protocol/suite.ts");
+const S = suite("killz-slumped-test"), { check } = S;
 const agents: any[] = [];
 const agent = async (name: string, avatar = "fixtures/body.vrm") => { const a: any = new WorldAgent({ url: URL, name, world: W, avatar }); agents.push(a); await a.connect(); return a; };
 try {
@@ -102,8 +102,7 @@ try {
   check("…and so are a canned slump and a physics pose kept under another clip", once(canned) && once(posed), at(canned, posed));
 } finally {
   for (const a of agents) { try { a.close(); } catch {} }
-  await H.cleanup(failed ? 1 : 0);
+  await H.cleanup(S.fail ? 1 : 0);
   fs.rmSync(lib, { recursive: true, force: true });
 }
-console.log(`[killz-slumped-test] ${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);
+S.done();

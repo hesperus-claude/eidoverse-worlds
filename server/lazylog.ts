@@ -1,14 +1,13 @@
 // server/lazylog.ts — a log whose prefix stays on disk: genesis and the tail read from the cache's offsets; a prefix line is read
 // and strictly parsed on first access (a holey array whose prototype answers a hole), so every reader sees the eager entries.
 import fs from "node:fs";
-import { readLog, Malformed } from "../shared/protocol/fold.js";
+import { readLog, isE } from "../shared/protocol/fold.js";
 import { posAt } from "../shared/protocol/authority.js";
 import type { At } from "./statecache.ts";
 
 type Any = any;
-const isE = (e: Any) => e && !(e instanceof Malformed) && typeof e === "object";
 const CHUNK = 8 << 20;
-const BULK = 4096;   // single prefix lines read before the rest load at once: a reader walking the prefix (review L20)
+const BULK = 4096;   // single prefix lines read before the rest load at once: a reader walking the prefix
 
 function readAt(fd: number, pos: number, len: number) {
   const b = Buffer.allocUnsafe(len); let off = 0;

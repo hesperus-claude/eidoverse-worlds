@@ -14,11 +14,11 @@ Run every suite from the repo root with `BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun
 | PR | suite(s) |
 |---|---|
 | #235 | `agent-mesh-collision` |
-| #236 | `navgrid`, `navgrid-edge` |
-| #239 | `places`, `places-scale` |
+| #236 | `navgrid`, `navgrid-rows` |
+| #239 | `places`, `navgrid-rows` (its places rows) |
 | #241 | `buildcheck`, `buildcheck-queue`, `buildcheck-route` |
 
-Outside the gate, run on their own: `tools/walk-precision-test.ts` and #237/#242's water and heightmap tests.
+Outside the gate, run on their own: #237/#242's water and heightmap tests (arrival precision is mover-check M4 and agenttools' walk_to tolerance).
 `tools/support-lifecycle-test.ts` is **not** passing: it was red on this branch before the stack merged. One cause is
 fixed (`68993f19`: its `geom()` read an undefined name). Re-measured at `bf9bd080`: 12/22, every red a height of 0.00
 from its calibration row on (the knock-down it drives never lands; likely its bare-socket hand's `puppet` / `bodydrag`
@@ -48,13 +48,13 @@ row was changed to require that the walk's **plan** refuses it, not the authorit
 
 **3. Rescale the body-space place tolerance** (#239). A room's floor tolerance (`mcpl/places.ts`
 `ROOM_FLOOR_EPS`, 0.1 m) is the walking body's, in metres — not multiplied by the thing's scale. Multiply it by the
-scale (`ROOM_FLOOR_EPS * s`), then run `places-scale`:
+scale (`ROOM_FLOOR_EPS * s`), then run `navgrid-rows` (it absorbed `places-scale`, whose rows went red the same way, 3 passed, 3 failed):
 
 ```
-✗ a 20× room's floor tolerance is the body's, in metres (0.1m), not 2m  {"above":2,"below":2}
+✗ region loft at 20×: reach covers the scaled room; floor tolerance is the body's, in metres  {"reach":8.48528137423857,"above":2,"below":2}
 ```
 
-Two more rows went red with it (3 passed, 3 failed).
+Five more rows went red with it (32 passed, 6 failed): the other regions at 0.05× and 20×, and both route rows (the 20× room "reached" on the platform beneath it, the 0.05× room 4 cm off its floor refused).
 
 **4. The worker reopens the mutable source** (#241). A queued check must run on exactly the bytes that were
 queued, even if the file changes before the job starts (`server/buildcheck-queue.ts`: the job runs on the

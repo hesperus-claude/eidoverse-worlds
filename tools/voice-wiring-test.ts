@@ -13,12 +13,10 @@
 // and the entry point imports what it calls. Source-level, no browser.
 
 import { readFileSync } from "node:fs";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("voice-wiring");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 // 🔴 CUTOVER NOTE (2026-08-16). Twelve assertions were REMOVED here, not
@@ -62,4 +60,4 @@ for (const [label, src] of [["main.js", main], ["voicemouths.js", mouths]] as co
       || new RegExp(`\\{[^}]*\\b${fn}\\b[^}]*\\}\\s*=\\s*await\\s+import`).test(src);
     check(`${label} binds ${fn} before calling it`, !called || bound);
   }
-}
+}S.done();

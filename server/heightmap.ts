@@ -69,7 +69,7 @@ function readTextChunk(png: Uint8Array, key: string): string | null {
 /** Decode an uploaded PNG into a grid, and store both. */
 export function ingestHeightmap(body: Uint8Array, hash: string):
     { grid: string; png: string; w: number; h: number; bits: number; meta: HeightmapMeta | null } | { error: string; status: number } {
-  // Dimensions from the IHDR BEFORE decoding (review on #237): a few KB of PNG can claim a 60000² image,
+  // Dimensions from the IHDR BEFORE decoding: a few KB of PNG can claim a 60000² image,
   // and decoding first would make the serving process unpack and allocate all of it just to refuse it.
   // IHDR is always the first chunk: width and height are big-endian u32s at bytes 16 and 20.
   if (body.length < 24 || String.fromCharCode(...body.subarray(12, 16)) !== "IHDR")
@@ -106,7 +106,7 @@ export function ingestHeightmap(body: Uint8Array, hash: string):
   return { grid, png, w, h, bits: img.data instanceof Uint16Array ? 16 : img.depth, meta };
 }
 
-// Exports run on the thread that serves the worlds (review on #237), so their work is BOUNDED, and the
+// Exports run on the thread that serves the worlds, so their work is BOUNDED, and the
 // bound is checked BEFORE any work is done:
 //   · at most EXPORT_MAX samples a side;
 //   · the last EXPORT_CACHE results kept by (terrain, resolution) — a terrain that has not changed is

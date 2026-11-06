@@ -1,8 +1,8 @@
 // The interim sky: a plain gradient dome shown while the real sky's programs compile (on a cold GPU cache the cloud
 // march takes minutes to link on WebGL). Its colours are the sky system's OWN time-of-day horizon/zenith, which it
 // recomputes in JavaScript every frame independently of its shaders, so the stand-in matches the hour from the start.
-// Tiny program, no textures: it links in milliseconds. (Owner, 09-27: one gradient that resembles the time of day,
-// never the half-made states.)
+// Tiny program, no textures: it links in milliseconds. One gradient that resembles the time of day, never the
+// half-made states.
 import { THREE, scene, camera } from './core.js';
 import { bus } from './base.js';
 

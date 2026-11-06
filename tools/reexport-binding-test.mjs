@@ -11,6 +11,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
+import { suite } from './protocol/suite.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SCAN = [join(ROOT, 'client')];
@@ -27,8 +28,11 @@ function* walk(dir) {
 const strip = (src) => src
   .replace(/\/\*[\s\S]*?\*\//g, '')
   .replace(/^\s*\/\/.*$/gm, '');
+// where a USE is looked for: also without the insides of quoted strings (a path like './markup.js' names no binding)
+// and trailing comments
+const code = (src) => src.replace(/(['"])(?:\\.|(?!\1)[^\\\n])*\1/g, '""').replace(/\/\/.*$/gm, '');
 
-let pass = 0, fail = 0;
+const S = suite('reexport-binding');
 const findings = [];
 
 for (const dir of SCAN) {
@@ -53,7 +57,7 @@ for (const dir of SCAN) {
         .map((n) => n.trim().split(/\s+as\s+/)[0].trim())
         .filter(Boolean);
       // everything in the file EXCEPT the re-export statement itself
-      const rest = src.slice(0, m.index) + src.slice(m.index + m[0].length);
+      const rest = code(src.slice(0, m.index) + src.slice(m.index + m[0].length));
       for (const name of names) {
         // NB: build these from a plain string, never a template literal carrying backslash
         // escapes - a template literal reads  as a backspace character, which is how the
@@ -67,17 +71,6 @@ for (const dir of SCAN) {
   }
 }
 
-if (findings.length === 0) {
-  pass++;
-  console.log('  ok    no module uses a name it only re-exports');
-} else {
-  fail++;
-  console.log('  FAIL  a re-exported name is used locally, where it has no binding:');
-  for (const f of findings) {
-    console.log(`          ${f.file} uses ${f.name}, which it only re-exports`);
-    console.log('          fix: `import { X } from ...; export { X };` so a local binding exists');
-  }
-}
-
-console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'} — ${pass} ok, ${fail} failed`);
-process.exit(fail === 0 ? 0 : 1);
+S.check('no module uses a name it only re-exports', findings.length === 0,
+  findings.map((f) => `${f.file} uses ${f.name}, which it only re-exports (fix: \`import { X } from ...; export { X };\` so a local binding exists)`).join('; '));
+S.done();

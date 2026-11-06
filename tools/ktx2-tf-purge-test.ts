@@ -4,8 +4,9 @@
 import { fileURLToPath } from "node:url";
 import { convertedLinear, overCap, staleOversize } from "./ktx2-tf-purge.ts";
 import { KTX2_TEXEL_CAP } from "../server/store-variants.ts";
-let pass = 0, fail = 0;
-const check = (n: string, ok: boolean, got?: unknown) => { if (ok) pass++; else fail++; console.log(`  ${ok ? "✓" : "✗"} ${n}${ok ? "" : `  got ${JSON.stringify(got)}`}`); };
+import { suite } from "./protocol/suite.ts";
+const S = suite("ktx2-tf-purge");
+const check = (n: string, ok: unknown, got?: unknown) => S.check(n, ok, got);
 function ktx2({ w, h, tf, writer }: { w: number; h: number; tf: number; writer: string }): Uint8Array {
   const kv = new TextEncoder().encode(`KTXwriter\0${writer}\0`);
   const dfd = 104, kvd = dfd + 48, b = new Uint8Array(kvd + kv.length + 8), dv = new DataView(b.buffer);
@@ -36,4 +37,4 @@ check("…and an avatar variant never is (the VRM arm does not resize)", !staleO
   check("--apply removes a purged variant AND its .failed/.deferred (so the sweep rebuilds it)", gone("a.ktx2") && gone("a.ktx2.failed") && gone("a.ktx2.deferred"),
     { out: new TextDecoder().decode(r.stdout).slice(-300), left: ["a.ktx2", "a.ktx2.failed", "a.ktx2.deferred"].filter((f) => !gone(f)) });
   check("…and leaves a variant it didn't purge, and that variant's marker, alone", !gone("b.ktx2") && !gone("b.ktx2.failed")); }
-console.log(`${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+S.done();

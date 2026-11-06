@@ -1,4 +1,4 @@
-// seatbody — a body at a socket, every frame: where it is, how it got there, and what it does there.
+// occupybody — a body at a socket, every frame: where it is, how it got there, and what it does there.
 //
 // One driver for every seated body — mine (localbody.js) and everyone else's (remotes.js) — so an occupant looks the same
 // on every screen: the same transform (world.js mountTransform: the socket, its part's motion, the anchor), the same

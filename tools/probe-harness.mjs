@@ -1,73 +1,43 @@
-// probe-harness — the owned foundations every browser probe shares (#131
-// review, item 3). Two portability sins this replaces, each measured on the
-// macOS review host:
-//
-// 1. A HARDCODED Linux browser path (`~/.cache/ms-playwright/chromium-1228/…`)
-//    in seven probes — every one failed before behavior on any other platform.
-//    Browser resolution here: `SFU_TEST_CHROME` env override (same knob as the
-//    sfu mini-smoke) ▸ otherwise Playwright's MANAGED browser for the pinned
-//    playwright version (`bunx playwright install chromium` on a clean
-//    checkout fetches the right build for the current platform).
-//
-// 2. AMBIENT fixed ports (`127.0.0.1:8946`/`:8960`): the probe's verdict was
-//    about whatever answered there — a stale staging server could buy a green,
-//    and a clean checkout had nothing to answer at all. `ownedWorld()` spawns
-//    a child bound to a per-run nonce identity in scratch state and REFUSES to
-//    proceed unless the responder proves it is ours (the boot-check pattern,
-//    which was already the #128 review lens applied). Probing a LIVE
-//    deployment stays possible but explicit: pass its origin, and identity
-//    checks are skipped because the deployment is not our child.
-import { chromium } from 'playwright';
+// probe-harness: the owned foundations every browser probe shares (#131).
+// 1. Browser: chrome.ts findChrome (CHROME, else playwright's managed build, else the OS's), driven over raw CDP by
+//    cdp-pw.mjs: the gate never runs playwright (chrome.ts cdpPage says why). Never a hardcoded Linux path.
+// 2. `ownedWorld()` spawns a child bound to a per-run nonce in scratch state and REFUSES to proceed unless the responder
+//    proves it is ours (as boot-check), never an ambient fixed port. A LIVE deployment is explicit: pass its origin,
+//    identity checks skipped.
+import { launchCdp } from './cdp-pw.mjs';
+import { freePort } from './harness.ts';
+import { suite } from './protocol/suite.ts';
+import { until, tryUntil, pause } from './protocol/wait.ts';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, extname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 
-// vrMicChoice: the pre-VR mic step (client/lib/vrmic.js) asks once per browser when the microphone permission is
-// still open — and a fresh headless context always reads 'prompt'. Every probe that clicks the visor to reach a
-// session would stop at that 2D step instead, so contexts start as a browser that already answered "not now"
-// (the step's own remembered choice; a written value is never overwritten). tools/vrmic-probe.mjs passes null to
-// drive the step itself.
-/** SFU_TEST_CHROME override ▸ managed browser. `mic: true` adds the fake-media
- *  flags a microphone probe needs (and its contexts get mic permission). */
-export async function launchBrowser({ mic = false, vrMicChoice = 'later' } = {}) {
-  const exe = process.env.SFU_TEST_CHROME;
+// vrMicChoice: the pre-VR mic step (client/lib/vrmic.js) would stop every visor-clicking probe, so contexts start as a
+// browser that answered "not now"; tools/vrmic-probe.mjs passes null to drive it
+/** One Chromium (chrome.ts findChrome). `mic: true` adds the fake-media flags (and mic permission). */
+export async function launchBrowser({ mic = false, vrMicChoice = 'later', args: extra = [] } = {}) {
   // no GPU watchdog: a software-rendered sky bake is a 4–7 s frame here, and the watchdog's kill loses every page's
   // WebGL context (gpulost.js then reloads the page mid-probe, 11-03)
   const args = ['--disable-gpu-watchdog', ...(mic ? ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream',
-    '--autoplay-policy=no-user-gesture-required'] : [])];
-  const b = await chromium.launch({ ...(exe ? { executablePath: exe } : {}), args });
-  // BOOT_CHECK_VIEWPORT=390x844 drives a probe at a phone-width (or any) viewport.
-  // Without it the context takes Playwright's default — which is why a layout that
-  // only fits the authoring viewport passed every owned-browser run (#185 review).
+    '--autoplay-policy=no-user-gesture-required'] : []), ...extra];
+  const b = await launchCdp({ args });
+  // BOOT_CHECK_VIEWPORT=390x844 drives a probe at any viewport (default 1280x720, the authoring viewport)
   const vp = (process.env.BOOT_CHECK_VIEWPORT || '').match(/^(\d+)x(\d+)$/);
   const viewport = vp ? { width: +vp[1], height: +vp[2] } : null;
-  const page = async () => {
-    // TOUCH IS A PRECONDITION, not a nicety (antra-tess #185 B2): the dock only
-    // leaves the left edge when document.body has class 'touch' (controller.js:434,
-    // ui.js:489), so without it the rail never goes horizontal along the top and
-    // the landscape dock/action-bar overlap she reported is invisible to any probe
-    // by construction. BOOT_CHECK_TOUCH=1 turns it on.
-    const touch = process.env.BOOT_CHECK_TOUCH === '1';
-    const ctx = await b.newContext({
-      ...(mic ? { permissions: ['microphone'] } : {}),
-      ...(viewport ? { viewport } : {}),
-      ...(touch ? { hasTouch: true, isMobile: true } : {}),
-    });
-    // a lost context stays lost: headless software GL loses the page's WebGL context a couple of minutes in (a
-    // 3–7 s frame, 11-03), and gpulost.js would reload the page, resetting every state a row reads. Seeded at its
-    // own stop rule (3 losses in 15 min), it says so (capnotice) and stays; scene, audio and network rows read on.
-    await ctx.addInitScript(() => { try { if (!sessionStorage.getItem('ew-gpu-lost')) sessionStorage.setItem('ew-gpu-lost', JSON.stringify([Date.now() - 1000, Date.now() - 500])); } catch { /* opaque origin */ } });
-    if (vrMicChoice) await ctx.addInitScript((v) => { try { if (!localStorage.getItem('ew-vr-mic-choice')) localStorage.setItem('ew-vr-mic-choice', v); } catch { /* opaque origin */ } }, vrMicChoice);
-    return ctx.newPage();
-  };
+  // touch is a precondition: the dock leaves the left edge only when body has class 'touch'. BOOT_CHECK_TOUCH=1 turns it on.
+  const page = () => b.page({ viewport, touch: process.env.BOOT_CHECK_TOUCH === '1', permissions: mic ? ['microphone'] : [],
+    initScripts: [
+      // a lost context stays lost: headless software GL loses the page's WebGL context minutes in; seeded at gpulost.js's own stop rule, it stays
+      [() => { try { if (!sessionStorage.getItem('ew-gpu-lost')) sessionStorage.setItem('ew-gpu-lost', JSON.stringify([Date.now() - 1000, Date.now() - 500])); } catch { /* opaque origin */ } }],
+      ...(vrMicChoice ? [[(v) => { try { if (!localStorage.getItem('ew-vr-mic-choice')) localStorage.setItem('ew-vr-mic-choice', v); } catch { /* opaque origin */ } }, vrMicChoice]] : [])] });
   return { browser: b, page, close: () => b.close() };
 }
 
-/** Spawn a world server this run OWNS, prove it is ours, hand back origin +
- *  teardown. Pass `live: "http://host:port"` to probe a deployment instead
- *  (explicit, identity unchecked — it is not our child). */
+/** Spawn a world server this run OWNS, prove it's ours, return origin + teardown. `live: "http://host:port"` probes a
+ *  deployment instead (identity unchecked). */
 const LIVE_CHILDREN = new Set(), scratchOf = new Map();
 let signalsArmed = false;
 function armSignals() {
@@ -77,15 +47,7 @@ function armSignals() {
     process.exit(sig === 'SIGINT' ? 130 : 143);
   };
   process.once('SIGINT', onSignal); process.once('SIGTERM', onSignal);
-  // An UNCAUGHT THROW is neither signal: node prints the stack and exits
-  // without running the signal handlers, so a probe whose assertion arithmetic
-  // TypeErrors (or whose selector rejects) leaves its owned server child
-  // squatting on its port with its mkdtemp scratch dir. Same sweep, two more
-  // doors. boot-check and mic-hud-probe already reach cleanup via try/finally;
-  // panel-teardown-probe, tts-blocking-probe and mic-meter-states do not, and
-  // they come from 3ee7480 rather than this PR — fixed HERE so every probe is
-  // covered without editing three files this rung does not own.
-  // (agent review round 3)
+  // an UNCAUGHT throw skips the signal handlers: the same sweep here, so every probe is covered with or without try/finally
   const onThrow = (err) => {
     for (const c of LIVE_CHILDREN) { try { c.kill('SIGKILL'); } catch { /* gone */ } try { rmSync(scratchOf.get(c), { recursive: true, force: true }); } catch {} }
     console.error(err?.stack ?? String(err));
@@ -94,21 +56,14 @@ function armSignals() {
   process.once('uncaughtException', onThrow); process.once('unhandledRejection', onThrow);
 }
 
-// `worlds`: the worlds founded in the scratch WORLDS_DIR before boot. The server never founds a world on join (a
-// name with no world behind it is refused, security review 10-06 H3), so a probe's page reaching ?world=<name> needs
-// that world founded first; staging and commons (the client's default) always are. `owner` founds them.
+// `worlds`: founded in the scratch WORLDS_DIR before boot. The server never founds on join (a name with no world is
+// refused), so a page reaching ?world=<name> needs it founded; staging and commons always are. `owner` founds them.
 export async function ownedWorld({ live = null, key = process.env.JOIN_KEY || 'dev', env: extraEnv = {}, worlds = [], owner = 'owner' } = {}) {
   if (live) return { origin: live, key, owned: false, close: async () => {} };
-  // Wide range: with a narrow one, two concurrent runs collide ~1/15 and the
-  // loser's readiness poll can reach the WINNER's just-started server, which
-  // passes a freshness check — the nonce echo is what actually rejects it,
-  // and width makes the collision rare to begin with.
-  const PORT = 8981 + Math.floor(Math.random() * 800);
+  const PORT = freePort(8981);   // the nonce echo is what rejects another run's server
   const scratch = mkdtempSync(join(tmpdir(), 'probe-'));
   const NONCE = randomUUID();
-  // process.execPath is only right when WE run under bun — under node it
-  // cannot run TS. An absolute bun serves both (house rule's target is
-  // Windows PATH shims); BUN_PATH overrides for other layouts.
+  // process.execPath only works under bun (node can't run TS): an absolute bun serves both; BUN_PATH overrides
   const BUN = process.execPath.includes('bun') ? process.execPath
     : (process.env.BUN_PATH || 'bun');
   for (const name of new Set(['staging', 'commons', ...worlds])) {
@@ -116,24 +71,15 @@ export async function ownedWorld({ live = null, key = process.env.JOIN_KEY || 'd
     if (r.status !== 0) { try { rmSync(scratch, { recursive: true, force: true }); } catch {} throw new Error(`ownedWorld: founding "${name}" failed: ${r.stdout}${r.stderr}`); }
   }
   const srv = spawn(BUN, ['server/server.ts'], {
-    // SKIP_OPT_SWEEP by default: a probe server shares the checkout's OPT_DIR (assets/opt) — its boot sweeps would
-    // build variants INTO the directory a live world serves from, mid-session (09-24 22:40: a lowered LOD floor had
-    // probe servers writing new store LODs under the owner's VR test). A probe that wants the sweep passes it in env.
+    // SKIP_OPT_SWEEP by default: a probe server shares the checkout's OPT_DIR (assets/opt), and its boot sweeps would
+    // build variants INTO the directory a live world serves from. A probe that wants the sweep passes it in env.
     env: { ...process.env, SKIP_OPT_SWEEP: '1', PORT: String(PORT), JOIN_TOKEN: key, WORLDS_DIR: scratch,
            EIDO_BOOT_NONCE: NONCE, ...extraEnv },
     stdio: ['ignore', 'ignore', 'ignore'],
   });
   const origin = `http://127.0.0.1:${PORT}`;
-  // Identity: the nonce echo, and ONLY the nonce echo (#131 re-review, item 4).
-  // The server's /version echoes EIDO_BOOT_NONCE (routes.ts, since #131), so an owned exact-head
-  // child always answers with our nonce; a startedAt-freshness fallback would
-  // reopen the just-started-impostor race for no one's benefit. A responder
-  // WITHOUT a nonce field is by definition not our child — some stale
-  // pre-nonce build squatting the port — and fails immediately. Probing a
-  // live deployment (not our child) is the explicit `live:` mode above.
-  // a SIGINT/SIGTERM that lands before the caller's finally exists (inside this poll, or before its browser is up)
-  // used to orphan the child on its port; every live child dies with us, whoever sends the signal — one handler
-  // over a module-level set, so two worlds open at once both go (eighth/ninth reviews 2026-09-10)
+  // identity is the nonce echo ONLY (/version echoes EIDO_BOOT_NONCE): a responder without it fails at once. Every live
+  // child dies with us on any signal, even mid-poll (one handler over a module-level set).
   LIVE_CHILDREN.add(srv); scratchOf.set(srv, scratch); armSignals();
   const verdict = await proveOwned(origin, NONCE, { alive: () => (srv.exitCode === null ? true : `exited ${srv.exitCode}`) });
   const ours = verdict.ours, reason = verdict.reason;
@@ -148,41 +94,29 @@ export async function ownedWorld({ live = null, key = process.env.JOIN_KEY || 'd
   return { origin, key, owned: true, close };
 }
 
-/** The identity check itself, callable on its own so a test can show the
- *  NEGATIVE: a responder that does not echo our nonce is refused, never
- *  judged (Mica, #192 review, blocker 3 — "an impostor cannot buy green").
- *  Polls `origin`/version up to `attempts` times, 250ms apart; `alive()`
- *  returns true while the thing we are waiting for could still come up, or
- *  a reason string once it cannot. Resolves { ours, reason }. */
+/** The identity check alone, so a test can show the NEGATIVE (a responder without our nonce is refused). Polls
+ *  `origin`/version up to `attempts` times, 250ms apart; `alive()` is true while the awaited thing could still come
+ *  up, else a reason string. Resolves { ours, reason }. */
 export async function proveOwned(origin, nonce, { attempts = 60, alive = () => true } = {}) {
   let ours = false, reason = 'never answered';
-  for (let i = 0; i < attempts && !ours; i++) {
+  await tryUntil('the server proves it is ours', async () => {
     const a = alive();
-    if (a !== true) { reason = String(a); break; }
+    if (a !== true) { reason = String(a); return true; }
     try {
       const v = await (await fetch(`${origin}/version`, { signal: AbortSignal.timeout(1000) })).json();
-      if (v.nonce === undefined) { reason = 'responder has no nonce field (stale pre-nonce listener)'; break; }
+      if (v.nonce === undefined) { reason = 'responder has no nonce field (stale pre-nonce listener)'; return true; }
       ours = v.nonce === nonce;
-      if (!ours) { reason = 'wrong nonce (not our child)'; break; }
-    } catch { /* not up yet */ }
-    if (!ours) await new Promise((r) => setTimeout(r, 250));
-  }
+      if (!ours) reason = 'wrong nonce (not our child)';
+      return true;
+    } catch { return false; /* not up yet */ }
+  }, { ms: attempts * 250, step: 250 });
   return { ours, reason };
 }
 
-/** Uniform pass/fail counting with a nonzero exit — a probe that cannot fail
- *  is a console.log, not a receipt. */
+/** Uniform pass/fail counting with a nonzero exit: a probe that can't fail is a console.log, not a receipt. */
 export function checker() {
-  let pass = 0, fail = 0;
-  const check = (name, ok, extra = '') => {
-    console.log(`  ${ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} ${name}${ok ? '' : '  ' + extra}`);
-    ok ? pass++ : fail++;
-  };
-  const done = () => {
-    console.log(`\n${fail === 0 ? '\x1b[32m' : '\x1b[31m'}${pass} passed, ${fail} failed\x1b[0m`);
-    process.exit(fail ? 1 : 0);
-  };
-  return { check, done };
+  const S = suite('probe');
+  return { check: (name, ok, extra = '') => S.check(name, ok, extra), done: () => S.done() };
 }
 
 /** Resolves once the page is in the world: the client's own `net.joined` (set on the snapshot, client/lib/net.js
@@ -198,4 +132,93 @@ export async function waitJoined(pg, { timeout = 90000 } = {}) {
   const reloads = [], joinedAt = Date.now();
   pg.on('framenavigated', (f) => { if (f === pg.mainFrame()) reloads.push(`${f.url().slice(0, 80)} at +${((Date.now() - joinedAt) / 1000).toFixed(0)}s`); });
   return reloads;
+}
+
+// IWER under the real client: its device loop pinned to a native rAF, refused unless the pattern matched exactly once
+// (memory: reference_iwer_headless_probe.md §2; an IWER bump that moves the line must turn every IWER probe red)
+export const IWER_LOOP = 'globalThis.requestAnimationFrame(this[P_SESSION].onDeviceFrame)';
+export function iwerSource(raw = readFileSync(new URL('../node_modules/iwer/build/iwer.js', import.meta.url), 'utf8')) {
+  const n = raw.split(IWER_LOOP).length - 1;
+  if (n !== 1) throw new Error(`iwer build changed: expected exactly one '${IWER_LOOP}', found ${n} (the native-rAF pin would silently not apply)`);
+  return 'globalThis.__iwerNativeRAF = globalThis.requestAnimationFrame.bind(globalThis);\n' +
+    raw.replace(IWER_LOOP, 'globalThis.__iwerNativeRAF(this[P_SESSION].onDeviceFrame)');
+}
+
+/** Before any client code: an emulated Quest 3 installed with forceInstall (headless Chromium ships a navigator.xr stub
+ *  IWER otherwise won't replace), kept as window.__iwerDevice and hidden from the product (no window.IWER: a real
+ *  headset's branch). `cloud`: the ew-cloud-quality the page boots with (null leaves it alone). */
+export async function iwerInit(pg, { cloud = null } = {}) {
+  if (cloud != null) await pg.addInitScript((q) => { try { localStorage.setItem('ew-cloud-quality', q); } catch {} }, cloud);
+  await pg.addInitScript(iwerSource());
+  await pg.addInitScript(() => {
+    const { XRDevice, metaQuest3 } = window.IWER ?? {};
+    if (!XRDevice) return;   // window.__iwerDevice stays unset: probes gate on it
+    const d = new XRDevice(metaQuest3); d.installRuntime({ forceInstall: true });
+    window.__iwerDevice = d;
+    try { delete window.IWER; } catch { window.IWER = undefined; }
+  });
+}
+
+/** Wait until the page has drawn `n` more animation frames: a wait on the render loop's progress, not on the clock. */
+export const drawn = (pg, n) => pg.evaluate((k) => new Promise((res) => { let i = 0; const f = () => (++i >= k ? res(true) : requestAnimationFrame(f)); requestAnimationFrame(f); }), n);
+
+/** The visor the product shows (#xrbtn displayed). `me`: also wait for a joined avatar. */
+export async function visorShown(pg, { timeout = 90000, me = false } = {}) {
+  await pg.waitForFunction((m) => { const b = document.querySelector('#xrbtn'); return !!b && getComputedStyle(b).display !== 'none' && (!m || !!globalThis.EW?.me?.()); }, me, { timeout });
+}
+
+/** Click the real visor and wait until three presents. The page must be an XR boot (`&xr=1`): on a host with WebGPU the
+ *  click otherwise reloads to WebGL and never presents (backend_choice.js), so a probe without it is red on a GPU host
+ *  and green on a GPU-less one (xr-res on macOS, CI 42190828916). Refused on every host. */
+export async function enterVR(pg, { timeout = 30000 } = {}) {
+  const xrBoot = await pg.evaluate(() => new URLSearchParams(location.search).get('xr') === '1');
+  if (!xrBoot) throw new Error('enterVR: the page was not booted with &xr=1 (on a WebGPU host the click reloads to WebGL instead of entering)');
+  await pg.evaluate(() => document.querySelector('#xrbtn').click());
+  await pg.waitForFunction(() => globalThis.EW?.renderer?.xr?.isPresenting, null, { timeout, polling: 250 });
+}
+
+/** End the emulated session; resolves whether or not three stopped presenting within `timeout`. */
+export async function exitVR(pg, { timeout = 60000 } = {}) {
+  await pg.evaluate(async () => { await window.__iwerDevice.activeSession?.end(); });
+  return pg.waitForFunction(() => !globalThis.EW?.renderer?.xr?.isPresenting, null, { timeout, polling: 500 }).then(() => true, () => false);
+}
+
+/** Off-tier sky boot: clouds off before load, the real client on staging, the engine up, then `sky` set on @world (the
+ *  world needs `owner: name` + TRUST_NAMES so the write is admitted) and, with `baked`, the baked tier waited for. */
+export async function skyBoot(pg, world, name, { sky = null, baked = false, query = '&lite=0', ready = () => globalThis.__ewEngineUp } = {}) {
+  await pg.goto(`${world.origin}/`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await pg.evaluate(() => localStorage.setItem('ew-cloud-quality', 'off'));
+  await pg.goto(`${world.origin}/?world=staging&name=${name}&key=${world.key}${query}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await pg.waitForFunction(ready, null, { timeout: 120000 });
+  if (sky) await pg.evaluate(async (v) => { const { sendRequest } = await import('./lib/net.js'); const r = await sendRequest('set', { id: '@world', component: 'sky', value: v, merge: true }); if (!r.ok) throw new Error(`sky refused: ${JSON.stringify(r.refused)}`); }, sky);
+  if (baked) await tryUntil('the baked sky is active', () => pg.evaluate(async () => (await import('./lib/sky_baked.js')).bakedActive()), { ms: 90_000, step: 1000 });
+}
+
+// RAW3: a page of real three + client/lib modules, served from client/ by route (no world server), on SwiftShader
+const CLIENT = fileURLToPath(new URL('../client/', import.meta.url));
+const TYPES = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.html': 'text/html', '.json': 'application/json', '.wasm': 'application/wasm' };
+export const RAW3_IMPORTMAP = '<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.webgpu.js","three/webgpu":"./node_modules/three/build/three.webgpu.js","three/tsl":"./node_modules/three/build/three.tsl.js"}}</script>';
+/** `html` at http://probe.local/; `errors` collects page errors and console errors; `result(ms, q)` loads `/?q` and
+ *  awaits window.__probe, or `{ error }` after `ms`. */
+export async function raw3Page(html) {
+  const { browser, page } = await launchBrowser({ vrMicChoice: null, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  const pg = await page(); const errors = [];
+  pg.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  pg.on('pageerror', (e) => errors.push(String(e)));
+  await pg.route('http://probe.local/**', (route) => {
+    const path = decodeURIComponent(new URL(route.request().url()).pathname);
+    if (path === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    const f = join(CLIENT, path);
+    if (!f.startsWith(CLIENT) || !existsSync(f)) return route.fulfill({ status: 404, body: 'nope' });
+    return route.fulfill({ body: readFileSync(f), contentType: TYPES[extname(f)] ?? 'application/octet-stream' });
+  });
+  const result = async (ms, q = '') => {
+    if (q) await pg.goto('about:blank');
+    await pg.goto(`http://probe.local/${q ? `?${q}` : ''}`);
+    // the page's module sets window.__probe (a value or a promise) once it runs: wait for it, then for its answer
+    const got = await tryUntil('the page sets window.__probe', () => pg.evaluate(() => window.__probe !== undefined), { ms, step: 50 });
+    if (!got) return { error: `probe timed out (${ms / 1000} s)` };
+    return Promise.race([pg.evaluate(() => window.__probe), pause('the probe\'s deadline', ms).then(() => ({ error: `probe timed out (${ms / 1000} s)` }))]);
+  };
+  return { browser, page: pg, errors, result, close: () => browser.close() };
 }

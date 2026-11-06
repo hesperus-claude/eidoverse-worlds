@@ -16,17 +16,15 @@
 //
 // NOTE for the main-tree control: this suite namespace-imports the module.
 // On a tree without fp_view.js it fails as LINK NOVELTY, not behavioral
-// evidence — the behavioral fail-on-main proof for #75 is the browser A/B
-// receipt (tools/fp-snap-probe.ts), where main's mounted first-person cannot
+// evidence — the behavioral fail-on-main proof for #75 was a one-off browser A/B
+// receipt (in #75's history), where main's mounted first-person cannot
 // see a marker the branch sees. (Sky-contract review N2 case law.)
 
 import * as fp from "../client/lib/fp_view.js";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-function check(name: string, cond: boolean, detail = "") {
-  if (cond) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const S = suite("fp-view");
+const check = (name: string, cond: unknown, detail?: unknown) => S.check(name, cond, detail);
 const near = (a: number, b: number, eps = 1e-9) => Math.abs(a - b) < eps;
 
 // A camera double that records what the composition did to it.
@@ -200,5 +198,5 @@ console.log("mounted geometry regression");
     anchoredInside && JSON.stringify(seq) === JSON.stringify([false, "render", true]));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-if (fail) process.exit(1);
+console.log(`\n${S.pass} passed, ${S.fail} failed`);
+if (S.fail) process.exit(1);

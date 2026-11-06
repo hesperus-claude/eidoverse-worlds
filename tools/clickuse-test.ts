@@ -6,6 +6,7 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/clickuse-test.ts
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
+import { suite } from "./protocol/suite.ts";
 const THREE_PATH = fileURLToPath(new URL('../client/node_modules/three/build/three.module.js', import.meta.url));
 const STUBS: Record<string, string> = {
   core: `import * as THREE from ${JSON.stringify(THREE_PATH)}; export { THREE };
@@ -37,8 +38,8 @@ plugin({
 (globalThis as any).document ??= { pointerLockElement: null };
 const winL: Record<string, Function[]> = {}; (globalThis as any).addEventListener = (k: string, f: Function) => { (winL[k] ??= []).push(f); };
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => { if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); } else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); } };
+const S = suite("clickuse");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 const cu: any = await import('../client/lib/clickuse.js');
 const { core, world, panels, tp } = (globalThis as any).__cu;
@@ -63,13 +64,13 @@ panels.menus.length = 0; click(2);
 const menu = panels.menus.at(-1)?.map((i: any) => i.k) ?? null;
 check('holding the crate, right-clicking the desk offers to put it on the desk', !!menu && menu.includes('puton'), JSON.stringify(menu));
 // ---- …and a left-click on the desk sets it down on the desk's top
-tp.calls.length = 0; click(0); await new Promise((r) => setTimeout(r, 0));
+tp.calls.length = 0; click(0); await new Promise((r) => setImmediate(r));
 const put = tp.calls.find((c: any[]) => c[0] === 'put');
 check('holding the crate, left-clicking the desk puts it down there, on its top', !!put && put[1] === 'crate' && Math.abs(put[2][0]) < 0.8 && Math.abs(put[2][1] + 3) < 0.4, JSON.stringify(tp.calls));
 
 // ---- holding the crate, a left-click on another thing to pick up still picks it up (its own first use); the menu offers put-on (pick up is the left click's first use, never a menu item while a thing is held)
 thing('ball', [0.3, 0.3, 0.3], [0, 0.8, -2], { label: 'ball' });   // in the line of the click, in front of the desk
-tp.calls.length = 0; click(0); await new Promise((r) => setTimeout(r, 0));
+tp.calls.length = 0; click(0); await new Promise((r) => setImmediate(r));
 check('holding the crate, left-clicking a ball picks the ball up (its own first use)', JSON.stringify(tp.calls) === '[["grab","ball"]]', JSON.stringify(tp.calls));
 panels.menus.length = 0; click(2); const bm = panels.menus.at(-1)?.map((i: any) => i.k) ?? null;
 check('holding the crate, right-clicking the ball offers to put the crate on it', !!bm && bm[0] === 'puton', JSON.stringify(bm));
@@ -80,5 +81,4 @@ tp.held.splice(0, Infinity); panels.menus.length = 0; click(2);
 check('holding nothing, a right-click on the desk opens no menu', panels.menus.length === 0, JSON.stringify(panels.menus));
 check('holding nothing, the crate offers pick up', keys(cu.offersOf('crate')).includes('grab'));
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

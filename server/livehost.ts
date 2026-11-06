@@ -1,5 +1,5 @@
 // server/livehost.ts — a world as a running server holds it: the authority (shared/protocol/authority.js) over one directory, with
-// every view the authority reads kept INCREMENTALLY (research 35, slice-2 #5):
+// every view the authority reads kept INCREMENTALLY:
 //   state   the strict fold, advanced per appended entry (copy-on-write: only the entities an entry touches are
 //           copied, so a held state never changes under its holder, and a write costs the world's touched part, not
 //           the log). A purge refolds from the log (purge is retroactive by law, L1).
@@ -17,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { custodyFileIn } from "./keyfiles.ts";
 import { writePrivate } from "./fsutil.ts";
-import { readLog, fold, opsOf, applyInPlace, redactionsIn, jcs, sha256, Malformed, DIALECT, VERSION } from "../shared/protocol/fold.js";
+import { readLog, fold, opsOf, applyInPlace, redactionsIn, jcs, sha256, Malformed, DIALECT, VERSION, isE, opsQuiet } from "../shared/protocol/fold.js";
 import { worldOf, posAt } from "../shared/protocol/authority.js";
 import { simFolder, carried, digestOf } from "../shared/protocol/simlayer.js";
 import { readLogBytes, appendDurable, putBlobFile } from "./durable.ts";
@@ -34,8 +34,6 @@ import { seedPurgedSeqs } from "../shared/protocol/authority/storage.js";
 
 type Any = any; // the authority is JSDoc-typed JS; the server holds it structurally
 
-const isE = (e: Any) => e && !(e instanceof Malformed) && typeof e === "object";
-const opsQuiet = (e: Any) => { try { return opsOf(e); } catch { return []; } };
 
 /** Apply one change entry's ops to a COPY of st that shares every entity the entry doesn't touch. */
 export function applyShared(st: Any, ops: Any[], seq: number) {
@@ -53,13 +51,13 @@ export type LiveOpts = { /** the act rate (server/config.ts RATE_POLICY); defaul
   /** id → account|anon|imported (the directory; the authority reads only "anon"); default: that worlds dir's directory */ kindOf?: (id: string) => string | null;
   /** the script sandbox (default QuickJS, shared/protocol/sandbox.js; null = none) */ scripts?: Any;
   /** who is connected beyond the authority's own bodies: [{id, at}] (server/worldlog.ts, from the World's clients) */ present?: () => { id: string; at: number[] | null }[];
-  /** speech is arrival-only (R 10-18): the seq at or below which this asker may not read a say's body; null = no floor (storage.js worldOf) */ sayFloor?: (actor: string) => number | null;
+  /** speech is arrival-only: the seq at or below which this asker may not read a say's body; null = no floor (storage.js worldOf) */ sayFloor?: (actor: string) => number | null;
   /** a sim checkpoint once `every` entries follow the last one (authority checkpointSim; server policy SIM_CHECKPOINT_EVERY); none: only after launches */ simCheckpoint?: { every: number };
   /** the derived fold cache (server/statecache.ts): written every `every` entries; onRefold after a re-derive disagreed */ stateCache?: { every: number; onRefold?: () => void };
   /** read the whole log even when the fold cache would let the boot read only its tail (the fallback; the suites' control) */ eager?: boolean;
   /** a reader's open (info, a dry run): the torn tail is left for the writer to cut, purged leftovers are left in place */ readOnly?: boolean };
 
-/** An in-place translation's in-progress marker, like git's index.lock (tools/protocol/world.ts translateInPlace; R 10-27). */
+/** An in-place translation's in-progress marker, like git's index.lock (tools/protocol/world.ts translateInPlace). */
 export const SWAP_MARKER = "translation.lock";
 /** Does `dir` hold an in-place swap that hasn't finished (its bans and identities may not be in yet)? Never served. */
 export const isSwapUnfinished = (dir: string): boolean => fs.existsSync(path.join(dir, SWAP_MARKER));
@@ -106,7 +104,7 @@ export function openLive(dir: string, name: string, opts: LiveOpts = {}) {
   const wall = opts.now ?? (() => Date.now());
   const now = () => (lastNow = Math.max(lastNow, Math.floor(wall())));
   // the speed track's pace: elapsed time from the monotonic clock. The wall is stepped back by NTP or a VM's host sync (WSL2
-  // pulls Burrow's back ~1.4 s every ~30 s), and `now` then holds still until the wall catches up — right for ts, but a body's
+  // can pull it back ~1.4 s every ~30 s), and `now` then holds still until the wall catches up — right for ts, but a body's
   // allowance would refill nothing meanwhile. A host that brings its own clock (a lab pinning time) is paced by it.
   const pace = opts.pace ?? (opts.now ? now : () => performance.now());
 
@@ -158,9 +156,9 @@ export function openLive(dir: string, name: string, opts: LiveOpts = {}) {
   let st = resumed?.st ?? fold(entries);
   let cachedAt = resumed ? hit!.coversIndex : -1;   // the line the cache on disk covers (-1: none to trust)
   // the cut carries the engine and what's lifted/launched, not the fold: the layer's engine view needs the state AT the
-  // cut (second review 10-11 S1-1: without it the first edit after a reopen removed the thing from the engine)
+  // cut (else the first edit after a reopen removes the thing from the engine)
   const useCk = ckpt && !simCover ? ckpt : null;
-  // no fold at the checkpoint in hand: it and the sim's replay read the prefix, so a tail boot loads it in one read (review L19)
+  // no fold at the checkpoint in hand: it and the sim's replay read the prefix, so a tail boot loads it in one read
   const ckptSt = useCk ? (resumed?.snap ?? atCover ?? (lazy?.prefix.loadAll(), fold(entries, { until: useCk.seq }))) : null;
   const ckptAtBoot = ckptSt && cloneState(ckptSt);   // the sim folds onto ckptSt
   const simFrom = useCk ? { ...useCk.cut, st: ckptSt } : simCover ? simFromCut(V, atCover, entries[hit!.coversIndex].ts) : null;
@@ -307,8 +305,8 @@ export function isWorldDir(dir: string): boolean {
   const g = genesisAt(path.join(dir, "world.jsonl"));
   return !!g && g.body?.dialect === DIALECT && g.body?.v === VERSION;
 }
-/** A log of this protocol's family (an entry-kind genesis) that this server can't read: saved before the 2026-10-07
- *  names pass (an older file name, or a genesis that stated its number in its own field). Refounded, or re-translated
+/** A log of this protocol's family (an entry-kind genesis) that this server can't read: saved before the names
+ *  pass (an older file name, or a genesis that stated its number in its own field). Refounded, or re-translated
  *  from its original log; never opened. */
 export function isPreNamesDir(dir: string): boolean {
   if (isWorldDir(dir) || !fs.existsSync(dir)) return false;

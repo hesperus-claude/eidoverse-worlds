@@ -24,7 +24,7 @@ const { FLOOR, UPPER, boxes, buildGlb, boxMesh } = await import("./two-storey-fi
 const { Document, NodeIO } = await import("@gltf-transform/core");
 const { ALL_EXTENSIONS } = await import("@gltf-transform/extensions");
 type Box = [number, number, number, number, number, number];
-const { scratchSequencer, mkCheck, sleep, legacyVerb, sceneId } = await import("./harness.ts");
+const { scratchSequencer, mkCheck, sleep, legacyVerb, sceneId, trackTicks } = await import("./harness.ts");
 const { tryUntil, pause } = await import("./protocol/wait.ts");
 const { check, tally } = mkCheck();
 
@@ -96,7 +96,7 @@ console.log("\nan agent in a two-storey building (isolated sequencer):");
 const h = await scratchSequencer("agent-mesh-collision", { serverEnv: { SKIP_OPT_SWEEP: "1", TRUST_NAMES: "1" }, worlds: ["meshcollide", "meshcollide-empty"], owner: "walker", portFrom: 9420 });
 const { WorldAgent } = await import("../mcpl/agent.ts");
 const URL_ = h.BASE.replace("http", "ws") + "/ws";
-let a: any = new WorldAgent({ name: "walker", world: "meshcollide", url: URL_ });
+let a: any = new WorldAgent({ name: "walker", world: "meshcollide", url: URL_, tickEveryMs: trackTicks() });
 const near = (v: number, want: number, tol = 0.03) => Math.abs(v - want) <= tol;
 try {
   await a.connect();
@@ -108,7 +108,7 @@ try {
   // the building sits on the ground under its own origin, wherever that is
   const gy = a.heightAt(0, 0);
   await legacyVerb(a, "spawn", { id: "tower", lib: path, pos: [0, gy, 0], yaw: 0 });
-  await tryUntil("the tower's support is registered", () => a.supportIds?.get("tower"), { ms: 5000, step: 50 });
+  await tryUntil("the tower's support is registered", () => a.supportIds?.get(sceneId(a, "tower")), { ms: 5000, step: 50 });
   await a.supportReady();
   await sleep(300);                                     // the fit itself is a detached registration
   // y: which floor at the destination, where it has more than one (navgrid)
@@ -140,7 +140,7 @@ try {
   await sleep(1500);                                    // the server's settled memory catches the pose
   a.close();
   await sleep(500);
-  a = new WorldAgent({ name: "walker", world: "meshcollide", url: URL_ });
+  a = new WorldAgent({ name: "walker", world: "meshcollide", url: URL_, tickEveryMs: trackTicks() });
   await a.connect();
   await a.supportReady();
   await sleep(500);
@@ -224,7 +224,7 @@ try {
       a.close(); await sleep(500);
       forgetMeshCache();
       delayed = 0;
-      a = new WorldAgent({ name: "walker", world: "meshcollide", url: URL_ });
+      a = new WorldAgent({ name: "walker", world: "meshcollide", url: URL_, tickEveryMs: trackTicks() });
       await a.connect();
       const pending = a.supportPending.size, from = a.pos.x;
       const back = await walk(21, 10);

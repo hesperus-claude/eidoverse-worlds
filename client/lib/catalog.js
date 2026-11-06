@@ -1,7 +1,5 @@
-// palette — the world panel's catalog sections (split from build.js, §R4):
-// the model library, the avatar roster, and the drag-in upload door. The
-// EDITING gestures (ghost, select, drag, undo) stay in build.js; this module
-// is how a thing gets INTO your hand, build.js is what your hand does with it.
+// palette — the world panel's catalog sections: the model library, the avatar roster, and the drag-in upload door.
+// This module is how a thing gets INTO your hand; build.js (ghost, select, drag, undo) is what your hand does with it.
 
 import { enc } from '../../shared/protocol/names.js';
 import * as OP from '../../shared/requests.js';
@@ -9,7 +7,8 @@ import { sendOps } from './editwrites.js';
 import { TIER_COLORS } from '../../shared/perfrank.js';
 import { CONFIG, report, bus } from './base.js';
 import { libLabels } from './assets.js';
-import { makeSection, toast, escapeHtml } from './ui.js';
+import { makeSection, toast } from './ui.js';
+import { escapeHtml } from './markup.js';
 import { holdGhost } from './build.js';
 import { paintGround } from './groundpanel.js';
 import { paintSky } from './skypanel.js';
@@ -69,23 +68,20 @@ async function paintBuild(body) {
   body.appendChild(grid);
 
   // Every optimization's status, from the server's own verdicts (/library-models `opt`, store-variants.ts
-  // variantStatus — owner, 09-24: nothing may fail silently). A pass that was refused / deferred / is stale shows an
-  // amber chip; a built LOD a quiet one; the hover lists every pass and why. Text goes through textContent/title
-  // only — reasons are server-written but derived from uploaded content.
+  // variantStatus): nothing may fail silently. Refused / deferred / stale shows an amber chip, a built LOD a quiet one.
+  // Text goes through textContent/title only — reasons are server-written but derived from uploaded content.
   const PASS = { min: 'compressed copy', ktx2: 'GPU textures', lod: 'LOD' };
   const WORD = { built: 'built', 'not-needed': 'not needed', unsupported: 'not supported', refused: 'refused',
     stale: 'will be re-checked', deferred: 'deferred', pending: 'not processed yet' };
-  // The corner row (owner, 09-24): the loupe's overall rank as a colored pill (the same rule and colors as Debug › Perf ›
-  // Loupe — shared/perfrank.js; the server reads it from the GLB, tools/glbperf-parity-probe proves it equals the
-  // loupe's), then LOD / ⚠ chips. Inset from the image corner and spaced; hover explains each.
+  // The corner row: the loupe's overall rank as a colored pill (shared/perfrank.js, same rule and colors as
+  // Debug › Perf › Loupe), then LOD / ⚠ chips. Hover explains each.
   const CAT = { tris: 'triangles', draws: 'draw calls', texMB: 'texture memory', bones: 'bones', mats: 'materials', alpha: 'transparent materials' };
   const chipRow = (card) => {
     let row = card.querySelector('.opt-row');
     if (!row) {
       row = document.createElement('div');
       row.className = 'opt-row';
-      // the chips are hoverable (tooltips) and sit INSIDE the card's <button>: a click on any of them is the chip's,
-      // never the card's (the card's click holds a placement ghost — owner, 09-24: a chip click placed the model)
+      // the chips sit INSIDE the card's <button>: a click on one is the chip's, never the card's (placement)
       row.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); });
       row.style.cssText = 'position:absolute;bottom:6px;right:6px;display:flex;gap:4px;align-items:center;pointer-events:none';
       (card.querySelector('.pv') ?? card).appendChild(row);
@@ -109,8 +105,8 @@ async function paintBuild(body) {
     chip.setAttribute('aria-label', chip.title);
     chip.style.cssText = 'position:relative;display:inline-block;width:auto;font-size:10px;line-height:1;padding:1px 5px;border-radius:4px;'
       + `pointer-events:auto;cursor:pointer;background:rgba(0,0,0,.55);color:#e8e8e8;opacity:${bad ? 1 : 0.55}`;
-    // a hit area ≥ 22 px for a finger (and, with htmlmesh's one-target click, a VR laser), without growing the drawn chip (the corner row's layout); 3 px on the
-    // left, less than the row's 4 px gap, so it never covers the chip beside it
+    // a ≥ 22 px hit area for a finger or VR laser without growing the drawn chip; 3 px on the left, under the row's
+    // 4 px gap, so it never covers the chip beside it
     const hit = document.createElement('i');   // not a <span>: a card's name is its first span
     hit.style.cssText = 'position:absolute;inset:-6px -8px -6px -3px';
     chip.appendChild(hit);
@@ -139,8 +135,8 @@ async function paintBuild(body) {
     chip.onkeyup = (e) => { if (e.key === ' ') { e.stopPropagation(); e.preventDefault(); } };   // Space activates a button on keyup
     chipRow(card).appendChild(chip);
   };
-  // tooltips live ON the thing they explain (owner, 09-24): the pill carries the perf numbers, the LOD/⚠ chips each pass's
-  // status and reason; the card itself just names the model (its full name — the label under it truncates at 48)
+  // tooltips live ON the thing they explain: the pill carries the perf numbers, the LOD/⚠ chips each pass's
+  // status and reason; the card itself just names the model (in full — the label under it truncates at 48)
   const optBadge = (card, opt, perf, perfOriginal, path, rebuildable, fullName) => {
     if (fullName) card.title = fullName;
     if (perf) {
@@ -181,7 +177,7 @@ async function paintBuild(body) {
         ? `<img alt="" loading="lazy" src="/library/${escapeHtml(it.preview)}">`   // no inline onerror: the page's CSP refuses inline handlers (hidden below)
         : '<div style="width:100%;aspect-ratio:1"></div>';
       // the picture gets its own positioned box so the status row sits ON the image (bottom-right), clear of the
-      // label strip Skye's previews carry along their top edge and of the name below (owner, 09-24)
+      // label strip the previews carry along their top edge and of the name below
       card.innerHTML = `<div class="pv" style="position:relative;width:100%;line-height:0">${img}</div><span>${escapeHtml(it.name)}</span>`;   // server-supplied name (§24k hygiene)
       card.querySelector('img')?.addEventListener('error', (e) => { e.currentTarget.style.visibility = 'hidden'; });
       card.onclick = () => holdGhost(it.path, it.name);
@@ -191,15 +187,12 @@ async function paintBuild(body) {
     if (!items.length) grid.innerHTML = '<div style="color:var(--dim);font-size:11px">nothing matched</div>';
   };
 
-  // The catalog agents already had (mcpl list_library), now served to people —
-  // with the _preview.jpg Skye ships beside every model, so it's a real
-  // catalog instead of a list of filenames.
+  // The catalog agents already had (mcpl list_library), served to people with each model's _preview.jpg.
   const starter = () => STARTER.map(([name, path]) =>
     ({ name, path, preview: path.replace(/\.glb$/, '_preview.jpg') }));
-  // the starters are painted at once from the list, then again with the catalog's record for each (opt / perf /
-  // rebuildable), so the view the panel opens on carries the same rank, chips and ↻ as a search (Greptile #207). One
-  // request: the route scores filename tokens, and each starter's full stem matches only itself. Curated names and
-  // order are kept; a starter the catalog doesn't know stays plain.
+  // the starters paint at once from the list, then again with the catalog's record for each (opt / perf /
+  // rebuildable), so they carry the same rank, chips and ↻ as a search. One request: each starter's full stem
+  // matches only itself. A starter the catalog doesn't know stays plain.
   const enrichStarters = async () => {
     const rows = starter();
     const stems = STARTER.map(([, p]) => p.split('/').pop().replace(/\.glb$/, '').toLowerCase());
@@ -216,9 +209,7 @@ async function paintBuild(body) {
 
   let timer = null;
   const run = async (q) => {
-    // An empty box shows the curated starters, not an alphabetical dump of the
-    // whole library — otherwise opening the panel greets you with four
-    // varieties of apocalyptic rubble.
+    // an empty box shows the curated starters, not an alphabetical dump of the whole library
     if (!q) { showStarters(); return; }
     try {
       const r = await fetch(`/library-models?q=${encodeURIComponent(q)}`);
@@ -246,26 +237,21 @@ export function switchAvatar(path, name) { return onSwitchAvatar?.(path, name); 
 let myAvatarPath = '';
 export function setMyAvatarPath(p) { myAvatarPath = p; }
 
-// a confirmed perf stamp (avatar.js) repaints an open avatar section — the pill appears without a reload (owner, 09-24:
-// wore tigerbee + aporia, the panel painted before the stamps landed and only claude showed a pill)
+// a confirmed perf stamp (avatar.js) repaints an open avatar section, so the pill appears without a reload
 let avatarBody = null;
 bus.on('avatar-perf', () => { if (avatarBody?.isConnected) paintAvatars(avatarBody); });
 async function paintAvatars(body) {
   avatarBody = body;
   const list = await fetch('/avatars').then((r) => r.json()).catch(() => []);
   body.innerHTML = '';
-  // the authority's proven recipe (09-05): dense grid, every card a 3:4 portrait
-  // box whether the image loaded or not — inline styles on the placeholder
-  // used to give it its own size, so cards came out at two sizes (R's shot)
+  // dense grid, every card a 3:4 portrait box whether the image loaded or not
   const grid = document.createElement('div');
   grid.className = 'grid dense av-grid';
   for (const { name, path, perf } of list) {
     const card = document.createElement('button');
     card.className = `card panel ${path === myAvatarPath ? 'on' : ''}`;
-    // the portrait BOX sizes the card, never the image: a lazy <img> that has
-    // not loaded (or 404s) has no size, and a card sized by it collapsed —
-    // that was the two-sizes grid. The placeholder sits under the image and
-    // simply shows through until a portrait covers it.
+    // the portrait BOX sizes the card, never the image: a lazy <img> that hasn't loaded (or 404s) has no size.
+    // The placeholder shows through until a portrait covers it.
     card.innerHTML =
       `<div class="av-shot"><div class="ph">🧍</div><img alt="" loading="lazy" src="/thumb/${encodeURIComponent(name)}.png"></div>
        <span>${escapeHtml(name)}</span>`;
@@ -282,7 +268,7 @@ async function paintAvatars(body) {
         + `background:${TIER_COLORS[perf.rank]};box-shadow:0 0 0 1px rgba(0,0,0,.45)`;
       pill.style.cursor = 'help';
       card.querySelector('.av-shot').appendChild(pill);
-      // the tooltip lives ON the pill (owner: the whole portrait saying perf on hover was noise)
+      // the tooltip lives ON the pill, not the whole portrait
       pill.title = `perf: ${perf.rankName} — set by ${AV_CAT[perf.worst] ?? perf.worst}\n  ${perf.tris.toLocaleString()} tris · ${perf.draws} draws · `
         + `${perf.mats} materials · ${perf.texMB} MB textures${perf.bones ? ` · ${perf.bones} bones` : ''}${perf.alpha ? ` · ${perf.alpha} transparent` : ''}`;
     }

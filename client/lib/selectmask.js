@@ -1,5 +1,5 @@
 // Which selection layers MY clicks in the edit viewport can land on (shared/layers.js). Per viewer, remembered here;
-// 'environment' starts off (R 10-11: "people don't select the ground plane all the time").
+// 'environment' starts off (people don't select the ground plane all the time).
 import { bus } from './base.js';
 import { LAYERS, layerOf } from '../../shared/layers.js';
 const KEY = 'ew.select.mask';

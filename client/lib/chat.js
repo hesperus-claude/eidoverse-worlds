@@ -1,21 +1,12 @@
 // chat — the room's conversation, which in this world is also its history.
 //
-// Mentions were already a first-class concept for AGENTS: the MCPL layer pings
-// on `@name` or a bare whole-word name, tags the message for the router, and
-// replays missed mentions on reconnect. Humans had no way to reliably type one,
-// no highlight when one arrived, and no unread state. That asymmetry is the
-// same one build mode fixed, in a different place.
-//
-// The mention pattern here is a simpler one than the agent's (mcpl/mention.ts):
-// @name, or the bare name as a whole word. The agent's rule also handles a
-// qualified display name such as `Artie (kube)` and treats a hyphen as part
-// of a name, so a person's highlight and an agent's ping can differ.
+// Humans get what agents already had: typed mentions, a highlight when one arrives, unread state. The mention pattern
+// here (@name, or the bare name as a whole word) is simpler than the agent's (mcpl/mention.ts), which also handles
+// qualified display names like `Artie (kube)` and hyphens, so a person's highlight and an agent's ping can differ.
 
 import { CONFIG, bus, colorFor, assignColors } from './base.js';
-// NOT importing xrpanels.js: it reaches the engine through domquad -> htmlmesh, and
-// chat.js is shared with a client that has no scene to hang a VR panel in. The spec is
-// EXPORTED instead and main.js registers it — the dependency inverted rather than made
-// conditional, so there is no lite-mode flag buried in a chat file.
+// NOT importing xrpanels.js (it reaches the engine via domquad -> htmlmesh, and chat.js also serves a client with no
+// scene): the VR panel spec is EXPORTED and main.js registers it, so there is no lite-mode flag in a chat file.
 import { lastWhy } from './debuglog.js';
 import { initAttention, mountAttentionControls } from './attention.js';
 import { makeFrame } from './windows.js';
@@ -26,12 +17,14 @@ import { requestHistory } from './net.js';
 import { COMMANDS, resolveCommand } from './commands/registry.js';
 import { register as registerAction } from './actions.js';
 import { escapeHtml as esc } from './markup.js';
+import { versionReady } from './version.js';
 
 const MAX_LINES = 400;
 const HISTORY = 'ew-chat-history';
 
 let frame = null;
 let logEl = null;
+let jumpEl = null;   // the unread pill (paintUnread)
 let inputEl = null;
 let onSend = null;
 const recent = [];   // the log's tail, for the VR quad
@@ -42,8 +35,8 @@ let getPeople = () => [];
 // chat → people → net → chat cycle. Absent (a page without it), rows are plain and the menu is Message alone.
 let personUi = null;
 
-// 'all' | 'mentions' | 'system'. Every tab is a view of the one public room: there is no private channel in world chat
-// (whisper and its DM tabs were removed, R 10-18; direct messages are planned at the identity level, not here).
+// 'all' | 'mentions' | 'system'. Every tab is a view of the one public room: world chat has no private channel
+// (direct messages are planned at the identity level, not here).
 let filter = 'all';
 let unread = 0, unreadMentions = 0;
 let lastAuthor = null, lastAt = 0, lastLineEl = null;
@@ -81,19 +74,19 @@ function inline(run) {
   if (i < run.length) frag.append(document.createTextNode(run.slice(i)));
   return frag;
 }
-function renderBody(text, names) {
+// a moderator's notice wears this first, fixed: their words can read like the house's, the header says they aren't (spoofing item 1)
+export const moderatorHeader = (world) => `From a moderator of world ‹${world}›, not from Eidoverse`;
+function renderBody(text, names, { links = true } = {}) {
   const frag = document.createDocumentFragment();
   const pattern = new RegExp(
-    `(https?://[^\\s]+)|(@?\\b(?:${names.map(escapeRx).join('|') || '\\u0000'})\\b)`,
+    `(${links ? 'https?://[^\\s]+' : '\\u0000'})|(@?\\b(?:${names.map(escapeRx).join('|') || '\\u0000'})\\b)`,
     'gi',
   );
   let i = 0;
   for (const m of String(text).matchAll(pattern)) {
     if (m.index > i) frag.append(inline(text.slice(i, m.index)));
     if (m[1]) {
-      // Trailing punctuation is prose, not address: "…?world=garden)" from a
-      // parenthesized link once sent a clicker to a world named "garden)" —
-      // which the server refuses, and refusing is all it should ever do.
+      // trailing punctuation is prose, not address: "…?world=garden)" must not link to a world named "garden)"
       let url = m[1];
       const trail = /[)\]}>.,;:!?'"»]+$/.exec(url)?.[0] ?? '';
       if (trail) url = url.slice(0, -trail.length);
@@ -108,9 +101,8 @@ function renderBody(text, names) {
       const bare = m[2].replace(/^@/, '');
       const isMe = bare.toLowerCase() === CONFIG.name.toLowerCase();
       s.className = isMe ? 'mention me' : 'mention';
-      // a mention wears the colour of the person mentioned, so "@fable" in the
-      // text and fable's own lines are visibly the same person. Mentions of YOU
-      // keep the amber ping styling — being addressed outranks being named.
+      // a mention wears the mentioned person's colour, so "@fable" and fable's own lines read as one person; a
+      // mention of YOU keeps the amber ping styling
       if (!isMe) s.style.color = colorFor(bare);
       s.textContent = m[2];
       frag.append(s);
@@ -123,21 +115,12 @@ function renderBody(text, names) {
 const escapeRx = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // ---------------------------------------------------------------- scrollback
-//
-// A join carries recent chat, not the archive — that is what keeps arrival
-// cheap now that worlds fold. Reaching the top of the log asks the world for
-// the page before it, so nothing said is actually out of reach; it is just not
-// paid for up front.
+// A join carries recent chat, not the archive (that keeps arrival cheap). Reaching the top of the log asks the world
+// for the page before it, so nothing said is out of reach.
 
-// The arrival window is NOT a contiguous slice of history: trimRecentChat
-// (shared/protocol/fold.js) makes room by dropping the loudest speaker's oldest line,
-// so a quiet visitor's last words from yesterday can sit at the top of the
-// window above hours of conversation that was trimmed out from under it.
-// Paging from the oldest line SHOWN jumps straight over that gap — scrolling
-// up landed on older days and the trimmed talk was never reachable. So the
-// cursor comes only from what paging itself has walked: it starts at the
-// present, lines already on screen are skipped, and the missing ones are
-// slotted into place by seq.
+// The arrival window is NOT a contiguous slice: trimRecentChat (shared/chatwindow.js) drops the loudest speaker's
+// oldest lines, so paging from the oldest line SHOWN would jump the gap. The cursor comes only from what paging has
+// walked: it starts at the present, skips lines already on screen, and slots the missing ones in by seq.
 let pageCursor = null;              // next page is everything below this seq; null = from now
 let loadingOlder = false;
 let noMoreHistory = false;
@@ -147,13 +130,9 @@ let trimmedThrough = -1;            // highest seq the MAX_LINES trim has remove
 // pages a re-join's catch-up fetches (resyncChatAfter).
 const MAX_SKIP_PAGES = 25;
 
-/** Start the backward walk again, from no lower than `cursor` (null: the
- *  present). A trim that passed it restarts it, and so do a trim of the end
- *  marker and a catch-up that stopped short. A restart only ever moves the
- *  cursor up, so whichever started higher covers the others. Lines still on
- *  screen are skipped as the walk passes them again, so starting higher costs
- *  requests, not lines. The walk isn't finished any more, so the end marker
- *  goes. */
+/** Start the backward walk again from no lower than `cursor` (null: the present) — after a trim passed it, a trim of
+ *  the end marker, or a short catch-up. A restart only moves the cursor up; on-screen lines are skipped, so starting
+ *  higher costs requests, not lines. The walk is unfinished again, so the end marker goes. */
 function restartWalk(cursor) {
   if (pageCursor !== null && (cursor === null || cursor > pageCursor)) pageCursor = cursor;
   noMoreHistory = false;
@@ -161,15 +140,10 @@ function restartWalk(cursor) {
   endMarker = null;
 }
 
-/** Keep the log to MAX_LINES rows, dropping from the top. A trimmed row is
- *  history again, not "already shown": every seq it shows leaves renderedSeqs
- *  so paging brings it back, and if the backward walk had already passed it,
- *  the walk starts over from the present (skipping what is still on screen)
- *  instead of stepping over the new hole. A walk that ended at the present,
- *  its first page empty, has passed everything. Trimming the end marker
- *  restarts the walk at its own cursor: when the trim takes the marker alone,
- *  the next scroll-up asks once more and, finding nothing older, puts the
- *  marker back. */
+/** Keep the log to MAX_LINES rows, dropping from the top. A trimmed row's seqs leave renderedSeqs so paging brings
+ *  them back, and a walk that had passed it restarts from the present (a walk that ended at the present, first page
+ *  empty, has passed everything). Trimming the end marker restarts the walk at its own cursor, so the next scroll-up
+ *  asks once more and puts the marker back. */
 function trimLog() {
   while (logEl.children.length > MAX_LINES) {
     const row = logEl.firstElementChild;
@@ -191,12 +165,9 @@ function seqsOf(row) {
   return row.dataset.seq !== undefined ? [+row.dataset.seq] : [];
 }
 
-/** Put one paged-in line where it belongs: straight after the last row that
- *  is older than it. NOT "before the first row that is newer" — a spoken row
- *  is placed by when its speech began (logChat's t0), so it can sit above
- *  rows with lower seqs, and anchoring on it would land later talk above
- *  earlier talk. Spoken rows only ever move EARLIER, so the last older row is
- *  always a sound left neighbour. Nothing older on screen: it goes on top. */
+/** Put one paged-in line straight after the last row older than it (nothing older: on top). Not "before the first
+ *  newer row": a spoken row is placed by when its speech began (logChat's t0) and can sit above lower seqs; spoken
+ *  rows only move EARLIER, so the last older row is always a sound neighbour. */
 function insertHistorical(who, text, ts, seq) {
   renderedSeqs.add(seq);
   const line = buildLine(who, text, { ts, historical: true });
@@ -215,11 +186,8 @@ function insertHistorical(who, text, ts, seq) {
   if (below && below.dataset.author !== who) below.classList.remove('cont');
 }
 
-/** Hold what the reader is looking at still while rows land around it. A
- *  fill lands below the top of the view as often as above it, so pin the
- *  first visible row, not the distance from the bottom — and measure in
- *  screen coordinates: offsetTop is relative to the offsetParent
- *  (.chat-main), not to the log that scrolls. Returns the restore step. */
+/** Hold the reader's view still while rows land around it: pin the first visible row (fills land above and below),
+ *  measured in screen coordinates (offsetTop is relative to .chat-main, not the scrolling log). Returns the restore. */
 function pinView() {
   const top = logEl.getBoundingClientRect().top;
   let anchor = null;
@@ -238,9 +206,7 @@ function pinView() {
 function insertPage(entries) {
   const fresh = (entries ?? []).filter((e) => typeof e.seq === 'number' && !renderedSeqs.has(e.seq));
   if (!fresh.length) return 0;
-  // a re-join's fill can land below the pinned row; a reader who was
-  // following the end must still be, not left with the newest lines below
-  // the fold and live-follow stopped
+  // a re-join's fill can land below the pinned row; a reader who was following the end must still be
   const following = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 48;
   const restore = pinView();
   for (const e of fresh) insertHistorical(e.actor, e.args?.text ?? '', e.ts, e.seq);
@@ -249,17 +215,11 @@ function insertPage(entries) {
   return fresh.length;
 }
 
-/** A reconnect hands over a NEW arrival window, trimmed the same fair way —
- *  so what was said while the socket was down can be missing from it, near
- *  the bottom of the log. net.js calls this as a re-join's snapshot lands,
- *  with the last seq the old socket delivered; what was said after it is
- *  fetched, newest first, up to MAX_SKIP_PAGES pages of 40, and slotted in.
- *  A catch-up that stops before it gets back to that seq, at the cap or on a
- *  page that fails, restarts the backward walk no lower than where it
- *  stopped, so scrolling up reaches the rest. Without that, a walk whose
- *  cursor is already below the missed lines, or that ended at the beginning,
- *  doesn't come back to them until a trim restarts it. A first join (nothing
- *  on screen yet) has no hole to fill. */
+/** A reconnect hands over a NEW arrival window, trimmed the same fair way, so lines said while the socket was down can
+ *  be missing near the bottom. net.js calls this as a re-join's snapshot lands, with the last seq the old socket
+ *  delivered; what came after is fetched newest first, up to MAX_SKIP_PAGES pages of 40, and slotted in. A catch-up
+ *  that stops short (the cap, a failed page) restarts the backward walk no lower than where it stopped, so scrolling
+ *  up reaches the rest. A first join has no hole to fill. */
 export async function resyncChatAfter(seq) {
   if (!logEl || !renderedSeqs.size || typeof seq !== 'number' || seq < 0) return;
   let before = null;
@@ -286,11 +246,9 @@ export async function resyncChatAfter(seq) {
  *  bot's telemetry looks like everything that has ever happened here. */
 export function noteHistoryContext({ total = null, shown = 0, spanMs = null } = {}) {
   if (!logEl) return;
-  // one note, ever: every rejoin (each server restart) prepended another, until the pane was a column of them (R 10-10)
+  // one note, ever: every rejoin (each server restart) would prepend another
   logEl.querySelectorAll('.hist-note').forEach((n) => n.remove());
-  // `total` is unknown for worlds folded before it was recorded. Saying
-  // "showing 40 of 0" would be worse than saying nothing; saying "there is
-  // more" is true either way.
+  // `total` is unknown for worlds folded before it was recorded: "showing 40 of 0" is worse than "there is more"
   const known = typeof total === 'number' && total > 0;
   if (known && total <= shown) return;
   const line = document.createElement('div');
@@ -320,11 +278,8 @@ async function loadOlder() {
         limit: 40, verbs: ['say'],
       });
       const entries = r.entries ?? [];
-      // A trim that passed the cursor, or a catch-up that stopped short,
-      // while this page was in flight has restarted the walk (restartWalk is
-      // the only other writer of the cursor). The page's lines still slot in,
-      // but where the walk stands, and whether it has reached the beginning,
-      // now come from the restart.
+      // a trim or short catch-up during this page's flight restarted the walk (restartWalk is the only other cursor
+      // writer): the lines still slot in, but the cursor and end-of-walk now come from the restart
       if (pageCursor === from) {
         if (entries.length) pageCursor = typeof r.oldestSeq === 'number' ? r.oldestSeq : entries[0].seq;
         if (!entries.length || !r.hasMore) noMoreHistory = true;
@@ -341,9 +296,7 @@ async function loadOlder() {
       logEl.prepend(endMarker);
     }
   } catch {
-    // a page that failed (requestHistory rejects: no socket, or no answer)
-    // leaves the walk's cursor as it stands, so the next scroll-up asks
-    // again from there
+    // a failed page (no socket, or no answer) leaves the cursor as it stands; the next scroll-up asks again
     marker.remove();
   } finally { loadingOlder = false; }
 }
@@ -352,18 +305,13 @@ async function loadOlder() {
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
-// Every seq this log has already rendered: a reconnect re-hydrates the world
-// and the social realizer re-renders the arrival window from state — the
-// SAME lines, same seqs. Idempotence lives here rather than in the realizer
-// because seq identity is chat's own concept (synthetic lines carry none and
-// are exempt — they were never positions in history).
+// Every seq this log has rendered: a reconnect re-renders the arrival window from state (the SAME seqs), and seq
+// identity is chat's concept, so idempotence lives here. Synthetic lines carry no seq and are exempt.
 const renderedSeqs = new Set();
 
 export function logChat(who, text, kind = '', meta = {}) {
   if (typeof meta.seq === 'number' && meta.seq >= 0) {
-    // ...or trimmed off the top: a re-join's window can replay such a line,
-    // and appending it would put it under hours of newer talk. Paging slots
-    // it back where it belongs.
+    // ...or trimmed off the top: a re-join's window can replay it, and appending would put it under newer talk
     if (renderedSeqs.has(meta.seq) || meta.seq <= trimmedThrough) return;
     renderedSeqs.add(meta.seq);
   }
@@ -372,12 +320,9 @@ export function logChat(who, text, kind = '', meta = {}) {
   recent.push({ who, text: String(text).slice(0, 140), kind });
   if (recent.length > 12) recent.shift();
   bus.emit('xr:repaint');
-  // Spoken-utterance merge: merges ONLY the continuation of one spoken
-  // utterance — spoken:true + same author + same utt (Sol review, PR#7).
-  // A voicebox interrupted mid-utterance flushes the aired sentences as one
-  // say and may finish the rest later under the SAME utt; those says are one
-  // paragraph. Everything else — ordinary agent says, distinct utterances,
-  // tool-authored messages — keeps today's row semantics.
+  // Spoken-utterance merge: ONLY the continuation of one spoken utterance (spoken:true + same author + same utt) —
+  // an interrupted voicebox flushes the aired sentences and may finish the rest under the SAME utt. Everything else
+  // keeps one row per message.
   if (meta.spoken && meta.utt != null && lastLineEl?.isConnected &&
       lastLineEl.dataset.author === who && lastLineEl.dataset.utt === String(meta.utt)) {
     const body = lastLineEl.querySelector('.body');
@@ -406,14 +351,10 @@ export function logChat(who, text, kind = '', meta = {}) {
   lastLineEl = line;
 
   const wasAtBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 48;
-  // Causal placement (verified against a world log where two records
-  // landed same-second, interrupter first): a spoken utterance is an INTERVAL.
-  // Its record arrives when the voice stops, but it BEGAN before the interrupt
-  // that cut it. When a spoken say carries t0 (air-start), it slots in front
-  // of any trailing lines that arrived after its speech began. Server order
-  // stays arrival-truth; this is display causality only. t0 is honored ONLY
-  // inside the spoken protocol and only within a bounded window — the server
-  // clamps it too, but an old or foreign server might not (Sol review, PR#7).
+  // Causal placement: a spoken utterance is an INTERVAL — its record arrives when the voice stops, but it BEGAN before
+  // any interrupt. A spoken say carrying t0 (air-start) slots in front of trailing lines that arrived after its speech
+  // began. Server order stays arrival-truth (this is display only); t0 is honored only inside the spoken protocol and
+  // a bounded window, since an old or foreign server might not clamp it.
   const ts = meta.ts ?? Date.now();
   const t0ok = meta.spoken && Number.isFinite(meta.t0) &&
     meta.t0 <= ts && meta.t0 >= ts - 300_000;
@@ -427,13 +368,9 @@ export function logChat(who, text, kind = '', meta = {}) {
     // the anchor may have been name-grouped with a line that's no longer its
     // neighbor — a different speaker between them means the name must reprint
     if (anchor.dataset.author !== who) anchor.classList.remove('cont');
-    // ...and the inserted line's OWN grouping must be re-derived from its
-    // visual predecessor. buildLine computed it against chronological arrival
-    // (lastAuthor), and the two disagree exactly when this branch runs — a
-    // 'cont' line landing under another speaker renders their nameplate over
-    // these words — a line credited to the wrong speaker. (repro:
-    // (reproduced with a stale-t0 harness). Sys lines pass through a group,
-    // same as the chronological rule.)
+    // ...and the inserted line's OWN grouping is re-derived from its visual predecessor: buildLine grouped it by
+    // arrival (lastAuthor), which disagrees exactly here, and a 'cont' line under another speaker reads as theirs.
+    // Sys lines pass through a group, as in the chronological rule.
     let prev = line.previousElementSibling;
     while (prev && prev.dataset.kind === 'system') prev = prev.previousElementSibling;
     const near = !!prev && prev.dataset.author === who &&
@@ -446,12 +383,8 @@ export function logChat(who, text, kind = '', meta = {}) {
     newlyPinged: line.dataset.kind === 'mention', wasAtBottom });
 }
 
-// ONE place turns a landed line into reader-facing accounting, for both new
-// and merged rows — a mention arriving in a later spoken sentence counts
-// exactly like a mention arriving as its own line, and nothing counts twice
-// (the old split paths could double-increment when the frame was hidden AND
-// the log was scrolled up). `seen` means the reader is actually looking:
-// frame visible, pinned to the bottom. (review of PR #7.)
+// ONE place turns a landed line into reader-facing accounting, for new and merged rows alike, so a mention in a later
+// spoken sentence counts like its own line and nothing counts twice. `seen` = frame visible and pinned to the bottom.
 function account(line, { who, text, merged, newlyPinged, wasAtBottom }) {
   const seen = frame.visible && wasAtBottom;
   if (seen) scrollToEnd();
@@ -463,16 +396,13 @@ function account(line, { who, text, merged, newlyPinged, wasAtBottom }) {
   if (newlyPinged) bus.emit('pinged', { who, text });
 }
 
-function buildLine(who, text, { kind = '', ts = Date.now(), historical = false } = {}) {
+function buildLine(who, text, { kind = '', ts = Date.now(), historical = false, links = true } = {}) {
   const sys = who === '*';
   const mine = who === CONFIG.name;
   const pinged = !sys && !mine && mentionsMe(text);
 
-  // Who you are talking to matters here more than it does in a chat app, so
-  // the label comes from live presence (the word a speaker declared at the
-  // door, PROTOCOL §6a: any word, shown as said; none, no label) rather than
-  // from anything written into the log. "People" is everyone: nothing here
-  // sorts speakers into kinds.
+  // the label comes from live presence (the word a speaker declared at the door, PROTOCOL §6a: any word, shown as
+  // said; none, no label), never from the log. Nothing here sorts speakers into kinds.
   const declared = sys || mine ? null : (getPeople().find((p) => p.id === who)?.declares ?? null);
 
   const line = document.createElement('div');
@@ -484,10 +414,8 @@ function buildLine(who, text, { kind = '', ts = Date.now(), historical = false }
   // window drop the repeated name, so a paragraph reads as a paragraph.
   // Historical lines are prepended out of order, so they never group.
   const grouped = !historical && !sys && who === lastAuthor && now - lastAt < 90_000;
-  // sys lines pass THROUGH a group without erasing it: an act narration mid-
-  // paragraph (an agent's tool use between spoken sentences) shouldn't force
-  // the name to reprint on the next sentence. Only a real change of speaker
-  // or the window ends a group. (Live observation.)
+  // sys lines pass THROUGH a group (an act narration between spoken sentences shouldn't reprint the name); only a
+  // change of speaker or the window ends one
   if (!historical && !sys) { lastAuthor = who; lastAt = now; }
   if (grouped) line.classList.add('cont');
   if (historical) line.classList.add('old');
@@ -513,7 +441,7 @@ function buildLine(who, text, { kind = '', ts = Date.now(), historical = false }
 
   const b = document.createElement('span');
   b.className = 'body';
-  b.append(renderBody(text, namesForHighlight()));
+  b.append(renderBody(text, namesForHighlight(), { links }));
 
   line.append(t, w, b);
   applyFilter(line);
@@ -567,7 +495,7 @@ function scrollToEnd() {
 }
 
 function paintUnread() {
-  const jump = document.getElementById('chat-jump');
+  const jump = jumpEl;   // initChat's own node: a mod's earlier #chat-jump would win a document lookup
   if (jump) {
     jump.style.display = unread > 0 ? 'block' : 'none';
     jump.textContent = `${unread} new ${unreadMentions ? `· ${unreadMentions} ✱` : ''}↓`;
@@ -590,10 +518,7 @@ function insertAtCursor(str) {
 
 let acBox = null, acItems = [], acIndex = 0, acStart = -1, acKind = null;
 
-// The command list derives from the registry — one source of truth. The
-// hand-kept copy that lived here drifted (a duplicate /kick row, help text
-// diverging from behavior); now the table that autocompletes IS the table
-// the handlers registered against.
+// The command list derives from the registry: the table that autocompletes IS the table the handlers registered.
 
 function closeAC() {
   acBox.style.display = 'none';
@@ -664,22 +589,10 @@ function acceptAC() {
 
 // ---- commands ---------------------------------------------------------------
 
-// The build actually SERVED, from the server's own /version — replacing a
-// hand-bumped 'src-N' stamp that had reached 10 in one day and would have been
-// forgotten by the next. Its purpose is unchanged: a report from a stale page
-// must carry a visibly different value than a fresh one, because a stale page
-// and a broken probe are otherwise indistinguishable and three diagnoses in
-// one morning chased the wrong one.
+// The build actually SERVED (the server's /version): a report from a stale page must carry a visibly different value,
+// or a stale page and a broken probe are indistinguishable.
 let _build = 'unknown';
-fetch('/version').then((r) => r.json())
-  .then((v) => { _build = `${String(v.sha ?? '').slice(0, 7) || 'unknown'}${v.dirty === true ? '+dirty' : ''}`; })
-  .catch(() => { /* stays 'unknown' — itself a diagnostic */ });
-
-/** What this device actually knows about its own audio, for a person with no
- *  console. Every line is READ LIVE at call time — a cached "we connected"
- *  claim is exactly what this exists to get past. Each probe is individually
- *  guarded: a missing subsystem must print "unknown", never take the report
- *  down with it (a diagnostic that throws is worse than none). */
+versionReady.then((v) => { if (v) _build = `${String(v.sha ?? '').slice(0, 7) || 'unknown'}${v.dirty === true ? '+dirty' : ''}`; });   // null: 'unknown' is itself a diagnostic
 
 function audioReport() {
   const L = [];
@@ -693,8 +606,7 @@ function audioReport() {
     const on = typeof window.__sfuMicOn === 'function' ? window.__sfuMicOn() : null;
     return on === null ? 'unknown (no sfu bridge)' : (on ? 'ON' : 'off');
   });
-  // The peer connection's own view — the only honest answer to "is there a
-  // media path", and the thing that was stalling in 'checking' this morning.
+  // the peer connection's own view — the only honest answer to "is there a media path"
   probe('ice', () => {
     const d = typeof window.relayDiag === 'function' ? window.relayDiag() : null;
     if (!d) return 'unknown (no diag)';
@@ -713,12 +625,8 @@ function audioReport() {
   // Playback is the half that failed silently on Android: packets arrive, the
   // <audio> element refuses to start, and nothing anywhere says so.
   probe('playback', () => {
-    // 🔴 DO NOT querySelectorAll('audio') — voicesfu builds `new Audio()`
-    // elements that are NEVER appended to the DOM, so the document cannot see
-    // them and this printed "no <audio> elements yet" on a phone that was
-    // audibly playing two speakers. A probe that reads the
-    // wrong source reports a failure that is not happening, which is worse
-    // than reporting nothing. Ask the transport for its own elements.
+    // 🔴 NOT querySelectorAll('audio'): voicesfu's `new Audio()` elements are never appended to the DOM, so the
+    // document can't see them. Ask the transport for its own elements.
     const entries = typeof window.__voiceSpeakerEls === 'function' ? window.__voiceSpeakerEls() : null;
     if (!entries) return 'unknown (transport exposes no elements)';
     if (!entries.length) return 'no speaker elements yet';
@@ -733,9 +641,7 @@ function audioReport() {
   probe('captions', () => {
     const has = !!(window.SpeechRecognition ?? window.webkitSpeechRecognition);
     if (!has) return 'no SpeechRecognition in this browser';
-    // The TALLY is the load-bearing part: a last-event slot cannot prove that
-    // something never happened, and reading that absence
-    // out of it was wrong twice.
+    // the TALLY is the load-bearing part: a last-event slot cannot prove that something never happened
     return `${window.__sttOn?.() ? 'ON' : 'off'}`
       + (window.__sttTally ? ` [${window.__sttTally()}]` : '')
       + (window.__sttLast ? ` — last: ${window.__sttLast}` : ' — no events yet');
@@ -747,12 +653,8 @@ function audioReport() {
   probe('source', () => lastWhy('publish'));
   probe('secure', () => `${window.isSecureContext} · isolated=${window.crossOriginIsolated}`);
 
-  // 🔴 STAMP THE BUILD. Repeatedly a "bug" was really the phone running an
-  // older copy of a module — once for a full round trip, because the report
-  // said "last event:" while the server had been serving "last:" for ten
-  // minutes. Without a version in
-  // the report, a stale page and a broken probe are indistinguishable, and I
-  // will chase the wrong one every time.
+  // 🔴 STAMP THE BUILD: without a version in the report, a stale page (an older copy of a module) and a broken probe
+  // are indistinguishable.
   L.push(`build: ${_build}`);
   return 'audio ▸ ' + L.join('  ·  ');
 }
@@ -770,15 +672,12 @@ function sttReport() {
   return 'stt ▸ ' + parts.join(' · ');
 }
 
-// The commands chat OWNS — they need this module's local state (the log
-// element, the roster read). Everything else
-// resolves through the registry's one alias table and rides the bus (§24l
-// R1: the switch here was a second, drifted copy of that table — each side
-// carried aliases the other lacked, and /kick was once listed twice).
+// The commands chat OWNS (they need this module's state: the log element, the roster read). Everything else resolves
+// through the registry's one alias table and rides the bus (§24l R1).
 const CHAT_LOCAL = {
-  // whisper was removed (R 10-18): speech in a world is public and arrival-only; DMs are planned at the identity level
+  // whisper was removed: speech in a world is public and arrival-only; DMs are planned at the identity level
   w() { logChat('*', 'whisper was removed: everything said in a world is public (everyone here hears it). To address someone, @mention them.'); },
-  // ghost was removed (R 10-20): nobody is hidden in a world; moderation quiets or removes
+  // ghost was removed: nobody is hidden in a world; moderation quiets or removes
   ghost() { logChat('*', 'ghost was removed: nobody in a world is hidden from it. To quiet someone, /mute them; to remove them, /kick or /ban.'); },
   name(rest, arg) {
     if (!arg) { logChat('*', `you are ${CONFIG.name} — /name <new name> to change it`); return; }
@@ -794,10 +693,8 @@ const CHAT_LOCAL = {
     lastAuthor = null;
   },
   audio(rest, arg) {
-    // /audio — the phone's own console (live: no on-device console on Android
-    // Chrome). Answers LOCALLY by default — a diagnostic is a self-report;
-    // `say` opts the short form into the room. Three forms because the full
-    // report is unreadable on the device that needs it most.
+    // /audio — the phone's own console (Android Chrome has none on-device). Answers LOCALLY by default (a diagnostic
+    // is a self-report); `say` opts the short form into the room.
     const mode = (arg || '').trim().toLowerCase();
     if (mode === 'say') { onSend(sttReport()); return; }
     logChat('*', mode === 'stt' ? sttReport() : audioReport());
@@ -846,40 +743,24 @@ export const chat = {
   toggle() { frame.toggle(); },
   submit: (text) => { const v = String(text ?? '').trim(); if (v) submitLine(v); },
   frame: () => frame,
-  // unread accounting is observable so tests can pin it (Sol review, PR#7)
+  // unread accounting is observable so tests can pin it
   unreadCounts: () => ({ unread, mentions: unreadMentions }),
   markRead: () => { unread = 0; unreadMentions = 0; paintUnread(); },
 };
 const open = chat.open;
 
-// ---- who's-here side pane (wanted by some, disliked by others as
-// precious, so the collapse must cost one click and the collapsed cost is a
-// 14px strip). Toggler rides the pane's left edge: › closes, ‹ opens.
+// ---- who's-here side pane, collapsible in one click. The toggler rides the pane's left edge: › closes, ‹ opens.
 const SIDE_LS = 'ew-chat-side';
-// The side-pane nodes, captured from the markup initChat ITSELF wrote (below).
-// A lookup by class would match at any depth, and registerPanel/mods.js mount
-// mod markup into frame bodies AFTER initChat's innerHTML wipe. These are
-// PUBLIC classes (docs/MODDING-UI.md §3) and a local mod is a TRUSTED mod
-// handed makeFrame (mods.js:5,88), so a mod carrying them could be found
-// instead, and this file would then write side-closed/side-left and the
-// chevron onto a different node than ui.js togglePeopleHere flips. Capturing once
-// is stronger than `:scope >` at each call site: nothing mounted later can be
-// captured.
+// The side-pane nodes, captured from the markup initChat ITSELF wrote: mods mount markup with these PUBLIC classes
+// (docs/MODDING-UI.md §3) into frame bodies after initChat, so a class lookup could find a mod's node instead.
 let sideEls = null;
-// FAIL LOUD, never stale: a captured node can be REMOVED from the document by
-// a mod, and a handle to a detached node stays valid — writes land on an orphan
-// and nothing happens, with no error. Re-deriving by class on detach would
-// reintroduce the very lookup this capture exists to avoid, so a detached node
-// reads as absent instead. (Same idiom the spoken-line path uses: ?.isConnected)
+// FAIL LOUD, never stale: a mod can remove a captured node, and writes to a detached node vanish silently, so a
+// detached node reads as absent (the same ?.isConnected idiom as the spoken-line path).
 const sideEl = (k) => { const n = sideEls?.[k] ?? null; return n?.isConnected ? n : null; };
-let sideSt = { w: 150, open: false, pos: 'left' };   // people pane on the LEFT by default (live 09-07 10:55 reference HUD)
+let sideSt = { w: 150, open: false, pos: 'left' };   // people pane on the LEFT by default
 function initSidePane() {
   try { sideSt = { ...sideSt, ...JSON.parse(localStorage.getItem(SIDE_LS) || '{}') } } catch {}
-  // Guarded like every other reader in this file: sideEl() is DESIGNED to return
-  // null ("a detached node reads as absent instead"), and these two were the
-  // only bare derefs — a null cols would have thrown inside initChat and killed
-  // chat init mid-boot. Unreachable today; inconsistent with the file's own
-  // thesis, which is the point. (agent review round 3)
+  // guarded like every other reader here: sideEl() returns null for a detached node
   const tog = sideEl('tog');
   if (tog) tog.onclick = toggleSide;
   // the open column's header closes it (the tab-row chip is hidden while it is open)
@@ -892,10 +773,8 @@ function initSidePane() {
     });
   }
 
-    // DOUBLE-CLICK A NAME -> A MENTION of them in the compose box (it opened a DM
-    // tab, R 2026-09-11; DMs left world chat with whisper, R 10-18). DELEGATED,
-    // because paintSide rebuilds this list's innerHTML on every roster event —
-    // per-row handlers would be discarded seconds later. Skips your own row.
+    // DOUBLE-CLICK A NAME -> A MENTION of them in the compose box. DELEGATED: paintSide rebuilds this list's
+    // innerHTML on every roster event. Skips your own row.
     const list = sideEl('list');
     const nameOf = (row) => row?.dataset?.name ?? null;
     list?.addEventListener('dblclick', (e) => {
@@ -904,12 +783,10 @@ function initSidePane() {
       const name = nameOf(row);
       if (name) mentionPerson(name);
     });
-    // THE PERSON MENU (research roles S6): one light list, one menu per person, built by people.js from
-    // roles.js personActions — desktop right-click (and the keyboard's menu key), a phone's long-press (500 ms) opens a
-    // bottom sheet, and in a headset a trigger on a row expands an inline strip under it (no popups in VR).
-    // a touch long-press is ALSO the browser's own gesture: around 500 ms Chrome cancels the pointer and fires contextmenu.
-    // That contextmenu (from touch, or during our own pending press) is the phone's long-press: the sheet, never the
-    // desktop menu; whichever comes first opens it (opening twice is harmless).
+    // THE PERSON MENU: one menu per person, built by people.js from roles.js personActions — desktop right-click (and
+    // the menu key); a phone's long-press (500 ms) opens a bottom sheet; in a headset a trigger on a row expands an
+    // inline strip (no popups in VR). Chrome's own long-press cancels the pointer and fires contextmenu around 500 ms:
+    // that contextmenu (from touch, or during our pending press) is the sheet; whichever comes first opens it.
     list?.addEventListener('contextmenu', (e) => {
       const row = e.target?.closest?.('.who-row'); if (!row || !personUi || row.classList.contains('self')) return;
       e.preventDefault();
@@ -931,7 +808,7 @@ function initSidePane() {
     // a release or a real move abandons the press; a pointercancel doesn't (Chrome sends one at its own long-press,
     // which is this very gesture, and its contextmenu follows, above; a scroll has already moved the finger past 10 px)
     const unpress = (e) => { if (!press || e.type === 'pointercancel') return; if (e.type === 'pointermove' && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 10) return;
-      // held long enough by the events' own clock: a long-press even when a busy page ran the timer late (the phone probe)
+      // held long enough by the events' own clock: a long-press even when a busy page ran the timer late
       const held = e.type === 'pointerup' && e.timeStamp - press.t0 >= LONG_PRESS_MS, name = press.name;
       clearTimeout(press.t); press = null; if (held) personUi.sheetFor(name); };
     for (const ev of ['pointerup', 'pointercancel', 'pointermove']) list?.addEventListener(ev, unpress);
@@ -946,7 +823,7 @@ function initSidePane() {
   grip?.addEventListener('pointerdown', (e) => {
     if (!sideSt.open) return;
     e.preventDefault();
-    e.stopPropagation();   // the frame's root drags on body pointerdown; the grip owns this one (live, 09-04: it moved the whole window)
+    e.stopPropagation();   // the frame's root drags on body pointerdown; the grip owns this one
     const x0 = e.clientX, w0 = sideSt.w;
     const move = (ev) => {
       const d = sideSt.pos === 'left' ? ev.clientX - x0 : x0 - ev.clientX;   // grip side flips with the pane
@@ -957,15 +834,14 @@ function initSidePane() {
   });
   bus.on('roster', () => { paintSide(); paintWho(); });
   bus.on('presence:me', () => { paintSide(); paintWho(); });                                   // my own mark flips at once
-  setInterval(() => { if (frame?.visible && sideSt.open) paintSide(); }, 2000);   // remote presence rides pose packets; a 2 s repaint is plenty. (`side` was out of scope here — the first tick threw and the interval died: marks froze on their first value)
+  setInterval(() => { if (frame?.visible && sideSt.open) paintSide(); }, 2000);   // remote presence rides pose packets; a 2 s repaint is plenty
   applySide();
 }
 const saveSide = () => { try { localStorage.setItem(SIDE_LS, JSON.stringify(sideSt)) } catch {} };
 function toggleSide() { sideSt.open = !sideSt.open; applySide(); saveSide(); }
 // THE PRESENCE CHIP in the tab row: who's here at a glance (a dot per person in their name colour, ringed by
-// presence) and the pane's toggle. Collapsed, the pane leaves NO strip in the chat body, so tabs, log and compose sit
-// centred in the panel (R, 09-29: "the Chat and typing surface being off-center in its own panel ... when it's
-// collapsed"). Painted in place on roster/presence; paintTabs rebuilds the row and calls this for its new chip.
+// presence) and the pane's toggle. Collapsed, the pane leaves NO strip, so tabs, log and compose sit centred.
+// Painted in place on roster/presence; paintTabs rebuilds the row and calls this for its new chip.
 let whoChip = null;   // the chip paintTabs wrote — by handle, never by class (MODDING-UI §3)
 function paintWho() {
   const chip = whoChip?.isConnected ? whoChip : null;
@@ -979,8 +855,7 @@ function paintWho() {
   if (left && bar.firstElementChild !== chip) bar.prepend(chip);
   else if (!left && bar.lastElementChild !== chip) bar.appendChild(chip);
   chip.classList.toggle('at-left', left);
-  // OPEN, the chip steps out: the column's own header says who's here and is the way back (R, 09-29 — "just you"
-  // twice on one line). Closing returns it.
+  // OPEN, the chip steps out: the column's own header says who's here and is the way back. Closing returns it.
   chip.hidden = !!sideSt.open;
   chip.setAttribute('aria-expanded', String(!!sideSt.open));
   chip.title = 'people here';
@@ -989,8 +864,7 @@ function applySide() {
   const side = sideEl('side');
   if (!side) return;
   side.classList.toggle('closed', !sideSt.open);
-  // the line between log and pane is the pane's grab edge; closed, there is
-  // nothing to grab, so the line goes too (live, 09-05: a confusing affordance)
+  // the line between log and pane is the pane's grab edge; closed, there is nothing to grab, so the line goes too
   sideEl('cols')?.classList.toggle('side-closed', !sideSt.open);
   paintWho();
   side.style.width = sideSt.open ? `${sideSt.w}px` : '';
@@ -1016,19 +890,14 @@ function paintSide(force = false) {
   sideEl('head').textContent =
     others === 0 ? 'just you' : `${others} other${others === 1 ? '' : 's'} here`;
   const html = people.length
-      // A BUTTON, not a div. _contentClaims (windows.js:80) exempts only
-      // BUTTON/INPUT/TEXTAREA/SELECT/A from the frame's drag surface — so a
-      // <div> row was swallowed by root's pointerdown and the dblclick never
-      // fired. R, 2026-09-11: "the Chat panel treats names in the roster as a
-      // grab-and-move-the-pane surface". The ∃ menu's .mrow is a <button> for
-      // exactly this reason; this now matches that vocabulary.
+      // A BUTTON, not a div: _contentClaims (windows.js) exempts only BUTTON/INPUT/TEXTAREA/SELECT/A from the frame's
+      // drag surface, so a <div> row would be grabbed as the pane (the ∃ menu's .mrow is a <button> for the same reason).
       ? people.map((p) => `<button type="button" class="who-row ${p.me ? 'self' : ''}" data-name="${esc(p.id)}"${p.me || !personUi ? '' : ' aria-haspopup="menu"'}>
           <span class="who-mark" data-presence="${esc(p.presence ?? 'present')}" title="${esc(p.presence ?? 'present')}"></span>
           <span class="n" style="color:${colorFor(p.id)}">${esc(p.id)}${p.me ? ' (you)' : ''}</span>${personUi ? personUi.badgeHtml(p.id, esc) : ''}${personUi?.muted?.(p.id) ? '<span class="who-muted" title="muted by a moderator" aria-label="muted">⊘</span>' : ''}
           <span class="d">${p.dist == null ? '' : p.dist.toFixed(0) + 'm'}</span></button>${stripName === p.id && personUi ? '<div class="pm-strip" data-for="' + esc(p.id) + '"></div>' : ''}`).join('')
     : '<div class="who-empty">nobody yet</div>';
-  // only when it changed: the 2 s repaint used to rebuild the list every time, which reset hover and keyboard focus on
-  // the rows and detached the row under a pointer mid-press (a right-click or long-press could land on a dead node)
+  // only when it changed: a rebuild resets hover and focus and detaches the row under a pointer mid-press
   const listEl = sideEl('list');
   if (listEl._html === html && !force) return;
   listEl.innerHTML = html; listEl._html = html;
@@ -1040,20 +909,15 @@ function paintSide(force = false) {
 // sits on. Small popover; both persisted.
 const CFS_LS = 'ew-chat-fs';
 function applyChatPrefs() {
-  // logEl, NOT a .chat-log class lookup: this is the one reader in the file that
-  // addressed a node by class at call time, and a mod prepending .chat-log into
-  // the chat body (which MODDING-UI §3 invites) won the query — the size landed
-  // on the decoy, persisted to localStorage, and the real log never changed,
-  // with no error. §3 promises "the client addresses its own nodes by the
-  // handles it captured when it wrote them"; this line was the counterexample.
-  // (agent review round 3)
+  // logEl, NOT a .chat-log lookup: a mod's .chat-log in the chat body would win the query (MODDING-UI §3: the client
+  // addresses its own nodes by the handles it captured when it wrote them)
   if (logEl) logEl.style.fontSize = `${chatFs}px`;
   sideEl('cols')?.classList.toggle('side-left', sideSt.pos === 'left');
 }
 let gearToggle = null, gearAnchor = null, placeGear = () => {};
 let chatFs = 14;
 const CMD_LS = 'ew-chat-md';
-let chatMd = true;   // *italic* **bold** `code` in the log — on by default (live, 09-05)
+let chatMd = true;   // *italic* **bold** `code` in the log — on by default
 try { chatMd = localStorage.getItem(CMD_LS) !== '0' } catch {}
 export const chatMarkdownOn = () => chatMd;
 try { chatFs = Math.min(20, Math.max(11, parseFloat(localStorage.getItem(CFS_LS)) || 14)) } catch {}
@@ -1065,10 +929,8 @@ function initChatGear() {
     const body = frame.body.getBoundingClientRect();
     const minTop = Math.max(4, body.top - f.top + 4);
     const bottom = Math.min(frame.el.clientHeight, body.bottom - f.top) - 4;
-    // Open below the gear when the options fit there, else UPWARD from it, its
-    // bottom edge above the gear: the compose row's gear has the log above and
-    // the frame's edge below. When neither side fits, the side with more room
-    // takes it, and a short frame scrolls the options instead of clipping them.
+    // open below the gear when the options fit, else UPWARD from it; when neither fits, the side with more room takes
+    // it and a short frame scrolls the options instead of clipping them
     const below = a.bottom - f.top + 6, above = a.top - f.top - 6;
     pop.style.maxHeight = 'none';
     const height = pop.offsetHeight;
@@ -1103,7 +965,7 @@ function initChatGear() {
     } else if (sd) {
       sideSt.pos = sd; saveSide();
     } else return;
-    applyChatPrefs(); applySide(); paintPop();   // applySide repaints the chevron for the new side (live 09-07 23:25: it pointed the old way after a left↔right move)
+    applyChatPrefs(); applySide(); paintPop();   // applySide repaints the chevron for the new side
   };
   gearToggle = (anchor) => {
     pop.hidden = !pop.hidden;
@@ -1127,9 +989,8 @@ function initChatGear() {
   applyChatPrefs();
 }
 
-// THE COMPOSE BOX GROWS (owner, 10-01: "it never expands to multiple lines… no matter how much you type"). The
-// convention (Discord, Slack, iMessage): one line at rest, growing with what you type up to a cap, then scrolling.
-// The cap here is six lines or 40% of the chat pane, whichever is less, so the log is never pushed out of sight.
+// THE COMPOSE BOX GROWS, like Discord/Slack/iMessage: one line at rest, growing with what you type up to six lines or
+// 40% of the chat pane (whichever is less), then scrolling, so the log is never pushed out of sight.
 const INPUT_MAX_LINES = 6, INPUT_MAX_SHARE = 0.4;
 function sizeInput() {
   if (!inputEl) return;
@@ -1157,14 +1018,8 @@ export function initChat({ send, typing, people, person }) {
     title: 'Chat',
     x: 10, y: -10, w: 390, h: 200, minW: 240, minH: 100,
       className: 'chat-frame',
-      // THE ARROWS NEVER RE-EVALUATED ON A RESIZE. paintArrows compares
-      // scrollWidth to clientWidth, and narrowing the panel changes clientWidth
-      // with nothing repainting the strip — so a panel dragged narrow kept the
-      // arrows hidden and its overflowing tabs unreachable (R, 2026-09-11: "the
-      // side-scroll buttons in the chat panel are missing, so you can't go to a
-      // tab that's off-screen because the panel is too narrow"). windows.js has
-      // called onResize(w, h) all along (windows.js:437); chat simply never
-      // passed one. Debounced like actionbar.js's (actionbar.js:53).
+      // the tab arrows re-evaluate on resize: paintArrows compares scrollWidth to clientWidth, and narrowing the
+      // panel changes clientWidth with nothing else repainting the strip. Debounced like actionbar.js's.
       onResize: () => { placeGear(); clearTimeout(_arrowT); _arrowT = setTimeout(() => paintTabs(), 120); },
   });
 
@@ -1198,21 +1053,11 @@ export function initChat({ send, typing, people, person }) {
       head: cols.querySelector(':scope > .chat-side > .chat-side-head'),
       list: cols.querySelector(':scope > .chat-side > .chat-side-list'),
     } : null; }
-  // Hand the captures to whoever holds this frame. ui.js's Tab handler needs
-  // these exact nodes and must not re-derive them: `:scope >` bounds DEPTH but
-  // not ORDER, so a mod PREPENDING a .chat-cols into this body wins a class
-  // lookup — and that door is real (mods.js:88 hands out makeFrame, windows.js
-  // returns the LIVE chat frame for a bare id, and a local mod is an in-page
-  // ES module with the whole document). The frame object is the seam: both
-  // sides already hold it via getFrame('chat'), so neither file imports the
-  // other.
+  // Hand the captures to whoever holds this frame: ui.js's Tab handler needs these exact nodes, and a class lookup
+  // (even `:scope >`) can be won by a mod prepending a .chat-cols. Both sides hold the frame via getFrame('chat'),
+  // so neither file imports the other.
   frame.sidePane = (k) => sideEl(k);
-  // BEFORE initChatGear: its last statement calls applyChatPrefs(), which now
-  // writes through the captured logEl. Assigned after, the saved text size
-  // silently did nothing on first load — I traded a mod-hijack bug for a
-  // no-op, and no suite noticed because nothing bound the font size. The
-  // markup is written at frame.body.innerHTML above, so #chatlog is queryable
-  // here. (self-caught, agent review round 3)
+  // BEFORE initChatGear: its last statement, applyChatPrefs(), writes through the captured logEl.
   logEl = frame.body.querySelector('#chatlog');
   tabsEl = frame.body.querySelector(':scope > .chat-cols > .chat-main > .chat-tabs');
   initSidePane();
@@ -1226,13 +1071,10 @@ export function initChat({ send, typing, people, person }) {
 
   paintTabs();
 
-  frame.body.querySelector('#chat-jump').onclick = scrollToEnd;
+  jumpEl = frame.body.querySelector('#chat-jump'); jumpEl.onclick = scrollToEnd;
   logEl.addEventListener('scroll', () => {
-    // Reaching the bottom clears the unread counters — but never touch
-    // scrollTop from inside the scroll handler: snapping back to the end
-    // while the reader is inside the near-bottom band traps them there
-    // (scrolling up needed a >48px jump in a single wheel event to escape).
-    // Stick-to-bottom on NEW content is handled at append time (account()).
+    // reaching the bottom clears the unread counters — but never touch scrollTop from inside the scroll handler (it
+    // traps a reader in the near-bottom band). Stick-to-bottom on new content is account()'s.
     if (logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 48 &&
         (unread || unreadMentions)) {
       unread = 0; unreadMentions = 0; paintUnread();
@@ -1333,12 +1175,8 @@ function paintTabs() {
   const bar = tabsEl;
   if (!bar) return;
   bar.innerHTML = '';
-  // The strip carries `all · mentions · system`; tabs size to their labels and
-  // the row SCROLLS on a narrow panel instead of every tab getting thinner.
-  // R, 2026-09-11: "squash the words together at the top to make room for more
-  // tabs but still leave some buffer so they don't get too close, left/right
-  // arrow keys at either side of the menu if you need to side-scroll and see
-  // more due to overflow."
+  // The strip carries `all · mentions · system`; tabs size to their labels and the row SCROLLS on a narrow panel,
+  // with arrows at either end when it overflows.
   const left = document.createElement('button');
   left.className = 'tabarrow'; left.type = 'button'; left.textContent = '\u2039';
   left.title = 'scroll tabs left'; left.setAttribute('aria-label', 'scroll tabs left');
@@ -1358,15 +1196,8 @@ function paintTabs() {
     right.hidden = !over || scroll.scrollLeft + scroll.clientWidth >= scroll.scrollWidth - 1;
   };
   scroll.addEventListener('scroll', paintArrows);
-    // WATCH THE SCROLLER ITSELF. paintArrows only ever ran from paintTabs (a
-    // filter change) and from the onResize hook — and both compute BEFORE the
-    // browser applies the new width, so a narrowing panel left scrollWidth
-    // frozen against a collapsing clientWidth. Measured with People Here open,
-    // which is R's real layout: at 330px and below scrollWidth stayed 175
-    // while clientWidth fell to 31 — genuinely overflowing, both arrows still
-    // hidden, her tabs unreachable (R, 2026-09-11: "I shrunk it to get rid of
-    // the 'system' tab and there's no arrows visible to reach it"). A
-    // ResizeObserver fires AFTER layout on the element that actually changed.
+    // WATCH THE SCROLLER ITSELF: paintTabs and onResize both measure BEFORE the browser applies a new width, so a
+    // narrowing panel can overflow with the arrows still hidden. A ResizeObserver fires after layout on the element.
     if (typeof ResizeObserver === 'function') {
       try { new ResizeObserver(() => paintArrows()).observe(scroll); } catch { /* older engine */ }
     }
@@ -1390,19 +1221,11 @@ function paintTabs() {
   whoChip = who;
   paintWho();
   paintArrows();
-  // KEEP THE ACTIVE TAB IN VIEW. Overflow was sacrificing the tab you are
-  // actually reading: R's screenshot shows `system| @H` — the open tab
-  // clipped to two characters while `all` and `mentions` held the full left.
-  // R, 2026-09-11: "should probably always preferentially display the tab that
-  // it's on ... probably 'mentions' and 'all' fully off-screen."
+  // KEEP THE ACTIVE TAB IN VIEW: overflow must never clip the tab you are reading.
   const active = scroll.querySelector('button.on');
   if (active) {
     // after layout, or scrollWidth is still 0 and this is a no-op
-    // `inline: 'end'` only scrolls when the element is out of view on that side —
-      // a tab CLIPPED at the edge is partially visible, so it stayed clipped.
-      // R, 2026-09-11: "When I clicked on the 'system' tab just now when it was
-      // already slightly off screen, it didn't recenter to it being fully on
-      // screen". 'nearest' moves the minimum needed to make it whole.
+      // 'nearest' moves the minimum to make a partly clipped tab whole ('end' leaves a clipped tab alone)
       const bring = () => active.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
     bring();
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { bring(); paintArrows(); });
@@ -1441,10 +1264,8 @@ bus.on('pinged', () => {
 });
 
 // ---- the chat frame as a VR quad: READ + canned replies --------------------
-// Typing in a headset needs a keyboard grid the renderer does not have yet
-// (a design item); until then the quad shows the log's tail and offers
-// a few whole replies that go through the SAME onSend typing goes through.
-// Honest about the gap in its title.
+// Until the renderer has a keyboard grid, the quad shows the log's tail and offers a few whole replies through the
+// SAME onSend typing uses. Honest about the gap in its title.
 const CANNED = ['hello', 'yes', 'no', 'one moment', 'come here', 'thank you'];
 export const chatXRPanel = {
   id: 'chat', title: 'Chat',

@@ -4,9 +4,7 @@
 // the rig owns a fixed pool of point-light slots born at boot and assigns them by priority: `keep` first, authored lights
 // next, inferred lamps last, ties by camera distance. Winning a slot is uniform writes, never a recompile.
 //
-// The budget that used to live here (MAX_CAST, grantCast, the shared count with sky.js's lamps, the one-way governor
-// ratchet) is gone — it existed because adding a PointLight recompiled every material in the scene, and the rig's fixed
-// topology deletes that cost. `keep: true` is top PRIORITY in the rig, not a budget escape.
+// `keep: true` is top PRIORITY in the rig, not a budget escape.
 
 import { THREE } from './core.js';
 import { isCasting } from './lightrig.js';

@@ -19,6 +19,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { scratch } from "./common.ts";
 import { tryUntil } from "./wait.ts";
+import { suite } from "./suite.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 const root = scratch("reachgate");
 process.env.WORLDS_DIR = path.join(root, "w"); process.env.OPT_DIR = path.join(root, "opt"); process.env.SKIP_OPT_SWEEP = "1";
@@ -28,8 +29,7 @@ const { foundWorld } = await import("../../server/worldlog.ts");
 const { World } = await import("../../server/world.ts");
 const { MESSAGES } = await import("../../server/messages.ts");
 const { REACH_NOTE_MS, refusalWords } = await import("../../shared/protocol/consent.js");
-let pass = 0, fail = 0;
-const ok = (c, what, d?) => { if (c) { pass++; console.log(`  ok   ${what}`); } else { fail++; console.log(`  FAIL ${what}${d !== undefined ? " — " + JSON.stringify(d).slice(0, 500) : ""}`); } };
+const { ok, done } = suite("reachgate-check", { cap: 500 });
 
 const OWNER = foundWorld(path.join(process.env.WORLDS_DIR, "touch"), "touch", "olive").owner;
 const w = new World("touch");
@@ -156,6 +156,18 @@ const head0 = w.log.seq;
 { const out = reachTo(sly, { p: [0.62, 1.2, 0.05], space: "self" }, { q: [0, 1, 0, 0] });
   ok(out && !out.reach, "RG22 a point in Sly's own frame, turned by q, that lands inside Vic is stripped", out);
   pose(sly, { p: [0.6, 0, 0], yaw: 0 }); }
+
+// RG23: a `space` point is metres at any body size (docs/body-state.md; reachnet.js localToWorld on the unscaled root);
+// only the frame's own capsule grows with the body. Vic at 2×
+{ const big = pose(vic, { p: [0, 0, 0], yaw: 0, scale: 2 });
+  ok(big?.scale === 2, "(RG23 setup) Vic stands at 2×", big);
+  const out = reachTo(sly, { p: [-0.62, 1.2, 0.05], space: "Vic" });   // 0.62 m out is Tom's middle, not 1.24 m
+  ok(out && !out.reach, "RG23 a point 0.62 m out in a 2× Vic's frame lands 0.62 m out, inside Tom, and is stripped", out);
+  const out2 = reachTo(tom, { p: [0, 1.2, 0.5], space: "Vic" });   // halved, 0.25 m: inside her 2× capsule
+  ok(out2 && !out2.reach, "RG23 …and her own capsule is judged at her size: a point 0.5 m in front of a 2× Vic is on her", out2);
+  const out3 = reachTo(tom, { p: [0, 1.2, 1.5], space: "Vic" });
+  ok(out3?.reach?.rightHand?.t?.space === "Vic", "RG23 …one 1.5 m in front of her relays", out3);
+  pose(vic, { p: [0, 0, 0], yaw: 0 }); }
 
 // RG10 (everything above went through the relay only)
 ok(w.log.seq === head0, "RG10 nothing about a reach is appended to the log", w.log.live.entries.slice(head0 + 1).map((e) => e.verb));
@@ -296,6 +308,9 @@ let tierNobody, perPerson;   // the two ways to be refused: a gate off, and a bl
   pose(far, { p: [44, 0, 40], yaw: 0 });
   ok(puppet({ ragdoll: true }).got === 1, "RR3 …and forwards them within it");
   req(una, "consent", { move: false }); ok(puppet({ ragdoll: true }).got === 0, "RR4 …where consent still decides");
+  pose(far, { p: [70, 0, 40], yaw: 0 }); const shut = puppet({ ragdoll: true });
+  req(una, "consent", { move: true }); const open = puppet({ ragdoll: true });
+  ok(shut.got === 0 && open.got === 0 && /get closer/.test(shut.err ?? "") && shut.err === open.err, "RR5 …and out of range the answer is the same whatever her gates, so distance can't read them", { shut, open });
   w.log.requestSync(OWNER, "set", { id: "@world", component: "body-default", value: {} }); }
 
 let skipped = null; const SKIP = Symbol("skip");
@@ -364,4 +379,4 @@ let skipped = null; const SKIP = Symbol("skip");
   } catch (e) { if (e !== SKIP) ok(false, "AG threw", String(e?.stack ?? e).slice(0, 600)); else console.log(`  SKIP AG1-AG2: the agent can't load here (${skipped}); NODE_PATH=<node_modules with it> runs them`); }
   try { ag?.close(); } catch {} try { vs?.close(); } catch {} try { proc.kill(); } catch {} }
 
-console.log(`[reachgate-check] ${pass} passed, ${fail} failed${skipped ? ", AG skipped (agent can't load)" : ""}`); process.exit(fail ? 1 : 0);
+done(`${skipped ? ", AG skipped (agent can't load)" : ""}`);

@@ -1,33 +1,15 @@
 /** voiceengines — a SLOT for speech engines, the way the world has a slot for
  *  components.
  *
- *  R asked for this shape directly (2026-08-09): "Can we do a slot-component
- *  solution for this under the hood like we do for eidoverse itself?" Yes, and
- *  it is the right call — the alternative was already rotting. Piper was baked
- *  into 21 places across two files, so "support Kokoro too" meant editing the
- *  dropdown, the loader, and the accept list, and every engine after it would
- *  cost the same again. That is the enum basin: a kind-list masquerading as a
- *  capability.
- *
- *  The server's comp fold is the model (server.ts:407):
- *
- *      if (a.data == null) delete ent.comp[a.type]; else ent.comp[a.type] = a.data;
- *      // "Blind by design: `data` is opaque here."
- *
- *  It stores components without knowing a single component type. The meaning
- *  lives in the data and in whoever reads it. So here: this module knows no
- *  engine names. An engine REGISTERS itself, declares what files it recognises,
- *  and returns the one thing the rest of the system wants —
+ *  Modelled on the server's comp fold, which stores components without knowing
+ *  a single component type: this module knows no engine names. An engine
+ *  REGISTERS itself, declares what files it recognises, and returns the one
+ *  thing the rest of the system wants, what setTtsSource() takes:
  *
  *      (text) => { pcm: Int16Array, sampleRate: number }
  *
- *  which is exactly what setTtsSource() has always taken. The universal seam was
- *  already there; only the loading layer had an enum in it.
- *
  *  Adding an engine = one registerEngine() call in its own file. Nothing here,
- *  in the panel, or in the accept list changes. A stranger can add one without
- *  touching code they did not write — the test from the enum-basin note: *can
- *  someone need a value that isn't listed?* Yes → it is data, not an enum.
+ *  in the panel, or in the accept list changes.
  */
 
 const engines = [];

@@ -12,7 +12,8 @@ const { WorldAgent } = await import("../mcpl/agent.ts");
 const { handleTool } = await import("../mcpl/tools.ts");
 const { puppetPose } = await import("../shared/humanoid.js");
 const { poseCommands } = await import("../client/lib/posecommands.js");
-const { scratchSequencer, mkCheck, sleep } = await import("./harness.ts");
+const { scratchSequencer, mkCheck } = await import("./harness.ts");
+const { tryUntil, pause } = await import("./protocol/wait.ts");
 const { fixture } = await import("./body-fixture.ts");
 const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");
@@ -121,89 +122,90 @@ async function agent(name: string) {
   }
   return a;
 }
-async function until(fn: () => boolean, ms = 4000) {
-  const end = Date.now() + ms;
-  while (!fn()) { if (Date.now() > end) return false; await sleep(20); }
-  return true;
-}
+const holds = async (fn: () => boolean, ms = 4000) => !!(await tryUntil("the condition", fn, { ms, step: 20 }));
 const tool = (a: any, name: string, args: any) => handleTool({ agent: a, canPush: () => false, heldActivity: [], cursor: { caughtUpTo: null } }, name, args);
 try {
   const poser = await agent("poser"), held = await agent("held");
   const heard: string[] = [];
-  held.onEvent = (e: any) => { if (e.who === poser.name && e.kind === "say") heard.push(e.text); };
+  // being posed is the poser's act on this body, never the poser's speech
+  held.onEvent = (e: any) => { if (e.who === poser.name) heard.push(`${e.kind}: ${e.text}`); };
   const arm = { leftUpperArm: [0, 0, 0.3, Math.sqrt(0.91)] };
 
   // The tools' seat.
   // the server tells a request to pose someone from its own track of where both bodies are: wait for each to see the other
-  const seen = await until(() => !!poser.people.get(held.name)?.pose && !!held.people.get(poser.name)?.pose, 10_000);
+  const seen = await holds(() => !!poser.people.get(held.name)?.pose && !!held.people.get(poser.name)?.pose, 10_000);
   check("setup: the two bodies see each other", seen);
   await tool(poser, "anim", { joints: arm, target: held.name });
-  check("an agent's pose reaches another body", await until(() => eq(held.heldPose, arm)), JSON.stringify(held.heldPose));
-  check("...and that body hears it was posed", await until(() => heard.includes("(posed you)")), heard.join(" | "));
+  check("an agent's pose reaches another body", await holds(() => eq(held.heldPose, arm)), JSON.stringify(held.heldPose));
+  check("...and that body hears it was posed", await holds(() => heard.includes("act: posed you")), heard.join(" | "));
+  check("...as an act in its inbox, from the poser", held.inbox.some((i: any) => i.kind === "act" && i.who === poser.name && i.text === "posed you"),
+    JSON.stringify(held.inbox.slice(-3)));
   heard.length = 0;
   await tool(poser, "anim", { stop: true, target: held.name });
-  check("anim {stop} with a target lets that body go", await until(() => held.heldPose == null), JSON.stringify(held.heldPose));
-  check("...and it hears a release, not a pose", await until(() => heard.includes("(released your pose)")) && !heard.includes("(posed you)"), heard.join(" | "));
+  check("anim {stop} with a target lets that body go", await holds(() => held.heldPose == null), JSON.stringify(held.heldPose));
+  check("...and it hears a release, not a pose", await holds(() => heard.includes("act: released your pose")) && !heard.includes("act: posed you"), heard.join(" | "));
 
   // The console's seat: its own verbs, sending what they build through a socket.
   const own: any = { pose: null };
   const EW = poseCommands({ state: own, sendPuppet: (t: string, r: any) => poser.puppet(t, r), play: () => {} });
   heard.length = 0;
   EW.pose(arm, held.name);
-  check("EW.pose with a name alone poses that body, not the caller", await until(() => eq(held.heldPose, arm)) && own.pose === null, JSON.stringify(held.heldPose));
+  check("EW.pose with a name alone poses that body, not the caller", await holds(() => eq(held.heldPose, arm)) && own.pose === null, JSON.stringify(held.heldPose));
   EW.pose(null, { target: held.name });
-  check("EW.pose(null, {target}) lets that body go", await until(() => held.heldPose == null) && own.pose === null, JSON.stringify(held.heldPose));
-  check("...and it hears a release", await until(() => heard.includes("(released your pose)")), heard.join(" | "));
+  check("EW.pose(null, {target}) lets that body go", await holds(() => held.heldPose == null) && own.pose === null, JSON.stringify(held.heldPose));
+  check("...and it hears a release", await holds(() => heard.includes("act: released your pose")), heard.join(" | "));
   EW.pose(arm, { target: held.name });
-  const posedAgain = await until(() => eq(held.heldPose, arm));
+  const posedAgain = await holds(() => eq(held.heldPose, arm));
   const head = [0, 0.2, 0, Math.sqrt(0.96)], spine = [0.1, 0, 0, Math.sqrt(0.99)];
   EW.pose({ head }, held.name);
-  check("EW.pose by name merges over what that body holds", posedAgain && await until(() => eq(held.heldPose, { ...arm, head })), JSON.stringify(held.heldPose));
+  check("EW.pose by name merges over what that body holds", posedAgain && await holds(() => eq(held.heldPose, { ...arm, head })), JSON.stringify(held.heldPose));
   EW.pose({ head: undefined }, held.name);
-  check("...an undefined bone releases it there, as it would on the caller", await until(() => eq(held.heldPose, arm)), JSON.stringify(held.heldPose));
+  check("...an undefined bone releases it there, as it would on the caller", await holds(() => eq(held.heldPose, arm)), JSON.stringify(held.heldPose));
   EW.pose({ spine }, { target: held.name, replace: true });
-  check("...and replace makes the named bones its whole pose", await until(() => eq(held.heldPose, { spine })), JSON.stringify(held.heldPose));
+  check("...and replace makes the named bones its whole pose", await holds(() => eq(held.heldPose, { spine })), JSON.stringify(held.heldPose));
   EW.clearPose(held.name);
-  check("EW.clearPose(name) lets that body go", await until(() => held.heldPose == null), JSON.stringify(held.heldPose));
+  check("EW.clearPose(name) lets that body go", await holds(() => held.heldPose == null), JSON.stringify(held.heldPose));
   heard.length = 0;
   EW.animate({ dur: 1, tracks: { head: [{ t: 0, q: [0, 0, 0, 1] }] } }, held.name);
-  check("EW.animate with a name alone animates that body, and it hears so", await until(() => heard.includes("(posed you with an animation)")), heard.join(" | "));
+  check("EW.animate with a name alone animates that body, and it hears so", await holds(() => heard.includes("act: posed you with an animation")), heard.join(" | "));
 
   // A request that carries nothing (an old console sent `pose: null` and
   // nothing else): the body keeps its pose and isn't told it was posed.
   await tool(poser, "anim", { joints: arm, target: held.name });
-  const ready = await until(() => eq(held.heldPose, arm));
+  const ready = await holds(() => eq(held.heldPose, arm));
   heard.length = 0;
   poser.puppet(held.name, { pose: null as any });
   await tool(poser, "anim", { joints: { head: [0, 0, 0, 1] }, target: held.name });   // a marker that the empty request was handled first
-  const marked = await until(() => !!held.heldPose?.head);
+  const marked = await holds(() => !!held.heldPose?.head);
   check("a request that carries nothing changes nothing and says nothing",
-    ready && marked && eq(held.heldPose, { ...arm, head: [0, 0, 0, 1] }) && eq(heard, ["(posed you)"]), heard.join(" | "));
+    ready && marked && eq(held.heldPose, { ...arm, head: [0, 0, 0, 1] }) && eq(heard, ["act: posed you"]), heard.join(" | "));
   heard.length = 0;
   poser.puppet(held.name, { pose: {}, anim: { dur: 1, tracks: { head: [{ t: 0, q: [0, 0, 0, 1] }] } } });
-  check("a release with an animation is told as both", await until(() => heard.includes("(released your pose, with an animation)")), heard.join(" | "));
-  // A replacing animation ends a held pose too, and the body is told so.
+  check("a release with an animation is told as both", await holds(() => heard.includes("act: released your pose, with an animation")), heard.join(" | "));
+  // a replacing animation ends a held pose too, and the body is told so
   await tool(poser, "anim", { joints: arm, target: held.name });
-  const posedFirst = await until(() => eq(held.heldPose, arm));
+  const posedFirst = await holds(() => eq(held.heldPose, arm));
   heard.length = 0;
   EW.animate({ dur: 1, tracks: { head: [{ t: 0, q: [0, 0, 0, 1] }] } }, { target: held.name, replace: true });
   check("a replacing animation that ends a held pose is told as a release", posedFirst
-    && await until(() => heard.includes("(released your pose, with an animation)")) && held.heldPose == null, heard.join(" | "));
+    && await holds(() => heard.includes("act: released your pose, with an animation")) && held.heldPose == null, heard.join(" | "));
 
   // Knocked over while kneeling: the fall starts from the kneel, as a
   // browser's does (its sim starts from the bones it draws). The ragdoll's
   // rest snapshot is taken with the root where the fall starts.
   const kneeler = await agent("kneeler");
-  check("setup: the kneeler and the poser see each other", await until(() => !!poser.people.get(kneeler.name)?.pose && !!kneeler.people.get(poser.name)?.pose, 10_000));
+  check("setup: the kneeler and the poser see each other", await holds(() => !!poser.people.get(kneeler.name)?.pose && !!kneeler.people.get(poser.name)?.pose, 10_000));
   const knock = async () => {
     const before = kneeler.body?.rd;
     poser.puppet(kneeler.name, { ragdoll: true });
-    return (await until(() => !!kneeler.body?.rd && kneeler.body.rd !== before, 15_000)) ? kneeler.body.rd.rest?.hips?.y : NaN;
+    return (await holds(() => !!kneeler.body?.rd && kneeler.body.rd !== before, 15_000)) ? kneeler.body.rd.rest?.hips?.y : NaN;
   };
   const standing = await knock();
   kneeler.setPose(null);   // standing up ends the slump
   kneeler.setPose({ hips: { t: [0, -0.3, 0] } });
   const kneeling = await knock();
+  check("a body knocked over is told so as the knocker's act, in its inbox",
+    kneeler.inbox.some((i: any) => i.kind === "act" && i.who === poser.name && i.text === "knocks you over"), JSON.stringify(kneeler.inbox.slice(-3)));
   check("a body knocked over while kneeling falls from its kneel", Math.abs(kneeling - standing + 0.3) < 1e-6,
     `rest hips y: standing ${standing}, kneeling ${kneeling}`);
   // What each fall starts from, as begin() is handed it.
@@ -225,7 +227,7 @@ try {
     const before = kneeler.body?.rd, count = begun.length;
     kneeler.knockDown(poser.name, null, "(knocked over)");
     during();
-    await until(() => kneeler.body?.rd && kneeler.body.rd !== before, 15_000);
+    await holds(() => kneeler.body?.rd && kneeler.body.rd !== before, 15_000);
     return { pose: begun.at(-1)?.pose, begins: begun.length - count };
   };
   kneeler.setPose(null);
@@ -251,7 +253,7 @@ try {
   const plinth = `${kneeler.world}/plinth`;
   check("setup: the plinth is a collider", await registerMeshSupport("other-body-pose-test", plinth, { positions: new Float32Array(bp), indices: new Uint32Array(bi) }, { position: [0, 0, 0], yaw: 0, scale: 1 }));
   kneeler.pos.y = 0.5;
-  await sleep(300);   // a few of the body's ticks: on nothing, it would be falling by now
+  await pause("a few of the body's ticks: on nothing, it would be falling by now", 300);
   check("setup: the kneeler stands on the plinth", Math.abs(kneeler.pos.y - 0.5) < 1e-6, String(kneeler.pos.y));
   const raised = await knock();
   await removeSupport("other-body-pose-test", plinth);

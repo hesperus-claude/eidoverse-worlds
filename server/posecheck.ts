@@ -1,8 +1,5 @@
-// A pose that reaches the wire reaches EVERY client. 2026-09-05 23:13: one NaN
-// from a waking stick made a presenter's pos/yaw NaN, and the server relayed
-// it — each receiver's lerp then held NaN until its own guard caught it. The
-// client guards remain (they fix the cause); this is the fence at the source:
-// a non-finite sample is dropped here, never batched into a frame.
+// A pose that reaches the wire reaches EVERY client, so this is the fence at the source: a non-finite sample is dropped
+// here, never batched into a frame (one NaN would otherwise sit in every receiver's lerp). Client guards remain.
 import { clampBodyScale, clampPlateY } from "../shared/presencewire.js";
 import { cleanPoses } from "../shared/wingpresence.js";
 import { isBodyMode } from "../shared/bodymode.js";
@@ -12,7 +9,7 @@ const fin = (v: unknown): v is number => typeof v === "number" && Number.isFinit
 const finArr = (a: unknown, n: number) => Array.isArray(a) && a.length === n && a.every(fin);
 
 /** The most a pose may weigh, serialized: every receiver gets it each frame, every joiner gets it in `present`, and it
- *  is remembered on disk (security review 10-06 pass 2, M-A: nothing bounded it, and the socket took 16 MB). A whole
+ *  is remembered on disk. A whole
  *  held pose of every bone, two hands' reaches and pins is a few kilobytes. */
 export const POSE_MAX_BYTES = 32_000;
 const STR_MAX = 256;
@@ -51,11 +48,11 @@ export function sanePose(pose: unknown): Record<string, unknown> | null {
   // voice and body fields are normalised here, not refused: a bad one costs its field, never the whole pose (the
   // receivers clamp too, but lastPose is remembered for joiners). Absent = unknown / default, so garbage is deleted.
   for (const k of ["mic", "hear"]) if (k in p && typeof p[k] !== "boolean") delete p[k];
-  // poses: the named poses a body holds (R 10-17: "wings-folded"; was the boolean wingsFolded, still relayed as sent so an
+  // poses: the named poses a body holds (e.g. "wings-folded"; the older boolean wingsFolded is still relayed as sent so an
   // older receiver keeps folding): a bad list costs the field
   if ("poses" in p) { const c = cleanPoses(p.poses); if (c) p.poses = c; else delete p.poses; }
   if ("wingsFolded" in p && typeof p.wingsFolded !== "boolean") delete p.wingsFolded;
-  // bodyMode (R 10-17: the body's self-declared mode, stand | sit | lie | swim | fly | fall): the grammar only; it grants nothing
+  // bodyMode (the body's self-declared mode, stand | sit | lie | swim | fly | fall): the grammar only; it grants nothing
   if ("bodyMode" in p && !isBodyMode(p.bodyMode)) delete p.bodyMode;
   // climb: {host, progress} on a climb route (shared/climb.js): a bad one costs the field
   if ("climb" in p) { const c = climbWire(p.climb); if (c) p.climb = c; else delete p.climb; }

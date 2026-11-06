@@ -12,9 +12,8 @@
 // perTag adds one pass per category (grass, terrain, sky, avatars, entities, …): that category counts, everything
 // else writes depth only — so the split is in the same real order as the total.
 //
-// Known, unexplained: the per-category passes sum to the total within ~0.1%, not exactly — ±1 at a few hundred far-
-// horizon pixels where subpixel grass stacks (2026-09-24: identical total passes are pixel-identical, so it is not
-// animation or nondeterminism; no single category ever exceeds the total at a pixel). `stable` checks the frame itself.
+// Known, unexplained: the per-category passes sum to the total within ~0.1%, not exactly (±1 at a few hundred
+// far-horizon pixels where subpixel grass stacks; not nondeterminism). `stable` checks the frame itself.
 // Honest limits: the capture draws the scene UNBATCHED (batching merges draws, not geometry — fragments are the same,
 // opaque order within a batch can differ); it is one mono view from the desktop/head camera, not both eyes; the live
 // frame is held for the capture (a desktop keeps its last image; in a headset expect a brief black blink).
@@ -70,8 +69,8 @@ function heatURL(counts, w, h) {
 
 /** One overdraw capture of the live view. Returns totals, a histogram, per-category fragment shares and (heat) a
  *  PNG data URL: black 0 · blue 1 · green 2 · yellow 3-4 · orange 5-8 · red 9-16 · white 17+. */
-// ONE capture at a time: two overlapping captures swap each other's temporary counting materials in and out and either
-// can lift the world hold while the other still draws (Greptile #206). A second call answers busy instead.
+// ONE capture at a time: two overlapping captures swap each other's temporary counting materials and either can lift
+// the world hold while the other still draws. A second call answers busy instead.
 let capturing = false;
 export async function overdrawCapture(opts) {
   if (capturing) return { error: 'busy: an overdraw capture is already running' };
@@ -154,7 +153,7 @@ async function captureOnce({ mode = 'actual', w = 480, perTag = true, heat = fal
     for (const [o, m] of orig) o.material = m;
     scene.background = saved.bg;
     for (const [l, a] of shadowLights) l.shadow.autoUpdate = a;
-    reassertShadowPref();   // a shadows toggle mid-measure wins over the saved value (review 7, L5)
+    reassertShadowPref();   // a shadows toggle mid-measure wins over the saved value
     renderer.setClearColor(saved.cc, saved.ca);
     setWorldHold(false);
     for (const [, rt] of rts) rt.dispose();

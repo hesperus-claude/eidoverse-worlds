@@ -11,12 +11,10 @@ import {
   setAperture, setTile, removeTile, drawRoom, eraseRoom, labelCell, pickWalledEdge,
 } from "../shared/structure_edit.js";
 import { planStructure, normalize, edgeKey } from "../shared/structure.js";
+import { suite } from "./protocol/suite.ts";
 
-let passed = 0, failed = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { passed++; console.log(`  ✓ ${name}`); }
-  else { failed++; console.log(`  ✗ ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("structure-edit");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const walls = (d: any) => normalize(d).levels[0].walls;
 const tiles = (d: any) => normalize(d).levels[0].tiles;
 
@@ -182,5 +180,5 @@ const G = { tile: 1 };
     planStructure(holed).levels[0].portals.length === 1);
 }
 
-console.log(`\n${passed} passed, ${failed} failed`);
-if (failed) process.exit(1);
+console.log(`\n${S.pass} passed, ${S.fail} failed`);
+if (S.fail) process.exit(1);

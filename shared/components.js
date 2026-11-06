@@ -52,7 +52,7 @@ export { sha256hex, sha256hexBytes };
 // Param types: num (unit, min, max), bool, vec3, color, text, asset (a library path), ref (another entity's id), choice (a
 // closed set that IS a set — a particle preset, a loop mode — not a type switch), list, json.
 //
-// ONE description (schema layers, 10-14): a registered component's params are DERIVED here from the registry
+// ONE description: a registered component's params are DERIVED here from the registry
 // (shared/protocol/componentspec.js: fields, defaults, ranges, units, docs) through its descriptor (shared/protocol/
 // descriptors.js: which fields the card shows, the editor's spellings — rate, burnsAtNoon, slot — and its translations).
 // This file adds no type, limit, unit or doc of its own for a registered field: paramsOf() throws if a hand entry tries.
@@ -99,7 +99,7 @@ function worldParams(key, hand) {
   for (const [name, h] of Object.entries(hand)) {
     const t = def.fields?.[name];
     for (const k of ['t', 'min', 'max', 'unit', 'hint']) if (t && k in h) throw new Error(`components: ${key}.${name} restates ${k}; it is the registry's`);
-    // a default is the registry's where it has one (shape audit 10-16: the inspector's terrain disagreed with the sim's law)
+    // a default is the registry's where it has one, so the inspector and the sim agree
     if ('default' in h && def.defaults && name in def.defaults) throw new Error(`components: ${key}.${name} restates its default; it is the registry's`);
     const p = { ...h, t: h.t ?? (t ? UNIT_OF[t] ?? 'json' : 'json'), ...(def.defaults && name in def.defaults ? { default: def.defaults[name] } : {}) };
     if (h.options) p.t = 'choice';
@@ -156,7 +156,7 @@ const DEFS = [
   { name: 'Grabbable', category: 'Interaction', needs: ['Model'], summary: 'it can be picked up and carried: who may, how it is held (grips), where it goes when let go, what using it while held does',
     params: paramsOf('Grabbable', { spec: { t: 'json', default: {}, hint: '{who, enabled, steal, range, priority, hold, pose, grips, twoHanded, throw, release, returnAfter, home, fits, use, prompt, fx}' } }),
     fallback: { text: 'can be picked up' }, note: 'wire: the grabbable component; a dynamic thing with no grabbable is carryable by physics.who (the migration fallback)' },
-  // openable (R 10-07; shared/protocol/componentspec.js): it opens and closes when used. The spec is the component's whole value; the
+  // openable (shared/protocol/componentspec.js): it opens and closes when used. The spec is the component's whole value; the
   // card edits open, locked, how it opens and how long it takes; its JSON hatch reaches the rest (part)
   { name: 'Openable', category: 'Interaction', summary: 'opens and closes when someone uses it: a door, a gate, a lid, a hatch',
     params: paramsOf('Openable', { spec: { t: 'json', default: {}, hint: '{open, locked, angle, axis, slide, time, part}' } }),
@@ -164,17 +164,17 @@ const DEFS = [
   { name: 'Parent', category: 'Interaction', summary: 'what it rides: its parent (wire: parent, written by mount)',
     params: paramsOf('Parent', { to: { default: null }, slot: { default: null }, offset: { t: 'vec3', default: null }, yaw: { ...deg, default: null } }),
     fallback: { text: 'on <to>' } },
-  // shape audit 10-16: the push that swings a pendulum was the impulse handler, reserved now; Reactions is added empty (its
+  // Reactions is added empty (its
   // actions are written on its card: toggle, set, play, reset, script) and needs nothing
   { name: 'Reactions', category: 'Interaction', summary: 'what a `use` does: its actions (toggle, set, play, reset, script); an Openable brings its own',
     params: paramsOf('Reactions', { actions: { t: 'json', default: {} } }), fallback: { text: 'reacts to: <actions>' } },
-  // R 10-07 (v2 of Particles, a new hash, L5): the instance names an effect document (shared/particle_effects.js) and sets
+  // v2 of Particles (a new hash, L5): the instance names an effect document (shared/particle_effects.js) and sets
   // its params; the first protocol's flat knobs are params of the Essentials now, and an older bag round-trips through
   // `extra` as every unknown key does
   { name: 'Particles', category: 'Effects', summary: 'an effect: fire, smoke, sparks… or a stored effect document',
     params: paramsOf('Particles', { effect: { options: [...ESSENTIAL_NAMES], default: null }, part: { default: null }, at: { default: [0, 0, 0] }, seed: { default: null }, params: { default: null } }),
     fallback: { visual: 'an effect this client doesn\'t know draws nothing', text: 'described by its effect' } },
-  // a picture is a quad of its own; its describing text is description (R 10-27); a sound is silent at radius (cap 100)
+  // a picture is a quad of its own; its describing text is description; a sound is silent at radius (cap 100)
   { name: 'Picture', category: 'Rendering', summary: 'an image: a framed picture of its own, its height from the image',
     params: paramsOf('Picture', { src: { t: 'asset', default: null } }),
     fallback: { visual: 'nothing hung', text: 'not shown: <why>' } },
@@ -196,11 +196,11 @@ const DEFS = [
   { name: 'Lock', category: 'Rules', summary: 'nailed down: nobody can move, replace or remove it', params: {}, fallback: { text: '🔒 locked' } },
   { name: 'Hidden', category: 'Rendering', summary: 'not drawn, still there', params: {}, fallback: { text: '(hidden)' } },
   { name: 'Label', category: 'Core', summary: 'a display name people see', params: paramsOf('Label', { text: { t: 'text', default: '', max: COMPONENTS.label.maxLen } }), fallback: { text: 'the label' } },
-  // R 10-07: how it is described to anyone who reads rather than sees; the header's, beside its name
+  // how it is described to anyone who reads rather than sees; the header's, beside its name
   { name: 'Description', category: 'Core', summary: 'how it is described to anyone who reads it', params: paramsOf('Description', { text: { t: 'text', default: '', max: COMPONENTS.description.maxLen } }), fallback: { text: 'the description' } },
   { name: 'Captions', category: 'Media', readOnly: true, summary: 'live captions (written by the caption verb)', params: paramsOf('Captions', { feed: { t: 'json', default: null } }), fallback: { text: 'captions' } },
   { name: 'Stage', category: 'Media', summary: 'who is speaking (captionbot)', params: paramsOf('Stage', { speaker: { default: null } }), fallback: { text: 'components: stage' } },
-  // R 10-12 (primitives): a parametric body, registered bare (componentspec `mesh`); it may sit beside a model or a light
+  // primitives: a parametric body, registered bare (componentspec `mesh`); it may sit beside a model or a light
   { name: 'Mesh', category: 'Rendering', summary: 'a parametric body with no model: a box, sphere, cylinder, plane or capsule, sized in metres',
     params: paramsOf('Mesh', { size: { default: [1, 1, 1] } }),
     fallback: { visual: 'a grey body', text: '(a <shape>)' },
@@ -428,7 +428,7 @@ export function entityOf({ components, stamps = {} }) {
       default: throw new Error(`entityOf: no alias for ${inst.type}`);
     }
   }
-  Object.assign(ent, comp);   // components sit flat on the record (view.js, 10-14): no bag
+  Object.assign(ent, comp);   // components sit flat on the record (view.js): no bag
   return { ...ent, ...stamps };
 }
 
@@ -465,7 +465,7 @@ const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
 /** The light an entity casts, normalized, or null: a plain-object comp.light on any entity (a bare light, or an imported
  *  lamp that is a model too). A field of the wrong type reads as its default — never a throw, never NaN reaching the rig. */
-// shape audit 10-16: a value a reader can't read is that component absent (one rule with isMeshBag): an unknown
+// a value a reader can't read is that component absent (one rule with isMeshBag): an unknown
 // kind is no light, never a point light. decay is part of the value (absent: the rig's old 1.7); daytime is dim | full
 export function lightOf(ent) {
   if (!ent || typeof ent !== 'object') return null;
@@ -496,7 +496,7 @@ export function lightOf(ent) {
  *  walk on, a ball is what its size decides. */
 export function colliderOf(ent) {
   const s = isBag(ent?.collider) ? ent.collider.shape : undefined;
-  if (s === 'mesh' || s === 'exact') return 'exact';   // the walker's word for its triangles; `exact` is the stored word before 10-16
+  if (s === 'mesh' || s === 'exact') return 'exact';   // the walker's word for its triangles; `exact` is an older stored word
   if (s === 'box') return s;
   return ent?.collide;
 }
@@ -504,12 +504,11 @@ export function colliderOf(ent) {
 /** A `mesh` component a reader may draw: a bag whose shape the registry names (a malformed mesh is absent, never a throw). */
 export const isMeshBag = (m) => isBag(m) && COMPONENTS.mesh.enums.shape.includes(m.shape);
 
-/** Why a `comp` of type light/collider would be refused, or null. The authority
- *  (server/verbs.ts vComp) and the inspector ask the same question, so a
- *  refusal reads the same from either. `data: null` (removal) is always fine.
- *  Keys a record does not name are allowed, as in every bag (annotations
- *  ride along); the ones it names must have their type. */
+/** One place per thing: the refusal's words, the same from the authority and the Inspector. `has` is what the thing
+ *  already is (model | light | mesh), `wants` what was asked for. */
 export const MESH_SHAPES = COMPONENTS.mesh.enums.shape;
+/** Why a comp of type mesh/light/collider would be refused, or null; the inspector and blueprints ask here, so a
+ *  refusal reads the same. `data: null` (removal) is always fine; keys a record does not name are allowed. */
 export function compRefusal(type, data, ent = null) {
   if (data == null) return null;
   if (type === 'mesh') {

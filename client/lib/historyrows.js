@@ -1,6 +1,6 @@
 // Rows for the editor's History (and, later, its Credits facet): pure, so they can be tested without a browser.
 // A refused write is on the record as an act whose body carries refused {code} (authority.js logRefusal, R7): it reads as
-// an attempt, never as a deed (Commons parity audit, 10-06: "refused acts print as done").
+// an attempt, never as a deed.
 import { phraseOf } from '../../shared/credits.js';
 export function worldHistoryRows(entries, nameOf) {
   return entries.filter((e) => e.kind === 'request').reverse().map((e) => {
@@ -13,8 +13,7 @@ export function worldHistoryRows(entries, nameOf) {
   });
 }
 
-// Credits, inside History (R 10-07: "Credits = filter modes inside History (by person / biggest contributors / list-by
-// rules), not a third tab"). The same rows, seen four ways; a refused attempt is shown (as an attempt) but is never a deed.
+// Credits, inside History as filter modes (not a third tab). The same rows, seen four ways; a refused attempt is shown (as an attempt) but is never a deed.
 //   time    every row, newest first (the default)
 //   person  one person's rows (opts.who: their identity)
 //   top     the biggest contributors: people ranked by deeds (acts that changed something), with their rows
@@ -41,10 +40,10 @@ export function historyView(list, nameOf, { mode = 'time', who = null } = {}) {
   return { mode: 'time', rows };
 }
 
-/** A thing's history page merged into what the panel shows (editpanels' History; client-check HT4-HT6, 10-17), against the
+/** A thing's history page merged into what the panel shows (editpanels' History; client-check HT4-HT6), against the
  *  authority's reply: `history {id, limit, before?}` → {entries: [{seq (the change entry's seq), diff (computed by the
  *  authority against the whole log, never against the page), …}], next: the last row's seq, or null at the beginning}; a
- *  `before` page holds the rows with seq < before. R 10-04: recent by default, deeper on request.
+ *  `before` page holds the rows with seq < before. Recent by default, deeper on request.
  *  - an Older… read (`more`) appends, by seq, and takes its cursor; it marks the panel `paged`;
  *  - a refresh (the thing changed) shows the newest page and its cursor — unless the person has paged: then the pages
  *    they read stay where they meet the new page, with the deeper cursor (a refresh landing after an Older… read never
