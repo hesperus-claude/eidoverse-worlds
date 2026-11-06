@@ -1,13 +1,8 @@
-// platecard — two quiet things beside a person's nameplate (owner, 09-30, about a mockup that put mic/ear marks ON the
-// plate: "it looks messy. Maybe anyone muted near you can pop up a grayed out ear *next* to their name plate? Oh, or
-// maybe hovering your cursor on their nameplate can pop that info beside their nameplate? … a little like an in-world
-// tooltip").
+// platecard — the card beside a person's nameplate (nothing goes ON the plate itself).
 //
-// VOICE STATE IS HOVER-ONLY (owner, 10-02: "I'd go for hover only"). An earlier pass put grey crossed headphones
-// beside the plate of anyone nearby with hearing off. The headphone toggle gates VOICE only (mic and TTS; world sound
-// is a separate slider), so that mark only mattered to someone speaking aloud and was noise to everyone typing; it
-// is gone. Mic and hearing live in the card below, in words. A client too old to say leaves them undefined and the
-// card reads "not shared" — unknown is not "headphones off".
+// VOICE STATE IS HOVER-ONLY: mic and hearing live in the card below, in words, never as a mark beside every plate
+// (the headphone toggle gates voice only, so a mark was noise to everyone typing). A client too old to say leaves
+// them undefined and the card reads "not shared" — unknown is not "headphones off".
 //
 // THE CARD: rest the pointer on a nameplate (or the head under it) for HOVER_MS (dwell.js: one dwell for every
 // "rest on it for a beat" in the client) and a small card opens beside the
@@ -17,7 +12,7 @@
 // (A sprite would need its own text rendering, its own hit-testing for the button and a repaint per state change.)
 // On a touch screen a TAP on a plate opens the same card; a tap elsewhere closes it. Esc closes it and goes no
 // further (windows.js's panel toggle yields to the claim). Leaving plate and card closes a hover-opened card.
-// VR (owner, 10-02: "VR has no hover — … you can still laser-point at someone's label"): a hand's laser RESTING on a
+// VR has no hover, so a hand's laser RESTING on a
 // plate (or the head under it) is the hover. xr.js asks platePick once no panel has claimed the laser and reports what it
 // found with aimPlate; the same timer opens the same card. The card is the SAME DOM, moved offscreen and rasterised onto
 // a quad by the vendored HTMLMesh, the way domquad.js puts the real frames in the headset (one set of panels to
@@ -42,9 +37,8 @@ const HEAD_R = 0.14;               // metres: the head under the plate counts as
 // is 12 px. Rasterised at XR_RASTER device px per CSS px.
 const XR_RAD_PER_PX = 0.002, XR_RASTER = 2.5, XR_GAP_PX = 10;
 // VR: the laser's slack around the pill for getting ON a plate (the desktop gives the cursor 3–4 px): a hand trembles.
-// An ANGLE about the hand, from the pointer's one table (xrpointer.js): it was a flat 3 cm, generous up close and
-// stingy far away, where tremor is angular — 0.01 rad is that same 3 cm at 3 m. Staying ON a plate once there is the
-// pointer's stickiness, measured from the last point the laser had on it (this slack included), not stacked on top.
+// An ANGLE about the hand (xrpointer.js's table), since tremor is angular: 0.01 rad is 3 cm at 3 m. Staying ON a
+// plate once there is the pointer's stickiness, measured from the last point the laser had on it, not stacked on top.
 
 let d = null;                      // injected: { camera, canvas, scene, remotes, myPos, presenting, mentionPerson, colorFor }
 let card = null, cardFor = null, openedBy = null, sig = '';
@@ -68,7 +62,7 @@ export function initPlates(deps) {
     const b = e.target.closest?.('button[data-act]');
     if (!b || !cardFor) return;
     if (b.dataset.act === 'mention') { const who = cardFor; close(); d.mentionPerson?.(who); }
-    // ⋯ (research roles S6): the person menu. Desktop: the house context menu under the button; a phone: the bottom
+    // ⋯: the person menu. Desktop: the house context menu under the button; a phone: the bottom
     // sheet; VR: its rows open INSIDE the card (no popups in a headset), the strip people.js draws
     if (b.dataset.act === 'more') { const who = cardFor; e.stopPropagation();
       if (vr) { let s = card.querySelector('.pm-strip'); if (s) { s.remove(); sig = ''; return; } s = document.createElement('div'); card.append(s); d.personStrip?.(who, s); sig = 'strip'; return; }
@@ -326,7 +320,7 @@ function paint() {
   } else {
     rows.push(`<div class="pc-row" data-k="voice"><span>voice state not shared</span></div>`);
   }
-  // the visor (owner, 10-02: "we should probably include the VR visor icon") — the HUD's own VR glyph
+  // the visor — the HUD's own VR glyph
   rows.push(`<div class="pc-row" data-k="xr" data-on="${!!r.xrOn}">${fsvg('virtual-reality', 14)}<span>${r.xrOn ? 'in VR' : 'not in VR'}</span></div>`);
   // the header's right end: the word they declared for themselves (§6a; any word, shown as said, nothing when they declared
   // none) and how far — 'present' is the default and says nothing, so only away / busy are named, in their presence colour

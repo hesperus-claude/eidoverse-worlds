@@ -13,18 +13,13 @@ import { normalizeSnapFrame } from '../../shared/snapframe.js';
 const _snapHead = new THREE.Vector3();
 const _snapBox = new THREE.Box3();
 
-// NO PARTIAL WORLDS. A renderer that has just arrived (a roaming one sent here for this shot) streams the world in
-// over seconds: a frame taken early shows half a build, and an agent would conclude its work is broken. So before a
-// capture the renderer moves its camera to the followed body — residency loads what is near the camera — and waits
-// until the world is REALIZED there: the body in the scene, the world's builds (terrain, water, grass) done, no model
-// loading or standing in — steady for a second. Not ready in time → an explicit error with
-// the counts. A settled renderer already looking there passes straight through. (Residency's unscheduled `waiting` models
-// aren't counted: one the aim hasn't reached in the steady second can still be missing)
+// NO PARTIAL WORLDS. A renderer that has just arrived streams the world in over seconds, and a frame taken early
+// shows half a build. So before a capture the renderer moves its camera to the followed body (residency loads what
+// is near the camera) and waits until the world is REALIZED there — body in the scene, builds done, no model loading
+// or standing in — steady for a second. Not ready in time → an explicit error with the counts, never a partial image.
 //
-// "In time" is the server's to say: each snap carries `wait`, how long the asker will still wait for this frame less
-// a margin for the capture and the send (server/screenshots.ts dispatch). The renderer used to stop at a fixed 20 s
-// while the server would wait 40 s, so a world that finished loading at 22 s became a failed first snapshot
-// (2026-10-24). SETTLE_MS is only for a server that sends no `wait`.
+// "In time" is the server's to say: each snap carries `wait`, how long the asker will still wait less a margin
+// (server/screenshots.ts dispatch). SETTLE_MS is only for a server that sends no `wait`.
 const SETTLE_MS = 20_000, MAX_SETTLE_MS = 240_000, STEADY_CHECKS = 4, CHECK_MS = 250;
 /** How long this snap may spend settling: the server's `wait`, bounded; the old fixed window without one. */
 export const settleBudget = (msg) => (typeof msg?.wait === 'number' && Number.isFinite(msg.wait) && msg.wait >= 0)
@@ -65,9 +60,8 @@ export async function capture(msg) {
   // Three framings:
   //   first  — the target's own eyes: the eye anchors on their LIVE head bone
   //            (mesh bounds when the rig has none) and their own body is
-  //            hidden for the frame, the same exclusion the local
-  //            first-person applies to `me` (#75). The root carries the
-  //            socket transform while mounted, so the eye rides the seat.
+  //            hidden for the frame, as local first-person hides `me`.
+  //            The root carries the socket transform while mounted, so the eye rides the seat.
   //   third  — chase cam over the shoulder: their body AND what it faces.
   //   selfie — from in front, facing them: the avatar itself is the subject.
   try {
@@ -85,7 +79,7 @@ export async function capture(msg) {
     let dataUrl;
     if (msg.at) {
       // a placed thing, seen from where the asker stands, fitted to its bounds: an agent checks what it built
-      // without walking over (gap list 2026-10-04: framing used to need the client's internals)
+      // without walking over
       const obj = entities.get(msg.at);
       // a picture of the grey stand-in would be a confident lie about what was built: say it is loading instead
       if (obj === null || obj?.userData?.placeholder) throw new Error(`"${msg.at}" is still loading — try again in a moment`);

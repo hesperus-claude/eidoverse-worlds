@@ -12,12 +12,10 @@
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail: unknown = "") => {
-  ok ? pass++ : fail++;
-  console.log(`  ${ok ? "ok  " : "FAIL"} ${name}${ok ? "" : ` — ${JSON.stringify(detail)}`}`);
-};
+const S = suite("vrmheight");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const near = (got: number | null | undefined, want: number) => got != null && Math.abs(got - want) < 1e-6;
 
 const root = mkdtempSync(join(tmpdir(), "vrmheight-"));
@@ -161,5 +159,4 @@ check("with none of them, no height", height("nothing") === null, height("nothin
 put("plain", body(V1, { headY: 0.6 }), 1_700_000_500_000);   // a re-export
 check("a re-export's stature shows at once", near(height("plain"), 1.63), height("plain"));
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

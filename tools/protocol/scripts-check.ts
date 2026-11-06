@@ -21,19 +21,20 @@ import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { idAliases } from "./idalias.ts";
 import { tryUntil, pause } from "./wait.ts";
 import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
+const IDS = idAliases();   // the real-server rows: the suite's names ride as placeholders and minted ids
 import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
 import { helloOf } from "../../shared/protocol/hello.js";
-const IDS = idAliases();   // the real-server rows: the suite's names ride as placeholders and minted ids (R 10-17)
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
 const BASE = "bbc9ac22";
 
 // ---------------- the mutation and control drivers (they re-run this file as child processes) ----------------
-// Each mutation removes ONE gate from a copy of shared/ and names the cases that must turn red. Applied as an exact text
-// replacement; a mutation whose text isn't found is itself a failure (the gate moved: update the list).
-const MUTANTS: [string, string, string, string[]][] = [
-  // [name, file, find, replace, cases]
+// each mutation removes ONE gate from a copy of shared/ and names the cases that must turn red, as an exact text
+// replacement; a mutation whose text isn't found is itself a failure (the gate moved: update the list)
+const MUTANTS: [string, string, string | [string, string, string?][], string, string[]][] = [
+  // [name, file, find, replace, cases]; find may be [find, replace, file?][] for a gate held in two places
   ["install: scope within installer's rights", "authority/scripts.js", "if (need) refuse(\"rights\", `${at}'s scope reaches", "if (false) refuse(\"rights\", `${at}'s scope reaches", ["B1"]],
   ["sponsor's role NOW", "authority/scripts.js", "const need = lacks(w, st, cap.sponsor, op,", "const need = null && lacks(w, st, cap.sponsor, op,", ["B2", "B3", "B24"]],
   ["scope narrowing", "authority/scripts.js", "if (!mine || (op.comp !== undefined && !inComps(cap.comps, op.comp))", "if (false && (!mine || (op.comp !== undefined && !inComps(cap.comps, op.comp)))", ["B4"]],
@@ -47,7 +48,7 @@ const MUTANTS: [string, string, string, string[]][] = [
   ["the excess taken from both places", "authority/scripts.js", "if (!ways.length) ways.push(", "if (false) ways.push(", ["Q1d"]],
   ["cascade depth", "authority/scriptrun.js", "if (depth > cfg.depth) return out(\"refused\"", "if (false) return out(\"refused\"", ["B8"]],
   ["locks bind scripts", "authority/gate.js", "if (k) lockCheck(w, st, who, role, k, op, at); }", "if (k && !cap) lockCheck(w, st, who, role, k, op, at); }", ["B9"]],
-  ["in flight binds scripts", "authority/gate.js", "if (inFlight(op.id) && !fu) refuse(\"in-flight\"", "if (inFlight(op.id) && !fu && cap?.kind !== \"script\") refuse(\"in-flight\"", ["B10"]],
+  ["in flight binds scripts", "authority/gate.js", "if (inFlight(op.id) && !fu) refuse(\"in-flight\"", "if (inFlight(op.id) && !fu && who.cap?.kind !== \"script\") refuse(\"in-flight\"", ["B10"]],
   ["hygiene at install", "authority/scripts.js", "const dirty = SR.hygiene(blob.text); if (dirty) refuse(dirty.code, `${at}: ${dirty.reason}`", "const dirty = null; if (dirty) refuse(dirty.code, `${at}: ${dirty.reason}`", ["H2"]],
   ["hygiene at upload", "authority/scriptrun.js", "const dirty = SR.hygiene(a.text); if (dirty) refuse(dirty.code, dirty.reason", "const dirty = null; if (dirty) refuse(dirty.code, dirty.reason", ["H1"]],
   ["scope names checked for typos at install", "authority/scripts.js", "if (near.length) refuse(\"schema\", `${at}.scope.comps:", "if (false) refuse(\"schema\", `${at}.scope.comps:", ["H4"]],
@@ -65,7 +66,7 @@ const MUTANTS: [string, string, string, string[]][] = [
   ["create needs scope.create", "authority/scripts.js", "if (!cap.create) refuse(\"scope\", `${cap.key} doesn't declare create: true`", "if (false) refuse(\"scope\", `${cap.key} doesn't declare create: true`", ["B22"]],
   ["created things stay in the subtree", "authority/gate.js", "if (cap?.kind === \"script\") for (const id of cap.made ?? []) if (s.entities[id] && !cap.ids.some(", "if (false) for (const id of cap.made ?? []) if (s.entities[id] && !cap.ids.some(", ["B22"]],
   ["a script's body effect meets consent", "authority/scriptrun.js", "const g = bodyGate(w, `script:${id}`, b.to, b.kind, { spec: b.spec, script: key, sponsor: sp.sponsor }); if (!g.ok) return mark(g.code, g.reason);", "const g = { ok: true, consent: \"standing\", deliver: () => {} };", ["C1"]],
-  ["the beat drains scripts", "authority/scriptrun.js", "drainAll(w);   // what the beat logged reaches scripts", "/* mutant */   // what the beat logged reaches scripts", ["E6"]],
+  ["the beat drains scripts", "authority/scriptrun.js", "checkpointSim(w);\n    drainAll(w);", "checkpointSim(w);\n    ;", ["E6"]],
   ["enter() restores the outer call's queues", "authority.js", "Object.assign(CTX, outer); w.changedQ = wq.changedQ; w.sayQ = wq.sayQ;", "Object.assign(CTX, outer); w.sayQ = wq.sayQ;", ["E5"]],
   ["bodies need scope.bodies", "authority/scriptrun.js", "for (const b of res.bodies) if (!(v.scope?.bodies ?? []).includes(b.kind)) return mark(\"scope\"", "for (const b of res.bodies) if (false) return mark(\"scope\"", ["C2"]],
   ["sponsor-wide body allowance", "authority/bodyconsent.js", "&& !named(from) && named(`scripts-by:${sponsor}`) ?", "&& false ?", ["C3"]],
@@ -115,8 +116,8 @@ const MUTANTS: [string, string, string, string[]][] = [
   ["admit copies one entity per op, not the world", "authority/gate.js", "    applyCow(s, [op]); norm.push(op);", "    s = applyOps(s, [op]); norm.push(op);", ["I5"]],
   ["elision copies one entity per op, not the world", "scriptrules.js", "out.push(o); try { applyCow(s, [o]); }", "out.push(o); try { JSON.parse(JSON.stringify(s.entities)); applyCow(s, [o]); }", ["I5"]],
   ["read-your-writes without copying the world", "sandbox.js", "const writable = (id) => { if (ov.has(id)) return ov.get(id); const b = base[id]; if (!b) return null; const e = { born: b.born, c: Object.assign(Object.create(null), b.c) }; ov.set(id, e); return e; };", "const writable = (id) => { const b = ov.has(id) ? ov.get(id) : base[id]; if (!b) return null; for (const k of Object.keys(base)) JSON.parse(JSON.stringify(base[k])); const e = { born: b.born, c: Object.assign(Object.create(null), b.c) }; ov.set(id, e); return e; };", ["I5"]],
-  // (not a mutation: the check between host answers is defence in depth. A process can't send its next call before its
-  // answer arrives, so the authority always finds the pipe empty first and its ordinary deadline check fires: measured, I9)
+  // (not a mutation: the check between host answers is defence in depth; a process can't send its next call before its
+  // answer arrives, so the authority finds the pipe empty first and its ordinary deadline check fires, as I9 measures)
   ["time spent answering isn't the process's starvation", "sandbox.js", "used !== null ? own > 0.5 * wall && used < STARVED * own :", "used !== null ? used < STARVED * wall :", ["I9"]],
   ["a starved process isn't the script's failure", "sandbox.js", "export const STARVED = 0.3;", "export const STARVED = 0;", ["I8"]],
   ["end of file means the process died", "sandbox.js", "if ((n === 0 && c.opened) || c.proc.exitCode !== null", "if (c.proc.exitCode !== null", ["I6"]],
@@ -149,9 +150,11 @@ if (argv.includes("--mutants")) {
   const only = opt("only")?.split(",") ?? null;
   for (const [name, file, find, repl, cases] of MUTANTS) {
     if (only && !cases.some((c) => only.includes(c)) && !(only.includes("CONTROL") && !cases.length)) continue;
-    ran++; const d = copyShared("mut"); const f = path.join(d, "shared/protocol", file); const src = readLF(f);
-    if (src.split(find).length !== 2) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${file} (the gate moved?)`); continue; }
-    fs.writeFileSync(f, src.replace(find, repl));
+    ran++; const d = copyShared("mut");
+    const edits: [string, string, string][] = (Array.isArray(find) ? find : [[find, repl]]).map(([a, b, g]) => [path.join(d, "shared/protocol", g ?? file), a, b]);
+    const miss = edits.find(([f, a]) => readLF(f).split(a).length !== 2);
+    if (miss) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${path.relative(path.join(d, "shared/protocol"), miss[0])} (the gate moved?)`); continue; }
+    for (const [f, a, b] of edits) fs.writeFileSync(f, readLF(f).replace(a, () => b));
     const r = await runSelf(d, cases.length ? cases : null);
     const redIds = [...r.out.matchAll(/^FAIL (\S+)/gm)].map((m) => m[1]);
     const good = cases.length ? r.code !== 0 && cases.every((c) => redIds.includes(c)) : r.code === 0;
@@ -1598,14 +1601,13 @@ serverCases.push({ id: "S2", server: true, what: "the server: while a hostile sc
   }, good: (o) => o.inst === "ok" && o.rounds.filter((r: any) => r.code !== "unavailable").length === 3 && o.rounds.every((r: any) => (r.code === "unavailable" || (r.status === "failed" && r.code === "time")) && r.ms < 800 && r.maxOther < 800) && o.last === "time" });
 
 // ---------------- run ----------------
-let pass = 0, fail = 0, na = 0;
+const SUITE = suite("scripts-check", { cap: 700 }); let na = 0;
 // The I rows test isolation itself (a killed process, the deadline held against a native builtin). A host without it
 // (Windows: shared/protocol/sandbox.js fifoOk) runs scripts in-process, where those guarantees are the documented gap, so
 // they print OPTIONAL with the reason (the gate receipt shows them). I0 keeps that from hiding a regression: isolation must be on everywhere else.
 const { SANDBOX: SBX } = await import("../../shared/protocol/sandbox.js");
 const isolating = !!SBX.isolated(), mustIsolate = process.platform !== "win32" && process.env.EIDO_SANDBOX !== "inprocess";
-{ const good = isolating || !mustIsolate; if (good) pass++; else fail++;
-  console.log(`${good ? "ok  " : "FAIL"} I0   isolation is on on every host but Windows (here: ${process.platform}, isolated ${isolating})`); }
+SUITE.ok(isolating || !mustIsolate, `I0   isolation is on on every host but Windows (here: ${process.platform}, isolated ${isolating})`);
 const all = [...cases, ...(argv.includes("--no-server") ? [] : serverCases)];
 for (const c of all) {
   if (ONLY && !ONLY.includes(c.id)) continue;
@@ -1613,8 +1615,6 @@ for (const c of all) {
   if (!isolating && (/^I\d/.test(c.id) || c.id === "S2")) { na++; console.log(`OPTIONAL ${c.id}: not run, no isolation on ${process.platform}${process.env.EIDO_SANDBOX === "inprocess" ? " (EIDO_SANDBOX=inprocess)" : ""} — ${c.what}`); continue; }
   let o: any, good = false;
   try { o = c.server ? await c.run(null) : c.run(session(c.opts)); good = !!c.good(o) && !o?.absent; } catch (e: any) { o = { threw: `${e?.constructor?.name}: ${e?.message}`.slice(0, 300) }; }
-  if (good) pass++; else fail++;
-  console.log(`${good ? "ok  " : "FAIL"} ${c.id.padEnd(4)} ${c.what}${good && !argv.includes("--verbose") ? "" : `\n       ${JSON.stringify(o).slice(0, 700)}`}`);
+  SUITE.ok(good, `${c.id.padEnd(4)} ${c.what}`, o);
 }
-console.log(`[scripts-check] ${pass} passed, ${fail} failed${na ? `, ${na} not applicable (no isolation here)` : ""}`);
-process.exit(fail ? 1 : 0);
+SUITE.done(`${na ? `, ${na} not applicable (no isolation here)` : ""}`);

@@ -90,11 +90,8 @@ export function lookupToken(registry: Record<string, TokenAuth>, token: string):
   return Object.hasOwn(registry, token) ? registry[token] : undefined;
 }
 
-/** id -> display name for every accepted credential, so a remote participant's
- *  token name can ride the wire as `author.name`. Ids
- *  without a distinct name are absent; callers fall back to the id. Conflicting
- *  names for one id are omitted rather than choosing by registry order. Never
- *  keyed by the secret. */
+/** id -> display name for every accepted credential (the wire's `author.name`). Ids without a distinct name, or
+ *  with conflicting names, are absent; callers fall back to the id. Never keyed by the secret. */
 export function displayNameIndex(registry: Record<string, TokenAuth>): Map<string, string> {
   const index = new Map<string, string>();
   const ambiguous = new Set<string>();
@@ -109,16 +106,10 @@ export function displayNameIndex(registry: Record<string, TokenAuth>): Map<strin
 
 export type WireAuthor = { id: string; name: string };
 
-/** The wire contract for "who said this": admitted credentials take precedence
- *  over the registry index, including aid1 identities absent from tokens.json.
- *  Keep the last admitted name after disconnect for replay; this is current
- *  identity metadata, not a historical-name ledger or an authorization cache.
- *  A failed registry reload cannot erase a name an admitted session supplied.
- *  `renderLine` writes the ID, the
- *  addressing handle, into the text (world lines render bare). The prefix is
- *  never the display name: a host that matches its own name against the text
- *  must not be woken by another body whose display name merely contains it.
- *  Every line a host receives, live or replayed, goes through these two. */
+/** The wire contract for "who said this", for every line a host receives, live or replayed. Admitted credentials
+ *  (incl. aid1 identities absent from tokens.json) beat the registry index and outlive disconnect and a failed
+ *  reload; it is identity metadata, not an authorization cache. `renderLine` prefixes the ID (world lines bare),
+ *  never the display name, so a host matching its own name isn't woken by another body whose name contains it. */
 export function wireAuthors(index: ReadonlyMap<string, string>) {
   const admitted = new Map<string, string>();
   return {

@@ -11,6 +11,7 @@
 // of one is (colliders.fitCollider, collide: "exact").
 import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
+import { suite } from "./protocol/suite.ts";
 const STUB = fileURLToPath(new URL('./core-stub.mjs', import.meta.url));
 plugin({ name: 'core-stub', setup(b) { b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB })); } });
 
@@ -21,11 +22,8 @@ const { AmmoRagdoll, ensureAmmo, interiorTriangles, INTERIOR_MAX_TRIS } = await 
 const { makeAvatar, toppleLean } = await import('./rig-load.mjs');
 const { wingRig } = await import('./doll-fixture.mjs');
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}${detail ? `  \x1b[2m${detail}\x1b[0m` : ''}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
-};
+const S = suite("ragdoll-floor");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 // 8×8m, walls 4m to the eaves of a 6.3m box; ground floor raised 0.3m; an
 // upper floor at 3.3m over the west half; terrain is flat at 0.
@@ -58,9 +56,8 @@ function drop(x: number, y: number, z: number) {
   const av: any = makeAvatar(wingRig.P, { realParent: wingRig.realParent });
   av.root.position.set(x, y, z);
   av.root.updateMatrixWorld(true);
-  const t0 = performance.now();
   const rd: any = new AmmoRagdoll(av, toppleLean(), av.restBonePositions());
-  const ctorMs = performance.now() - t0, fallback = rd.interiorFallback ?? null;
+  const fallback = rd.interiorFallback ?? null;
   let low = Infinity, rest = Infinity, steps = 0;
   while (!rd.done && steps < 900) {
     rd.step(1 / 60); steps++;
@@ -70,7 +67,7 @@ function drop(x: number, y: number, z: number) {
     low = Math.min(low, m); rest = m;
   }
   rd.dispose?.();
-  return { low, rest, steps, ctorMs, fallback };
+  return { low, rest, steps, fallback };
 }
 
 console.log('\nlimp indoors:');
@@ -132,19 +129,22 @@ const warns: string[] = [];
   const m = new THREE.Mesh(g, undefined); m.updateMatrixWorld(true);
   C.fitCollider('dense', m, { collide: 'exact' });
   const tris = g.getAttribute('position').count / 3;
-  const t0 = performance.now();
-  const got = interiorTriangles([...C.nearColliders(X, 0, 1)].find(([id]: any) => id === 'dense')?.[1], { x: X, z: 0 }, 8);
-  const qMs = performance.now() - t0;
-  check(`asking a ${(tris / 1e6).toFixed(2)}M-triangle interior for what's near a fall stops at the budget, quickly`,
-    got.over && got.tris.length / 9 <= INTERIOR_MAX_TRIS && qMs < 200, `${got.tris.length / 9} triangles, over=${got.over}, ${qMs.toFixed(0)}ms`);
-  // the same body going limp in the plain hall (warm): what a fall costs
-  // anyway — the dense interior may add only its bounded handoff to it
-  const base = Math.min(...[0, 1, 2].map(() => drop(100, 1.0, 0).ctorMs));
+  // the handoff's work counted, not timed: BVH triangles looked at (a walk's query box is 2× its square, so 4 budgets a walk)
+  const dense = [...C.nearColliders(X, 0, 1)].find(([id]: any) => id === 'dense')?.[1];
+  const work = { looked: 0 }, cast = dense.exact.bvh.shapecast.bind(dense.exact.bvh);
+  dense.exact.bvh.shapecast = (cb: any) => cast({ ...cb, intersectsTriangle: (...a: unknown[]) => { work.looked++; return cb.intersectsTriangle(...a); } });
+  const got = interiorTriangles(dense, { x: X, z: 0 }, 8);
+  const queryLooked = work.looked;
+  check(`asking a ${(tris / 1e6).toFixed(2)}M-triangle interior for what's near a fall stops at the budget: its walk looks at four budgets at most, not its size`,
+    got.over && got.tris.length / 9 <= INTERIOR_MAX_TRIS && queryLooked <= 4 * INTERIOR_MAX_TRIS,
+    `${got.tris.length / 9} kept, over=${got.over}, ${queryLooked} looked at (budget ${INTERIOR_MAX_TRIS}, size ${tris})`);
+  work.looked = 0;
   const d = drop(X, H, 0);
+  const fallLooked = work.looked;
   drop(X, H, 0);                                         // a second fall in the same room
   console.warn = realWarn;
-  check('a body that goes limp in it builds its world without running out of memory, and the interior adds under 60ms',
-    d.ctorMs - base < 60, `constructor ${d.ctorMs.toFixed(0)}ms vs ${base.toFixed(0)}ms in the plain hall`);
+  check('a body that goes limp in it builds its world without running out of memory: its handoff\'s two walks (reach, then near) look at eight budgets at most, not the interior',
+    fallLooked > 0 && fallLooked <= 8 * INTERIOR_MAX_TRIS, `${fallLooked} triangles looked at (budget ${INTERIOR_MAX_TRIS}, size ${tris})`);
   // the fallback is observable where it ships: the `ragdoll` debuglog topic
   // (entity, cap, floor) and one console warning per thing — not per fall
   const { lastWhy } = await import('../client/lib/debuglog.js');
@@ -157,5 +157,4 @@ const warns: string[] = [];
     /floor slab at 1\.00m/.test(d.fallback ?? '') && d.rest > H - 0.05 && d.low > H - 0.2, `${d.fallback} — lowest ${d.low.toFixed(2)}, rests ${d.rest.toFixed(2)}`);
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

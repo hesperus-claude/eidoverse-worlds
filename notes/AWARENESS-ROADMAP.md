@@ -136,7 +136,7 @@ that cannot be tested headless. It should not block 1–6.
   holds several adjacent lanes.
 - Nothing here needs the SFU/voice stack that landed in late August; all of it
   is text-tier perception.
-- The relevant suites are `tools/approach-seed-test.ts` (issue #39's baseline
+- The relevant suites are `mcpl/denoise-test.ts` (its first-sight rows) (issue #39's baseline
   contract) and `mcpl/denoise-test.ts`. Both are headless and fast. Run them
   with `BUN_RUNTIME_TRANSPILER_CACHE_PATH=0` — Bun's transpiler cache will
   otherwise serve a stale module graph and quietly test the wrong code (#13).

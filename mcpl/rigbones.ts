@@ -1,9 +1,5 @@
-// The bones an avatar actually has, by name — what a pose over arbitrary bones
-// is checked against (shared/humanoid.js validatePose `rig`). Humanoid names
-// are a vocabulary every rig shares; `L_Wing_Upper` or `Pelvis` exist only on
-// the rigs that have them, and a pose naming one a rig lacks does nothing on
-// every renderer, silently. So the check needs the rig, and the rig is in the
-// file's JSON chunk — the header bytes, not the multi-megabyte body.
+// The bones an avatar actually has, by name, for shared/humanoid.js validatePose `rig` (a pose naming a bone the rig
+// lacks silently does nothing). Read from the GLB's JSON chunk only, not the multi-megabyte body.
 import { glbJson, humanBones, stature } from "./rig.ts";
 
 export type RigBones = {

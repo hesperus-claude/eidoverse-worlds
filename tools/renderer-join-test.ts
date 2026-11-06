@@ -9,7 +9,7 @@
 // renderer, no working one was ever sent (2026-10-24). net.js sendJoin now claims the role only when a
 // snapshot renderer is wired (main.js wires net_capture.js; lite.js wires none). A page that claims neither
 // flag still asks to be invisible (spectate). A door key admits it as a spectator; the renderers'
-// credential admits renderers only and refuses it (4003 "insufficient scope", server.ts; tools/authtest.ts pins the scope refusal). Either way,
+// credential admits renderers only and refuses it (4003 "insufficient scope", server.ts; a row of tools/renderer-cred-test.ts). Either way,
 // the broker never routes a snapshot to it.
 //
 // Real net.js + base.js, fresh process per page load, as tools/name-snowball-test.ts does it; only the
@@ -17,12 +17,10 @@
 
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-function check(name: string, cond: boolean, detail = "") {
-  if (cond) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const S = suite("renderer-join");
+const check = (name: string, cond: unknown, detail?: unknown) => S.check(name, cond, detail);
 const ROOT = join(import.meta.dir, "..");
 
 type Join = { id: string; spectate: boolean; renderer: boolean; roam?: boolean };
@@ -39,7 +37,7 @@ function pageLoad(search: string, wire: "none" | "snapshot" | "other-hooks", joi
     const { mock } = await import("bun:test");
     const L = ${JSON.stringify(L)};
     mock.module(L + "presence.js", () => ({ presence: {} }));
-    mock.module(L + "chat.js", () => ({ logChat() {}, logWhisper() {}, noteTyping() {}, noteHistoryContext() {}, resyncChatAfter() {} }));
+    mock.module(L + "chat.js", () => ({ logChat() {}, logWhisper() {}, noteTyping() {}, noteHistoryContext() {}, resyncChatAfter() {}, moderatorHeader: (w) => "From a moderator of world ‹" + w + "›, not from Eidoverse" }));
     mock.module(L + "boot.js", () => ({ markPhase() {}, refuseBoot() {}, waitBoot: async () => {} }));
     const net = await import(L + "net.js");
     const wire = ${JSON.stringify(wire)};
@@ -106,5 +104,4 @@ console.log("the entry points wire what this test assumes");
   check("main.js wires net_capture.js's snapshot before it first calls start() or connect()", wiredAt >= 0 && firstStart >= 0 && wiredAt < firstStart, `wired at ${wiredAt}, first start/connect at ${firstStart}`);
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

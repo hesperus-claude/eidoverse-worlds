@@ -1,9 +1,5 @@
 // consent-client-test — my body's two gates and two lists (client/lib/consent.js, R 10-28) are what the authority decides
 // by, an older stored setting is carried into the gates never wider, and a sync that fails is heard, then retried.
-//
-// The authority is the one decider (#260 recut A1); the table it checks is what my client sends on arrival and on every
-// change (consentsync.js). Kept honest here: nothing else pinned consent.js → decide, and localbody.js once swallowed a
-// refused `consent` sync (DEBT-SURVEY 2026-10-12 #9), leaving the server on its defaults while my switch said otherwise.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/consent-client-test.ts
 // Mutation (must go red): in client/lib/consentsync.js drop the `on('hydrated', …)` line, or the timer retry, or the toast.
 import { setConsent, decide, tableOf, migratePresence, worldGates, DEFAULT_GATES } from '../shared/protocol/consent.js';

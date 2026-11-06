@@ -1,4 +1,4 @@
-// server/reqcap.ts — one immutable capability per request (reviewer item 2, 10-18; docs/DESIGN-txn-capability.md).
+// server/reqcap.ts — one immutable capability per request (docs/DESIGN-txn-capability.md).
 //
 // A request is admitted under WHO the connection was when it arrived: its identity, account, spectator flag, operator
 // status, the credential's world narrowing, the door's decision, its role here, its leg (gen). capture() freezes that once;
@@ -38,7 +38,7 @@ export function recheck(cap: ReqCap, now = Date.now(), { role = true } = {}): st
   if (c.actorId !== cap.actorId || (c.account ?? null) !== cap.account || !!c.spectator !== cap.spectator)
     return "this connection is someone else now (it joined again while the request waited); nothing was written";
   // operator status (operator-repair's right, and the door's bypass)
-  // which way it went (house 6340433633): a grant isn't a refusal sending again would meet (recheckFix reads the words)
+  // which way it went: a grant isn't a refusal sending again would meet (recheckFix reads the words)
   if (isOperator(cap.account) !== cap.operator) return cap.operator
     ? "this account stopped being a server operator while the request waited (operator status changed); nothing was written"
     : "this account became a server operator while the request waited (operator status changed); nothing was written — send it again if you still mean it";

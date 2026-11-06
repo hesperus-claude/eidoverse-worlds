@@ -221,5 +221,15 @@ console.log("\nwater");
   check("no water, no change", waterStance(null, -50, 1.7).y === -50 && waterStance(null, -50, 1.7).speedFactor === 1);
 }
 
+// a world's material layers (shared/terrainlayers.js): an authored array passes through; any older or other shape is
+// ignored, never executed
+{
+  const { materialLayerSpecs } = await import("../shared/terrainlayers.js");
+  const authored = [{ color: "#123456", repeat: 7 }, { color: "#abcdef" }];
+  check("material layers: an authored array passes through by identity", materialLayerSpecs(authored) === authored);
+  for (const [what, v] of [["missing", undefined], ["null", null], ["a legacy number", 1], ["an object", { color: "#fff" }], ["a string", "grass"]] as const)
+    check(`material layers: ${what} means none`, JSON.stringify(materialLayerSpecs(v)) === "[]");
+}
+
 console.log(failures ? `\n\x1b[31m${failures} failed\x1b[0m` : "\n\x1b[32mall passed\x1b[0m");
 process.exit(failures ? 1 : 0);

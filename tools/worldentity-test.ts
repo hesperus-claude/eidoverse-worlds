@@ -16,9 +16,10 @@
 //    whatever was used last
 // 5. the text tier: inspect / edit / hierarchy speak @world (the agent's edit sent to a real door)
 //
-// the protocol port (2026-10-06): the world is read from the view (shared/protocol/view.js viewState); every result is the
-// door's (tools/protocol/scratchworld.ts). worldInverse is gone: undo is the door's `undo`, checked as such.
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+// the world is read from the view (shared/protocol/view.js viewState); results and `undo` are the door's
+// (tools/protocol/scratchworld.ts).
+import { noWorldUrl } from './no-world.ts';
+import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { canon, RECORDS, addable, componentsOf } from '../shared/components.js';
@@ -33,11 +34,12 @@ import { v1FoldBuild } from './protocol/import-v1/build.ts';
 import { scratchWorld, flat } from './protocol/scratchworld.ts';
 import { COMPONENTS as SPEC } from '../shared/protocol/componentspec.js';
 import { pinned } from "./protocol/clock.ts";
+import { suite } from "./protocol/suite.ts";
 const SKY_DEFAULTS = SPEC.sky.defaults;
 const hexInt = (x: any) => (typeof x === 'string' && /^#[0-9a-f]{6}$/i.test(x) ? parseInt(x.slice(1), 16) : x);   // a layer colour is stored as an int (shape audit 10-16)
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => { if (ok) pass++; else fail++; console.log(`${ok ? '✓' : '✗'} ${name}${!ok && detail ? `  — ${detail}` : ''}`); };
+const S = suite("worldentity");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const now = () => pinned(Date.now()) + 500;   // the authority's clock (scratchworld steps it per request)
 const ROOT = join(import.meta.dir, '..');
 const PRESETS = JSON.parse(readFileSync(join(ROOT, 'defs/sky/_presets.json'), 'utf8'));
@@ -92,7 +94,7 @@ console.log('1. the alias both ways, through the real door:');
     ['Sky', 'Weather', 'Terrain', 'Grass'].every((t) => /^[0-9a-f]{64}$/.test((RECORDS as any)[t]?.hash ?? '') && (RECORDS as any)[t].category === 'World')
     && !addable(componentsOf({ pos: [0, 0, 0] }).components).some((a: any) => (RECORDS as any)[a.name]?.world));
 
-  // every spec fixture, translated (shared/protocol/translate-v1.js, as a world is migrated), state by state
+  // every spec fixture, translated (tools/protocol/import-v1/translate-v1.js, as a world is migrated), state by state
   const logs: string[] = [];
   const walk = (d: string) => { if (!existsSync(d)) return; for (const x of readdirSync(d)) { const p = join(d, x); if (statSync(p).isDirectory()) walk(p); else if (x === 'log.jsonl') logs.push(p); } };
   walk(join(ROOT, 'spec/fixtures'));
@@ -249,7 +251,7 @@ console.log('\n5. the text tier (mcpl/tools.ts): inspect, edit and hierarchy spe
   W.call('sky', { hours: 17.6, clouds: 'cumulus' });
   W.call(...terrainReq(terrainArgs(PAL, { seed: 7, shape: 'hills', tint: 'meadow' })));
   W.call('create', { id: 'pivot', components: { transform: { pos: [1, 0, 1] } } });
-  const ag = new WorldAgent({ name: 'eye' });
+  const ag = new WorldAgent({ url: noWorldUrl(), name: 'eye' });
   const A = ag as any;
   // the agent's world is the view; its door is this scratch world's real door (dry runs answered by the door itself)
   const sync = () => { A.st = W.view(); A.replica = { st: W.state() }; A.reconcileFromFold(); };   // componentsOf (edit's expect pins) reads the replica's state
@@ -303,5 +305,4 @@ console.log('\nI95. removing the Weather removes it, forecast and all:');
   check('with no forecast it is the clear weather it always was', canon(r2.ops) === canon([{ verb: 'weather', args: { weather: 'clear' } }]), JSON.stringify(r2));
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

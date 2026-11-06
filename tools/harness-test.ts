@@ -3,13 +3,14 @@
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { scratchBench, scratchSequencer, mkCheck, ROOT, sleep } from './harness.ts';
+import { scratchBench, scratchSequencer, mkCheck, ROOT } from './harness.ts';
+import { until } from './protocol/wait.ts';
 const mode = process.argv[2];
 if (mode === 'assertion') {
-  const { evalJson, cleanup } = await scratchBench('harness-assertion', { portFrom: 9010 });
+  const { evalJson, cleanup, SCRATCH } = await scratchBench('harness-assertion', { portFrom: 9010 });
   const { check } = mkCheck();
   await evalJson(`console.warn('retained-console-sentinel'); setTimeout(() => { throw Error('retained-runtime-sentinel'); }, 0);`);
-  await sleep(100);
+  await until('the runtime sentinel is recorded', () => { try { return readFileSync(join(SCRATCH, 'browser.events.jsonl'), 'utf8').includes('retained-runtime-sentinel'); } catch { return false; } }, { ms: 5000 });
   let caught = false;
   try { await evalJson(`throw Error('retained-eval-sentinel')`); } catch { caught = true; }
   check('evalJson surfaces exceptionDetails', caught);
@@ -21,11 +22,28 @@ if (mode === 'nonce') {
   await scratchSequencer('harness-nonce', { portFrom: 9010, preload: process.argv[3] });
   throw Error('accepted a foreign nonce');
 }
+if (mode === 'collision') {
+  // another process takes our port between the probe and the child's bind (two suites on one runner): readiness must move to a fresh port
+  let squatted = 0, squatter: any;
+  const run = await scratchSequencer('harness-collision', { portFrom: 9010, prepare: (_s, port) => {
+    squatted = port;
+    squatter = Bun.serve({ port, hostname: '127.0.0.1', fetch: () => Response.json({ ok: true, nonce: 'squatter', pid: -1 }) });
+  } });
+  squatter?.stop(true);
+  if (!squatted || run.PORT === squatted) { console.error(`stayed on the squatted port ${squatted}`); process.exit(1); }
+  await run.cleanup(0);
+  process.exit(0);
+}
 const { check, tally } = mkCheck();
 const scratch = mkdtempSync(join(tmpdir(), 'ew-harness-test-'));
 try {
   const preload = join(scratch, 'foreign.ts');
   writeFileSync(preload, `process.env.BENCH_NONCE = 'another-child';\n`);
+  {
+    const p = Bun.spawn([process.execPath, import.meta.path, 'collision'], { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' });
+    const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
+    check('a squatter on our port moves readiness to a fresh port', code === 0, code === 0 ? '' : out + err);
+  }
   for (const scenario of ['nonce', 'assertion']) {
     const p = Bun.spawn([process.execPath, import.meta.path, scenario, preload], { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' });
     const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
@@ -46,5 +64,16 @@ try {
     } finally { rmSync(dir, { recursive: true, force: true }); }
   }
 } finally { rmSync(scratch, { recursive: true, force: true }); }
+{ // cdp-pw (the probes' driver) gives a console message what playwright's does: type, text, location
+  const { launchCdp } = await import('./cdp-pw.mjs');
+  const b = await launchCdp(); const msgs: any[] = [];
+  try {
+    const pg = await b.page();
+    pg.on('console', (m: any) => { try { msgs.push({ type: m.type(), text: m.text(), url: m.location().url }); } catch (e) { msgs.push({ threw: String(e) }); } });
+    await pg.evaluate(() => { console.error('cdp-pw-console-sentinel'); });
+    await until('the console message arrives', () => msgs.length > 0, { ms: 10_000 }).catch(() => {});
+  } finally { await b.close(); }
+  check('cdp-pw: a console message has type(), text() and location()', msgs.some((m) => m.type === 'error' && m.text === 'cdp-pw-console-sentinel' && typeof m.url === 'string'), JSON.stringify(msgs));
+}
 console.log(`${tally.passed} passed, ${tally.failed} failed`);
 process.exit(tally.failed ? 1 : 0);

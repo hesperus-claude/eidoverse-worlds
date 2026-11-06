@@ -1,20 +1,9 @@
 // grass_quality — the resident's local meadow budget, DOM-free (unit-tested
 // in tools/grass-quality-test.ts).
 //
-// Two dials own the meadow's draw cost, and they are different people's:
-//
-//   the CAP is the resident's chosen ceiling (full/medium/low/off) — "my poor
-//   gpu" (#60). Persisted per browser, so it survives re-grows, reconnects
-//   and restarts.
-//
-//   the SHED is the frame governor's dial — session-only, lowered under load.
-//
-// What the field actually draws is min(cap, shed): the governor may thin
-// below the resident's ceiling, but can never silently raise above it, and
-// the resident raising their cap never un-sheds a machine that measured a
-// slow frame. Neither dial is ever a verb — the shared field (species, seed,
-// extent, provenance) is world state; how many blades THIS machine fills
-// pixels with is not.
+// Two dials own the meadow's draw cost: the CAP is the resident's chosen ceiling (full/medium/low/off, persisted per
+// browser); the SHED is the frame governor's session-only dial. The field draws min(cap, shed). Neither is ever a
+// verb: the field itself is world state; how many blades THIS machine fills pixels with is not.
 
 export const GRASS_QUALITY = ['full', 'medium', 'low', 'off'];
 export const QUALITY_DENSITY = { full: 1, medium: 0.6, low: 0.35, off: 0 };

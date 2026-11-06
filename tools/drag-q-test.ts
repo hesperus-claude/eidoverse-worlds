@@ -1,3 +1,4 @@
+import { suite } from "./protocol/suite.ts";
 // drag-q-test — the rotate gizmo's live drag carries the full orientation
 // (design §5, step 3): the REAL "drag" message handler (server/messages.ts)
 // relays a usable q (normalized) alongside the yaw older peers read, and
@@ -7,8 +8,8 @@
 process.env.WORLDS_DIR ??= require('node:fs').mkdtempSync(require('node:os').tmpdir() + '/drag-q-');
 process.env.JOIN_TOKEN ??= 'test-door';
 const { MESSAGES } = await import('../server/messages.ts');
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => { if (ok) pass++; else fail++; console.log(`${ok ? '✓' : '✗'} ${name}${!ok && detail ? `  — ${detail}` : ''}`); };
+const S = suite("drag-q");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const out: any[] = [];
 // the gate reads the door's role for the person's directory identity (actorId), never their name
 const roles: Record<string, string> = { 'u-builder': 'builder', 'u-visitor': 'member' };
@@ -32,5 +33,4 @@ check('a yaw-only drag (an old client) relays exactly as before', out.length ===
   MESSAGES['drag']({ ...ctx, c: { id: 'v', actorId: 'u-visitor', world, spectator: false } }, { type: 'drag', id: 'crate', pos: [9, 0, 9], yaw: 0, q: [0, 0, 0, 1] });
   check("a visitor's drag is not relayed (the door's role, by identity)", out.length === n, JSON.stringify(out.slice(n))); }
 import('node:fs').then((fs) => { try { fs.rmSync(process.env.WORLDS_DIR!, { recursive: true, force: true }); } catch {} });
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

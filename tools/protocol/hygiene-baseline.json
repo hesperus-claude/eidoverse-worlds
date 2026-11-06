@@ -8,44 +8,157 @@
  "tools/animnames-retry-test.ts": {
   "bare-wait": 1
  },
+ "tools/avatar-test.ts": {
+  "own-ok": 1
+ },
+ "tools/axes-test.ts": {
+  "own-ok": 1
+ },
+ "tools/build-gate-test.ts": {
+  "own-ok": 1
+ },
  "tools/buildcheck-queue-test.ts": {
   "bare-wait": 6
  },
  "tools/buildcheck-route-test.ts": {
   "bare-wait": 1
  },
+ "tools/capsule-recovery-test.mjs": {
+  "own-ok": 1
+ },
+ "tools/channelbox-test.ts": {
+  "own-ok": 1
+ },
+ "tools/collider-test.ts": {
+  "own-ok": 1
+ },
  "tools/colour-picker-bench.ts": {
   "bare-wait": 2
  },
+ "tools/compose-test.ts": {
+  "own-ok": 1
+ },
+ "tools/confirmcenter-test.ts": {
+  "own-ok": 1
+ },
+ "tools/consent-client-test.ts": {
+  "own-ok": 1
+ },
  "tools/consent-replay-test.ts": {
-  "bare-wait": 2
+  "bare-wait": 2,
+  "own-ok": 1
+ },
+ "tools/csp-test.ts": {
+  "own-ok": 1
  },
  "tools/debug-tabs-test.ts": {
-  "bare-wait": 1
+  "bare-wait": 1,
+  "own-ok": 1
+ },
+ "tools/descriptor-defaults-test.ts": {
+  "own-ok": 1
  },
  "tools/dismount-height-test.ts": {
-  "bare-wait": 1
+  "bare-wait": 1,
+  "own-ok": 1
  },
  "tools/door-is-error-test.ts": {
-  "bare-wait": 1
+  "bare-wait": 1,
+  "own-ok": 1
+ },
+ "tools/editcommit-test.ts": {
+  "own-ok": 1
+ },
+ "tools/editor-range-test.ts": {
+  "own-ok": 1
+ },
+ "tools/editschema-test.ts": {
+  "own-ok": 1
+ },
+ "tools/environment-realizer-test.ts": {
+  "own-ok": 1
+ },
+ "tools/event-wire-test.ts": {
+  "own-ok": 1
+ },
+ "tools/first-name-account-test.ts": {
+  "own-ok": 1
+ },
+ "tools/frames-layout-test.ts": {
+  "own-ok": 1
+ },
+ "tools/governor-xr-test.ts": {
+  "own-ok": 1
  },
  "tools/grant-command-test.ts": {
-  "bare-wait": 1
+  "bare-wait": 1,
+  "own-ok": 1
+ },
+ "tools/grant-until-test.ts": {
+  "own-ok": 1
+ },
+ "tools/hierarchy-commit-test.ts": {
+  "own-ok": 1
+ },
+ "tools/history-request-test.ts": {
+  "own-ok": 1
+ },
+ "tools/keyhints-check.ts": {
+  "own-ok": 1
  },
  "tools/knockdown-test.ts": {
-  "bare-wait": 20
+  "bare-wait": 20,
+  "own-ok": 1
+ },
+ "tools/last-world-test.ts": {
+  "own-ok": 1
+ },
+ "tools/latestread-test.ts": {
+  "own-ok": 1
+ },
+ "tools/lite-graph-test.ts": {
+  "own-ok": 1
  },
  "tools/lying-support-test.ts": {
-  "bare-wait": 1
+  "bare-wait": 1,
+  "own-ok": 1
+ },
+ "tools/media-trust-tabs-test.ts": {
+  "own-ok": 1
+ },
+ "tools/models-field-test.ts": {
+  "own-ok": 1
+ },
+ "tools/msgrate-test.ts": {
+  "own-ok": 1
  },
  "tools/navgrid-test.ts": {
   "bare-wait": 1
  },
+ "tools/oldworlds-test.ts": {
+  "own-ok": 1
+ },
+ "tools/originof-test.ts": {
+  "own-ok": 1
+ },
  "tools/panels-test.ts": {
-  "bare-wait": 3
+  "bare-wait": 3,
+  "own-ok": 1
+ },
+ "tools/particles-test.ts": {
+  "own-ok": 1
+ },
+ "tools/physconst-test.ts": {
+  "own-ok": 1
+ },
+ "tools/physics-off-test.ts": {
+  "own-ok": 1
  },
  "tools/places-test.ts": {
   "bare-wait": 7
+ },
+ "tools/predict-pending-test.ts": {
+  "own-ok": 1
  },
  "tools/protocol/access-check.ts": {
   "bare-wait": 7
@@ -62,14 +175,38 @@
  "tools/protocol/build-probe.ts": {
   "bare-wait": 5
  },
+ "tools/protocol/catalogue-check.ts": {
+  "own-ok": 1
+ },
  "tools/protocol/client-check.ts": {
   "bare-wait": 48
+ },
+ "tools/protocol/climb-env-check.ts": {
+  "own-ok": 1
  },
  "tools/protocol/counter-check.ts": {
   "bare-wait": 1
  },
+ "tools/protocol/drive-check.ts": {
+  "own-ok": 1
+ },
+ "tools/protocol/foldparity-check.ts": {
+  "own-ok": 1
+ },
+ "tools/protocol/force-check.ts": {
+  "own-ok": 1
+ },
  "tools/protocol/fork-reset-check.ts": {
   "bare-wait": 2
+ },
+ "tools/protocol/freeze-check.ts": {
+  "own-ok": 1
+ },
+ "tools/protocol/gates-check.ts": {
+  "own-ok": 1
+ },
+ "tools/protocol/hello-refused-check.ts": {
+  "own-ok": 1
  },
  "tools/protocol/identity-check.ts": {
   "bare-wait": 46
@@ -80,11 +217,17 @@
  "tools/protocol/inspectharness.ts": {
   "bare-wait": 1
  },
+ "tools/protocol/owners-check.ts": {
+  "own-ok": 1
+ },
  "tools/protocol/parity-check.ts": {
   "bare-wait": 5
  },
  "tools/protocol/party-probe.ts": {
   "bare-wait": 32
+ },
+ "tools/protocol/physics-area-check.ts": {
+  "own-ok": 1
  },
  "tools/protocol/presence-check.ts": {
   "bare-wait": 10
@@ -95,25 +238,109 @@
  "tools/protocol/refusedjoin-check.ts": {
   "bare-wait": 11
  },
+ "tools/protocol/reset-race-check.ts": {
+  "own-ok": 1
+ },
+ "tools/protocol/scripting-check.ts": {
+  "own-ok": 1
+ },
  "tools/protocol/scripts-check.ts": {
   "bare-wait": 15
  },
  "tools/protocol/server-check.ts": {
   "bare-wait": 28
  },
+ "tools/protocol/setup-check.ts": {
+  "own-ok": 1
+ },
  "tools/protocol/shiplist-probe.ts": {
   "bare-wait": 105
+ },
+ "tools/protocol/simckpt-check.ts": {
+  "own-ok": 1
+ },
+ "tools/protocol/siminputs-check.ts": {
+  "own-ok": 1
+ },
+ "tools/protocol/statecache-check.ts": {
+  "own-ok": 1
+ },
+ "tools/protocol/translate-check.ts": {
+  "own-ok": 1
+ },
+ "tools/protocol/upgrade-check.ts": {
+  "own-ok": 1
+ },
+ "tools/protocol/vocab-fixtures-check.ts": {
+  "own-ok": 1
  },
  "tools/protocol/xss-probe.ts": {
   "bare-wait": 8
  },
+ "tools/protocol/zone-water-check.ts": {
+  "own-ok": 1
+ },
  "tools/reach-order-test.ts": {
   "bare-wait": 1
  },
+ "tools/retired-commands-test.ts": {
+  "own-ok": 1
+ },
+ "tools/role-grammar-test.ts": {
+  "own-ok": 1
+ },
+ "tools/rot-test.ts": {
+  "own-ok": 1
+ },
+ "tools/scriptnew-expect-test.ts": {
+  "own-ok": 1
+ },
+ "tools/shape-attach-test.ts": {
+  "own-ok": 1
+ },
+ "tools/shape-import-test.ts": {
+  "own-ok": 1
+ },
+ "tools/shape-physics-test.ts": {
+  "own-ok": 1
+ },
+ "tools/shape-render-test.ts": {
+  "own-ok": 1
+ },
+ "tools/shove-test.ts": {
+  "own-ok": 1
+ },
+ "tools/skypanel-state-test.ts": {
+  "bare-wait": 2,
+  "own-ok": 1
+ },
+ "tools/skystamp-test.ts": {
+  "own-ok": 1
+ },
+ "tools/sockets-test.ts": {
+  "own-ok": 1
+ },
+ "tools/sound-editor-test.ts": {
+  "own-ok": 1
+ },
+ "tools/sound-test.ts": {
+  "own-ok": 1
+ },
  "tools/support-swap-test.ts": {
-  "bare-wait": 2
+  "bare-wait": 2,
+  "own-ok": 1
+ },
+ "tools/surface-hold-test.ts": {
+  "own-ok": 1
  },
  "tools/unknown-comp-test.ts": {
-  "bare-wait": 2
+  "bare-wait": 2,
+  "own-ok": 1
+ },
+ "tools/water/import-golden-check.ts": {
+  "own-ok": 1
+ },
+ "tools/windows-guard-test.ts": {
+  "own-ok": 1
  }
 }

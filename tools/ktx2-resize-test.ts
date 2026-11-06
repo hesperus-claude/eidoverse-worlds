@@ -9,9 +9,10 @@
 //   no sharp — on a ktx-create host without sharp, an over-cap texture is skipped, not shipped full-size    [mutate: revert → 2048]
 import { Document, NodeIO } from "@gltf-transform/core";
 import { optimizeGlbKtx2, findKtx2Encoder, getSharp } from "../server/optimize.ts";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => { ok ? pass++ : fail++; console.log(`  ${ok ? "✓" : "✗"} ${name}${detail ? "  " + detail : ""}`); };
+const S = suite("ktx2-resize");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 const encoder = findKtx2Encoder();
 if (!encoder) { console.log("  SKIP: no KTX2 encoder on this host (toktx / ktx)"); process.exit(0); }
@@ -68,5 +69,4 @@ for (const [w, h, want, name] of [[2048, 2048, [1024, 1024], "capped: 2048² →
 { const child = Bun.spawnSync(["bun", import.meta.path], { env: { ...process.env, KTX2_NO_SHARP: "1" } });
   const line = new TextDecoder().decode(child.stdout).split("\n").find((l) => l.startsWith("NO_SHARP")) ?? "(no answer)";
   check("no sharp on a ktx-create host: a 2048² texture is never shipped over the cap (Greptile #207)", /^NO_SHARP OK/.test(line), line); }
-console.log(`${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

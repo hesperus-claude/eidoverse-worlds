@@ -9,6 +9,7 @@
 // Mutation (must go red): drop vehicles.js's bus.on('mount', …) line (rows HL1, HL2).
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
+import { suite } from './protocol/suite.ts';
 const THREE_PATH = fileURLToPath(new URL('../client/node_modules/three/build/three.module.js', import.meta.url));
 const STUBS: Record<string, string> = {
   base: `const on = new Map(); export const CONFIG = { name: 'me' };
@@ -30,8 +31,7 @@ plugin({
 });
 const G = globalThis as any; G.__hl = { sent: [] };
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => { if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); } else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); } };
+const { check, done } = suite("helm-leave-test");
 
 const v: any = await import('../client/lib/vehicles.js');
 const { bus, world, avatarMounts, keys } = G.__hl;
@@ -63,5 +63,4 @@ const n0 = G.__hl.sent.length; v.updateHelm(0.016);
 const sentTo = G.__hl.sent.slice(n0).at(-1)?.[1];
 check('HL2 …sitting at its helm again drives on from where the hull is, not from where I left it', Math.abs(hull.position.x - 9) < 0.05 && (!sentTo || Math.abs(sentTo[0] - 9) < 0.05), `x ${hull.position.x}, sent ${JSON.stringify(sentTo)}`);
 
-console.log(`[helm-leave-test] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

@@ -1,7 +1,6 @@
 // viewprefs — how THIS viewer's editor reads a thing: its rotate order (Maya's rotateOrder; PROTOCOL §9.1: Euler channels
 // are a view, an editor's rotation order changes how the channels read, never the stored q). Kept on this device, per
-// world and thing, never sent, never seen by anyone else (it was once written as a component, which the authority
-// refuses; #260 house I242).
+// world and thing, never sent, never seen by anyone else (never a component: the authority refuses that).
 import { bus, CONFIG } from './base.js';
 import { ROT_MODES } from '../../shared/euler.js';
 

@@ -2,7 +2,8 @@
 // shared/layers.js: a thing's selection layer, by default and by a builder's word.   bun tools/layers-test.ts
 import { layerOf, defaultLayer } from "../shared/layers.js";
 import { inspectSchema, editOps } from "../shared/editschema.js";
-let pass = 0, fail = 0; const check = (n, ok, d = "") => { if (ok) pass++; else { fail++; console.log("  ✗", n, d); } };
+import { suite } from "./protocol/suite.ts";
+const S = suite("layers", { quiet: true }); const check = (n, ok, d = "") => S.check(n, ok, d);
 const W = {
   floor: { model: "m/floor.glb", physics: { kind: "static", shape: [[-1, 0, -1], [1, 0.1, 1]] }, transform: { pos: [0, 0, 0], scale: [30, 1, 30] } },
   crate: { model: "m/crate.glb", physics: { kind: "dynamic", shape: [[-1, 0, -1], [1, 2, 1]] }, transform: { pos: [0, 0, 0], scale: [0.25, 0.25, 0.25] } },
@@ -27,4 +28,4 @@ check("the layer row offers auto (its default) and every layer", f?.value === "a
 const e = editOps({ ...W.crate, id: "crate" }, "crate", { "flags.layer": "environment" }, {});
 check("choosing a layer writes hesperus/layer; auto removes it", e.ops.length === 1 && e.ops[0].args?.component === "hesperus/layer" && e.ops[0].args?.value === "environment"
   && editOps({ ...W.told, id: "told" }, "told", { "flags.layer": "auto" }, {}).ops[0]?.verb === "delete", JSON.stringify(e));
-console.log(`${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+S.done();

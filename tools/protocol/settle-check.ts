@@ -1,19 +1,15 @@
 // @ts-nocheck
-// tools/protocol/settle-check.ts — what a thing at rest is attached to (settleSim). R's gym, 10-10: a pyramid's top crate
-// over the gap between two crates was parented to the crate a row lower (read under its centre), and rode along 0.5 m
-// above it when that one was carried.   Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/settle-check.ts
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
-import { request } from "../../shared/protocol/authority.js";
+// tools/protocol/settle-check.ts: what a thing at rest is attached to (settleSim): a crate across a gap must not parent to
+// the crate a row lower (read under its centre) and ride along above it when that one is carried.
+//   Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/settle-check.ts
+import "./fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import { openWorld } from "../../server/filehost.ts";
 import { fold } from "../../shared/protocol/fold.js";
-import { ENGINES, restsOf, worldPose } from "../../shared/protocol/simlayer.js";
-import { scratch } from "./common.ts";
-import { labClock } from "./clock.ts";
-const ENG = { engine: Object.keys(ENGINES).find((k) => k.startsWith("eidosim@")) };
-let pass = 0, fail = 0;
-const ok = (c, name, info) => { if (c) pass++; else { fail++; console.log("FAIL", name, info === undefined ? "" : JSON.stringify(info)); } };
-const root = scratch("settle"); const clock = labClock();
-const call = (W, a, v, args = {}) => { clock.advance(1500); return request(openWorld(root, W), a, v, args); };
+import { restsOf, worldPose } from "../../shared/protocol/simlayer.js";
+import { ENG, labWorld } from "./labworld.ts";
+import { suite } from "./suite.ts";
+const { ok, done } = suite("settle-check", { quiet: true, cap: Infinity });
+const { root, clock, call } = labWorld("settle");
 const st = (W) => fold(openWorld(root, W).entries);
 const box = (W, id, pos, scale = [1, 1, 1]) => call(W, "rowan", "create", { id, model: "crate", components: { physics: { kind: "dynamic", who: "member" }, transform: { pos, q: [0, 0, 0, 1], scale } } });
 { const W = "gap"; call(W, "rowan", "create-world", { title: W }); call(W, "rowan", "set", { id: "@world", component: "physics-engine", value: ENG }); call(W, "rowan", "set", { id: "@world", component: "access", value: { join: "anyone" } });
@@ -183,5 +179,4 @@ for (const verb of ["delete", "grab"]) { const W = `straddle-foreign-${verb}`; c
   ok(sw.ok && on === "plinth" && !r.ok && r.refused?.code === "foreign-engine" && r.refused.reason.includes(foreign) && r.refused.reason.includes("crate") && !added.some((e: any) => e.kind === "change") && st(W).entities.plinth.c.mesh.size[1] === 0.6,
     "SE21 under a version this server doesn't carry, reshaping what a thing rests on is refused, naming the engine and what rests on it (only that engine re-drops it); the host keeps its shape", { sw: sw.ok ?? sw.refused, on, r: r.ok ?? r.refused, added: added.map((e: any) => [e.kind, e.verb ?? e.op]) }); }
 
-console.log(`[settle-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

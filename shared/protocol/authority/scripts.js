@@ -1,8 +1,8 @@
 // shared/protocol/authority/scripts.js — scripts, the standing half (settings and registration): the server's script
 // settings and an owner's @world.script-settings, a script's rights and install checks, particles and effect uploads, the
 // runtime console ring, sponsors and pauses, the per-state script memo, and the budgets (rate, duty, CPU) an activation is
-// held to (refactor split, 2026-10-17; moved from authority.js's "behaviours" section unchanged; the running half is
-// authority/scriptrun.js). The gate's rights words (lacks, needWords, nearMiss) are above it, reached through UP.
+// held to (the running half is authority/scriptrun.js). The gate's rights words (lacks, needWords, nearMiss) are above
+// it, reached through UP.
 import { isEntityId, isComponent, jcs, utf8Len, REDACTED } from "../fold.js";
 import { COMPONENTS, registered, baseOf } from "../componentspec.js";
 import * as SR from "../scriptrules.js";
@@ -30,7 +30,7 @@ const needWords = (...a) => UP.needWords(...a);
 // Stated rule (§3d): no-op writes in a script batch are dropped (SR.elide, shared with the auditor). Authority practice: timers
 // sleep in an empty world unless `always`; a per-script rate, a per-sponsor fair share of a per-world hourly budget, a
 // cascade depth, and a pause after repeated failures.
-// This server's script configuration (shape audit 10-16): run, max, budget and cpu are what an owner may set in
+// This server's script configuration: run, max, budget and cpu are what an owner may set in
 // @world.script-settings (absent: scriptDefaults(), which schema reports), max, budget and cpu never above scriptCeiling() (an owner
 // tightens the budgets, never raises them past the server's); rate, depth, fails and runs are the server's alone
 // (setScriptConfig, an operator's). A stored value of a field the owner no longer sets (an old install, rate…) is ignored.
@@ -73,13 +73,13 @@ function scriptRights(w, st, cap, op, at, made) {
 // At install (any set of script:<name>), by whoever's rights carry the write: the install rank, a scope within those
 // rights NOW (a builder can't install a script that writes roles:*: promotion by proxy), a clean source that parses, the
 // timer floor, `always` only by an owner, the world's script count.
-// R 10-07 (particles): the instance names an effect (an Essential, or a document stored in this world's blobs), and its
+// particles: the instance names an effect (an Essential, or a document stored in this world's blobs), and its
 // params are ones that document declares, within their bounds, with the effect still within EFFECT_LIMITS once they're
 // applied. The first protocol's flat bag is read in older values (PROTOCOL §4: a stored value is read forever) and never
 // taken in a write: its spelling would be a second way to say one thing. A held thing's fx carries a particles value too.
 function particlesCheck(w, op) {
   const one = (v, at) => { if (!v || typeof v !== "object" || Array.isArray(v)) return;
-    const b = isEssential(v.effect) ? null : effectBlobName(v.effect); let doc = null;   // an Essential's address is its own document (shape audit 10-16), not this world's blob
+    const b = isEssential(v.effect) ? null : effectBlobName(v.effect); let doc = null;   // an Essential's address is its own document, not this world's blob
     if (b) { try { doc = w.getBlob(b); } catch { /* not stored here: said below */ }
       if (doc && (doc.kind !== EFFECT_KIND || effectProblem(doc))) refuse("shape", `${at}.effect: ${b} isn't a particle effect this protocol runs (${doc.kind !== EFFECT_KIND ? "not a particle-effect document" : effectProblem(doc)})`, "upload {effect: {kind: 'particle-effect', v: 1, emitters: [...]}} stores one and says why it can't"); }
     else doc = effectFor(v.effect);
@@ -106,7 +106,7 @@ function uploadEffect(w, actor, a) {
 function installCheck(w, st, s, who, op) {
   const { actor, cap } = who; const installer = cap?.kind === "script" ? cap.sponsor : cap?.kind === "reaction" ? cap.author : actor;
   const role = roleOf(st, installer), cfg = scriptsCfg(st), v = op.value, at = `${op.id}.${op.comp}`;
-  // research S2: the `scripts` permission is the install gate (role-defs: the owner sets each role's)
+  // the `scripts` permission is the install gate (role-defs: the owner sets each role's)
   if (!may(st, installer, "scripts")) refuse("rights", `installing a script here needs the scripts permission; ${said(installer)} is ${role}`, "the role's scripts permission says who may (the owner sets it in role-defs)", { needs: "scripts" });
   if (typeof v.src !== "string" || !/^sha256:[0-9a-f]{64}$/.test(v.src)) refuse("shape", `${at}.src must be a blob name sha256:<64 hex>`, "upload {text} stores the source and returns its name");
   let blob = null; try { blob = w.getBlob(v.src); } catch { /* missing or doesn't match its name: refused below */ }
@@ -168,7 +168,7 @@ function scriptWrites(w, id, key) {
 // `paused` is a permission, not the script: a write that changes only it (pause, resume) is a "pause write"
 export const unpaused = (v) => { if (!v || typeof v !== "object" || Array.isArray(v)) return v; const { paused, ...rest } = v; return rest; };
 const pauseOnly = (v, prev) => v !== undefined && prev !== undefined && jcs(unpaused(v)) === jcs(unpaused(prev));
-// §5 "Two views" (H3), with R's decision on lab 49 F4 (2026-10-06): the sponsor is whose rights admitted the latest write
+// §5 "Two views" (H3): the sponsor is whose rights admitted the latest write
 // to the script: key in its current life THAT CHANGED MORE THAN `paused`. Pausing or resuming adopts nothing: an owner
 // who pauses a builder's script stops it, and the builder still answers for it (an explicit adopt is how to take it on).
 function sponsorOf(w, id, key) {
@@ -190,8 +190,7 @@ function presentOf(w) { const out = new Map();
   for (const p of w.present?.() ?? []) if (p && typeof p.id === "string" && !out.has(p.id)) out.set(p.id, Array.isArray(p.at) && p.at.length === 3 && p.at.every(Number.isFinite) ? p.at : null);
   return out; }
 const scriptMemo = new WeakMap();
-// per state, from each entity's own list (cached on its entity object: a write's next state re-reads only what it touched;
-// review 10-06 S0-2, every write re-scanned every component of every thing)
+// per state, from each entity's own list (cached on its entity object: a write's next state re-reads only what it touched)
 const scriptsOfEnt = new WeakMap();
 function allScripts(st) { let out = scriptMemo.get(st); if (out) return out; out = []; const vol = VOLATILE.has(st.entities);
   for (const id of Object.keys(st.entities)) { const e = st.entities[id]; let mine = vol ? null : scriptsOfEnt.get(e);

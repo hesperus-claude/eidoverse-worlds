@@ -17,22 +17,31 @@
 //   version-regex a version floor written as a regex of digits (`@(1[4-9]|[2-9][0-9])`): it breaks at the next decade. Parse
 //                 the number (translate-v1.js translatorVersion) and compare.
 //   slash-path    a resolved filesystem path tested with a `/`-only pattern (`/\/tools\//.test(p)`): never matches on
-//                 Windows, so the check quietly does nothing there.
+//                 Windows, so the check quietly does nothing there. Also a path-suffix regex (`/mcpl\/agent\.ts$/`) on a line
+//                 that doesn't convert the path first, and a regex built as `'/' + file` (a bun plugin filter sees the native
+//                 path): CI 42190828916, flight and voice-wire-mutation. Use common.ts slashed / pathEnd.
 //   chrome-flags  a Chromium launched with its own flag list (a quoted headless or remote-debugging-port flag) instead of
 //                 chrome.ts chromeArgs: five launchers each had a different list, and an OS's flag lived in a workflow's env.
 //                 Checked over all of tools/, where the benches that launch browsers outside the gate live.
 //   lab-clock     the authority's clock env set or deleted by hand: 124 inline "advance then pin" copies in 34 files (10-22),
 //                 where a helper that forgot to advance (or two sharing one counter) could run time backwards silently. Use
 //                 tools/protocol/clock.ts (labClock().advance, pin, unpinned).
-//   redaction-parse  a redaction's targets read by hand (`.body.values`) outside fold.js: four parsers drifted apart when
-//                 {seq, op} became {seq, index}, and undo wrote a redacted value back (review 11-05 B1). Use fold.js
-//                 redactionsIn / redactedBodies.
-//   role-words    WORLD_ADMIN / "world admin" / "world operator" for the server's operator (R 10-27): say "server operator".
+//   agent-url     a WorldAgent built without `url`: it falls back to 127.0.0.1:8940, whatever runs there (or a closed port,
+//                 which hangs ~2 min on a mirrored-network host). Pass the test's own server: tools/no-world.ts noWorldUrl().
+//                 Checked over tools/ only.
+//   own-ok        a suite counting its own rows (`let pass = 0, fail = 0`) instead of importing suite.ts.
+//   posix-mode    a file's mode asserted equal to an octal literal (`=== 0o600`) on a line that doesn't say what Windows does:
+//                 NTFS has no POSIX modes (stat says 666), so the row fails there or passes vacuously. Use suite.ts `mode()`,
+//                 which reports the row not applicable on Windows (CI 42190828916: native-login W10, mkconfig).
+//   ungated       a test-named file (-test, -check, -probe, .test, -bench, -mutants under tools/, tools/protocol/, tools/water/,
+//                 mcpl/) that no SUITES row runs or imports: every test is in the gate or gone (R 10-29). The ones still out
+//                 are listed in tools/protocol/ungated.json with one line why; that list only shrinks.
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { ENGINE } from "./common.ts";
 import { SUITES, localImports, suitePath } from "./suites.ts";
+import { suite } from "./suite.ts";
 
 export const RULES: Record<string, RegExp> = {
   "bare-wait": /new Promise\(\s*\(?\s*(?:r|res|resolve|ok|done)\s*\)?\s*=>\s*setTimeout\(\s*(?:r|res|resolve|ok|done)\b|\bBun\.sleep(?:Sync)?\(|\bawait\s+(?:sleep|delay|nap|snooze)\(|\.waitForTimeout\(/g,
@@ -43,18 +52,22 @@ export const RULES: Record<string, RegExp> = {
   "colon-list": /[^\n]*(?:process\.env\.\w+|\broots\b|\bdirs\b)[^\n]*\.split\(\s*["']:["']\s*\)/g,
   "version-regex": /@\(\d\[\d-\d\]\|/g,
   "lab-clock": /\bdelete\s+process\.env(?:\.PROTOCOL_NOW|\[\s*["'`]PROTOCOL_NOW["'`]\s*\])|process\.env(?:\.PROTOCOL_NOW|\[\s*["'`]PROTOCOL_NOW["'`]\s*\])\s*=(?!=)/g,
-  "slash-path": /[^\n]*\\\/(?:tools|shared|server|client|mcpl|spec|worlds?)\\\/[^\n]*\.test\(\s*(?:p|f|file|abs|full|dir|d)\s*\)/g,
+  "slash-path": /[^\n]*\\\/(?:tools|shared|server|client|mcpl|spec|worlds?)\\\/[^\n]*\.test\(\s*(?:p|f|file|abs|full|dir|d)\s*\)|^(?![^\n]*(?:\.replace\(\/\\\\\/g|\bslashed\(|\bfwd\(|\[\\\\\/\]))[^\n]*(?<!\\)\/[A-Za-z_][\w-]*\\\/(?:[^\/\n\\]|\\.)*\\\.(?:ts|js|mjs|json)\$\/[^\n]*|\bnew RegExp\(\s*(?:(["'])\/\1\s*\+|`\/\$\{)/gm,
   "chrome-flags": /["'`]--(?:headless\b|remote-debugging-port\b)/g,
   // the gate runs under Bun, and under Bun on Windows playwright neither launches (its pipe descriptors don't pass through
   // Bun's spawn) nor connects over CDP: browser-check hung to its timeout on every Windows run until 10-22. Gate suites drive
   // Chrome with chrome.ts cdpPage / harness scratchBench. Benches run under node may use it.
+  "agent-url": /\bnew\s+WorldAgent\s*\(\s*(?:\{(?![^{}]*\burl\b)[^{}]*\})?\s*\)/g,
+  "own-ok": /\blet\s+(?:pass|passes|passed)\s*=\s*0\s*,\s*(?:fail|fails|failed)\s*=\s*0\b|\blet\s+(?:fail|fails|failed)\s*=\s*0\s*,\s*(?:pass|passes|passed)\s*=\s*0\b/g,
   "redaction-parse": /\.body\??\.values\b/g,
+  "posix-mode": /^(?![^\n]*(?:win32|\bWIN\b|NO_MODES))[^\n]*===?\s*0o[0-7]{3}\b[^\n]*/gm,
   "playwright": /\bfrom\s+["']playwright(?:-core)?["']|\b(?:require|import)\(\s*["']playwright(?:-core)?["']/g,
 };
 const SELF = "tools/protocol/hygiene-check.ts";   // its fixtures are the bad shapes on purpose
-const EXEMPT: Record<string, string[]> = { "chrome-flags": ["tools/protocol/chrome.ts", "tools/roaming-renderer-check.ts"], "raw-symlink": ["tools/protocol/common.ts"], "bare-wait": ["tools/protocol/wait.ts"], "own-until": ["tools/protocol/wait.ts"], "lab-clock": ["tools/protocol/clock.ts"], "redaction-parse": ["shared/protocol/fold.js"] };
-const SUITE_ONLY = new Set(["bare-wait", "own-until", "playwright"]);   // the waiting rules are about tests; server code may wait on purpose
-const ALL_TOOLS = new Set(["chrome-flags"]);
+const EXEMPT: Record<string, string[]> = { "chrome-flags": ["tools/protocol/chrome.ts"], "raw-symlink": ["tools/protocol/common.ts"], "bare-wait": ["tools/protocol/wait.ts"], "own-until": ["tools/protocol/wait.ts"], "lab-clock": ["tools/protocol/clock.ts"], "own-ok": ["tools/protocol/suite.ts"], "agent-url": ["tools/dummy.ts"], "redaction-parse": ["shared/protocol/fold.js"] };   // dummy is the show host's service: WORLD_URL is how it is told where to connect
+const SUITE_ONLY = new Set(["bare-wait", "own-until", "playwright", "own-ok", "posix-mode"]);   // the waiting rules are about tests; server code may wait on purpose
+const ALL_TOOLS = new Set(["chrome-flags", "agent-url", "slash-path"]);   // slash-path: a --preload file is no import, so the gate set misses it
+const TOOLS_ONLY = new Set(["agent-url"]);   // mcpl/ has its own owner and its server builds its agent from the env on purpose
 
 export function scan(text: string): Record<string, number> {
   const out: Record<string, number> = {};
@@ -107,7 +120,7 @@ export function measure(): Record<string, Record<string, number>> {
   for (const f of [...files].sort()) {
     const counts = scan(fs.readFileSync(path.join(ENGINE, f), "utf8"));
     for (const k of Object.keys(counts)) {
-      if (f === SELF || EXEMPT[k]?.includes(f) || (SUITE_ONLY.has(k) && !suites.has(f)) || (!ALL_TOOLS.has(k) && !gate.has(f))) continue;
+      if (f === SELF || EXEMPT[k]?.includes(f) || (SUITE_ONLY.has(k) && !suites.has(f)) || (TOOLS_ONLY.has(k) && !f.startsWith("tools/")) || (!ALL_TOOLS.has(k) && !gate.has(f))) continue;
       (out[f] ??= {})[k] = counts[k];
     }
   }
@@ -115,6 +128,21 @@ export function measure(): Record<string, Record<string, number>> {
 }
 
 const BASE = path.join(ENGINE, "tools/protocol/hygiene-baseline.json");
+
+/** Test-named files no SUITES row reaches (ungated.json lists the ones still out, each with its reason). */
+export const TEST_NAME = /(?:-test|-check|-probe|\.test|-bench|-mutants)\.(?:ts|mjs|js)$/;
+const UNGATED = path.join(ENGINE, "tools/protocol/ungated.json");
+export function ungatedTests(): string[] {
+  const gated = new Set<string>();
+  for (const [, file] of SUITES) {
+    for (const f of localImports(suitePath(file))) gated.add(rel(f));
+    for (const a of file.split(" ").slice(1)) if (/\.(?:ts|mjs|js)$/.test(a)) for (const f of localImports(path.join(ENGINE, a))) gated.add(rel(f));   // a runner's file argument (bun-test.ts tools/x-test.ts)
+  }
+  const out: string[] = [];
+  for (const d of ["tools", "tools/protocol", "tools/water", "mcpl"]) for (const e of fs.readdirSync(path.join(ENGINE, d), { withFileTypes: true }))
+    if (e.isFile() && TEST_NAME.test(e.name) && !gated.has(`${d}/${e.name}`)) out.push(`${d}/${e.name}`);
+  return out.sort();
+}
 export function compare(now: Record<string, Record<string, number>>, base: Record<string, Record<string, number>>) {
   const over: string[] = [], under: string[] = [];
   for (const f of new Set([...Object.keys(now), ...Object.keys(base)])) for (const k of Object.keys(RULES)) {
@@ -125,8 +153,7 @@ export function compare(now: Record<string, Record<string, number>>, base: Recor
 }
 
 if (import.meta.main) {
-  let pass = 0, fail = 0;
-  const check = (name: string, ok: boolean, info?: unknown) => { if (ok) { pass++; console.log(`ok   ${name}`); } else { fail++; console.log(`FAIL ${name}`); if (info !== undefined) console.log("     ", typeof info === "string" ? info : JSON.stringify(info)); } };
+  const { check, done } = suite("hygiene-check", { cap: Infinity });
 
   // H1…: each rule catches the shape it names, and leaves the right way alone
   const bad: Record<string, string> = {
@@ -138,15 +165,18 @@ if (import.meta.main) {
     "colon-list": "const roots = (process.env.PROTOCOL_WORLDS ?? \"\").split(\":\");",
     "version-regex": "ok(/@(1[4-9]|[2-9][0-9])$/.test(TRANSLATOR));",
     "lab-clock": 'T += 100; process.env.PROTOCOL_NOW = String(T); process.env["PROTOCOL_NOW"] = "1"; delete process.env.PROTOCOL_NOW;',
-    "slash-path": 'if (/\\/tools\\/[^/]+\\.(ts|mjs)$|\\/tools\\/protocol\\//.test(p)) walk(p);',
+    "slash-path": 'if (/\\/tools\\/[^/]+\\.(ts|mjs)$|\\/tools\\/protocol\\//.test(p)) walk(p);\nconst ALLOWED = [/mcpl\\/agent\\.ts$/, /client\\/lib\\/controller\\.js$/];\nb.onLoad({ filter: new RegExp(\'/\' + m.file + \'$\') }, f);',
     // split: the whole flag in this file would make suites.ts read the hygiene suite as one that launches a browser
     "chrome-flags": 'Bun.spawn([CHROME, "--headless=new", `--remote-' + 'debugging-port=${port}`, url]);',
     // split, like chrome-flags: the whole import in this file would make suites.ts read hygiene as a browser suite
+    "agent-url": 'new WorldAgent({ name: "a", world: "w" }); new WorldAgent(); new WorldAgent({\n  name: "b",\n  avatar: "",\n});',
+    "own-ok": "let pass = 0, fail = 0; let fails = 0, passes = 0;",
     "redaction-parse": 'if (e.kind === "redaction") for (const t of e.body.values) p.add(t.seq); const v = e.body?.values;',
     "playwright": 'import { chromium } from "play' + 'wright"; const { chromium: c2 } = await import("playwright-core");',
+    "posix-mode": 'check("W10 private", (statSync(f).mode & 0o777) === 0o600);\nok(st.mode == 0o644, "D9");',
   };
-  const want: Record<string, number> = { "bare-wait": 4, "own-until": 2, "url-path": 1, "shell-interp": 1, "raw-symlink": 1, "colon-list": 1, "version-regex": 1, "slash-path": 1, "chrome-flags": 2, "lab-clock": 3, "redaction-parse": 2, "playwright": 2 };
-  const good = 'await until("the crate rests", () => crate.rest); await pause("the 2 s refractory window", 2000); const d = fileURLToPath(new URL("../f/", import.meta.url)); Bun.spawnSync(["sh", "-c", \'git archive "$1"\', "sh", c]); linkInto(t, at); if (/[\\\\/]tools[\\\\/]/.test(p)) walk(p); const poll = (p) => post("/native/poll", p); const r = pathList(process.env.PROTOCOL_WORLDS); ok(translatorVersion(TRANSLATOR) >= 14); Bun.spawn([CHROME, ...chromeArgs({ port, profile }), url]); const n = rows.filter((r) => /chrom(e|ium).*--headless/.test(r)); // a --headless Chrome clock.advance(100); pin(LAB_EPOCH); const t = pinned(); if (process.env.PROTOCOL_NOW === "1") unpinned(f); const red = redactionsIn(E); const body = redactedBodies(E, red); const values = Object.values(body);';
+  const want: Record<string, number> = { "bare-wait": 4, "own-until": 2, "url-path": 1, "shell-interp": 1, "raw-symlink": 1, "colon-list": 1, "version-regex": 1, "slash-path": 3, "chrome-flags": 2, "lab-clock": 3, "redaction-parse": 2, "playwright": 2, "agent-url": 3, "own-ok": 2, "posix-mode": 2 };
+  const good = 'const ALLOWED = ["mcpl/agent.ts"]; ALLOWED.includes(slashed(f));\nb.onLoad({ filter: new RegExp(pathEnd(m.file)) }, f);\n(/\\/client\\/lib\\/x\\.js$/.test(a.importer.replace(/\\\\/g, "/")));\nS.mode("W10 private", f, 0o600);\nok(WIN ? isFile : st.mode === 0o600);\nok(process.platform === "win32" || m === 0o600);\nawait until("the crate rests", () => crate.rest); await pause("the 2 s refractory window", 2000); const d = fileURLToPath(new URL("../f/", import.meta.url)); Bun.spawnSync(["sh", "-c", \'git archive "$1"\', "sh", c]); linkInto(t, at); if (/[\\\\/]tools[\\\\/]/.test(p)) walk(p); const poll = (p) => post("/native/poll", p); const r = pathList(process.env.PROTOCOL_WORLDS); ok(translatorVersion(TRANSLATOR) >= 14); Bun.spawn([CHROME, ...chromeArgs({ port, profile }), url]); const n = rows.filter((r) => /chrom(e|ium).*--headless/.test(r)); // a --headless Chrome clock.advance(100); pin(LAB_EPOCH); const t = pinned(); if (process.env.PROTOCOL_NOW === "1") unpinned(f); const { ok, done } = suite("x"); let pass = rows.length; new WorldAgent({ name: "a", url: noWorldUrl() }); new WorldAgent({ url, name }); new WorldAgent(opts); const red = redactionsIn(E); const body = redactedBodies(E, red); const values = Object.values(body);';
   let i = 1;
   for (const k of Object.keys(RULES)) check(`H${i++} ${k}: caught in its known-bad form (${want[k]}), and not in the right way`, (scan(bad[k])[k] ?? 0) === want[k] && !(scan(good)[k] ?? 0), { bad: scan(bad[k]), good: scan(good) });
   // own-until has one false friend in the tree ('const poll = (p: any) => post(...)', native-login-test); it's a request, not a loop
@@ -168,6 +198,15 @@ if (import.meta.main) {
   const mcplHits = mcplStatelessHits();
   check(`H${i++} mcpl-state: no test spawns the mcpl server without MCPL_STATE`, mcplHits.length === 0, mcplHits.join("\n      "));
 
+  // every test is in the gate or gone (R 10-29): a test-named file no suite reaches is listed in ungated.json with its reason
+  const listed: Record<string, string> = fs.existsSync(UNGATED) ? JSON.parse(fs.readFileSync(UNGATED, "utf8")) : {};
+  const out = ungatedTests();
+  const unlisted = out.filter((f) => !listed[f]?.trim());
+  check(`H${i++} ungated: every test-named file runs in the gate, or ungated.json says in one line why not`, unlisted.length === 0, unlisted.join("\n      "));
+  const stale = Object.keys(listed).filter((f) => !out.includes(f));
+  check(`H${i++} ungated: ungated.json names only files that exist and are still out of the gate (a gated or deleted one comes off)`, stale.length === 0, stale.join("\n      "));
+  console.log(`[hygiene] tests still out of the gate: ${out.length}`);
+
   // then the gate's code against the baseline (may only go down)
   const now = measure();
   const base = fs.existsSync(BASE) ? JSON.parse(fs.readFileSync(BASE, "utf8")) : {};
@@ -181,5 +220,5 @@ if (import.meta.main) {
   check(`H${i++} no file is under its baseline without the baseline following (\`hygiene-check --write\` locks in what was paid off)`, under.length === 0, under.join("\n      "));
   const tot: Record<string, number> = {}; for (const f of Object.values(now)) for (const [k, n] of Object.entries(f)) tot[k] = (tot[k] ?? 0) + n;
   console.log(`[hygiene] debt still in the tree: ${Object.entries(tot).map(([k, n]) => `${k} ${n}`).join(", ") || "none"}`);
-  console.log(`[hygiene-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+  done();
 }

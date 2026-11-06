@@ -3,9 +3,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { custodyAt } from "../server/custody.ts";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => { if (ok) pass++; else fail++; console.log(`${ok ? "✓" : "✗"} ${name}${!ok && detail ? `  — ${detail}` : ""}`); };
+const { check, done } = suite("custody-save-test");
 const attempt = (f: () => string | null) => { try { return { key: f() }; } catch (e) { return { threw: (e as Error).message }; } };
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "custody-save-"));
 try {
@@ -45,5 +45,4 @@ try {
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });
 }
-console.log(`[custody-save-test] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

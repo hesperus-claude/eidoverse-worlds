@@ -12,19 +12,13 @@
 //
 //   captions = {session, n, gen, title?, line: {t0, t1, text, speaker?}}
 //
-// Each write holds ITS line, once (shape audit 10-16, render-media-env §11; WebVTT and TTML store a cue once). Until then
-// the bag carried the newest twenty lines (`window`) and the playhead (`mediaTime`), so every caption change re-logged up to
-// twenty lines: the very cost the caption verb was made to remove. A reader that wants the last lines reads the last
-// captions changes (the log is the transcript); an older stored value's window still reads.
+// Each write holds ITS line, once (render-media-env §11; WebVTT and TTML store a cue once). A reader that wants the last
+// lines reads the last captions changes (the log is the transcript); an older stored value's `window` still reads.
 //
 // Rung 2 of the projector ladder (anima_dev/eidoverse_projector_design.md):
 // the music player — audio in, captions the models can read, no video yet.
-// This is the design note's `caption` verb, made as a protocol amendment
-// (AGENTS.md) after the comp door proved to carry the wrong contract: every
-// window write was a log entry, so the append-only log held each line up to
-// twenty times, and writing one screen's captions took builder standing
-// over the whole world (Mica, #187 review). One line per entry fixes the
-// first; the `caption` deed (a per-entity grant) fixes the second.
+// Writing one screen's captions takes the `caption` deed (a per-entity grant),
+// not builder standing over the whole world.
 //
 // RETENTION, stated truthfully: captions are durable world testimony like
 // `say`; `end` clears current perception, not history. The bot keeps no
@@ -42,7 +36,7 @@
 // still takes over (its leg is newer), a stale predecessor cannot present a
 // "later" timestamp and win (its leg is older), and two captioners for one
 // screen resolve to whichever joined last — the owner's recovery is `end`
-// or `caption: null` (Mica, #187 round 2).
+// or `caption: null`.
 //
 // SESSION is the bot's media-clock label, minted at attach (ISO time plus a
 // nonce, human-readable): it says which attach a `00:30` belongs to. Within
@@ -60,10 +54,9 @@
 //
 // BOUNDS are in CHARACTERS (String.length, UTF-16 code units), not bytes: a
 // 240-character line of CJK is ~720 UTF-8 bytes and that is fine — the bag is
-// folded state, not a verb payload under the value cap; the authority keeps a
-// value under 64 KiB of UTF-8 (protocol/gate.js), a different unit from these
-// character bounds, and a bag of 20 full lines plus title and speakers stays
-// well inside it in any script.
+// folded state, not a verb payload under the comp cap; and the authority keeps each
+// value under 64 KiB of UTF-8 (authority/gate.js), so a bag of 20 full lines plus
+// title and speakers stays well inside it in any script.
 
 import { shown } from './shown.js';
 

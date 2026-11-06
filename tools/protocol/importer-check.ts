@@ -38,6 +38,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { scratch } from "./common.ts";
+import { suite } from "./suite.ts";
 
 const argv = process.argv.slice(2);
 // IM-I9's child: one translation under TRUST_NAMES=1 (read at import), printed as JSON
@@ -58,8 +59,7 @@ const { bindIdentity } = await import("../operator-bind.ts");
 const { HN_ISS } = await import("../../server/auth.ts");
 const { emptyState: v1Empty, foldEntry: v1Fold } = await import("./import-v1/fold.js");
 
-let pass = 0, fail = 0;
-const ok = (cond: any, what: string, detail?: any) => { if (cond) { pass++; console.log(`  ok  ${what}`); } else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail)?.slice(0, 600)}` : ""}`); } };
+const { ok, done } = suite("importer-check", { cap: 600 });
 const row = (what: string, fn: () => void) => { try { fn(); } catch (e) { ok(false, what, `threw: ${e?.stack ?? e}`); } };
 const root = scratch("importer");
 let n = 0;
@@ -533,5 +533,4 @@ row("IM-I45", () => {
   let ok26 = true; try { TV1.translate([BASIC[0], { actor: "a", verb: "spawn", args: { id: id26, lib: "b.glb", pos: [0, 0, 0] } }].map((e, i) => ({ seq: i, ts: i + 1, ...e }))); } catch { ok26 = false; }
   ok(threw.includes(id24) && /reserved person shape/.test(threw) && ok26, "F19 an entity id wearing u-[a-z2-7]{24} refuses the translation, loud, naming the id; a 26-char u- id is fine", { threw, ok26 }); }
 
-console.log(`[importer-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

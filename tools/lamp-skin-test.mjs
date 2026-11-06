@@ -26,6 +26,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
 HTMLCanvasElement.prototype.getContext = function () { const a = new Proxy(function () {}, { get: (_t, k) => (k === 'width' ? 100 : a), apply: () => a, set: () => true }); return new Proxy({}, { get: (_t, k) => (k === 'measureText' ? () => ({ width: 100 }) : a), set: () => true }); };
 import { plugin } from 'bun';
+import { suite } from "./protocol/suite.ts";
 const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
 plugin({ name: 'core-stub', setup(build) {
   build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('./core-stub.mjs') }));
@@ -37,8 +38,8 @@ plugin({ name: 'core-stub', setup(build) {
 const { THREE } = await import('./core-stub.mjs');
 const rig = await import('../client/lib/lightrig.js');
 
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+const S = suite("lamp-skin");
+const check = (name, ok, note) => S.check(name, ok, note);
 
 // A body-like rig: root on the floor, chest bone at y=1.47, lamp geometry
 // authored in BIND space the way the VRM's is (absolute, not relative).
@@ -225,5 +226,4 @@ check('the nudge rides the bone through a full turn', spread < 1e-3,
   `bulb-to-bone distance varied ${spread.toFixed(5)} m across 0/90/180/270`);
 rig.setLampShadow({ forward: 0, up: 0, side: 0 });
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

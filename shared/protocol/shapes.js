@@ -1,6 +1,6 @@
 // shared/protocol/shapes.js — the grammar of a collision shape (spec/PHYSICS.md §3.1). physics.shape is stamped by the
 // authority into the log, so its grammar is frozen the moment the first engine writes one: it's fixed here, before any
-// non-box shape exists (research physics-seeds 10-07, seed 3).
+// non-box shape exists.
 //
 //   [[minX, minY, minZ], [maxX, maxY, maxZ]]   a box: the authority's measured box, in the thing's own frame. Every
 //                                             shape stamped so far is one, so a bare 2-array is a box FOREVER.

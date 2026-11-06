@@ -1,15 +1,11 @@
 // world — the authored plane's scene registries and world-scope builders.
 //
-// The log's MEANING lives in shared/protocol/fold.js (state.js folds it; the
-// realizers in realize/ project it into the scene). What remains here is
-// what every consumer shares: the entity/comp/mount registries, the
-// world-build queue that gates arrival on ground, the world-scope
-// application functions the environment/social realizers drive, mount
-// transforms, and the deferred shadow drain. The applyEntry switch that
-// once folded entries directly into the scene — and the pendingOps/
-// pendingMounts machinery that reconstructed ordering downstream — is
-// gone: state is folded once, realizers read it, and every load
-// completion re-reads current state (TEL0S_NOTES §11).
+// The log's MEANING lives in shared/protocol/fold.js (net.js folds it through replica.js; the
+// realizers in realize/ project it into the scene). What remains here is what every consumer
+// shares: the entity/comp/mount registries, the world-build queue that gates arrival on ground,
+// the world-scope application functions the environment/social realizers drive, and mount
+// transforms. State is folded once, realizers read it, and every load completion re-reads
+// current state (TEL0S_NOTES §11).
 
 import { bodyOf } from '../../shared/components.js';
 import { socketsUnder, resolveSeat } from '../../shared/sockbody.js';
@@ -33,10 +29,7 @@ import { buildFloraField, warmField, loadFloraModule } from './flora.js';
 import { applySky, whenSkyWarm } from './sky.js';
 import { whenBooted, bootDone } from './boot.js';
 import { warm, P_GATE } from './warmqueue.js';
-// seat correction for mounted occupants (upstream #101) — the me-drive frame
-// calls these for every seated body; their import fell on the fork side of
-// a merge hunk while the call site auto-merged, and every SIT threw 56
-// ReferenceErrors a second (antra, live, from a swing in commons2)
+// seat correction for mounted occupants (upstream #101) — the me-drive frame calls these for every seated body
 import { occupyCorrectionFor } from './occupants.js';
 import { applySeatCorrection } from './seatcore.js';
 import { isOwner } from '../../shared/protocol/roles.js';
@@ -46,22 +39,21 @@ import { isOwner } from '../../shared/protocol/roles.js';
 export const entities = new Map();
 /** A thing's fold record as this client folds it (shared/protocol/replica.js): {model?, transform, parent?, …components},
  *  component keys as the fold spells them (shared/protocol/names.js). ONE record for every reader — the Hierarchy, the
- *  Inspector, every evaluator (motion.js reads `motion`; a seat reads its socket child's `socket`; the server reads `reactions`) — so
- *  nothing is held beside the fold to drift (C7c; the `comps` Map the realizer mirrored it into is gone). Frozen in
- *  dev: a reader that writes into it throws. Data is opaque here, as on the server: unknown types just sit in it.
- *  Read it where you need it; never keep it across an ingest — a write replaces the record (the frozen one is thawed
- *  by copy), so a kept reference goes stale. */
+ *  Inspector, every evaluator (motion.js reads `motion`; a seat reads its socket child's `socket`; the server reads
+ *  `reactions`) — so nothing is held beside the fold to drift. Frozen in dev: a reader that writes into it throws. Data
+ *  is opaque here, as on the server. Never keep it across an ingest: a write replaces the record (the frozen one is
+ *  thawed by copy), so a kept reference goes stale. */
 export const bagOf = (id) => replica.st?.entities?.[enc(String(id))]?.c ?? null;
 /** Every placed thing's [id, record], ids as the page spells them (the world entity excluded). */
 export function* bags() {
   const es = replica.st?.entities; if (!es) return;
   for (const k in es) if (k !== '@world') yield [dec(k) ?? k, es[k].c];
 }
-/** A thing's model, for the panels: {model?}, read from the fold (entityMeta is gone, C7c). */
+/** A thing's model, for the panels: {model?}, read from the fold. */
 export const metaOf = (id) => { const c = bagOf(id); return c ? { ...(typeof c.model === 'string' ? { model: c.model } : {}) } : null; };
 /** The tree's edges as this client's fold indexes them (shared/protocol/replica.js, kept at every ingest): the ids a
  *  carrier holds (id order), a thing's carrier, the ids above it nearest first — ids as the page spells them. One
- *  index for the realizer's carrier checks, the panels and the seats; no map is kept beside the fold (C12b). */
+ *  index for the realizer's carrier checks, the panels and the seats; no map is kept beside the fold. */
 const out = (k) => dec(k) ?? k;
 export const childrenOf = (id) => replica.childrenOf?.(enc(String(id))).map(out) ?? [];
 export const parentIdOf = (id) => { const p = replica.parentOf?.(enc(String(id))); return p == null ? null : out(p); };
@@ -76,7 +68,7 @@ export function seatSocket(id) {
   const c = id == null ? null : bagOf(id);
   if (!c?.socket || typeof c.socket !== 'object') return null;
   // a socket switched off (or under something switched off) is closed to occupying, as the authority reads it (occupants.js: offChain):
-  // whoever sits there lets go (localbody's per-frame check), and a frame naming it seats nobody (review 10-12 S3-3)
+  // whoever sits there lets go (localbody's per-frame check), and a frame naming it seats nobody
   if (c.disabled === true || ancestorsOf(id).some((a) => bagOf(a)?.disabled === true)) return null;
   return { id: String(id), host: parentIdOf(id), name: c.socket.name, sock: c.socket, station: c.station && typeof c.station === 'object' ? c.station : null };
 }
@@ -115,11 +107,9 @@ function seatExtras(m, seat) {
 }
 
 
-export const liveEntities = () => [...entities.values()].filter(Boolean);
-
 /** ids someone is actively editing — the residency sweep must never demote
- *  them (review S4: id-based, because promote/demote SWAPS the object a
- *  userData flag would ride). build.js and panel editors add/remove. */
+ *  them (id-based, because promote/demote SWAPS the object a userData flag
+ *  would ride). build.js and panel editors add/remove. */
 export const editHolds = new Set();
 
 // Heavy world construction (terrain ~2s, grass ~1s of main-thread geometry
@@ -140,8 +130,7 @@ function enqueueWorldBuild(what, fn) {
   worldBuild = worldBuild
     .then(() => {
       loadTrack(`build:${what}`, `growing ${what}`);
-      // a work record too — terrain/grass builds were the biggest UNNAMED
-      // frame gaps in the first Safari beacon (2.4s "(unattributed)")
+      // a work record too, so terrain/grass builds are not unattributed frame gaps
       const work = beginWork(`build ${what}`);
       return Promise.resolve(fn()).finally(() => work.end());
     })
@@ -167,16 +156,13 @@ let stageFloor = true;   // no terrain built: the stage floor stands (with the w
 let lastGrassArgs = null;
 
 // ---- world-scope state application ------------------------------------------
-// Driven by the environment/social realizers (realize/environment.js,
-// realize/social.js). Written during the migration window as one
-// implementation under two drivers; the legacy driver is gone, the names
-// stay.
+// Driven by the environment/social realizers (realize/environment.js, realize/social.js).
 
 /** Build (or rebuild) the terrain from its authored bag. Dedupes by args so
  *  a re-join replaying the same world does not regenerate identical ground. */
 export function applyTerrainState(args) {
   // no terrain: the stage floor returns, with the world's water on it when it has some (environment.js groundArgs
-  // {stageFloor, water}; house review I8) and without the old ground's water when it doesn't
+  // {stageFloor, water}) and without the old ground's water when it doesn't
   // …and a flat terrain is that floor at its height (componentspec terrain kind flat)
   const flat = flatHeightOf(args);
   if (!args || args.stageFloor === true || flat !== null) {
@@ -211,26 +197,16 @@ export function applyTerrainState(args) {
     if (t && shape) reshapeTerrain(t, args);
     // the layer textures ride the engine's colorNode, unreachable from
     // material properties — carry them so terrain disposal can free them
-    // (review S5)
     if (t) t.layerTextures = layers.map((l) => l.map);
     // the factory dresses the ground BEFORE its compile: wetness + cloud
-    // shade + receiveShadow (real terrain never received before — only the
-    // stage floor did, and that hides when this lands)
+    // shade + receiveShadow (only the stage floor received before, and that
+    // hides when this lands)
     if (t?.mesh) prepareObject(t.mesh, { kind: 'terrain' });
-    // compile the ground's pipelines BEFORE it enters the scene — an
-    // unprecompiled terrain material otherwise codegens synchronously
-    // inside the first render() that sees it. UNCAPPED, through the warm
-    // conductor and awaited fully (§16.2.A): this build gates arrival, so
-    // the splash simply holds a moment longer and the ground enters
-    // compiled. (A 1200ms Promise.race cap lived here for slow-compile
-    // Safari boots — but past the cap the biggest material in the world
-    // entered the scene UNCOMPILED and codegen'd inside the first render()
-    // that saw it, §16.1c. An uncompiled ground is worse than a longer
-    // splash.)
+    // compile the ground's pipelines BEFORE it enters the scene — an uncompiled terrain material codegens
+    // synchronously inside the first render() that sees it (§16.1c). UNCAPPED, through the warm conductor and
+    // awaited fully (§16.2.A): this build gates arrival, and an uncompiled ground is worse than a longer splash.
     if (t?.mesh) {
-      // P_GATE: arrival waits on THIS item — the first 8b gate measured a
-      // rain world booting in 16s because the cloud-march compiles queued
-      // ahead of the ground the curtain was actually waiting for
+      // P_GATE: arrival waits on THIS item, so ambient compiles must never queue ahead of it
       await warm('compile terrain', () => renderer.compileAsync(t.mesh, camera, scene).catch(() => {}), { p: P_GATE });
     }
     setTerrain(t);
@@ -331,13 +307,9 @@ export function applyGrassState(args) {
     // group): wet sheen on the meadow, sweep markers, no shadow receipt
     // (grass never received, and its fragment cost is the client's biggest)
     if (field?.mesh) prepareObject(field.mesh, { kind: 'grass' });
-    // warm EVERY render object off the render path. The old field-level
-    // compileAsync silently skipped whatever applyTiles had culled against
-    // the boot camera (visible=false / out of frustum), and those tiles
-    // compiled synchronously inside render() when first looked at.
-    // warmField (flora.js) detaches per object, defeats culling, compiles
-    // one per frame, then re-settles tile counts against the live camera —
-    // still inside this build's beginWork('build grass') accounting.
+    // warm EVERY render object off the render path: a field-level compileAsync skips whatever applyTiles culled
+    // against the boot camera. warmField (flora.js) detaches per object, defeats culling, compiles one per frame,
+    // then re-settles tile counts against the live camera — inside this build's beginWork('build grass').
     if (field?.mesh) await warmField(field, renderer, camera, scene);
     setGrass(field);
   });
@@ -345,25 +317,14 @@ export function applyGrassState(args) {
 
 /** Apply an already-FOLDED sky bag (state.st.sky or foldSkyEntry output).
  *  `ts` anchors live transition timing; a snapshot passes the bag's own. */
-// During INITIAL hydration, arrival gates on the sky's pipeline warm
-// (§16.2.D): the dome compiles are ~3s of splash instead of ~3s of visible
-// jank — the warm used to await whenBooted() and land squarely AFTER the
-// curtain lifted (§16.1g). Capped: a degraded or headless sky must never
-// brick arrival (lightbench's bolt-seam section knows sky can degrade) —
-// past the cap the curtain lifts and the warm continues in the conductor
-// behind it. A mid-session sky verb (bootDone) gates nothing and behaves
-// exactly as before; a world with no sky verb never reaches this and gates
-// on nothing. The gate registers synchronously inside the hydration
-// realizer pass — before checkReady can ever observe an empty queue (same
-// ordering guarantee terrain leans on, realize/environment.js).
+// During INITIAL hydration, arrival gates on the sky's pipeline warm (§16.2.D), so the dome compiles are splash
+// rather than visible jank after the curtain (§16.1g). Capped: a degraded or headless sky must never brick arrival —
+// past the cap the curtain lifts and the warm continues in the conductor behind it. A mid-session sky verb
+// (bootDone) gates nothing; a world with no sky verb gates on nothing. The gate registers synchronously inside the
+// hydration realizer pass, before checkReady can observe an empty queue (as terrain does, realize/environment.js).
 let skyGated = false;
-// 25s, was 8: the gate now covers the first bake's cloud-graph compile
-// (§19a — measured 9.3s ending at t=15.3s on THIS box's cold GPU cache;
-// a slower GPU must not have the curtain lift mid-stall, and the gate
-// resolves EARLY via whenBakeReady the moment the pipeline is warm — the
-// cap only binds pathological cases. Near-zero on warm Dawn caches.
-// tel0s chose splash over a mid-session stall until upstream can cache
-// the graph per flavour.)
+// The cap covers the first bake's cloud-graph compile on a cold GPU cache (§19a); the gate resolves EARLY via
+// whenBakeReady the moment the pipeline is warm, so the cap only binds pathological cases.
 const SKY_GATE_MAX_MS = 25000;
 export function applySkyFolded(bag, ts) {
   if (!bag) return Promise.resolve();
@@ -412,11 +373,8 @@ export function applyGrantState(id, rec) {
   // (What I MAY DO is the server's answer, `your-rights`, re-sent whenever a role changes; this mirror is the HUD's.)
 }
 
-// (The deferred shadow-in drain that lived here — markShadowless /
-// drainShadows, one caster per 250ms beat, lanes-idle trigger, 30s fallback
-// — is gone: object.castShadow is in no pipeline cache key, so the light
-// rig budgets the caster set live by camera distance, reversibly.
-// lightrig.js §12.5.)
+// (The light rig budgets the shadow-caster set live by camera distance — object.castShadow is in no pipeline
+// cache key — so nothing here defers shadows. lightrig.js §12.5.)
 
 // Per-world roles (@world roles:<id>), mirrored from the view. A mirror for UI honesty — the authority enforces; this only
 // lets the client SAY what someone is.

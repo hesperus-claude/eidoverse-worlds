@@ -14,13 +14,11 @@
 // This repo's suite stays browser-free, so the registry contract lives here.)
 
 import * as I from "../client/lib/icons.js";
+import { suite } from "./protocol/suite.ts";
 const { has, svg } = I as any;
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("icons");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 // the three states the typing relay actually admits, and the hear glyph pair (HUD toggle, nameplate mark, hover card)
 const SHIPPED = ["ear", "think", "wrench", "headphones", "headphonesOff"];
@@ -50,5 +48,4 @@ const iconFor = avatarSrc.match(/ICON_FOR = \{([^}]*)\}/)?.[1] ?? "";
 for (const m of iconFor.matchAll(/:\s*'(\w+)'/g))
   check(`ICON_FOR '${m[1]}' resolves in the registry`, has(m[1]));
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

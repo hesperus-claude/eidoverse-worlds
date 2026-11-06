@@ -7,28 +7,17 @@
 //
 // A picture is a standalone image (Godot's Sprite3D, Unity's SpriteRenderer): it owns its quad, `width` metres wide,
 // its height from the image's aspect once the image loads. A texture on a NAMED node of a model is the `material`
-// component's (shared/material.js; R 10-27: two shapes, no overlap).
+// component's (shared/material.js: two shapes, no overlap).
 
-// (Batch 2, R 10-07: an https link is a source too now; shared/mediasrc.js decides whose browser may fetch it,
-// and an untrusted host is fetched only for a viewer who opted in. What follows is the rule for the store paths.)
-// SOURCE ALLOW-LIST. `src` is a library-relative path under one of two roots,
-// both served by the sequencer's own /library/ route: `eidoverse/assets/`
-// (Skye's library plus the assets/opt overlay — what the operator placed) and
-// `store/images/` (what someone uploaded through `POST /upload?as=image`:
-// content-addressed, sniffed by bytes, token-gated and rate-limited like every
-// store upload). Never a URL: a picture is an authored asset that entered
-// through a door, not a fetch the world performs on someone's behalf. That is
-// the whole content story for this rung, and it is what keeps a picture inside
-// the world log's trust boundary instead of reaching out of it.
+// SOURCES. An https link (shared/mediasrc.js decides whose browser may fetch it), or a library-relative store path
+// under one of PICTURE_DIRS, both served by the sequencer's /library/ route: `eidoverse/assets/` (what the operator
+// placed) and `store/images/` (uploads via `POST /upload?as=image`: content-addressed, sniffed, token-gated).
 //
-// THE DESCRIPTION. Text-tier residents perceive by reading. A picture with no
-// `description` reads as "a picture (<file>)", which is true and nearly useless; the
-// author can say what it shows in ≤200 chars and that sentence is what look()
-// carries. Nothing about pixels is ever claimed — the host renders, the line
-// describes, and the two are the author's responsibility to keep honest.
+// THE DESCRIPTION. Text-tier residents perceive by reading: the author's ≤200-char `description` is what look()
+// carries (else "a picture (<file>)"). Nothing about pixels is ever claimed.
 
 import { mediaTier } from './mediasrc.js';
-import { graphemes, graphemeList, quoted } from './text.js';
+import { graphemes, quoted } from './text.js';
 
 export const PICTURE_DIR = 'eidoverse/assets/';
 export const PICTURE_STORE = 'store/images/';
@@ -37,19 +26,14 @@ const IMAGE_EXT = /\.(png|jpe?g|webp)$/i;
 export const PICTURE_DESCRIPTION_MAX = 200;
 export const PICTURE_MAX_WIDTH = 20;
 export const PICTURE_DEFAULTS = Object.freeze({ lit: 'scene', width: 1 });
-/** The description field's tooltip, in plain words (R 10-07). */
+/** The description field's tooltip, in plain words. */
 export const DESCRIPTION_HINT = 'Describes this in words, for people who can\'t see it and for agents';
 export const PICTURE_LIT = Object.freeze({ scene: 'lit by the scene', self: 'self-lit (a screen)' });
 const KNOWN_KEYS = new Set(['src', 'width', 'description', 'lit']);
 
-/** Is `src` an allowed picture source? Library-relative, under one of PICTURE_DIRS,
- *  image extension, no scheme, no leading slash, no dot segments — and no
- *  percent-encoding at all. The rule is over the path the FETCH will
- *  canonicalize to, not the string as written: a URL parser reads `%2e%2e`
- *  as `..` (a dot segment by spec), and a server may decode `%41` to `A`
- *  after the check ran (Mica, #186 review). Library paths are plain; a `%`
- *  has no honest use in one, so its presence is a refusal, and the parsed
- *  pathname must come back byte-identical to the declared one. */
+/** Is `src` an allowed picture source? Library-relative, under one of PICTURE_DIRS, image extension, no scheme, no
+ *  leading slash, no dot segments, no `%` at all (a URL parser reads `%2e%2e` as `..`). The parsed pathname must come
+ *  back byte-identical to the declared one: the rule is over what the FETCH canonicalizes to. */
 export function allowedPictureSrc(src) {
   if (typeof src !== 'string' || !src) return false;
   if (/^[a-z][a-z0-9+.-]*:/i.test(src) || src.startsWith('/') || src.includes('\\')) return false;
@@ -67,7 +51,7 @@ export function allowedPictureSrc(src) {
 
 /** Validate an authored bag. `ok:false` carries WHY (legible, once per authoring);
  *  `ok:true` carries the normalized picture plus notes for anything coerced.
- *  `description` is the describing line (R 10-27); src may be an https link (shared/mediasrc.js says who may fetch it). */
+ *  `description` is the describing line; src may be an https link (shared/mediasrc.js says who may fetch it). */
 export function normalizePicture(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     return { ok: false, why: 'picture data must be an object {src, width?, description?, lit?}' };
@@ -81,8 +65,8 @@ export function normalizePicture(data) {
   if (data.width !== undefined) { const w = Number(data.width); if (Number.isFinite(w) && w > 0) picture.width = Math.min(PICTURE_MAX_WIDTH, w); else notes.push('width is a number of metres above 0 — using 1'); }
   if (data.description != null) {
     const d = String(data.description).replace(/\s+/g, ' ').trim();
-    if (graphemes(d) > PICTURE_DESCRIPTION_MAX) { notes.push(`description clipped to ${PICTURE_DESCRIPTION_MAX} characters`); picture.description = graphemeList(d).slice(0, PICTURE_DESCRIPTION_MAX).join(''); }
-    else if (d) picture.description = d;
+    if (graphemes(d) > PICTURE_DESCRIPTION_MAX) return { ok: false, why: `description is ${graphemes(d).toLocaleString('en')} characters (at most ${PICTURE_DESCRIPTION_MAX})` };   // the door's bound, in the editor's words (mediasrc.js, editor-range-test)
+    if (d) picture.description = d;
   }
   if (!picture.description) notes.push('no description — anyone who can\'t see it (or reads the world as text) gets only the file name; say what it shows');
   if (data.lit != null) {

@@ -28,6 +28,8 @@ import { join } from "node:path";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { supportHolders } from "../mcpl/physics.ts";
 import { summarizeGlb } from "../server/geometry.ts";
+import { foundWorlds, requester } from "./harness.ts";
+import { qFromYaw } from "../shared/rot.js";
 import { helloOf } from "../shared/protocol/hello.js";
 
 const PORT = Number(process.env.PORT ?? 9001);
@@ -70,8 +72,10 @@ const rubbleSum = (await summarizeGlb(join(process.env.EIDOVERSE_DIR, RUBBLE_LIB
 // process.execPath, not "bun": the PATH "bun" is an npm .cmd shim on Windows
 // whose pid dies immediately, orphaning the real sequencer on this port where
 // it poisons the next run.
+const worldsDir = mkdtempSync(join(tmpdir(), "ew-uneven-"));
+foundWorlds(worldsDir, [WORLD], "warden");   // joining never founds a world
 const server = spawn(process.execPath, [join(import.meta.dir, "..", "server", "server.ts")], {
-  env: { ...process.env, PORT: String(PORT), WORLDS_DIR: mkdtempSync(join(tmpdir(), "ew-uneven-")), JOIN_TOKEN: "" },
+  env: { ...process.env, PORT: String(PORT), WORLDS_DIR: worldsDir, JOIN_TOKEN: "", TRUST_NAMES: "1" },
   stdio: "ignore",
 });
 const stop = () => { try { server.kill(); } catch {} };
@@ -79,9 +83,12 @@ process.on("exit", stop);
 await sleep(1500);
 
 const warden = new WebSocket(URL_);
-const verb = (v: string, args: any) => warden.send(JSON.stringify({ type: "verb", verb: v, args }));
+const rq = requester(warden);
+const tf = (T: { pos: number[]; yaw: number; scale: number }) => ({ pos: T.pos, q: qFromYaw(T.yaw), scale: [T.scale, T.scale, T.scale] });
+const make = async (id: string, model: string, T: { pos: number[]; yaw: number; scale: number }) => {
+  const r = await rq.request("create", { id, model, components: { transform: tf(T) } }); if (!r?.ok) throw new Error(`${id} wasn't made: ${JSON.stringify(r)}`); };
 await new Promise<void>((res, rej) => {
-  warden.onopen = () => { warden.send(JSON.stringify({ type: "join", hello: helloOf(), world: WORLD, id: "warden", avatar: "eidoverse/assets/vrms/claude.vrm" })); res(); };
+  warden.onopen = () => { warden.send(JSON.stringify({ type: "join", hello: helloOf(), world: WORLD, id: "warden", replica: true, avatar: "eidoverse/assets/vrms/claude.vrm" })); res(); };
   warden.onerror = () => rej(new Error("warden failed to connect"));
 });
 await sleep(400);
@@ -92,12 +99,12 @@ await agent.connect();
 // the blanket: nonzero yaw, non-unit scale, and raised so its below-origin
 // cloth clears the flat terrain (else terrain-at-0 legitimately covers it)
 const B = { pos: [4, 0.5, 4], yaw: 0.9, scale: 1.25 };
-verb("spawn", { id: "blank1", model: BLANKET_LIB, pos: B.pos, yaw: B.yaw, scale: B.scale });
+await make("blank1", BLANKET_LIB, B);
 // the rubble pile, scaled INTO the floor-shaped class (h·s ≤ 1.0)
 const R = { pos: [20, 0, 20], yaw: 0.7, scale: 0.88 };
-verb("spawn", { id: "rubble1", model: RUBBLE_LIB, pos: R.pos, yaw: R.yaw, scale: R.scale });
+await make("rubble1", RUBBLE_LIB, R);
 // the honest control
-verb("spawn", { id: "crate1", model: CRATE_LIB, pos: [40, 0, 40], yaw: 0, scale: 1 });
+await make("crate1", CRATE_LIB, { pos: [40, 0, 40], yaw: 0, scale: 1 });
 await (agent as any).supportReady(8000);
 await until(() => Object.keys(supportHolders()).length >= 3, 8000);
 
@@ -276,10 +283,10 @@ console.log("\n━━ a scale that stretches certification: declared abstention 
 {
   // certSpread 0.03 × scale 2 = 0.06 > the 0.05 world bound — the grid must
   // be refused, the seam declared, and the body finds terrain (no box!)
-  verb("spawn", { id: "blank2", model: BLANKET_LIB, pos: [80, 0.5, 80], yaw: 0, scale: 2 });
+  await make("blank2", BLANKET_LIB, { pos: [80, 0.5, 80], yaw: 0, scale: 2 });
   await sleep(1500);
   await (agent as any).supportReady(8000);
-  const held = Object.keys(supportHolders()).some((k) => k.endsWith("/blank2"));
+  const held = Object.keys(supportHolders()).some((k) => k.endsWith(`/${rq.ids.of("blank2")}`));
   check("over-stretched grid registers NOTHING (no box, no grid)", !held, JSON.stringify(Object.keys(supportHolders())));
   check("and the seam is declared, bounded", agent.supportSeams > 0, `seams=${agent.supportSeams}`);
 }

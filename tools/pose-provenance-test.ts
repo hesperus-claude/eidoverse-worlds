@@ -15,21 +15,19 @@
 // the SOURCE (the settled-pose-test pattern), so reverting a call site fails
 // the suite.
 
+import { noWorldUrl } from "./no-world.ts";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-function ok(cond: unknown, label: string) {
-  if (cond) { pass++; console.log(`  ✓ ${label}`); }
-  else { fail++; console.log(`  ✗ ${label}`); }
-}
+const { ok, done } = suite("pose-provenance");
 
 const BAG = { hips: [-0.6186, 0.2801, 0.3753, 0.6308] } as Record<string, number[]>;
 
 function agent(): any {
-  return new WorldAgent({ name: "prov-test", world: "prov-test" }) as any;
+  return new WorldAgent({ url: noWorldUrl(), name: "prov-test", world: "prov-test" }) as any;
 }
 
 console.log("authored poses (setPose):");
@@ -92,9 +90,6 @@ console.log("wire + call-site invariants (asserted against the source):");
   ok(leaves.length >= 2, "walking AND standing both leave the seat (found " + leaves.length + " call sites)");
   ok(/msg\.restore\.pose && msg\.restore\.clip !== "ragdoll"\) \{ this\.heldPose = msg\.restore\.pose; this\.heldPoseAuthored = true/.test(src),
      "a restored pose (post-settledPose server memory) counts as authored");
-  // (gone with v1: "stateToEntries replays folded mounts — a rejoined agent knows it is seated". A seat is presence
-  //  and isn't in the log or the cut, so a rejoin starts standing; there is no folded mount to replay.)
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

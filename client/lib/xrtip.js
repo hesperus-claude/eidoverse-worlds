@@ -1,4 +1,4 @@
-// xrtip — a panel control's TOOLTIP, in the headset (owner, 10-02). The desktop shows a control's title= in the house
+// xrtip — a panel control's TOOLTIP, in the headset. The desktop shows a control's title= in the house
 // chip (#tipchip, ui.js) after the mouse rests on it; a laser has no hover, so in VR the same text shows when the laser
 // DWELLS on that control (dwell.js, per hand, through the pointer's stickiness) and goes when the laser leaves it.
 // No strings of its own: the text is the control's own title (or its nearest titled ancestor's — a settings row

@@ -15,11 +15,11 @@
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
+import { suite } from "./suite.ts";
 
 const ENGINE = path.resolve(import.meta.dir, "../..");
 const CLIENT = path.join(ENGINE, "client");
-let pass = 0, fail = 0;
-const ok = (c: any, what: string, detail?: any) => { if (c) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 700)}` : ""}`); } };
+const { ok, done } = suite("modhole-check", { quiet: true, cap: 700 });
 
 const files: string[] = [];
 const walk = (d: string) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) {
@@ -79,5 +79,4 @@ ok(escapers.some(({ f }) => f === path.join("lib", "markup.js")), "MH6 (setup) t
 const short = escapers.filter(({ l }) => !/replace\(\/\[&<>"'\]\//.test(l));
 ok(short.length === 0, "MH6 every client escaper escapes ' as well as & < > \"", short);
 
-console.log(`[modhole-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

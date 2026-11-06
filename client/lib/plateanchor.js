@@ -1,24 +1,19 @@
 // plateanchor — WHERE a nameplate hangs: anchored to the body, following its posture. Pure, so the test drives these
 // very functions (tools/plateanchor-test.ts); avatar.js measures the body once and calls them every frame.
 //
-// WHY this shape (notes/eidoverse/nameplate-anchor-research-2026-09-30.md; owner, 09-30): a plate at a fixed 1.95 m
-// above the feet is wrong for a short or a tall body and can't follow sitting or lying down. Nobody tracks the live
-// HEAD — "a plate that bobs with the wearer's neck reads as broken" (BasisVR, BasisNamePlateAnchorMath.cs). So, Basis's
-// way: measure the crown ONCE at rest, then hang the plate over the LIVE HIPS at the rest hips→crown height. Sitting
-// lowers the hips, so the plate comes down with them for free. The head term (head + head span) only wins when the
-// head rises above where the hips say it should be (a stretch, a jump's reach).
-// LYING (Basis doesn't handle it; its plate would float a torso-length above a lying body): when the head drops under
-// LIE_START of its rest height above the feet, the anchor blends to over the head — smoothly across the band down to
-// LIE_FULL, so lying down is a glide, not a snap. A LOW HEAD ALONE IS NOT LYING: measured on the real clips (09-30,
-// tools/plateanchor-shot-probe.mjs), sitting_on_ground puts the head at ~40% of its rest height (tigerbee 0.587 m of
-// 1.44) — inside the band, so the plate slid 63% of the way to the head of a person sitting upright. What tells the
-// two apart is the TORSO: head-over-hips as a fraction of rest is ~0.9 sitting (claude 0.90, tigerbee 0.92) and ~0.4
-// on the lie clip (0.40 / 0.36). So lying = a low head AND a torso that has gone over (TORSO_START → TORSO_FULL);
+// WHY this shape: a plate at a fixed height is wrong for a short or a tall body and can't follow sitting or lying
+// down. Nobody tracks the live HEAD — "a plate that bobs with the wearer's neck reads as broken" (BasisVR,
+// BasisNamePlateAnchorMath.cs). So, Basis's way: measure the crown ONCE at rest, then hang the plate over the LIVE
+// HIPS at the rest hips→crown height. Sitting lowers the hips, so the plate comes down with them for free. The head
+// term (head + head span) only wins when the head rises above where the hips say it should be (a stretch, a jump).
+// LYING (Basis doesn't handle it): when the head drops under LIE_START of its rest height above the feet, the anchor
+// blends to over the head, smoothly down to LIE_FULL. A LOW HEAD ALONE IS NOT LYING: sitting on the ground puts the
+// head at ~40% of rest height. The TORSO tells them apart: head-over-hips is ~0.9
+// of rest sitting and ~0.4 lying. So lying = a low head AND a torso that has gone over (TORSO_START → TORSO_FULL);
 // the lower of the two blends wins. A bow or a crouch keeps the head high, so it doesn't count either.
 // Y is smoothed (a critically-damped chase with a small dead zone for breathing and head bob); X/Z are not — a plate
 // that trails its walking body sideways reads as lag.
-// STANDING IS RIGID (owner, 10-01: "big noticeable lag on the nameplate on jumping"): the chase was on the live anchor,
-// and a jump clip moves the hips under the root (crouch, tuck, land), so the eased plate chased a swinging target.
+// STANDING IS RIGID: a jump clip moves the hips under the root, so an eased plate would chase a swinging target.
 // Upright in ordinary motion (STAND_SLOTS) the plate rides the REST crown over the root and the clip cannot move it;
 // the chase only runs when the target changes, which is a posture change (stand ↔ sit ↔ lie).
 
@@ -102,7 +97,7 @@ export function plateOffset(prev, { standing, standY, liveY }, dt, opts = {}) {
 }
 const RIGID = { dead: 0 };
 
-// ---- seen from above (owner, 10-01: "make sure the label offsets away from the avatar when seen from above") ------
+// ---- seen from above: the label offsets away from the avatar ------------------------------------------------------
 // The plate hangs a gap over the crown in WORLD up. Looking down, that gap foreshortens (cos of the pitch) and the
 // head's own top rises on screen toward the plate, until from straight above the plate sits on the face. The plate is
 // a screen-aligned sprite, so the fix is in screen terms: slide it along the camera's up (perpendicular to the view,
@@ -113,7 +108,6 @@ const RIGID = { dead: 0 };
 // is 0 at eye level, grows smoothly as the camera pitches down, and is about headR + drop from straight above. A level
 // or upward-looking camera lifts nothing (the rule alone would ask ~1 cm looking up 25°, the head being nearer the eye
 // than the plate; at a level camera it is exactly 0, so the cut is continuous).
-// (Clearing the head's top with no stand-off left the pill touching the head from straight above — 10-01 shots.)
 // A pure function of the camera and the plate's own anchor (not the live head), so it is as steady as the plate.
 
 /** eye, up, fwd: the camera's world position and unit up / forward ([x,y,z]); plate: the plate's centre (world);

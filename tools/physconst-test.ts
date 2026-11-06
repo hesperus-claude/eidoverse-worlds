@@ -4,8 +4,8 @@
 // A  byte-equal launch: for a few releases (a −0 in pos/q/v, the engine's speed cap, a throw with spin and occupants) the
 //    entry client/lib/thingphysics.js planRelease predicts equals the body the authority logs: the engine folds the same
 //    bits (DESIGN-physics-responsiveness §3). −0 counts: a predicted −0 and a logged 0 are different bytes to a hash.
-// B  one binding: the files that used to carry their own copy of a reach or a rounding import shared/protocol/physconst.js
-//    or shared/protocol/round.js, and no copy of the literal is back.
+// B  one binding: the shared values are the ones the design states (the imports and the no-copy scan over every file
+//    are tools/one-binding-test.ts's).
 // @ts-nocheck
 import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
@@ -84,29 +84,7 @@ const ENG = "eidosim@1.0.0";
 }
 
 // ---------------- B: one binding ----------------
-const src = (f) => fs.readFileSync(path.join(ENGINE, f), "utf8");
-const NO = [ // [file, the import it must carry, the literal patterns that must not be back]
-  ["shared/protocol/authority.js", /from "\.\/physconst\.js"/, [/\bREACH\s*=\s*[\d.]/, /\bHAND_Y\s*=\s*[\d.]/, /\bMAX_HELD\s*=\s*\d/, /\bKICK\s*=\s*\{/]],
-  ["shared/protocol/authority.js", /from "\.\/round\.js"/, [/\bconst r3\s*=/, /\bnoNeg0\s*=\s*\(/, /\bunNegZero\s*=\s*\(/]],
-  ["client/lib/thingphysics.js", /from '\.\.\/\.\.\/shared\/protocol\/physconst\.js'/, [/\bREACH\s*=\s*[\d.]/, /\bHAND_Y\s*=\s*[\d.]/, /\bKICK\s*=\s*\{/]],
-  ["client/lib/thingphysics.js", /from '\.\.\/\.\.\/shared\/protocol\/round\.js'/, [/\bconst r3\s*=/]],
-  ["client/lib/thingphysics.js", /planLaunch\(/, [/planVelocity\(/]],
-  ["client/lib/useprompt.js", /from '\.\.\/\.\.\/shared\/protocol\/physconst\.js'/, [/\bUSE_REACH\s*=\s*[\d.]/]],
-  ["client/lib/commands/handlers.js", /from '\.\.\/\.\.\/\.\.\/shared\/protocol\/physconst\.js'/, [/\bREACH\s*=\s*[\d.]/]],
-  ["server/messages.ts", /from "\.\.\/shared\/protocol\/physconst\.js"/, [/\bBODY_RANGE[^=\n]*=\s*\{/]],
-  ["shared/grab.js", /from '\.\/protocol\/physconst\.js'/, [/\bHAND_REACH\s*=\s*[\d.]/]],
-  ["shared/protocol/launchplan.js", /from "\.\/round\.js"/, [/\bconst r3\s*=/]],
-  ["shared/protocol/simlayer.js", /from "\.\/round\.js"/, [/Math\.round\(n \* 1000\) \/ 1000/, /Math\.round\(n \* 100\) \/ 100/]],
-  ["shared/hierarchy.js", /from '\.\/protocol\/round\.js'/, [/\bconst r3\s*=/, /\bconst r9\s*=/, /toFixed\(4\)/]],
-  ["tools/protocol/import-v1/translate-v1.js", /from "\.\.\/\.\.\/\.\.\/shared\/protocol\/round\.js"/, [/\bunNegZero\s*=\s*\(/]],
-  ["mcpl/agent.ts", /from "\.\.\/shared\/protocol\/round\.js"/, [/\bconst r3\s*=/]],
-  ["server/modelcatalogue.ts", /from "\.\.\/shared\/protocol\/round\.js"/, [/\bconst r3\s*=/]],
-];
-for (const [f, imp, lits] of NO) {
-  const s = src(f);
-  ok(imp.test(s), `B ${f} imports the shared binding (${imp})`);
-  for (const re of lits) ok(!re.test(s), `B ${f} carries no copy of ${re}`, s.match(re)?.[0]);
-}
+// the import and no-copy rows over every file are tools/one-binding-test.ts's
 { // the shared values are the ones the design states, and the layered shove reaches stay distinct on purpose
   const P = await import("../shared/protocol/physconst.js"), R = await import("../shared/protocol/round.js");
   ok(P.REACH === 1.5 && P.HAND_Y === 1.1 && P.MAX_HELD === 2 && P.USE_REACH === 2.5, "B physconst values", P);
@@ -117,6 +95,7 @@ for (const [f, imp, lits] of NO) {
   ok(bytes(R.unNegZero({ a: [-0, { b: -0 }], c: -0 })) === bytes({ a: [0, { b: 0 }], c: 0 }), "B unNegZero scrubs nested", R.unNegZero({ a: [-0] }));
 }
 
+const src = (f: string) => fs.readFileSync(path.join(ENGINE, f), "utf8");
 // R 10-28: a punt's reach lives in KICK alone: no runtime file, help or agent description writes a punt / kick distance of its own
 { const walk = (d: string): string[] => fs.readdirSync(path.join(ENGINE, d), { withFileTypes: true }).flatMap((e) => e.name === "node_modules" || e.name === "vendor" ? [] : e.isDirectory() ? walk(path.join(d, e.name)) : /\.(m?js|ts|json)$/.test(e.name) && !/-test\.|-check\./.test(e.name) ? [path.join(d, e.name)] : []);
   const hits = ["client", "shared", "mcpl", "server", "defs/ui"].flatMap(walk).filter((f) => f !== path.join("shared", "protocol", "physconst.js"))

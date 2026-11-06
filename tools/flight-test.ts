@@ -8,10 +8,11 @@
 // the CLIP carries the rest -- stated rather than pretended.
 //
 // COVERAGE IS PARTIAL, and the headings say which part. These prove physical
-// SUBCOMPONENTS, not the full acceptance vectors, because the verbs and the
-// render path do not exist yet:
+// SUBCOMPONENTS, not the full acceptance vectors, because parts of the plan
+// layer and the render path do not exist yet:
 //
-//   T1  take_off              -- no verb yet. Not covered.
+//   T1  take_off              -- PARTIAL: takeOff's launch speeds, boost and
+//                               refusals are proven; the render is not.
 //   T2  glide range/polar     -- PARTIAL: the curve and the range prediction
 //                               are proven; there is no glide_to target
 //                               contract to land short OF.
@@ -21,12 +22,14 @@
 //   T5  consent gate          -- PARTIAL: the injected stub allows/denies/
 //                               revokes; land_at(person) descent and the
 //                               mid-descent diversion do not exist.
-//   T6  fold_down silhouette  -- no verb, no render. Not covered.
+//   T6  fold_down silhouette  -- PARTIAL: foldDown/unfold and take_off's
+//                               refusal while folded are proven; the render is not.
 //   T7  mode tags over a mixed sortie -- no plan layer yet. Not covered.
 //   T8  3.4s periods          -- PARTIAL: the leaf period is measured in the
 //                               integrator; wing-idle and stamina-tick RENDER
 //                               periods are not, and T8 asks about the render.
 
+import { noWorldUrl } from './no-world.ts';
 import {
   makeConfig, initialState, step, bodyDown, bodyRecovered,
   leafAt, beatRemaining, sinkRate, glideRatio, glideRange,
@@ -38,12 +41,11 @@ import { inspectBody, describeBody } from '../shared/flightbody.js';
 import { denyAllFlight, devFlightProvider, worldFlightProvider, resolveFlight, rigProfile, revoked }
   from '../shared/flightcap.js';
 import { readFileSync } from 'node:fs';
+import { suite } from "./protocol/suite.ts";
+import { slashed } from "./protocol/common.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => {
-  if (ok) { pass++; console.log(`  ok    ${name}`); }
-  else { fail++; console.log(`  FAIL  ${name}${detail ? '  -- ' + detail : ''}`); }
-};
+const S = suite("flight");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol;
 
 const DT = 1 / 120;
@@ -702,8 +704,7 @@ console.log('\nDEFAULT-DENY -- a compatible rig is evidence, never permission');
   const granted = { role: 'owner', fly: true };
   check('no rights says they have not arrived, and what to do if they never do',
         /haven't arrived/.test(reasonOf(null)) && /ask whoever runs it/.test(reasonOf(null)), reasonOf(null));
-  // main #245 named a `grant {fly}` verb; on this branch flight is a role's fly permission (server rightsFor), so the
-  // reason names who gives it and the set that does
+  // flight is a role's fly permission (server rightsFor), so the reason names who gives it and the set that does
   check('no grant names who gives flight and the roles set that does it',
         /a role's fly permission, which the world's owner/.test(reasonOf({ role: 'owner', fly: false })) &&
         /set \{id: "@world", component: "roles:<your id>", value: \{can: \{fly: true\}\}, merge: true\}/.test(reasonOf({ role: 'owner', fly: false })), reasonOf({ role: 'owner', fly: false }));
@@ -869,12 +870,8 @@ console.log('\nT6 -- fold_down grounds the flier, and unfolding is deliberate');
 // ---------------------------------------------------------------- isolation
 console.log('\nISOLATION -- nothing in the running world reaches flight yet');
 {
-  // mica: "unchanged non-Mythos/flight-disabled behavior needs negative
-  // tests". The strongest form available at this stage is structural: no
-  // shipped runtime module imports the flight core at all, so there is no
-  // path by which a commons avatar's behaviour could differ. When the
-  // controller does wire it up, this test tightens to "imports it, and every
-  // entry point resolves a capability first".
+  // only the deliberate importers below may reach the flight core, each resolving a capability first, so a commons
+  // avatar's behaviour can't differ
   const { readFileSync, readdirSync, statSync } = await import('node:fs');
   const { join } = await import('node:path');
   const walk = (dir: string, out: string[] = []) => {
@@ -882,7 +879,7 @@ console.log('\nISOLATION -- nothing in the running world reaches flight yet');
       if (e === 'node_modules' || e.startsWith('.')) continue;
       const p = join(dir, e);
       if (statSync(p).isDirectory()) walk(p, out);
-      else if (/\.(js|ts|mjs)$/.test(e)) out.push(p);
+      else if (/\.(js|ts|mjs)$/.test(e)) out.push(slashed(p));   // repo-relative with `/` on every OS: compared by name below
     }
     return out;
   };
@@ -916,13 +913,13 @@ console.log('\nISOLATION -- nothing in the running world reaches flight yet');
   // the old scan rather than absent from it. It is listed here rather than
   // exempted: it takes no capability decision, it is handed forces by a caller
   // that already resolved one, so the per-importer checks below skip it.
-  const ALLOWED = [/mcpl\/agent\.ts$/, /client\/lib\/controller\.js$/, /mcpl\/physics\.ts$/];
+  const ALLOWED = ['mcpl/agent.ts', 'client/lib/controller.js', 'mcpl/physics.ts'];
   // Only the two ENTRY POINTS must gate; physics.ts is downstream of a gate.
-  const GATEKEEPERS = [/mcpl\/agent\.ts$/, /client\/lib\/controller\.js$/];
+  const GATEKEEPERS = ['mcpl/agent.ts', 'client/lib/controller.js'];
   check(`only expected modules import flight (${importers.length})`,
-        importers.length > 0 && importers.every(f => ALLOWED.some(re => re.test(f))),
+        importers.length > 0 && importers.every(f => ALLOWED.includes(f)),
         importers.join(', '));
-  for (const f of importers.filter(f => GATEKEEPERS.some(re => re.test(f)))) {
+  for (const f of importers.filter(f => GATEKEEPERS.includes(f))) {
     const src = readFileSync(f, 'utf8');
     check(`${f.split('/').pop()} resolves a capability before it flies`,
           /resolveFlight\(/.test(src));
@@ -1266,7 +1263,7 @@ console.log('\nFLOWN -- four faults a human found that no assertion had');
 {
   const live = { type: 'your-rights', rights: { role: 'builder', gen: false, fly: false } };
   const { WorldAgent } = await import('../mcpl/agent.ts');
-  const ag: any = new WorldAgent({ name: 'pilot', world: 'rights-bench' });
+  const ag: any = new WorldAgent({ url: noWorldUrl(), name: 'pilot', world: 'rights-bench' });
   ag.bodyBoneNames = ['Hip', 'Spine02', 'Head',
     'L_Wing_Upper', 'L_Wing_Upper_1', 'R_Wing_Upper', 'R_Wing_Upper_1',
     'L_Wing_Lower', 'R_Wing_Lower'];
@@ -1288,7 +1285,7 @@ console.log('\nFLOWN -- four faults a human found that no assertion had');
 // On ccb065c this deliberately fails: flightEvent() called verb("say", ...) (today it would be door/say).
 {
   const { WorldAgent } = await import('../mcpl/agent.ts');
-  const ag: any = new WorldAgent({ name: 'pilot', world: 'bench' });
+  const ag: any = new WorldAgent({ url: noWorldUrl(), name: 'pilot', world: 'bench' });
   let authored = 0;
   // every way an agent writes: the door (requests, say included) and its say helper
   ag.door = async () => { authored++; return { ok: true }; };
@@ -1296,5 +1293,4 @@ console.log('\nFLOWN -- four faults a human found that no assertion had');
   ag.flightEvent({ kind: 'ground.landed', impactV: 0.5 });
   check('flight telemetry never authors resident say', authored === 0, `authored=${authored}`);
 }
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

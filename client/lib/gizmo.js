@@ -1,16 +1,9 @@
 // gizmo — three's TransformControls on the selected thing, in build mode.
 //
-// The tools column's move / rotate / scale already drive build.js's own drag
-// (grab anywhere on the mesh). The gizmo is the precise version of the same
-// three gestures: axis handles you can see. It never replaces their drag —
-// build.js vetoes its mesh-grab while a handle is hot (setPointerVeto), and
-// both commit the same way: ONE request on release (editOps' set transform, expecting where the drag began),
-// an inverse from the fold on the undo stack, others watching the drag at
-// pose cadence. Rotate turns about any axis and commits the full orientation
-// q (design §5; a pure turn about up on a yaw-only thing stays a yaw); scale
-// commits one number (the Y handle's; the others follow — editschema.js scale3).
-// A locked thing's release asks the door; a thing riding a moving part gets no
-// gizmo — the schema says its transform is read-only, and a handle you can't drag is a lie.
+// The precise version of build.js's move / rotate / scale drag: axis handles you can see. build.js vetoes its
+// mesh-grab while a handle is hot (setPointerVeto), and both commit the same way: ONE request with the full pose on
+// release, others watching the drag at pose cadence. Rotate commits the full orientation q (design §5).
+// Things whose transform the schema makes read-only get no gizmo: a handle you can't drag is a lie.
 
 import { THREE, scene, camera, canvas } from './core.js';
 import { bus } from './base.js';
@@ -36,7 +29,7 @@ let attachedId = null;
 let start = null;        // { rec, scale, comps? } at drag start (the components the release's expect names)
 let cancelled = false;   // Esc during the drag — the thing goes back, and the release writes nothing (§3a)
 let lastSent = 0;
-// the pivot (research 52, Roblox's PivotOffset): with a `pivot` comp the handles ride a PROXY at the pivot, oriented as
+// the pivot (Roblox's PivotOffset): with a `pivot` comp the handles ride a PROXY at the pivot, oriented as
 // the thing, and the thing follows the proxy: objWorld = proxy × offset (offset fixed at drag start). A turn or a size
 // then goes about the pivot; nothing about the thing's own record changes but its pose.
 const proxy = new THREE.Object3D(); proxy.name = 'edit-gizmo-pivot';
@@ -75,8 +68,8 @@ const MODE = { move: 'translate', rotate: 'rotate', scale: 'scale', pivot: 'tran
  *  thing's transform is read-only; a light has no orientation or scale to drag. */
 function editable(id, mode) {
   const rec = foldRecord(id); const obj = entities.get(id);
-  // a lock doesn't stop the drag: the release asks the door, and a person who may lift it is asked (§5, R's dialog).
-  // A thing riding another: three parents it (realize/models.js), so its position IS the local transform the schema's
+  // a lock doesn't stop the drag: the release asks the door, and a person who may lift it is asked (§5).
+  // A thing parented to another: three parents it (realize/models.js), so its position IS the local transform the schema's
   // pos.* edits, the frame the mesh drag already uses; a part socket (a moving node) stays out.
   const rides = !!rec?.parent;
   if (!rec || !obj || (rides && obj.parent !== entities.get(rec.parent.to ?? rec.parent))) return false;
@@ -102,7 +95,7 @@ function sync() {
   if (c.mode !== mode) c.setMode(mode);
   const sp = getSpace(getTool()) === 'object' ? 'local' : 'world';
   if (c.space !== sp) c.setSpace(sp);   // the tool's space (build.js SPACES)
-  // every axis: rotate commits q; scale is per axis (R 10-04)
+  // every axis: rotate commits q; scale is per axis
   c.showX = true; c.showZ = true; c.showY = true;
 }
 

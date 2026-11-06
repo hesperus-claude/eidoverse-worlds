@@ -11,7 +11,8 @@ export const defsRegistry = async () => ({ skyPresets: {}, skyClocks: { paris: {
 export const sendOps = async (ops) => { for (const o of [].concat(ops)) S.sent.push([o.verb, o.args]); return { ok: true }; };
 export const flashHint = () => {};
 
-export const S = { logged: null, args: {}, previewing: false, impl: 'eidoverse', cloudQuality: 'medium', sent: [] };
+export const S = { logged: null, args: {}, previewing: false, impl: 'eidoverse', cloudQuality: 'medium', choice: null, sent: [],
+  rendering: false, degraded: false, cap: null, inXR: false };
 /** what applySky does to the state the panel reads */
 export function logSky(args) {
   S.args = { ...args }; S.logged = { args: S.args, t0: args.ts ?? Date.now() }; S.previewing = false;
@@ -22,13 +23,13 @@ export const skyArgs = () => S.args;
 export const skyImpl = () => S.impl;
 export const loggedSky = () => S.logged;
 export const skyPreviewing = () => S.previewing;
-export const skyRendering = () => false;
-export const skyDegraded = () => false;
+export const skyRendering = () => S.rendering;
+export const skyDegraded = () => S.degraded;
 export const getCloudQuality = () => S.cloudQuality;
-export const getCloudChoice = () => S.cloudQuality;
-export const setCloudQuality = (v) => { S.cloudQuality = v; };
-export const cloudCap = () => null;
-export const skyInXR = () => false;
+export const getCloudChoice = () => S.choice ?? S.cloudQuality;
+export const setCloudQuality = (v) => { S.cloudQuality = v; S.choice = null; };
+export const cloudCap = () => S.cap;
+export const skyInXR = () => S.inXR;
 export const WEATHERS = ['clear', 'fair', 'overcast', 'rain', 'storm'];
 export const CLOUDS = ['clear', 'cumulus', 'stratus', 'cirrus'];
 export const SKY_WORLDS = ['earth'];

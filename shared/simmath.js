@@ -3,9 +3,8 @@
 //
 // The host's Math.sin/cos/atan2/exp are IMPLEMENTATION-APPROXIMATED — two
 // correct engines may disagree in the last bits, which under a deterministic
-// fold is a forked world. Covenant I therefore bans them from sim code and
-// promised "a wasm kernel later". This module is that kernel, delivered in
-// the house's own no-build dialect instead: every function below is built
+// fold is a forked world. Covenant I therefore bans them from sim code; this
+// module is the owned kernel: every function below is built
 // ONLY from operations the covenant already blesses as IEEE-754-exact on
 // every conforming engine — + − × ÷, sqrt, comparisons, floor/abs/min/max,
 // and explicit-endian byte views — evaluated in a FIXED order. Bit-identity

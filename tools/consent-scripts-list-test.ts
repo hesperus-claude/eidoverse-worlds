@@ -12,12 +12,12 @@ process.env.WORLD_TOKEN = "";
 const { WorldAgent } = await import("../mcpl/agent.ts");
 const { scratchSequencer } = await import("./harness.ts");
 const { until } = await import("./protocol/wait.ts");
+const { suite } = await import("./protocol/suite.ts");
 
 const W = "consent-scripts";
 const H = await scratchSequencer(W, { worlds: [W], serverEnv: { SKIP_OPT_SWEEP: "1" } });
 const URL = `ws://127.0.0.1:${H.PORT}/ws`;
-let passed = 0, failed = 0;
-const check = (name: string, ok: boolean, detail = "") => { if (ok) { passed++; console.log(`  ✓ ${name}`); } else { failed++; console.log(`  ✗ ${name}${detail ? ` — ${detail}` : ""}`); } };
+const S = suite("consent-scripts-list-test"), { check } = S;
 const agents: any[] = [];
 const agent = async (name: string) => { const a: any = new WorldAgent({ url: URL, name, world: W }); agents.push(a); await a.connect(); return a; };
 try {
@@ -52,7 +52,6 @@ try {
     left?.refused?.code === "gone" && /guest's/.test(left?.refused?.reason ?? "") && /while they're here/.test(left?.refused?.fix ?? "") && !/whois/.test(left?.refused?.fix ?? ""), JSON.stringify(left));
 } finally {
   for (const a of agents) { try { a.close(); } catch {} }
-  await H.cleanup(failed ? 1 : 0);
+  await H.cleanup(S.fail ? 1 : 0);
 }
-console.log(`[consent-scripts-list-test] ${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);
+S.done();

@@ -40,17 +40,16 @@ plugin({
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { fileURLToPath } from "node:url";
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
 const { setLog, holdNext, failNext, release, inFlight, requests } = await import("./chat-history-stub.mjs");
 const { frameStub } = await import("./chat-frames-stub.mjs");
 const { hear } = await import("../shared/chatwindow.js");
+const { tryUntil } = await import("./protocol/wait.ts");
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("chat-scrollback");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 let n = 0;
 async function freshChat() {
@@ -65,7 +64,7 @@ const rowsOf = (logEl: HTMLElement) => [...logEl.children].filter((c) => !c.clas
 const shownIn = (logEl: HTMLElement) => rowsOf(logEl).map((c) => c.querySelector(".body")?.textContent ?? "");
 const num = (t: string) => +t.slice(1);
 const isSorted = (xs: string[]) => xs.every((x, i) => !i || num(xs[i - 1]) < num(x));
-const settle = () => Bun.sleep(20);   // the stub answers at once; let the async pass finish
+const settle = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };   // the stub answers at once; let the async pass finish
 const scrollUp = async (logEl: HTMLElement) => { logEl.dispatchEvent(new Event("scroll")); await settle(); };
 const scrollToTop = async (logEl: HTMLElement) => {
   for (let i = 0; i < 30 && !logEl.textContent!.includes("beginning of this world"); i++) await scrollUp(logEl);
@@ -442,7 +441,7 @@ console.log("a trim while a page is in flight does not send the walk past the ne
     shownIn(logEl)[0] === "#561" && rowsOf(logEl).length === 440, `${shownIn(logEl)[0]}, ${rowsOf(logEl).length} rows`);
   holdNext();
   logEl.dispatchEvent(new Event("scroll"));
-  await Bun.sleep(5);
+  await tryUntil("the next page is asked for", inFlight, { ms: 2000, step: 1 });
   check("precondition: the next page is in flight", inFlight());
   setLog(log);
   logChat(log[1000].actor, "#1001", "", { seq: 1001, ts: log[1000].ts });
@@ -472,7 +471,7 @@ console.log("a page that lands after a trim restarted the walk does not end it")
     shownIn(logEl)[0] === "#1" && rowsOf(logEl).length === 440, `${shownIn(logEl)[0]}, ${rowsOf(logEl).length} rows`);
   holdNext();
   logEl.dispatchEvent(new Event("scroll"));
-  await Bun.sleep(5);
+  await tryUntil("the page before #1 is asked for", inFlight, { ms: 2000, step: 1 });
   check("precondition: the page before #1 is in flight", inFlight());
   setLog(log);
   logChat(log[440].actor, "#441", "", { seq: 441, ts: log[440].ts });
@@ -504,7 +503,7 @@ async function scrollAll(logEl: HTMLElement, max = 80) {
     still = rowsOf(logEl).length === was ? still + 1 : 0;
   }
 }
-async function dropAndCatchUp(walk: "beginning" | "one page" | "unmoved", missed: number, fail?: number) {
+async function dropAndCatchUp(walk: "beginning" | "one page" | "unmoved", missed: number, failPage?: number) {
   const chat = await freshChat();
   const { logChat, logEl, resyncChatAfter } = chat;
   setLog(day);
@@ -516,7 +515,7 @@ async function dropAndCatchUp(walk: "beginning" | "one page" | "unmoved", missed
   const t1 = Date.now() - 3_600_000;
   for (let s = 201; s <= 200 + missed; s++) later.push(say(s, s % 2 ? "cairn" : "mythos", t1 + s * 1000));
   setLog(later);
-  if (fail !== undefined) failNext(fail);
+  if (failPage !== undefined) failNext(failPage);
   // what net.js does on a re-join: the catch-up's first page goes out, and
   // the realizer replays the new window while it is on its way
   const pending = resyncChatAfter(200);
@@ -565,10 +564,10 @@ console.log("a catch-up that fetched everything leaves a finished walk finished"
 }
 
 console.log("a catch-up whose page fails leaves the rest to the walk");
-for (const [label, missed, fail] of [["its first page", 60, 0], ["its second page", 200, 1]] as const) {
+for (const [label, missed, failPage] of [["its first page", 60, 0], ["its second page", 200, 1]] as const) {
   // the walk had ended at the beginning, the hardest case: on its own it
   // never asks again
-  const { logEl, later, threw, missing } = await dropAndCatchUp("beginning", missed, fail);
+  const { logEl, later, threw, missing } = await dropAndCatchUp("beginning", missed, failPage);
   check(`${label} fails: the catch-up settles without rejecting`, !threw);
   check(`precondition (${label}): some of what was missed isn't on screen`, missing(201, 200 + missed).length > 0,
     range(missing(201, 200 + missed)));
@@ -615,7 +614,7 @@ console.log("a trim during the catch-up keeps what it trimmed in the walk's reac
   holdNext(24);
   const pending = resyncChatAfter(200);
   for (const m of windowOf(later)) logChat(m.actor, m.text, "", { seq: m.seq, ts: m.ts });
-  for (let i = 0; i < 200 && !inFlight(); i++) await Bun.sleep(1);
+  await tryUntil("a page is in flight", inFlight, { ms: 2000, step: 1 });
   check("precondition: the catch-up's 25th page is in flight", inFlight() && requests.length === 25, `${requests.length} requests`);
   later.push(say(1301, "cairn", Date.now()));
   logChat("cairn", "#1301", "", { seq: 1301, ts: Date.now() });
@@ -647,7 +646,7 @@ console.log("a catch-up's restart doesn't move a walk that stands higher down");
   holdNext(0);
   const pending = resyncChatAfter(200);
   for (const m of windowOf(later)) logChat(m.actor, m.text, "", { seq: m.seq, ts: m.ts });
-  for (let i = 0; i < 200 && !inFlight(); i++) await Bun.sleep(1);
+  await tryUntil("a page is in flight", inFlight, { ms: 2000, step: 1 });
   check("precondition: the catch-up's first page is in flight", inFlight() && requests.length === 1, `${requests.length} requests`);
   await scrollUp(logEl);
   const walkedTo = Math.min(...shownIn(logEl).map(num).filter((s) => s > 200)), asked = requests.length;
@@ -655,7 +654,7 @@ console.log("a catch-up's restart doesn't move a walk that stands higher down");
     walkedTo > 1200 && asked >= 2, `walked to #${walkedTo}, ${asked} requests`);
   holdNext(18);                       // the catch-up's pages 2, 3, … go out as the next requests
   release();
-  for (let i = 0; i < 400 && !inFlight(); i++) await Bun.sleep(1);
+  await tryUntil("a page is in flight", inFlight, { ms: 2000, step: 1 });
   check("precondition: the catch-up's 20th page is in flight", inFlight() && requests.length === asked + 19,
     `${requests.length - asked} requests since the walk's`);
   later.push(say(1301, "cairn", Date.now()));
@@ -696,5 +695,4 @@ console.log("a trim that takes the end marker alone opens the walk where it stan
   check("…with every say once, in order", wholeOnce(logEl, log).ok, wholeOnce(logEl, log).detail);
 }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

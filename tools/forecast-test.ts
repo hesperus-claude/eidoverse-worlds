@@ -21,14 +21,12 @@
 // both-tree behavioral controls run on any tree; only the canonical-clock
 // checks gate on the export existing (labeled as novelty when absent).
 import * as F from "../shared/forecast.js";
+import { suite } from "./protocol/suite.ts";
 const { WEATHERS, normalizePolicy, segmentAt, effectiveSky, foldSkyEntry, hoursAt, describeSky } = F as any;
 const effectiveClock = (F as any).effectiveClock;
 
-let pass = 0, fail = 0;
-function check(name: string, ok: boolean, detail = "") {
-  if (ok) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const S = suite("forecast");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 const T0 = 1_754_000_000_000;   // fixed epoch — tests never touch the wall clock
 const HOUR = 3600e3, MIN = 60e3;
@@ -472,5 +470,4 @@ const policyArgs = {
   check("skyTicks: a tz alone at rate 0 ticks (the wall clock), as do a rate and a forecast; an old clock: 'real' (read no more) and a still sky don't",
     typeof F.skyTicks === "function" && F.skyTicks({ tz: "Europe/Paris", rate: 0 }) && F.skyTicks({ rate: 2 }) && !F.skyTicks({ clock: "real" }) && F.skyTicks({ forecast: { seed: 1 } }) && !F.skyTicks({ rate: 0, hours: 12 }) && !F.skyTicks(undefined));
 }
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

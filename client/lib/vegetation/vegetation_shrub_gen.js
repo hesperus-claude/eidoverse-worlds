@@ -578,7 +578,7 @@ export function bakeSprayCards(terminalStems, parentStems, cfgIn, rng, anchor) {
     return g;
 }
 
-// ── species presets (tuned in the SeedThree shrub dive, 2026-07-29) ──────────
+// ── species presets (tuned against SeedThree) ───────────────────────────────────
 export const SHRUB_GEN = {
     // The wood is a LOWPOLY armature that stops where the card takes over —
     // each card is a WHOLE painted branch assembly (twig + leaves + blooms),

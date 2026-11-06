@@ -28,12 +28,13 @@
 //
 //   bun tools/mkconfig-test.ts   (E and F parse with Bun.YAML, Bun 1.2.21 or later)
 import { fileURLToPath } from "node:url";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = '') => { ok ? pass++ : fail++; console.log(`${ok ? '  ok' : 'FAIL'}  ${name}${ok || !detail ? '' : ` — ${detail}`}`); };
+const S = suite("mkconfig");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const SCRIPT = fileURLToPath(new URL('../deploy/projector/mkconfig.sh', import.meta.url));
 const dir = mkdtempSync(join(tmpdir(), 'mkconfig-'));
 let n = 0;
@@ -52,7 +53,7 @@ console.log('— A. the defaults render —');
   check('the key is in the YAML as the publisher password', !!r.yaml && r.yaml.includes(`pass: "${r.stdout}"\n`));
   check('no placeholder survives', !!r.yaml && !/^[^#\n]*\$\{/m.test(r.yaml));
   check('loopback everywhere', !!r.yaml && /rtmpAddress: "127\.0\.0\.1:1935"/.test(r.yaml));
-  check('mode 600', (statSync(r.out).mode & 0o777) === 0o600);
+  S.mode('mode 600', r.out, 0o600);
 }
 
 const base = { PROJECTOR_BIND: '0.0.0.0', PROJECTOR_PUBLISH_KEY: '0123456789abcdef' };
@@ -162,5 +163,4 @@ if (YAML) {
 }
 
 rmSync(dir, { recursive: true, force: true });
-console.log(`\n${pass} ok, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

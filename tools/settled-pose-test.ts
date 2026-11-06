@@ -19,6 +19,7 @@
 // solver, not for this).
 
 import { withoutOnceAnim, ONCE_KEYS } from "../shared/onceanim.js";
+import { suite } from "./protocol/suite.ts";
 
 // Mirror of server.ts's settledPose. Kept in sync by the assertions below —
 // if the server's version changes shape, these fail loudly rather than
@@ -30,12 +31,8 @@ function settledPose(pose: unknown): Record<string, unknown> | null {
   return still;
 }
 
-let pass = 0, fail = 0;
-const ck = (n: string, got: unknown, want: unknown) => {
-  const ok = JSON.stringify(got) === JSON.stringify(want);
-  console.log((ok ? "  ✓ " : "  ✗ ") + n + (ok ? "" : `  [got ${JSON.stringify(got)}, want ${JSON.stringify(want)}]`));
-  ok ? pass++ : fail++;
-};
+const { ok, done } = suite("settled-pose");
+const ck = (n: string, got: unknown, want: unknown) => ok(JSON.stringify(got) === JSON.stringify(want), n, `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
 
 // ── the bug itself ──────────────────────────────────────────────────────────
 {
@@ -67,7 +64,6 @@ const ck = (n: string, got: unknown, want: unknown) => {
   const waving = { clip: "idle", anim: "wave", p: [0, 0, 0] };
   const out = settledPose(waving)!;
   ck("a gesture (pose.anim) does not persist (a wave would become a tic)", out.anim, undefined);
-  ck("  ...nor under its pre-release key", ONCE_KEYS[1] in settledPose({ clip: "idle", [ONCE_KEYS[1]]: "wave", p: [0, 0, 0] })!, false);
   ck("  ...the underlying clip does", out.clip, "idle");
 }
 
@@ -129,5 +125,4 @@ const ck = (n: string, got: unknown, want: unknown) => {
      /pose: o\.lastPose\b/.test(src), false);
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

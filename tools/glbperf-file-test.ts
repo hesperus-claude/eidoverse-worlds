@@ -5,9 +5,11 @@
 import { mkdtempSync, writeFileSync, readFileSync, statSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { suite } from "./protocol/suite.ts";
+import { until } from "./protocol/wait.ts";
 const { glbPerf, glbPerfOfFile, glbPerfIo } = await import("../server/glbperf.ts");
-let pass = 0, fail = 0;
-const check = (n: string, ok: boolean, d: unknown = "") => { ok ? pass++ : fail++; console.log(`  ${ok ? "\x1b[32m✓" : "\x1b[31m✗"}\x1b[0m ${n}${ok ? "" : `  ${JSON.stringify(d)}`}`); };
+const S = suite("glbperf-file");
+const check = (n: string, ok: unknown, d?: unknown) => S.check(n, ok, d);
 const pad4 = (b: Uint8Array, fill = 0) => { const o = new Uint8Array((b.length + 3) & ~3).fill(fill); o.set(b); return o; };
 function glb(image: Uint8Array, mime: string, filler: number) {
   const pos = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
@@ -75,12 +77,18 @@ const whole = readFileSync(join(dir, "png.glb")); writeFileSync(join(dir, "cut.g
 check("a truncated file is unreadable (null), not a partial rank", glbPerfOfFile(join(dir, "cut.glb")) === null);
 // antra's collision (#207 review, 09-29): the rank cache was keyed on size + mtime. A same-size replacement with the
 // mtime restored kept the old file's rank. Here the PNG head goes 512×256 → 256×256: same length, different cost.
+// The mtime is set to a whole second first: a sub-ms mtime doesn't survive the seconds float utimes takes on NTFS (100 ns
+// ticks; CI 42190828916 read …297.1191 back as …297.1184), so restoring it would make no collision there.
 { const f = join(dir, "swap.glb"); writeFileSync(f, glb(png, "image/png", 1000));
+  const T = Math.floor(Date.now() / 1000) - 60; utimesSync(f, T, T);
   const before = glbPerfOfFile(f), st0 = statSync(f);
   const small = png.slice(); new DataView(small.buffer).setUint32(16, 256);
-  writeFileSync(f, glb(small, "image/png", 1000)); utimesSync(f, st0.mtimeMs / 1000, st0.mtimeMs / 1000);
+  // the replacement comes after the file system's change clock has ticked: NTFS keeps ctime at ~1 ms, so a rewrite in
+  // the same tick can't be told apart by any stat field (Cyllene: 42 of 50 such rewrites kept size, mtime, ino, ctime)
+  const tick = join(dir, "tick"); await until("the change clock passes the original's ctime", () => { writeFileSync(tick, "x"); return statSync(tick).ctimeMs > st0.ctimeMs; }, { ms: 5000 });
+  writeFileSync(f, glb(small, "image/png", 1000)); utimesSync(f, T, T);
   const st1 = statSync(f), after = glbPerfOfFile(f), fresh = glbPerf(new Uint8Array(readFileSync(f)));
-  check("collision setup: same size and mtime after the replacement", st1.size === st0.size && st1.mtimeMs === st0.mtimeMs, [st0.size, st1.size, st0.mtimeMs, st1.mtimeMs]);
+  check("collision setup: same size and mtime after the replacement", st1.size === st0.size && st1.mtimeMs === st0.mtimeMs && st1.ctimeMs > st0.ctimeMs, [st0.size, st1.size, st0.mtimeMs, st1.mtimeMs, st0.ctimeMs, st1.ctimeMs]);
   check("a same-size replacement with its mtime restored is re-ranked (not the cached rank of the old bytes)",
     JSON.stringify(after) === JSON.stringify(fresh) && JSON.stringify(after) !== JSON.stringify(before), [before, after]); }
-console.log(`${fail ? "\x1b[31m" : "\x1b[32m"}${pass} passed, ${fail} failed\x1b[0m`); process.exit(fail ? 1 : 0);
+S.done();

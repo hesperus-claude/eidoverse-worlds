@@ -1,4 +1,4 @@
-// panels — schema-driven edit surfaces (design of 2026-08-04 21:52).
+// panels — schema-driven edit surfaces.
 //
 // A panel is a FRAME on desktop and a laser-clickable QUAD in VR, and the way
 // that stays true is that a panel never owns bespoke DOM: it declares FIELDS —
@@ -9,7 +9,7 @@
 //   renderCanvas(canvas, fields) → hit regions → quad texture (VR); a laser
 //     UV-hit resolves to a region and dispatches the SAME edit(action, payload)
 //
-// Field design rule (live, 21:58): every field must be operable with no keyboard —
+// Field design rule: every field must be operable with no keyboard —
 // numbers are steppers, actions are buttons, lists are rows. Free-text exists
 // on desktop (rename, comp JSON) and degrades to display-only in VR rather
 // than summoning a keyboard nobody wants to float-type on.
@@ -74,8 +74,7 @@ import { parseEntry } from '../../shared/editschema.js';
 import { paintEdit } from './editpaint.js';
 import { WIDGETS, FACTS, paintFields, el, put, trimNum, R2D } from './widgets.js';
 export { trimNum, WIDGETS } from './widgets.js';
-// a name from either set: the line icons (24 grid) or the filled ones (the eye, R 10-10: the Hierarchy's eye drew nothing,
-// 'eye' being a filled-set name the line-set function didn't know)
+// a name from either set: the line icons (24 grid) or the filled ones (the eye is a filled-set name)
 import { KEYHINTS, engage, release } from './keyhints.js';
 export { parseEntry };
 
@@ -97,9 +96,8 @@ export function makeSchemaFrame(key, opts) {
   function set(fields, edit) {
     lastFields = { fields, edit };
     // Same shape as what is on screen → update values in place: no node is
-    // destroyed, a hovered button stays hovered, a scroll position holds.
-    // (Godot routes a changed property to its one widget through
-    // editor_property_map, editor_inspector.cpp:4870; this is that.)
+    // destroyed, a hovered button stays hovered, a scroll position holds
+    // (Godot's editor_property_map does the same).
     const key = shapeKey(fields);
     if (live && live.key === key) {
       live.box.edit = edit;
@@ -113,8 +111,8 @@ export function makeSchemaFrame(key, opts) {
     // Rebuilding under a focused input eats the caret mid-edit; hold the
     // refresh until focus leaves the panel, then paint the queued state.
     if (holdUntilBlur()) return;
-    // keep what is in view where it is (R 10-11 01:00: hiding a thing with the eye added a line above the Hierarchy's rows,
-    // and every row jumped down, then back up on showing it): the first row in view, by its id, sits at the same height
+    // keep what is in view where it is (a line added above the rows must not make every row jump):
+    // the first row in view, by its id, sits at the same height
     const top = scroll.getBoundingClientRect().top; let anchor = null;
     if (scroll.scrollTop > 0) for (const e of scroll.querySelectorAll('[data-id]')) { const t = e.getBoundingClientRect().top; if (t >= top) { anchor = { id: e.dataset.id, at: t }; break; } }
     live = { key, ...renderDOM(scroll, fields, edit, ro) };
@@ -130,7 +128,7 @@ export function makeSchemaFrame(key, opts) {
       // re-arm on an element that will never blur twice. The input is leaving;
       // a rebuild can no longer eat its caret.
       // a tick later, so the focus move has landed: Tab (or a click) into ANOTHER field of this panel holds again on it
-      // instead of rebuilding the panel under the field just focused (house I198)
+      // instead of rebuilding the panel under the field just focused
       a.addEventListener('blur', () => setTimeout(() => {
         pendingWhileFocused = false;
         if (holdUntilBlur()) return;
@@ -157,9 +155,9 @@ export function shapeKey(fields) {
 }
 
 /** Nav/action separation: a drag that BEGINS on a button must scroll, never
- *  fire the button. Resonite #707 / Neos #1040 — eight years of "I scrolled
- *  the component list and it nulled a field". Measured from pointerdown; a
- *  click that travelled is swallowed at capture, before any onclick. */
+ *  fire the button (the Resonite/Neos "scrolled the list and it nulled a field"
+ *  class). Measured from pointerdown; a click that travelled is swallowed at
+ *  capture, before any onclick. */
 function guardActions(root) {
   let down = null;
   root.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; }, true);
@@ -221,10 +219,10 @@ export function closeContextMenu() {
 }
 
 
-// scrub feel (R 10-04, Maya's Channel Box icons): how dragging a number feels, per viewer, never logged. speed: slow /
-// medium / fast; accel: the further you drag the faster it goes (Maya's "hyperbolic"; R's default). Modifiers while
-// dragging: Shift = 10× finer, Ctrl = whole numbers. Said in every number's tooltip and when a drag starts, because
-// a modifier nobody can find doesn't exist (R: "SOOOO much hidden knowledge").
+// scrub feel (Maya's Channel Box): how dragging a number feels, per viewer, never logged. speed: slow / medium /
+// fast; accel: the further you drag the faster it goes (Maya's "hyperbolic"; the default). Modifiers while dragging:
+// Shift = 10× finer, Ctrl = whole numbers. Said in every number's tooltip and when a drag starts, because a modifier
+// nobody can find doesn't exist.
 export const SCRUB_SPEEDS = { slow: 0.3, medium: 1, fast: 3 };
 let scrubFeel = { speed: 'medium', accel: true };
 try { scrubFeel = { ...scrubFeel, ...JSON.parse(localStorage.getItem('ew-scrub-feel') ?? '{}') }; } catch { /* defaults */ }
@@ -250,7 +248,7 @@ function stepper(value, f, commit) {
   const soft = (w) => Math.min(cur.softMax ?? cur.max ?? Infinity, Math.max(cur.softMin ?? cur.min ?? -Infinity, w));
   let wire = +value;
   let shownFace = '';   // the text show() last put in the field (onchange: the same text is no edit)
-  // mixed: the selection disagrees on this value, so the field says — (Unity's multi-object convention; R, gym 10-17 20:39)
+  // mixed: the selection disagrees on this value, so the field says — (Unity's multi-object convention)
   // until an edit makes them one; a drag or an arrow starts from the value shown on the active thing
   const show = (w) => { num.value = cur.mixed ? '—' : toFace(w); shownFace = num.value; };
   show(wire);
@@ -259,10 +257,9 @@ function stepper(value, f, commit) {
   // editOps, D4a) refuses what the door would refuse and says why, so nothing here clamps (tools/editor-range-test.ts)
   const sendTyped = (w) => { cur.mixed = false; wire = w; show(wire); commit(wire); };
 
-  // typed entry: relative math against the CURRENT face value, no clamp (sendTyped). ONE commit per typing: Enter commits and
-  // blurs, and the blur's own native `change` must not commit again with a stale expect (review 10-07 B2: every Enter
-  // wrote the edit, then a second identical set that the authority refused as `changed`, with a red toast). A change
-  // whose text is what the field last showed is no edit at all.
+  // typed entry: relative math against the CURRENT face value, no clamp (sendTyped). ONE commit per typing: Enter
+  // commits and blurs, and the blur's own native `change` must not commit again with a stale expect. A change whose
+  // text is what the field last showed is no edit at all.
   num.onchange = () => {
     if (num.value === shownFace) return;
     const face = parseEntry(num.value, +toFace(wire));
@@ -297,10 +294,9 @@ function stepper(value, f, commit) {
     scrubHint(false);
     if (d.armed) { cur.mixed = d.mixed; show(d.w0); commit(d.w0, { live: true }); wire = d.w0; for (const q of d.peers ?? []) q.p.peer.restore(q.w0); }
   };
-  // the same drag from the value box and from the channel's NAME (R, 10-10: "make the channel lines themselves
-  // selectable and scrub-able just like their value boxes. This is a Maya feature that I love")
+  // the same drag from the value box and from the channel's NAME (Maya's channel box)
   // a peer is another selected channel's stepper: it begins where it stands, follows the same face delta, and commits
-  // or restores with the leader (the channel box's run, R 10-11 23:13: "scrubbing on then only affects one still")
+  // or restores with the leader
   wrap.peer = { begin: () => ({ w0: wire, face0: +toFace(wire) }),
     to: (face, live) => { cur.mixed = false; const w = soft(toWire(face)); wire = w; show(w); commit(w, live ? { live: true } : undefined); },
     restore: (w0) => { show(w0); commit(w0, { live: true }); wire = w0; } };
@@ -387,8 +383,7 @@ function openPop(anchor, f, pick) {
   popOpen?.close();
   const LS = `ew-recent-${f.recentKey ?? 'pop'}`;
   let recent = []; if (!f.plain) try { recent = JSON.parse(localStorage.getItem(LS) ?? '[]'); } catch { /* none */ }   // plain: a short menu of switches, no search box, no recents
-  // opaque, inside the viewport, one row lit (review 10-07 S10: it drew over the fields behind it, ran off the right and
-  // bottom edges, and every row wore the brand-green button look). Its look is index.html's .sp-pop rules.
+  // opaque, inside the viewport, one row lit. Its look is index.html's .sp-pop rules.
   const box = el('div', 'sp-pop');
   const W = 260, H = 360, M = 8;
   Object.assign(box.style, { position: 'fixed', zIndex: 10000, width: `${W}px`, maxHeight: `${Math.min(H, innerHeight - 2 * M)}px`, boxSizing: 'border-box', display: 'flex', flexDirection: 'column' });
@@ -451,8 +446,7 @@ function openPop(anchor, f, pick) {
   paint(); inp.focus();
 }
 
-/** The row's menu as a BUTTON (R, 10-10: "buttons in VR to the right of anywhere that would get a right-click menu,
- *  hidden on desktop"; Resonite's inspector does the same: a small button per field opens its menu, no right-click).
+/** The row's menu as a BUTTON, for VR where there is no right-click (Resonite's inspector does the same).
  *  It opens exactly what a right-click on the row opens. CSS shows it only on a frame staged for a headset
  *  (#xr-stage: domquad.js), so the desktop row is unchanged. */
 function menuButton(row) {
@@ -514,8 +508,7 @@ function fieldDOM(f, edit, ro = {}) {
   }
   // revert-to-default (Godot's ↺ / Blender's Backspace): a field that declares `def` grows a
   // small ↺ while its value differs; clicking commits the default through the same edit path
-  // …except the transform's channels: there the reset is the right-click menu's (R, 10-10: "why does only scale get
-  // the 'reset to default'? it feels like a right-click menu item anyway")
+  // …except pos/rot channels: their reset lives in the right-click menu
   if (f.def !== undefined && ['num', 'enum', 'color', 'range'].includes(f.t) && !/(?:^|:)(?:pos|rot)\./.test(f.k ?? '')) {
     const same = (a, b) => (typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(b)) : a === b);
     const face = f.t === 'color' ? FACTS.hex(+f.def) : f.deg ? `${Math.round(f.def * R2D)}°` : String(f.def);
@@ -534,11 +527,9 @@ function fieldDOM(f, edit, ro = {}) {
 // canvas pixels so xr.js can turn a laser UV-hit into the same edit() call.
 // Text fields render display-only here on purpose (no floating keyboards).
 
-// The quad wears the PANELS' skin, not its own (in-headset, 09-04: "looks
-// hand-rolled — go with the panels"): colors come from the same tokens the
-// desktop frames use, read at paint time; a quad has no alpha, so the panel
-// ground is the solid --panel-rgb. Fallbacks keep a headless/tokenless page
-// painting the old palette.
+// The quad wears the PANELS' skin: colors come from the same tokens the desktop
+// frames use, read at paint time; a quad has no alpha, so the panel ground is the
+// solid --panel-rgb. Fallbacks keep a headless/tokenless page painting.
 function tokens() {
   let cs = null;
   try { cs = getComputedStyle(document.documentElement); } catch { /* no DOM */ }

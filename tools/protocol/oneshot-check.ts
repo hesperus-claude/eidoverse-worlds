@@ -17,10 +17,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch } from "./common.ts";
 import { tryUntil } from "./wait.ts";
+import { suite } from "./suite.ts";
 
 const root = scratch("oneshot");
-let pass = 0, fail = 0;
-const ok = (cond: any, what: string, detail?: any) => { if (cond) { pass++; console.log(`  ok  ${what}`); } else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail)?.slice(0, 900)}` : ""}`); } };
+const { ok, done } = suite("oneshot");
 const W = path.join(root, "worlds"), B = path.join(root, "backups"), OPT = path.join(root, "opt"), PIDS = path.join(root, "pids");
 for (const d of [W, B, OPT, PIDS]) fs.mkdirSync(d, { recursive: true });
 const OPS = Array.from({ length: 16 }, (_, i) => `human:test:op${i}`);
@@ -129,5 +129,4 @@ const direct = async (mode: string, guardMs: number) => {
   ok(!r.accepted && r.end === "forced process cleanup" && /still running when it was killed/.test(r.why ?? "") && !r.receipt && r.gone && r.kid > 0 && await gone(r.kid),
     "OS5h a descendant running when a framed, hung child is killed → refused (no receipt), the descendant killed with its group", r); }
 
-console.log(`oneshot: ${pass} passed, ${fail} failed (bun ${Bun.version}, ${process.platform})`);
-process.exit(fail ? 1 : 0);
+done(` (bun ${Bun.version}, ${process.platform})`);

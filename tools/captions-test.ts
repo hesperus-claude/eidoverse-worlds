@@ -11,15 +11,12 @@
 //      old n, a superseded leg, an end for the wrong session); the fold
 //      (append, the window bound, a newer leg or a new session starts fresh,
 //      end clears). `gen` is the sequencer's stamp: the live leg.
-// (Protocol v1 removed, 2026-10-07. Two legs went with it and wait on the caption path, being designed: 1d THE
-//  DEED (the per-entity caption grant folded by the v1 `grant` verb and carried by rightsIn: its born/rename/sub
-//  migration rules) and 2 PERCEPTION (the agent's look() line folded from v1 `caption` entries: newest line,
-//  duplicate n and superseded leg folding to nothing, `end` clearing it, a hand-written captions comp ignored).
-//  What's left is shared/captions.js's pure functions: describeCaptions is what the agent's look() still calls.)
+// What's tested: shared/captions.js's pure functions (describeCaptions is what the agent's look() calls).
 import { normalizeCaptions, describeCaptions, captionsDetail, clock, normalizeCaptionArgs, captionRefusal, foldCaption, mintSession, CAPTIONS_MAX_LINES, CAPTION_TEXT_MAX } from "../shared/captions.js";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => { ok ? pass++ : fail++; console.log(`${ok ? "  ok" : "FAIL"}  ${name}${ok || !detail ? "" : ` — ${detail}`}`); };
+const S = suite("captions");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const line = (t0: number, t1: number, text: string, speaker?: string) => ({ t0, t1, text, ...(speaker ? { speaker } : {}) });
 const S1 = "2026-09-16T20:00:00.000Z-aaaa", S2 = "2026-09-16T21:00:00.000Z-bbbb";
 
@@ -134,5 +131,4 @@ let big = foldCaption(undefined, L(1, 0, "line 1"));
 for (let i = 2; i <= CAPTIONS_MAX_LINES + 5; i++) big = foldCaption(big, L(i, i, `line ${i}`));
 check("a value never grows with its session: the last line only, however many came before", !!big && big.line?.text === `line ${CAPTIONS_MAX_LINES + 5}` && big.n === CAPTIONS_MAX_LINES + 5 && JSON.stringify(big).length < 300, JSON.stringify(big));
 
-console.log(`\n${pass} ok, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

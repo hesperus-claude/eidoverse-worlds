@@ -1,4 +1,4 @@
-// people.js — who someone is here and what you may do to them (research roles 10-06, S6; PLAN decisions 10-06).
+// people.js — who someone is here and what you may do to them.
 //
 // ONE function decides the menu: personActions(me, them) in shared/protocol/roles.js (pure, tested in tools/protocol/roles-check.ts
 // P1–P3). It shows only what you may do to that one person, so a member sees "Mention" plus the consent rows (always/never allow, default: consentItems), and when rank
@@ -16,13 +16,13 @@ import { CONFIG, bus, report } from './base.js';
 import { net, identities, guests, sendRequest, replica } from './net.js';
 import { contextMenu, closeContextMenu } from './panels.js';
 import * as R from '../../shared/protocol/roles.js';
+import { plainRefusal } from '../../shared/protocol/refusal.js';   // the door's words, its fix and names (PARITY)
 import { listOf, setListed, BLOCK_FOLLOW_WORDS } from './consent.js';
+import { moderatorHeader } from './chat.js';
 
 let deps = { mentionPerson: () => {}, presenting: () => false, openModLog: () => {}, toast: () => {} };
 export function initPeople(d) { deps = { ...deps, ...d }; }
 
-/** The display name behind an identity here (People Here rows are names; the authority names identities). */
-export function displayOf(actorId) { if (actorId && actorId === net.you) return CONFIG.name; for (const [n, id] of identities) if (id === actorId) return n; return actorId ?? '?'; }
 
 const wc = () => replica.st?.entities?.['@world']?.c ?? {};
 /** The person behind a display name here: {display, id, anon, role, name, rank, permissions, muted, me}. */
@@ -36,7 +36,7 @@ export function personOf(display) {
 }
 export const myself = () => personOf(CONFIG.name);
 /** The items the menu shows for this person (pure: roles.js personActions). */
-export function menuFor(display) {
+function menuFor(display) {
   const me = myself(), them = personOf(display);
   if (!them.id && !them.me) return [{ id: 'mention', label: 'Mention' }];   // not known to the authority yet (an old client)
   const items = R.personActions(me, them, { muted: them.muted });
@@ -59,7 +59,7 @@ const SAY = { warn: 'They see a notice they must dismiss.', mute: 'Nobody hears 
 
 async function run(verb, args, what) {
   const r = await sendRequest(verb, args);
-  if (r?.ok) deps.toast(`${what}: done`, 'info'); else deps.toast(`${what}: ${r?.refused?.reason ?? 'refused'}`, 'warn', 8000);
+  if (r?.ok) deps.toast(`${what}: done`, 'info'); else deps.toast(r?.refused ? plainRefusal(what, r) : `${what}: refused`, 'warn', 8000);
   return r;
 }
 /** Do a menu item. Acts with choices open the form on `surface` ('card' | 'sheet' | {strip: host}). */
@@ -97,8 +97,8 @@ export function sheetFor(display) {
     b.onclick = () => { if (!sh.armed) return; if (!VERB[it.id] && it.id !== 'role') closeSheet(); act(it.id, display, 'sheet'); };
     sh.body.append(b);
   }
-  // the press that opened the sheet is still down: lifting it must not "click" the row that slid under the finger
-  // (the phone probe caught it choosing Ghost…). Rows act only after a fresh press that starts inside the sheet.
+  // the press that opened the sheet is still down: lifting it must not "click" the row that slid under the finger.
+  // Rows act only after a fresh press that starts inside the sheet.
   sh.armed = false;
   sh.root.hidden = false; requestAnimationFrame(() => sh.root.classList.add('open'));
   try { navigator.vibrate?.(15); } catch { /* no haptics */ }
@@ -127,13 +127,13 @@ function sheet() {
   sh = { root, title: root.querySelector('.pm-title'), body: root.querySelector('.pm-body') };
   return sh;
 }
-export function closeSheet() { if (!sh) return; sh.root.classList.remove('open'); sh.root.hidden = true; }
+function closeSheet() { if (!sh) return; sh.root.classList.remove('open'); sh.root.hidden = true; }
 
 // ---------------------------------------------------------------- the role ▸ submenu
 function roleMenu(display, surface) {
   const me = myself(), them = personOf(display);
   const roles = R.grantableRoles(wc(), me).filter((r) => r.id !== 'none');
-  // merge when the entry exists: the role menu must not wipe the person's exceptions/note (review 10-14 K3)
+  // merge when the entry exists: the role menu must not wipe the person's exceptions/note
   const pick = (rid) => run('set', { id: '@world', component: `roles:${them.id}`, value: { role: rid }, ...(wc()[`roles:${them.id}`] ? { merge: true } : {}) }, `make ${display} ${rid}`);
   const items = [...roles.map((r) => ({ k: r.id, label: `${r.id === them.role ? '✓ ' : ''}${r.name}` })), ...(R.isOwner(me) || me.permissions.includes('grantRoles') ? [{ k: '::can', label: 'Exceptions…' }] : [])];
   const choose = (k) => (k === '::can' ? openCanForm(display, surface) : pick(k));
@@ -145,11 +145,9 @@ function roleMenu(display, surface) {
 }
 
 // ---------------------------------------------------------------- my lists, per person
-// Always allow / Never allow / Default (R 10-28): this person is always yes or always no to everything done to my body,
-// whatever my switches say, or back to my switches. ✓ on the current one. consent.js keeps it (with the name, for the
-// list in Settings ▸ body) and consentsync sends it; the list is by identity, so a name passed on later isn't on it.
+// Always allow / Never allow / Default per person (by identity, ✓ on the current one) → consent.js lists; consentsync sends.
 const LIST_ITEMS = [['consent-allow', 'allow', 'Always allow'], ['consent-block', 'block', 'Never allow'], ['consent-default', null, 'Default']];
-export function consentItems(id) {
+function consentItems(id) {
   const now = listOf(id);
   return LIST_ITEMS.map(([k, list, label]) => ({ id: k, label: `${now === list ? '✓ ' : ''}${label}`, ...(list === 'block' ? { danger: true } : {}) }));
 }
@@ -168,7 +166,7 @@ let card = null;
 function closeCard() { card?.remove(); card = null; }
 /** The form: who (name + identity, small: homoglyphs), how long (preset chips), channels (mute), why (chips + text),
  *  confirm. In a strip (VR), kick/ban confirm with a second press on a confirm row. */
-export function openForm(verb, display, surface = 'card') {
+function openForm(verb, display, surface = 'card') {
   const them = personOf(display), me = myself();
   const st = { len: (PRESETS[verb] ?? [])[0]?.[0], forever: false, ch: new Set(['voice', 'chat']), reason: '', why: '' };
   const host = document.createElement('div'); host.className = 'pm-form'; host.dataset.verb = verb;
@@ -203,8 +201,9 @@ export function openForm(verb, display, surface = 'card') {
     const args = { who: them.id, ...(reason ? { reason } : {}) };
     if (verb === 'mute') Object.assign(args, { minutes: st.len, channels: [...st.ch] });
     if (verb === 'ban' && !st.forever) args.days = st.len / 1440;
-    const r = await run(verb, args, `${VERB[verb].toLowerCase()} ${display}`);
-    if (r?.ok) done(); else if (r?.refused) { let p = host.querySelector('.pm-err'); if (!p) { p = document.createElement('p'); p.className = 'pm-err'; host.insertBefore(p, btns); } p.textContent = r.refused.reason; }
+    const what = `${VERB[verb].toLowerCase()} ${display}`;
+    const r = await run(verb, args, what);
+    if (r?.ok) done(); else if (r?.refused) { let p = host.querySelector('.pm-err'); if (!p) { p = document.createElement('p'); p.className = 'pm-err'; host.insertBefore(p, btns); } p.textContent = plainRefusal(what, r); }
   };
   if (surface === 'card') { closeCard(); card = document.createElement('div'); card.id = 'person-form'; const c = document.createElement('div'); c.className = 'pm-card panel'; c.setAttribute('role', 'dialog'); c.append(host); card.append(c);
     card.addEventListener('pointerdown', (e) => { if (e.target === card) closeCard(); }); card.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeCard(); } });
@@ -228,10 +227,9 @@ function openCanForm(display, surface) {
   }
   const b = document.createElement('button'); b.type = 'button'; b.className = 'pm-go'; b.textContent = 'Save';
   // an existing entry is patched (its note and legacy fields stay); someone on the default role gets an entry naming the
-  // role they have now (an exception needs an entry to live on; review 10-07)
+  // role they have now (an exception needs an entry to live on)
   const has = !!wc()[`roles:${them.id}`];
   // a merge keeps keys it isn't sent (RFC 7396): an exception set back to "as the role" goes as null, which removes it
-  // (review 10-07: clearing an exception did nothing)
   b.onclick = async () => { const cleared = Object.fromEntries(Object.keys(cur).filter((k) => !(k in st)).map((k) => [k, null]));
     const value = has ? { can: { ...st, ...cleared } } : { role: them.role, ...(Object.keys(st).length ? { can: st } : {}) };
     const r = await run('set', { id: '@world', component: `roles:${them.id}`, value, ...(has ? { merge: true } : {}) }, `${display}'s exceptions`); if (r?.ok) { closeCard(); closeSheet(); } };
@@ -241,9 +239,9 @@ function openCanForm(display, surface) {
   else { surface.strip.innerHTML = ''; surface.strip.append(host); }
 }
 
-// a warning is a notice you dismiss (research roles §5); the house centred card, kept until pressed
-// a DOM card isn't drawn in a headset (review 10-07 N6): in VR the same notice rides the XR quad (xrask.js), until pressed
+// a warning is a notice you dismiss; the house centred card, kept until pressed. A DOM card isn't drawn in a
+// headset: in VR the same notice rides the XR quad (xrask.js), until pressed
 bus.on('warned', (m) => { import('./xrask.js').then(({ xrActive, chooseXR }) => (xrActive()
-  ? chooseXR({ title: `${m.by} warned you`, body: String(m.reason ?? ''), choices: [{ v: 'ok', label: 'I understand' }], cancel: 'ok' })
-  : import('./confirmcenter.js').then(({ confirmCenter }) => confirmCenter({ title: `${m.by} warned you`, body: String(m.reason ?? ''), ok: 'I understand', cancel: 'Close' })))).catch((e) => report('warned', e)); });
+  ? chooseXR({ title: moderatorHeader(CONFIG.world), body: `${m.by} warned you: ${String(m.reason ?? '')}`, choices: [{ v: 'ok', label: 'I understand' }], cancel: 'ok' })
+  : import('./confirmcenter.js').then(({ confirmCenter }) => confirmCenter({ title: moderatorHeader(CONFIG.world), body: `${m.by} warned you: ${String(m.reason ?? '')}`, ok: 'I understand', cancel: 'Close' })))).catch((e) => report('warned', e)); });
 export { closeContextMenu };

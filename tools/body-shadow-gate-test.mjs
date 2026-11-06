@@ -17,6 +17,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
 HTMLCanvasElement.prototype.getContext = function () { const a = new Proxy(function () {}, { get: (_t, k) => (k === 'width' ? 100 : a), apply: () => a, set: () => true }); return new Proxy({}, { get: (_t, k) => (k === 'measureText' ? () => ({ width: 100 }) : a), set: () => true }); };
 import { plugin } from 'bun';
+import { suite } from "./protocol/suite.ts";
 const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
 plugin({ name: 'core-stub', setup(build) {
   build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('./core-stub.mjs') }));
@@ -26,8 +27,8 @@ plugin({ name: 'core-stub', setup(build) {
 const { THREE } = await import('./core-stub.mjs');
 const mats = await import('../client/lib/materials.js');
 
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+const S = suite("body-shadow-gate");
+const check = (name, ok, note) => S.check(name, ok, note);
 
 // the real node names off Mythos's VRM (nodes, not meshes -- o.name is the node)
 const NAMES = ['body_main', 'wings', 'eyelids', 'eyeballs', 'GOLD', 'lamp'];
@@ -160,5 +161,4 @@ console.log("ROUND 2 — the LIT warm (receiveShadow IS in the cache key) and th
 console.log('A NULL ROOT — no throw (module init passes a null ground)');
 check('setBodyShadows(null) returns 0', mats.setBodyShadows(null) === 0);
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

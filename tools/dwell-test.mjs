@@ -2,8 +2,9 @@
 // ask it whether the pointer has rested on something for a beat.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/dwell-test.mjs
 import { makeDwell, DWELL_MS } from '../client/lib/dwell.js';
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+import { suite } from "./protocol/suite.ts";
+const S = suite("dwell");
+const check = (name, ok, note) => S.check(name, ok, note);
 console.log('DWELL');
 check('the delay is the nameplate card\'s 300 ms', DWELL_MS === 300);
 const d = makeDwell();
@@ -24,5 +25,4 @@ check('a per-use delay', e.ripe(50) && !e.ripe(49));
 const el = {}; const f = makeDwell(); f.step(el, 0); f.step(el, 200);
 check('object keys (a panel control element) compare by identity', f.since === 0 && f.ripe(300));
 d.reset(5000); check('reset forgets the key', d.key === null && !d.ripe(9e9));
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

@@ -37,9 +37,9 @@ export const CONFIG = {};
  *  "browser" transcodes KTX2, and which libs have a baked variant. Mutable —
  *  a section flips them and spawns fresh placements. */
 export const server = { key: KTX2_KEY, recipe: LOD_RECIPE, capable: true, variants: new Set() };
-/** Every loadGLB call, in order: { lib, tier (what crossed the wire), url }. */
+/** Every loadGLB call, in order: { model, tier (what crossed the wire), url }. */
 export const loads = [];
-/** Loads held open while `hold` is on: { lib, tier, url, release() }. */
+/** Loads held open while `hold` is on: { model, tier, url, release() }. */
 export const held = [];
 let hold = false;
 export const setHold = (v) => { hold = !!v; };
@@ -61,7 +61,7 @@ export const lodNegotiable = (lib) =>
  *  "server" answered, bound to the running recipe), tierAsked (the wire). */
 export async function loadGLB(lib, { tier = 'full' } = {}) {
   const ask = askFor({ libPath: lib, key: server.key, capable: server.capable, recipe: server.recipe, tier });
-  const rec = { lib, tier: ask.tier, url: ask.url };
+  const rec = { model: lib, tier: ask.tier, url: ask.url };
   loads.push(rec);
   if (hold) await new Promise((release) => held.push({ ...rec, release }));
   // the answer: a stamped variant for a lib the sequencer baked, the

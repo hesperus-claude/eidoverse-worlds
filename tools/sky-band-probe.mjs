@@ -11,7 +11,7 @@
 // sky tier, so the boot bake does not run headless at all; the live proof is the owner's console's
 // '[sky] boot bake banded: N bands over M ms' line (and ?skyband=0 to compare).
 // Usage: bun tools/sky-band-probe.mjs [origin] [--mutate-gap]   (run under a memory guard: headless Chromium renders on the CPU)
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
+import { launchBrowser, ownedWorld, checker, drawn } from './probe-harness.mjs';
 
 const { check, done } = checker();
 const GAP = process.argv.includes('--mutate-gap');
@@ -24,7 +24,7 @@ pg.on('pageerror', (e) => errs.push(String(e)));
 try {
   await pg.goto(`${world.origin}/?world=staging&name=skyband&key=${world.key}&xr=1`, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await pg.waitForFunction(() => globalThis.__ewEngineUp, null, { timeout: 60000 });
-  await pg.waitForTimeout(4000);
+  await drawn(pg, 120);   // the boot's first frames
   const r = await Promise.race([pg.evaluate(async (gap) => {
     const { THREE, TSL, renderer } = await import('./lib/core.js');
     const { bandedBakeRender, bandCuts } = await import('./lib/sky_baked.js');

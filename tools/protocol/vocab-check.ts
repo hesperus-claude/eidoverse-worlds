@@ -128,6 +128,43 @@ const oscWalk = (dir: string) => {
 };
 for (const d of [...RUNTIME, ...DEPLOYED]) oscWalk(path.join(ROOT, d));
 for (const rel of OSC_DOCS) { const p = path.join(ROOT, rel); if (fs.existsSync(p)) oscScan(rel, fs.readFileSync(p, "utf8"), OSC_DOC); else offences.push(`${rel}: missing (OSC_DOCS lists it)`); }
+// "person"/"people" means anyone, human or agent (AGENTS.md house rule 6): set against "agent" it meant human — say human
+const PERSON = /(?<!["'`])\b(?:person|people)\s+(?:\(\s*)?(?:or|and|nor|vs\.?)\s+agents?\b|\bagents?\s+(?:or|and|nor|vs\.?)\s+(?:person|people)\b(?!["'`])/i;
+const PERSON_DOCS = ["AGENTS.md", "DESIGN.md", "README.md", ...fs.readdirSync(path.join(ROOT, "docs")).filter((f) => f.endsWith(".md") && f !== "INCIDENTS.md").map((f) => `docs/${f}`), "spec/PROTOCOL.md"];
+const personScan = (rel: string, text: string) => text.split("\n").forEach((line, i) => {
+  if (PERSON.test(line)) offences.push(`${rel}:${i + 1}: "person" set against "agent" means human: write human (AGENTS.md rule 6) — ${line.trim().slice(0, 100)}`); });
+const personWalk = (dir: string) => {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) { if (SKIP_DIR.has(e.name)) continue; const p = path.join(dir, e.name);
+    if (e.isDirectory()) personWalk(p); else if (EXT.test(e.name)) personScan(path.relative(ROOT, p).split(path.sep).join("/"), fs.readFileSync(p, "utf8")); } };
+for (const d of [...RUNTIME, ...DEPLOYED]) personWalk(path.join(ROOT, d));
+for (const rel of PERSON_DOCS) { const p = path.join(ROOT, rel); if (fs.existsSync(p)) personScan(rel, fs.readFileSync(p, "utf8")); }
+{ const bad = ["a person or agent", "people and agents", "agent or person", "person (or agent)"], good = ["People Here", "a person may", "refuses \"person or agent\" and its kin", "a human or agent"];
+  const wrong = [...bad.filter((t) => !PERSON.test(t)), ...good.filter((t) => PERSON.test(t))]; if (wrong.length) offences.push(`PERSON self-test misreads: ${wrong.join(" | ")}`); }
+
+// What a participant IS is "AI"; "agent" is how one connects (R 11-03: "ruthless consistency is good so people aren't confused
+// about which to do"). The MCP door, mcpl/agent.ts, agent tokens and AGENTS.md keep "agent". The declared word on the wire
+// (`declares: "agent"`, PROTOCOL §6a; the ◈ marker's CSS key) is data and stays until a refuse-and-point alias retires it.
+// A sentence the browser shows a person may not call them or their neighbour an agent: a string in client/ saying
+// "agent speech", "nearby agents", "an agent listening/speaking/here" or "AI agent" is refused. AI_OK lists exceptions.
+const WHAT_YOU_ARE = /\bagents? speech\b|\bnearby agents?\b|\ban agent (listening|speaking|talking|here)\b|\bAI agents?\b/i;
+const AI_OK: [string, RegExp, string][] = [];
+const aiScan = (rel: string, text: string) => text.split("\n").forEach((line, i) => {
+  if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+  const code = line.replace(/\s\/\/\s.*$/, "");
+  const strings = code.match(/"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`|'(?:[^'\\]|\\.)*'/g) ?? (/\.html$/.test(rel) ? [code] : []);
+  if (strings.some((t) => WHAT_YOU_ARE.test(t)) && !AI_OK.some(([f, re]) => rel === f && re.test(line)))
+    offences.push(`${rel}:${i + 1}  calls a participant an agent (what you are is AI; agent is how you connect): ${line.trim().slice(0, 100)}`);
+});
+const aiWalk = (dir: string) => {
+  if (!fs.existsSync(dir)) return;
+  for (const name of fs.readdirSync(dir)) {
+    if (SKIP_DIR.has(name)) continue;
+    const p = path.join(dir, name);
+    if (fs.statSync(p).isDirectory()) { aiWalk(p); continue; }
+    if (EXT.test(name) || /\.html$/.test(name)) aiScan(path.relative(ROOT, p).split(path.sep).join("/"), fs.readFileSync(p, "utf8"));
+  }
+};
+aiWalk(path.join(ROOT, "client"));
 // The log's vocabulary is minor 1's (docs/DESIGN-log-vocabulary.md D3, 2026-11-04): kinds request/physics/redaction/governance,
 // `op` on a change, `cascade`, `commitment`, `rewindWindow`, the view marker `redacted`, the snapshot blob key `snapshotJson`. A retired
 // spelling (act, sim, purge, sequencer as a kind; followUps; rewind_window; commit-unpurged; purged: true; verb on genesis/say; cutJson

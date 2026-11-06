@@ -1,5 +1,4 @@
-// capsulebody — the body you get when no body loads (owner, 09-11: "capsule avatar + hand capsules", assigned to
-// the VR PR; 09-19: arrived bodiless behind a flapping tunnel — "I thought we fixed this").
+// capsulebody — the body you get when no body loads (with capsules on the hands for VR).
 //
 // Not a bare mesh: a VRM-SHAPED puppet. A synthetic humanoid skeleton (hips → spine → chest → upperChest →
 // neck → head; shoulders → upperArm → lowerArm → hand, both sides) with a capsule on each bone, wrapped as
@@ -58,11 +57,11 @@ export function makeCapsuleVrm() {
   }
   scene.updateMatrixWorld(true);
   const humanoid = {
-    update() {},   // landmarks.js/reachbone.js call h.update() before measuring; a VRMHumanoid copies normalized→raw here, the puppet has one skeleton (round 2 N1)
+    update() {},   // landmarks.js/reachbone.js call h.update() before measuring; a VRMHumanoid copies normalized→raw here, the puppet has one skeleton
     getNormalizedBoneNode: (n) => bones[n] ?? null,
     getRawBoneNode: (n) => bones[n] ?? null,
     normalizedHumanBones: Object.fromEntries(Object.entries(bones).map(([k, node]) => [k, { node }])),
-    humanBones: Object.fromEntries(Object.entries(bones).map(([k, node]) => [k, { node }])),   // what avatar.js/reachbone.js/landmarks.js actually read (pre-review S3)
+    humanBones: Object.fromEntries(Object.entries(bones).map(([k, node]) => [k, { node }])),   // what avatar.js/reachbone.js/landmarks.js actually read
   };
   // what three-vrm-animation's clip builder reads (createVRMAnimationHumanoidTracks): uniquely named bones,
   // the hips' rest height for the walk's root motion, and a VRM-1 meta so no 180° legacy flip is applied

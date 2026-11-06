@@ -20,11 +20,8 @@ import { fileURLToPath } from "node:url";
 import { mock } from "bun:test";
 import * as THREE from "three";
 
-let pass = 0, fail = 0;
-function check(name: string, cond: boolean, detail = "") {
-  if (cond) { pass++; console.log(`  ok  ${name}`); }
-  else { fail++; console.log(`FAIL  ${name}${detail ? ` — ${detail}` : ""}`); }
-}
+const { mkCheck } = await import("./harness.ts");
+const { check, tally } = mkCheck();
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const near = (a: THREE.Vector3, b: THREE.Vector3, eps = 1e-9) => a.distanceTo(b) < eps;
 const fmt = (v: THREE.Vector3) => `[${v.toArray().map((n) => n.toFixed(3)).join(", ")}]`;
@@ -120,18 +117,23 @@ check("omitted pitch reaches it as undefined", composed.length === n + 1 && comp
 await shoot({ view: "first", frame: { pitch: -200 } });
 check("pitch is clamped before the composer", composed.at(-1)!.pitch === -85, JSON.stringify(composed.at(-1)?.pitch));
 
-// ---- fields on the message itself -------------------------------------------
-console.log("fields on the message itself");
-// A snap that also carries an image size (width, height) asks for no framing.
-t = await shoot({ view: "selfie", width: 960, height: 540 });
-check("selfie with an image size: the default eye, 1.6 m up", !!t.shot && near(t.shot.eye, at(1.6, 2.6)), t.shot ? fmt(t.shot.eye) : String(t.r));
-t = await shoot({ view: "third", width: 960, height: 540, dist: 1 });
-check("third with an image size and a dist: the default eye and aim", !!t.shot && near(t.shot.eye, at(2.1, -3.4)) && near(t.shot.at, at(1.2, 4)), t.shot ? `${fmt(t.shot.eye)} → ${fmt(t.shot.at)}` : String(t.r));
-t = await shoot({ view: "selfie", dist: 1 });
-check("selfie with a dist: the default eye, 2.6 m in front", !!t.shot && near(t.shot.eye, at(1.6, 2.6)), t.shot ? fmt(t.shot.eye) : String(t.r));
-n = composed.length;
-await shoot({ view: "first", pitch: -60 });
-check("first with a pitch outside frame: the default gaze", composed.length === n + 1 && composed.at(-1)!.pitch === undefined, JSON.stringify(composed.at(-1)?.pitch));
+// ---- view × field × where: a field moves the camera only when it is nested in `frame` AND applies to the view
+// (dist/height: third and selfie; pitch: first); a top-level field is never framing (an image size's `height`)
+console.log("view × field × where");
+const DEFAULT: Record<string, { eye: THREE.Vector3; at: THREE.Vector3 } | null> = {
+  third: { eye: at(2.1, -3.4), at: at(1.2, 4) }, selfie: { eye: at(1.6, 2.6), at: at(1.25, 0) }, first: null };
+const APPLIES: Record<string, string[]> = { third: ["dist", "height"], selfie: ["dist", "height"], first: ["pitch"] };
+for (const view of Object.keys(DEFAULT)) for (const [field, v] of [["pitch", 20], ["dist", 1], ["height", 0.8]] as const)
+  for (const where of ["frame", "top"] as const) {
+    const n0 = composed.length;
+    t = await shoot({ view, ...(where === "frame" ? { frame: { [field]: v } } : { [field]: v, ...(field === "height" ? { width: 960 } : {}) }) });
+    const honoured = where === "frame" && APPLIES[view].includes(field);
+    const d = DEFAULT[view];
+    const isDefault = d ? !!t.shot && near(t.shot.eye, d.eye) && near(t.shot.at, d.at)
+      : t.shot === null && composed.length === n0 + 1 && composed.at(-1)!.pitch === undefined;
+    check(`${view} + ${field} ${where === "frame" ? "in frame" : "on the message"}: ${honoured ? "moves the camera" : "the default camera"}`,
+      t.ok && isDefault !== honoured, t.shot ? `${fmt(t.shot.eye)} → ${fmt(t.shot.at)}` : JSON.stringify(composed.at(-1)?.pitch));
+  }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+console.log(`${tally.passed} passed, ${tally.failed} failed`);
+process.exit(tally.failed ? 1 : 0);

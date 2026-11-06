@@ -1,15 +1,14 @@
 // The splash rays, off the main thread: a WebGL2 fragment shader on an
-// OffscreenCanvas inside a Worker. Why a worker (R, 09-05): the splash must
-// animate every frame REGARDLESS of what loading does to the main thread —
-// GLB parses stall it for 300 ms–2 s at a time — and stop only if the tab is
-// hard-frozen (which kills this worker too). Why a shader: smooth math in 8
+// OffscreenCanvas inside a Worker. Why a worker: the splash must animate every
+// frame REGARDLESS of what loading does to the main thread (GLB parses stall
+// it for seconds) and stop only if the tab is hard-frozen. Why a shader: smooth math in 8
 // bits still bands at these luminances unless you dither, and only a shader
 // can dither. Soft vertical rays in the SteamVR key-art manner, two tints,
 // alpha eased from 0 over 1.5 s so it never pops in.
 let gl, prog, uT, uRes, uRamp, uCalm, canvas, t0, raf = 0, calm = 1, probe = false;
-// COST (09-05 A/B): full-res 60 Hz fbm per pixel added ~9 s to the load on a
-// CPU GL and a visible creep on R's GPU. The gradient is soft by nature: render
-// at 1/3 resolution and 30 Hz; the compositor upscales.
+// COST: full-res 60 Hz fbm per pixel added ~9 s to the load on a CPU GL. The
+// gradient is soft by nature: render at 1/3 resolution and 30 Hz; the
+// compositor upscales.
 const RES_DIV = 3, FRAME_MS = 33;
 let lastFrame = 0;
 

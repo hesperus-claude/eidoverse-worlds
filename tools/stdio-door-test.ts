@@ -11,7 +11,8 @@
 // through the shared dispatcher — including tools that never existed on this
 // door before the unification.
 
-import { scratchSequencer, mkCheck, sleep, ROOT } from './harness.ts';
+import { scratchSequencer, mkCheck, ROOT } from './harness.ts';
+import { tryUntil } from './protocol/wait.ts';
 import { join } from 'node:path';
 
 // a scratch sequencer with the door's world founded by the agent itself (TRUST_NAMES: its typed name is its account,
@@ -72,8 +73,8 @@ try {
   const list = await rpc('tools/list');
   const names: string[] = (list.result?.tools ?? []).map((t: any) => t.name);
   check('the shared table serves this door (≥26 tools)', names.length >= 26, `${names.length}: ${names.join(',')}`);
-  const gained = ['pose', 'reach', 'animate', 'measure', 'world_history', 'world_debug',
-    'library', 'set_avatar', 'catch_up', 'activity'];   // the surface fold (10-14): clear_*/posture/ragdoll/light are modes
+  const gained = ['anim', 'reach', 'measure', 'world_history', 'world_debug',
+    'library', 'set_avatar', 'catch_up', 'activity'];   // the surface folds: clear_*/posture/ragdoll are anim's modes, pose/animate are anim, light is create
   const missing = gained.filter((n) => !names.includes(n));
   check('every formerly-missing tool is listed', missing.length === 0, missing.join(' '));
   check('pending_pings (the polling wake surface) is listed', names.includes('pending_pings'));
@@ -89,11 +90,11 @@ try {
   check('say lands', toolText(say) === 'said', toolText(say));
 
   // a tool the OLD door never had: the shared dispatcher answers it now
-  const posture = await rpc('tools/call', { name: 'pose', arguments: { posture: 'sit' } });
-  check('pose {posture} (gained in the unification) answers', /sit down/.test(toolText(posture)), toolText(posture));
+  const posture = await rpc('tools/call', { name: 'anim', arguments: { name: 'sit' } });
+  check('anim {name: sit} (gained in the unification) answers', !posture.result?.isError && /sit/.test(toolText(posture)), toolText(posture));
 
-  const pose = await rpc('tools/call', { name: 'pose', arguments: { bones: { leftUpperArm: [0, 0, -0.9, 0.44] } } });
-  check('pose (gained) validates and reports', /posed 1 bone\(s\); now holding 1 bone/.test(toolText(pose)), toolText(pose));
+  const pose = await rpc('tools/call', { name: 'anim', arguments: { joints: { leftUpperArm: [0, 0, -0.9, 0.44] } } });
+  check('anim {joints} (gained) validates and reports', !pose.result?.isError && /live/.test(toolText(pose)), toolText(pose));
 
   const pings = await rpc('tools/call', { name: 'pending_pings', arguments: {} });
   check('pending_pings answers (door-local vocabulary)', /no pending pings|reach|mention/.test(toolText(pings)), toolText(pings));
@@ -105,26 +106,27 @@ try {
   // the inspector, for models: inspect / edit / hierarchy read ONE shared
   // declaration (shared/editschema.js) — the same one the browser renders
   check('inspect · edit · hierarchy are listed', ['inspect', 'edit', 'hierarchy'].every((n) => names.includes(n)));
-  const lit = await rpc('tools/call', { name: 'light', arguments: { id: 'lamp1', x: 1, y: 2, z: 3, color: 0xff8800, intensity: 16, range: 6 } });
-  check('the light tool places a lamp through the door', !lit.result?.isError, toolText(lit));
+  const lit = await rpc('tools/call', { name: 'create', arguments: { components: { light: { color: 0xff8800, intensity: 16, range: 6 } }, at: [1, 2, 3] } });
+  check('a lamp is created through the door (create {components: {light}})', !lit.result?.isError, toolText(lit));
+  const LAMP = /— id (\S+)/.exec(toolText(lit))?.[1] ?? 'no-id';   // ids are minted (writers never choose one)
   // poll for the fold echo instead of guessing a sleep
   let ins: any = null;
-  for (let i = 0; i < 30; i++) { ins = await rpc('tools/call', { name: 'inspect', arguments: { id: 'lamp1' } }); if (/light\.intensity = 16  \(/.test(toolText(ins))) break; await sleep(200); }
-  check('inspect reads the FOLDED light (intensity 16, range 6 m, colour) — not the thinned perception view', /light\.intensity = 16  \(/.test(toolText(ins)) && /light\.range = 6 m  \(/.test(toolText(ins)) && /0xff8800/.test(toolText(ins)) && /pos\.y = 2 m/.test(toolText(ins)), toolText(ins).slice(0, 200));
-  const dry = await rpc('tools/call', { name: 'edit', arguments: { id: 'lamp1', dry: true, set: { 'pos.x': '+=1', 'pos.z': 0, 'light.intensity': '+=25%' } } });
+  await tryUntil('the fold echoes the lamp', async () => /light\.intensity = 16$/m.test(toolText(ins = await rpc('tools/call', { name: 'inspect', arguments: { id: LAMP } }))), { ms: 6000, step: 200 });
+  check('inspect reads the FOLDED light (intensity 16, range 6 m, colour) — not the thinned perception view', /light\.intensity = 16$/m.test(toolText(ins)) && /light\.range = 6 m$/m.test(toolText(ins)) && /0xff8800/.test(toolText(ins)) && /pos\.y = 2 m/.test(toolText(ins)), toolText(ins).slice(0, 200));
+  const dry = await rpc('tools/call', { name: 'edit', arguments: { id: LAMP, dry: true, set: { 'pos.x': '+=1', 'pos.z': 0, 'light.intensity': '+=25%' } } });
   // a lamp is a thing with a light component: the edit is ONE door batch, a transform set (the whole pose) and a
   // light set (the bag, merged)
   check('edit dry: three edits → ONE batch: set transform (full pose) + set light', (toolText(dry).match(/would send/g) ?? []).length === 1 && /would send batch .*"component":"transform","value":\{"pos":\[2,2,0\]/.test(toolText(dry)) && /"component":"light","value":\{[^}]*"intensity":20[,}]/.test(toolText(dry)), toolText(dry));
-  const ed = await rpc('tools/call', { name: 'edit', arguments: { id: 'lamp1', set: { 'light.intensity': '+=4', 'flags.label': 'the porch lamp' } } });
+  const ed = await rpc('tools/call', { name: 'edit', arguments: { id: LAMP, set: { 'light.intensity': '+=4', 'flags.label': 'the porch lamp' } } });
   check('edit sends (one batch: the label and the light)', /sent batch .*"component":"label","value":"the porch lamp"/.test(toolText(ed)) && /"component":"light"/.test(toolText(ed)), toolText(ed));
   let ins2: any = null;
-  for (let i = 0; i < 30; i++) { ins2 = await rpc('tools/call', { name: 'inspect', arguments: { id: 'lamp1' } }); if (/light\.intensity = 20  \(/.test(toolText(ins2)) && /porch lamp/.test(toolText(ins2))) break; await sleep(200); }
-  check('…and the fold came back with 20 and the label', /light\.intensity = 20  \(/.test(toolText(ins2)) && /"the porch lamp"/.test(toolText(ins2)), toolText(ins2).slice(0, 160));
+  await tryUntil('the fold echoes the edit', async () => { ins2 = await rpc('tools/call', { name: 'inspect', arguments: { id: LAMP } }); return /light\.intensity = 20$/m.test(toolText(ins2)) && /porch lamp/.test(toolText(ins2)); }, { ms: 6000, step: 200 });
+  check('…and the fold came back with 20 and the label', /light\.intensity = 20$/m.test(toolText(ins2)) && /"the porch lamp"/.test(toolText(ins2)), toolText(ins2).slice(0, 160));
   // (a lamp is a thing: it has a heading, so pos.yaw is no longer the field it lacks)
-  const bad = await rpc('tools/call', { name: 'edit', arguments: { id: 'lamp1', set: { 'light.flicker': 2 } } });
+  const bad = await rpc('tools/call', { name: 'edit', arguments: { id: LAMP, set: { 'light.flicker': 2 } } });
   check('a field a light does not have is refused by name, nothing sent, marked isError', /refused: light\.flicker/.test(toolText(bad)) && !/sent/.test(toolText(bad)) && bad.result?.isError === true, toolText(bad));
   const hier = await rpc('tools/call', { name: 'hierarchy', arguments: {} });
-  check('hierarchy lists the lamp with its label (an Empty with a light component)', /\[lamp1\] "the porch lamp" empty · light/.test(toolText(hier)), toolText(hier).slice(0, 300));
+  check('hierarchy lists the lamp with its label (an Empty with a light component)', new RegExp(`\\[${LAMP.slice(0, 4)}[^\\]]*\\] "the porch lamp" (model · )?(empty · )?light`).test(toolText(hier)), toolText(hier).slice(0, 300));
   const hf = await rpc('tools/call', { name: 'hierarchy', arguments: { filter: 'nothing-like-this' } });
   check('a filter with no match says so', /no placed thing matches/.test(toolText(hf)), toolText(hf));
   const lk = await rpc('tools/call', { name: 'look', arguments: {} });

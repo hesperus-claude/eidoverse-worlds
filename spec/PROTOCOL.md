@@ -323,7 +323,7 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
   solid. `enabled: false` with `physics.kind: dynamic` is refused (it would fall
   forever). shared/protocol/simlayer.js `solidOff` is the one reading.
 - **Collision layers are `collider {blocks: [...], layer?, mask?}`**. `blocks` names the kinds of
-  mover it stops, of `bodies` (people and agents walking or swimming: the walkers, the authority's track and index),
+  mover it stops, of `bodies` (anyone walking or swimming: the walkers, the authority's track and index),
   `hulls` (driven vehicles: the authority's hull sweep) and `things` (loose things: the engine). Absent, it stops all
   three, as before. `hidden` with `blocks: ['hulls']` is an invisible wall every vehicle meets. A dynamic thing must
   block `things`. `layer` and `mask` are Godot's (CollisionObject3D `collision_layer`, the layers it is in, and

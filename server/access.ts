@@ -1,7 +1,4 @@
-// eidoverse-worlds sequencer — WORLD ACCESS: who may come in, decided by the world (upstream #258 / #259,
-// docs/DESIGN-world-access.md; ported to this protocol 2026-10-17).
-//
-// Upstream wrote access as the bottom rungs of its `grant` ladder (`none`, `spectator`). Here the facts are the world's own
+// WORLD ACCESS: who may come in, decided by the world (docs/DESIGN-world-access.md). The facts are the world's own
 // components, read by one pure function both the server and the client import (shared/protocol/access.js):
 //   @world.access {join: anyone|signed-in|listed, watch?: "anyone", max?, soft?, minAccountDays?}
 //   @world.default-role, roles:<id> {role, …, until?}
@@ -12,13 +9,7 @@
 //   doorFor       — a world's door, read from disk when the world isn't loaded (a /worlds listing never loads one)
 //   settleAccess  — after roles or access change: remove whoever may no longer stay (4010)
 //   sweepAccess   — timed grants: warn five minutes out, then the authority writes the end (expire-roles) and settle
-// It never imports server.ts: the session's expel is injected by the caller.
-//
-// Not ported from upstream (and why): a FOUNDING CAP (joining never founds a world here; founding is `world-found`, with no
-// engine quota); the directory SEARCH of everyone who has signed in (this
-// server's whois is scoped to a world's own people: a roster of sign-ins isn't an owner's to browse); `grant <name>
-// spectator` for ONE person (a role is membership here, never a state: a world that admits only people listed lets
-// everyone else watch with access.watch, or no one).
+// It never imports server.ts: the session's expel is injected by the caller. Not carried over from upstream: see the doc.
 
 import { WORLDS_DIR, JOIN_TOKEN } from "./config.ts";
 import { serverBans, findBan, doorLocked, LOCKED_WHY } from "./moderation.ts";
@@ -31,6 +22,7 @@ import { isBanned } from "../shared/protocol/authority.js";
 import { addressOf } from "./peer.ts";
 import { entryOf, doorOf as doorOfWc, listedIn, timedGrants, leftWords, ACCESS_WARN_MS } from "../shared/protocol/access.js";
 import { type World, type Client } from "./world.ts";
+import { WORLD_NAME_RE } from "./limits.ts";
 import { type OldWorld } from "./oldworlds.ts";
 import { lookup, ownerIn, type IndexEntry } from "./worldindex.ts";
 
@@ -64,10 +56,9 @@ export function doorOfWorld(w: World): Door { const wc = wcOfWorld(w); return { 
 export function doorOf(w: World): string { return doorOfWc(wcOfWorld(w)); }
 
 // ---- a world's door, without loading the world ----------------------------------------------------------------------
-// Listing and HTTP reads must answer "may this caller see world X?" for worlds nobody is in. Loading them would do it,
-// but a loaded world is never unloaded, so a /worlds call would pull every world on disk into memory for good. Instead the
-// door is read off the access index (worldindex.ts: @world's door components and the moderator log, read from disk when
-// they change, never because of who asks).
+// A loaded world is never unloaded, so listings must not load worlds to read their doors. Instead: fold only the
+// world.jsonl entries touching @world's access, default-role, role-defs and roles:*, cached until the file changes. The
+// moderator log (world.mod.jsonl) comes with it, so a ban closes the door before the world is loaded, as after.
 /** Set by server.ts: the loaded worlds (a loaded world's own fold is the truth). */
 let loadedWorlds: () => Map<string, World> = () => new Map();
 export function setLoadedWorlds(fn: () => Map<string, World>) { loadedWorlds = fn; }
@@ -76,7 +67,7 @@ const doorOfEntry = (name: string, e: IndexEntry): Door | null => (e.kind === "s
 /** A world's door by name: the loaded world's, else the index's; null when there is no such saved world (missing, mid-swap,
  *  an old format, or a moderator log that can't be read). Every name makes the same index lookup. */
 export function doorFor(name: string): Door | null {
-  if (!/^[a-z0-9_-]{1,64}$/i.test(name)) return null;
+  if (!WORLD_NAME_RE.test(name)) return null;
   const live = loadedWorlds().get(name), e = lookup(name, { loaded: !!live });
   return live ? doorOfWorld(live) : doorOfEntry(name, e);
 }
@@ -114,8 +105,7 @@ export function entryFor(door: Door, who: Who, mode: EntryMode, { now = Date.now
   if (e.may === "none" || (mode === "embody" && e.may === "watch")) return { code: ACCESS_CLOSE, reason: "no-access", why: e.why ?? `"${door.name}" isn't open to you` };
   if (bypass) return null;
   const acc = door.wc.access && typeof door.wc.access === "object" ? door.wc.access : null;
-  // a trusted renderer has no account and never embodies: the door let it watch above, and the account-age rule is about
-  // accounts (review of #260, server I52)
+  // a trusted renderer has no account and never embodies: the door let it watch above; account age is about accounts
   const age = acc && !who.trustedRenderer ? accountAgeRefusal({ world: door.name, minDays: acc.minAccountDays, account, anonymous: !account, now }) : null;
   if (age && !(mode === "watch" && acc?.watch === "anyone")) return { code: ACCESS_CLOSE, reason: "age", why: age };
   // "full" is transient (someone leaves): its own close (4005 "full"), which clients wait out and try again
@@ -144,7 +134,7 @@ export type Told = { kind: "door"; door: Door } | { kind: "unavailable" } | { ki
   | { kind: "old"; old: OldWorld; operator: boolean; owner: "bound" | "name" | null; ownerName?: string };
 export function toldOf(name: string, who: Who | null, proven: { account: string; name: string } | null = null): Told | Promise<Told> {
   const no: Told = { kind: "unavailable" };
-  if (!/^[a-z0-9_-]{1,64}$/i.test(name)) return no;
+  if (!WORLD_NAME_RE.test(name)) return no;
   const live = loadedWorlds().get(name), e = lookup(name, { loaded: !!live });   // the one index read, whatever the name is
   const operator = isOperator(proven?.account ?? null);
   const door = live ? doorOfWorld(live) : doorOfEntry(name, e);

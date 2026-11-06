@@ -1,6 +1,5 @@
 // confirmcenter — a yes/no question in the middle of the screen, for a press that would otherwise do something
-// big without warning: leaving for the light version, or a VR click that has to restart the page on WebGL
-// (owner, 10-01: "a pop-up confirmation in the center of the screen… that's caught me by surprise a few times").
+// big without warning: leaving for the light version, or a VR click that has to restart the page on WebGL.
 // The browser's own confirm() hangs from the top edge, can't be styled, and doesn't exist inside a headset.
 //
 //   confirmCenter({ title, body, ok = 'OK', cancel = 'Cancel' }) → Promise<boolean>
@@ -28,7 +27,7 @@ export function confirmCenter({ title, body = '', ok = 'OK', cancel = 'Cancel' }
     const okB = root.querySelector('.cc-ok'), noB = root.querySelector('.cc-no');
     const onKey = (e) => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); settle(false); }
-      // Enter on a focused button presses THAT button (Cancel included) — not "yes" whatever has focus (review #212)
+      // Enter on a focused button presses THAT button (Cancel included) — not "yes" whatever has focus
       else if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); e.stopPropagation(); settle(!e.target?.classList?.contains('cc-no')); }
       // Tab stays between the two buttons: focus that wandered off the card would leave Enter meaning yes out of sight
       else if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); (e.target === okB ? noB : okB).focus(); }
@@ -137,8 +136,7 @@ export function chooseCenter({ title, body = '', choices = [], cancel = null, fo
     addEventListener('keydown', onKey, true);
     document.body.appendChild(root);
     open = { root, settle, cancel };
-    // `focus`: the answer Enter gives at first — a destructive question focuses its safe answer (review 10-07 S1: Enter
-    // on "This is locked. Delete anyway?" deleted it)
+    // `focus`: the answer Enter gives at first — a destructive question focuses its safe answer
     const fi = focus != null ? choices.findIndex((c) => c.v === focus) : -1;
     btns[fi >= 0 ? fi : 0].focus();
   });

@@ -4,17 +4,13 @@
 // _setFramebuffer then calls WebGLState.drawBuffers(renderContext, fb), which caches per framebuffer in a WeakMap —
 // `currentDrawbuffers.set(fb, …)`. A WebGL emulator (IWER, and the Immersive Web Emulator extension built on it)
 // answers XRWebGLLayer.framebuffer with null by design (iwer lib/layers/XRWebGLLayer.js:44: it draws to the canvas and
-// splits it per eye), so the set throws `Invalid value used as weak map key`. The throw lands inside
-// renderer._renderOutput between `xr.enabled = false; autoClear = false` and their restore (no finally), so after the
-// first XR frame the renderer was left with XR OFF: later frames drew the desktop camera into the canvas, not the eyes
-// (48 session frames → 4 eye draws; the probe's red). report()'s rate limit showed it once.
+// splits it per eye), so the set throws `Invalid value used as weak map key` — inside renderer._renderOutput before
+// `xr.enabled` is restored (no finally), leaving the renderer with XR OFF: later frames drew the desktop camera.
 //
-// A real immersive runtime (her headset, Chromium) returns an opaque WebGLFramebuffer, never null (WebXR §
-// XRWebGLLayer: only an INLINE session's layer has a null framebuffer), so there this wrapper only ever passes through.
-// So nothing is patched at boot: the wrapper installs at sessionstart, and only when that session's base layer really
-// has a null framebuffer — the condition itself, not a guess at which emulator is present (the probes hide IWER).
-// On the headset it never installs. For null, the draw-buffer state the default framebuffer needs is [BACK] — exactly
-// what three issues for a context with no textures — so that is what it gets. gl.bindFramebuffer(…, null) is already right.
+// A real immersive runtime returns an opaque WebGLFramebuffer, never null (WebXR § XRWebGLLayer: only an INLINE
+// session's layer has a null framebuffer). So the wrapper installs at sessionstart, and only when that session's base
+// layer really has a null framebuffer — the condition itself, not a guess at which emulator is present. For null, the
+// draw-buffer state the default framebuffer needs is [BACK] (what three issues for a context with no textures).
 // Revisit at every three bump: if drawBuffers stops keying a WeakMap on the framebuffer, delete this file.
 export function tolerateNullXRFramebuffer(renderer) {
   const state = renderer?.backend?.isWebGLBackend ? renderer.backend.state : null;

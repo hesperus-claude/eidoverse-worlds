@@ -22,6 +22,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch, archiveTo, linkInto, readLF } from "./common.ts";
 import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 import { LAB_CATALOGUE } from "./labmodels.js";   // the suites' model table (a base or mutant tree reads it from here)
 
 const argv = process.argv.slice(2);
@@ -379,13 +380,11 @@ const cases: { id: string; what: string; run: (s: any) => any; good: (o: any) =>
     good: (o) => o.plain === "conflicts" && o.stray === "shape" && /b\.pivot\.axis/.test(o.strayWhy ?? "") && o.word === "shape" && o.none === "conflicts" && o.left === "shape" && o.good === "ok" && o.i === "[0,1,0]" },
 ];
 
-let pass = 0, fail = 0;
+const SUITE = suite("build-check", { cap: 900 });
 for (const c of cases) {
   if (ONLY && !ONLY.includes(c.id)) continue;
   let o: any, good = false;
   try { o = c.run(session()); good = !!c.good(o); } catch (e: any) { o = { threw: `${e?.constructor?.name}: ${e?.message}`.slice(0, 300) }; }
-  if (good) pass++; else fail++;
-  console.log(`${good ? "ok  " : "FAIL"} ${c.id.padEnd(4)} ${c.what}${good && !argv.includes("--verbose") ? "" : `\n       ${JSON.stringify(o).slice(0, 900)}`}`);
+  SUITE.ok(good, `${c.id.padEnd(4)} ${c.what}`, o);
 }
-console.log(`[build-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();

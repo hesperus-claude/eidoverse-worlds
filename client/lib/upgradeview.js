@@ -64,8 +64,8 @@ export function showOldFormat(root, refused, world) {
   root.querySelector('.sp-upgrade')?.remove();
   const box = el('div', 'sp-upgrade');
   const doc = el('a', 'sp-up-doc', 'How upgrading works'); doc.href = `/${refused?.doc ?? OLD_FORMAT_DOC}`; doc.target = '_blank'; doc.rel = 'noopener';
-  const area = el('div', 'sp-up-area'); box.append(area, doc);   // the action first; "how" is for when it's unclear (R 10-28)
-  if (!refused?.may && !refused?.operator) area.append(el('p', 'sp-up-who', IF_YOU_RUN_IT));   // who can't upgrade it: the runner's way in, else ask (R 10-28)
+  const area = el('div', 'sp-up-area'); box.append(area, doc);   // the action first; "how" is for when it's unclear
+  if (!refused?.may && !refused?.operator) area.append(el('p', 'sp-up-who', IF_YOU_RUN_IT));   // who can't upgrade it: the runner's way in, else ask
   if (refused?.may) {   // an operator, or its owner (refused.owner: 'bound' by main's records, 'name' provisionally)
     const review = el('button', 'sp-up-btn sp-up-review', 'Upgrade world…'); area.append(review);
     review.onclick = async () => {

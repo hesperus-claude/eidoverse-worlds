@@ -2,7 +2,7 @@
 // world-upgrade-review {id, world} → {type, id, ok, world, report, hash, warning?}: the CLI's dry run (nothing written).
 // world-upgrade {id, world, approved} → {type, id, ok, world, backup, report, rollback, people, warning?}: the CLI's in-place translation, bound to
 // that hash (a verified backup first: server/backups.ts). Both run tools/protocol/world.ts itself: the translation has one code path.
-// A server operator (SERVER_OPERATORS) or the world's owner, by a proven account (R 10-28): an owner main's records bind to
+// A server operator (SERVER_OPERATORS) or the world's owner, by a proven account: an owner main's records bind to
 // that account ("bound"), or one main recorded no account for whose name the account's is ("name", provisional):
 // the access index (worldindex.ts ownerIn, server/ownerrecognise.ts). An ownerless world's upgrader becomes its owner (--claim); a recognised owner is bound to them (report.claim). The translation binds an owner to the account main
 // recorded for them; when no owner is bound, both replies carry `warning` and the server log says so (docs/TRANSLATING-OLD-WORLDS.md).
@@ -51,7 +51,7 @@ const RATE_N = 6, RATE_MS = 10 * 60_000;
 const running = new Set<string>(), recent = new Map<string, number[]>();
 
 /** The checks both requests share; a refusal is answered here and null returned. */
-async function admit({ c, ws }: Ctx, msg: Any, type: string, shape?: () => [string, string] | null) {
+async function takeUpgrade({ c, ws }: Ctx, msg: Any, type: string, shape?: () => [string, string] | null) {
   const id = msg.id ?? null;
   const refuse = (code: string, reason: string, fix?: string) => { ws.send(JSON.stringify({ type, id, ok: false, refused: { code, reason, ...(fix ? { fix } : {}) } })); return null; };
   const who = provenWho(c, msg), account = who?.account ?? null, operator = isOperator(account);
@@ -61,7 +61,7 @@ async function admit({ c, ws }: Ctx, msg: Any, type: string, shape?: () => [stri
   const unavailableHere = () => { const u = unavailable(world.slice(0, 64)); return refuse(u.code, u.message); };
   if (!account) return unavailableHere();
   const bad = shape?.(); if (bad) return refuse("shape", bad[0], bad[1]);   // before the rate slot: a malformed request runs nothing
-  // the rate next, for every name (review full-260 L2: an owner check runs the CLI, so it is spent on the slot; and a slot
+  // the rate next: an owner check runs the CLI, so it is spent on the slot; and a slot
   // spent only on an old world's name would tell a stranger it is there)
   const now = Date.now(), mine = (recent.get(account) ?? []).filter((t) => now - t < RATE_MS);
   if (mine.length >= RATE_N) return refuse("rate", `at most ${RATE_N} upgrade requests in ${RATE_MS / 60_000} minutes`, "try again later");
@@ -80,7 +80,7 @@ const claimEnv = (a: { account: string; name: string }) => ({ EIDO_UPGRADER_ACCO
 
 export const UPGRADE_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
   "world-upgrade-review": (ctx, msg) => {
-    const type = "world-upgrade-review"; void admit(ctx, msg, type).then((a) => { if (!a) return;
+    const type = "world-upgrade-review"; void takeUpgrade(ctx, msg, type).then((a) => { if (!a) return;
     void runCli(["translate", "--dry-run", "--no-founder-key", "--claim", "--json", "--", a.world], claimEnv(a), `review ${a.world}`).then((r) => {
       const got = r.accepted ? tagged(r.out, "report-json") : null;
       if (!got) { a.refuse("failed", `the dry run didn't finish${r.accepted ? "" : ` (${r.why})`}: ${(r.err || r.out).trim().slice(-1200)}`); return; }
@@ -93,7 +93,7 @@ export const UPGRADE_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
     const type = "world-upgrade";
     const approved = String(msg.approved ?? "");
     const shape = (): [string, string] | null => /^[0-9a-f]{64}$/.test(approved) ? null : ["approved must be the reviewed report's hash (64 hex)", "review the upgrade first"];
-    void admit(ctx, msg, type, shape).then((a) => { if (!a) return;
+    void takeUpgrade(ctx, msg, type, shape).then((a) => { if (!a) return;
     void runCli(["translate", "--no-founder-key", "--operator-only-no-owner", "--claim", "--approved", approved, "--json", "--", a.world], claimEnv(a), `apply ${a.world}`).then((r) => {
       const got = r.accepted && r.code === 0 ? tagged(r.out, "result-json") : null;
       const said = `${r.err}\n${r.out}`.trim();

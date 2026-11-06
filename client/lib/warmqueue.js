@@ -1,19 +1,14 @@
 // warmqueue — the warm conductor (TEL0S_NOTES §16.2.A).
 //
-// One serialized queue through which pipeline warms pass: GLB lib compiles
-// (assets.js), terrain (world.js), sky domes (sky.js), and shadow-depth
-// variants (below, driven by lightrig's casterPass). Concurrency is ONE —
-// that is the point: the GPU process compiles one thing at a time while
-// frames keep presenting. The gpu lane's 2-wide concurrency was exactly
-// what let compiles fight each other (§16.1d); the conductor replaces it
-// for pipeline warms while the lane keeps its remaining users (avatar
-// bodies, portrait contexts).
+// One serialized queue for pipeline warms: GLB lib compiles (assets.js),
+// terrain (world.js), sky domes (sky.js) and shadow-depth variants (below,
+// driven by lightrig's casterPass). Concurrency is ONE — that is the point: the
+// GPU process compiles one thing at a time while frames keep presenting (a
+// 2-wide lane let compiles fight each other, §16.1d).
 //
-// Between items: one REAL requestAnimationFrame yield — never
-// scheduler.yield, whose same-turn continuation storm starves rAF on
-// Chromium (§16.1a). Errors are swallowed per the house warm pattern
-// (every warm call site already wrote `.catch(() => {})`), but counted;
-// warmStats() is the debug shape 8e hangs on EW later.
+// Between items: one REAL requestAnimationFrame yield — never scheduler.yield,
+// whose same-turn continuation storm starves rAF on Chromium (§16.1a). Errors
+// are swallowed (house warm pattern) but counted in warmStats().
 
 import { renderer, scene, sun, camera, THREE, TSL } from './core.js';
 import { beginWork, nextFrame } from './loadwork.js';
@@ -25,19 +20,16 @@ const queue = [];
 let running = false;
 const stats = { queued: 0, done: 0, failed: 0, lastLabel: null };
 
-// Priority classes, because FIFO gated arrival on ambience: the rain world's
-// cloud-march compiles queued AHEAD of the terrain compile the curtain waits
-// on, and boot went 2s → 16s (measured, first 8b gate). GATE items are what
-// the splash is waiting for; AMBIENT items (sky domes, depth variants) are
-// pure background warmth. Stable FIFO within a class.
+// Priority classes: under plain FIFO, ambient compiles queued ahead of the
+// terrain compile the curtain waits on and slowed boot ~8×. GATE = what the
+// splash waits for; AMBIENT = background warmth. Stable FIFO within a class.
 export const P_GATE = 0;     // arrival waits on this (terrain)
 export const P_MODEL = 1;    // a thing someone is about to see (default)
 export const P_AMBIENT = 2;  // sky domes, shadow-depth variants
 
-/** Enqueue an async warm. Runs fn() alone — highest class first, arrival
- *  order within a class — one real frame between items. The returned promise
- *  resolves when the item has RUN — never rejects (errors are swallowed and
- *  counted, house warm pattern). */
+/** Enqueue an async warm. Runs fn() alone — highest class first, arrival order
+ *  within a class — one real frame between items. Resolves when the item has
+ *  RUN; never rejects (errors are swallowed and counted). */
 export function warm(label, fn, { p = P_MODEL } = {}) {
   return new Promise((resolve) => {
     // the record starts at enqueue so the wait is visible as its own phase
@@ -92,54 +84,11 @@ async function pump() {
 export const warmStats = () => ({ ...stats, pending: queue.length, running });
 
 // ---- shadow-depth pre-warm --------------------------------------------------
-// The shadow-depth pass was the one pipeline family NOTHING warmed: every
-// caster the rig enables paid a synchronous createRenderPipeline inside the
-// next shadow render (§16.1c). This warms a caster's depth pipelines through
-// compileAsync BEFORE castShadow ever flips, so the real pass is a pure
-// cache hit. Grounded in the vendored three.webgpu.js (r184) — every line
-// number below was read, not assumed:
-//
-//   The pipeline cache is renderer-global and keys on program ids + a
-//   VALUE-only backend key (:32248-32252, lookup :32035-32047): material
-//   blend/depth/stencil/side state, target formats, sample count, topology,
-//   geometry key — no object, scene, or context IDENTITY anywhere
-//   (:81752-81782). Programs dedupe by WGSL SOURCE STRING (:32003-32029),
-//   and NodeBuilder names uniforms/vars with builder-local counters
-//   (:51535-51557, :51570-51590) with constants inlined by value
-//   (:50882-50931) — so structurally identical graphs emit byte-identical
-//   text. A warm compile that reproduces the real pass's material VALUES,
-//   node graph, object and target formats therefore lands the exact
-//   GPURenderPipeline the real pass will ask for.
-//
-//   The real pass: ShadowNode.updateShadow sets scene.overrideMaterial to a
-//   per-light NodeMaterial{colorNode:vec4(0,0,0,1), isShadowPassMaterial,
-//   NoBlending, fog:false} (:44603, built :43865-3884) and renders into a
-//   RenderTarget whose texture.type = shadow.mapType with a default
-//   DepthTexture (:44272-4285). Depth-pass codegen is scene-independent BY
-//   DESIGN — getDynamicCacheKey skips the lights/env/fog key entirely for
-//   isShadowPassMaterial (:30257-30268) — and per caster material the
-//   renderer derives colorNode/depthNode/positionNode once and caches THE
-//   INSTANCES on itself (_getShadowNodes, :61040-61133), then mutates the
-//   override material per object: alphaTest/alphaMap/transparent copied,
-//   side flipped through _shadowSide (:61187-61203, map :57817).
-//
-//   The one trap: renderObject() RESTORES colorNode/depthNode/positionNode/
-//   side after queueing (:61237-61243), and compileAsync DEFERS codegen to
-//   after that restore (:61343-61383, loop :58761-58790) — so a naive
-//   "overrideMaterial + compileAsync" compiles the WRONG pipeline for any
-//   caster with a map/alphaTest/flipped side. The fix: PRE-configure our
-//   warm material to exactly the post-mutation state (same cached node
-//   instances via _getShadowNodes — which also primes the renderer's cache
-//   for the real pass), so save→mutate→restore is identity and the deferred
-//   build sees the correct state.
-//
-//   compileAsync captures its render target/context synchronously before
-//   its first internal yield (:58652-58654; items carry the context,
-//   :61358) — the avatar-thumbnail precedent (avatar.js) — so target and
-//   overrideMaterial are restored in the same synchronous block and no real
-//   frame ever sees them. Pipelines build through
-//   device.createRenderPipelineAsync (:79006-79031), not the blocking
-//   variant — nothing stalls the queue.
+// Warms a caster's depth pipelines through compileAsync BEFORE castShadow
+// flips, so the real shadow pass is a pure cache hit (§16.1c). The warm
+// material is pre-configured to the exact state three's renderObject() leaves
+// the real shadow material in, because compileAsync defers codegen past its
+// restore. Mechanism + three.webgpu.js line refs: docs/research/shadow-depth-prewarm.md
 
 const SHADOW_SIDE = {
   [THREE.FrontSide]: THREE.BackSide,
@@ -150,7 +99,7 @@ const SHADOW_SIDE = {
 let warmMat = null;       // our shadow-pass material — value-identical to three's
 let baseColorNode = null; // vec4(0,0,0,1), inlined by value in WGSL
 let scratchRT = null;     // format-matched fallback target (never drawn into)
-let depthWarmBroken = new URLSearchParams(globalThis.location?.search ?? '').has('nodepthwarm');   // ?nodepthwarm=1 — R 09-07 19:22: casters compile in-frame, the pre-warm bypassed, to tell a wrong warmed pipeline from a driver compare issue
+let depthWarmBroken = new URLSearchParams(globalThis.location?.search ?? '').has('nodepthwarm');   // ?nodepthwarm=1: casters compile in-frame, the pre-warm bypassed, to tell a wrong warmed pipeline from a driver compare issue
 
 function ensureDepthWarm() {
   if (warmMat) return true;
@@ -172,12 +121,10 @@ function ensureDepthWarm() {
   return true;
 }
 
-// The warm target: prefer the REAL shadow map RT (same render context as the
-// real pass — for textured casters even the NodeBuilder state is shared, the
-// material cache key includes context.id). Before the first shadow render it
-// doesn't exist yet; the scratch RT replicates setupRenderTarget's FORMATS
-// verbatim (:44272-4285) — only formats enter the pipeline key, so 4×4 is
-// plenty: the compile never draws into it.
+// The warm target: the REAL shadow map RT once it exists (same render context
+// as the real pass). Before the first shadow render, a 4×4 scratch RT with
+// setupRenderTarget's FORMATS (:44272-4285) — only formats enter the pipeline
+// key, and the compile never draws into it.
 function warmTarget() {
   if (sun.shadow?.map?.isRenderTarget) return sun.shadow.map;
   if (!scratchRT) {
@@ -213,10 +160,9 @@ function configureFor(m) {
   warmMat.needsUpdate = true;
 }
 
-// One compile round: this mesh, this material's depth config. Every group of
-// a multi-material mesh dedupes to the same pipeline key within a round
-// (shared geometry + same material values), so per-unique-material rounds
-// warm everything with zero waste.
+// One compile round: this mesh, this material's depth config. A multi-material
+// mesh's groups dedupe to one pipeline key per round, so per-unique-material
+// rounds warm everything with zero waste.
 async function compileDepthRound(mesh, material) {
   configureFor(material);
   const saveVisible = mesh.visible;

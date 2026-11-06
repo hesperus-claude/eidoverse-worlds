@@ -274,10 +274,8 @@ function removeSeat() {
   deselectSocket();
 }
 
-// The seat drag's own arm/commit listeners — the same DRAG_SLOP threshold
-// every desktop UI uses to tell a click from a drag. These fire beside the
-// core's listeners and touch only seat state, so order between the two
-// modules' handlers does not matter.
+// The seat drag's own arm/commit listeners (DRAG_SLOP tells a click from a
+// drag). They touch only seat state, so their order against the core's doesn't matter.
 const DRAG_SLOP = 4;
 addEventListener('mousemove', (e) => {
   if (seatDrag && !seatDrag.armed
@@ -292,8 +290,10 @@ addEventListener('mouseup', () => {
 
 
 // ---- the inspector's sockets GESTURES --------------------------------
-// The card is shared/editschema.js's: '+ socket here' arms the click-to-place, a row click selects that socket child.
-// Components ▸ + seat…: the first seat in ONE step (before, a sockets comp had to exist first)
+// The card is shared/editschema.js. What only this module adds:
+// '+ socket here' arms the click-to-place, a row click selects that gizmo, a live
+// drag on a slot's channels moves the gizmo before the merged comp commits.
+// Components ▸ + seat…: the first seat in ONE step
 registerHandler('comp', (id, _obj, k, _v, opts) => { if (k !== 'add:seat' || opts?.live) return false; armSocketPlacement(id); return true; });
 registerHandler('sockets', (id, _obj, k, value) => {
   if (k === 'add') { armSocketPlacement(id); return true; }

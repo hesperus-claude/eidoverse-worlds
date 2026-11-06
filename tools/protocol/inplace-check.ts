@@ -104,11 +104,11 @@ import { approvalText, approvalProblem, makeApproval, translateV1World, NO_OWNER
 const operatorPub = () => JSON.parse(fs.readFileSync(path.join(W, ".custody.json"), "utf8")).operator?.pub as string;
 const verifies = (key: string, msg: string, sig: string) => { try { return crypto.verify(null, Buffer.from(msg), crypto.createPublicKey({ key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), Buffer.from(key.slice(8), "base64url")]), format: "der", type: "spki" }), Buffer.from(sig, "base64url")); } catch { return false; } };
 import { readLog } from "../../shared/protocol/fold.js";
+import { suite } from "./suite.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 
 const root = scratch("inplace");
-let pass = 0, fail = 0;
-const ok = (cond: any, what: string, detail?: any) => { if (cond) { pass++; console.log(`  ok  ${what}`); } else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 700)}` : ""}`); } };
+const { ok, done } = suite("inplace", { cap: 700 });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const W = path.join(root, "worlds"), OPT = path.join(root, "opt"); fs.mkdirSync(OPT, { recursive: true });
 // Every world.ts run goes through the server's own one-shot helper (server/oneshot.ts runOneShot: framed, its group checked,
@@ -744,5 +744,4 @@ fs.rmSync = (p, x) => { log("rm " + p); return rm(p, x); };\n`);
 { const forced = children.filter((c) => c.end === "forced process cleanup"), bad = children.filter((c) => !c.accepted);
   const receipt = path.join(root, "world-children.json"); fs.writeFileSync(receipt, JSON.stringify({ bun: Bun.version, platform: process.platform, children }, null, 1) + "\n");
   ok(children.length > 100 && !bad.length, `IP45 every world.ts run answered framed with no handle of its own open, and ended (${children.length}: ${children.length - forced.length} exited, ${forced.length} ${FORCED}; ${receipt})`, bad.slice(0, 5)); }
-console.log(`inplace: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

@@ -752,6 +752,9 @@ House rules, learned the hard way (each one is a past incident):
    authority in a sandbox), so components stay pure data. Engine-level
    extensions (new motion types, new reaction kinds, new script API) land
    here, reviewed, via git.
+6. **A person is anyone.** "Person" and "people" mean any participant, human
+   or agent (People Here, PROTOCOL §6a); write "human" when you mean someone
+   at a browser or in a headset. vocab-check refuses "person or agent" and its kin.
 
 ### Dev loop
 

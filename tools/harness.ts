@@ -1,11 +1,16 @@
 // Shared scratch sequencer/browser ownership and failure evidence for benches.
-import { existsSync, mkdtempSync, rmSync, appendFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, appendFileSync, readFileSync, renameSync } from "node:fs";
 import { tmpdir, loadavg, cpus } from "node:os";
 import { join, resolve } from "node:path";
 import { chromeArgs, findChrome, cdpOn, type Cdp } from "./protocol/chrome.ts";
+import { MOVER, TRACK } from "../shared/mover.js";
+import { idAliases } from "./protocol/idalias.ts";
 export { cdpOn, type Cdp };
 
 export const ROOT = resolve(import.meta.dir, "..");
+/** A WorldAgent's tickEveryMs for walks at `speed` m/s, as fast as the authority's speed track allows with a fifth to
+ *  spare (shared/protocol/authority/bodyverbs.js too-fast; each tick steps 100 ms of the body, mcpl/agent.ts TICK_MS). */
+export const trackTicks = (speed: number = MOVER.walk.speed) => Math.ceil(100 * speed / (TRACK.speed * 0.8));
 export const CHROME = findChrome() ?? "";
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;
@@ -59,6 +64,17 @@ export function saysIn(msgs: any[]) {
   return out;
 }
 
+/** Requests over a raw world socket: {type: "request", id, verb, args} → the reply (server/requestwire.ts), with the
+ *  suite's names as placeholders and minted ids (idalias.ts). `ids.of(name)` reads a name as its id; ms: give up (null). */
+export function requester(ws: WebSocket, ms = 8000) {
+  const ids = idAliases(), waiting = new Map<string, (r: any) => void>(); let n = 0;
+  ws.addEventListener("message", (ev: MessageEvent) => { let m: any; try { m = JSON.parse(String(ev.data)); } catch { return; }
+    if (m?.type === "reply" && waiting.has(m.id)) { const done = waiting.get(m.id)!; waiting.delete(m.id); done(ids.back(m.reply)); } });
+  return { ids, request(verb: string, args: any = {}): Promise<any> {
+    const id = `rq${++n}`; ws.send(JSON.stringify({ type: "request", id, verb, args: ids.out(verb, args) }));
+    return new Promise((res) => { waiting.set(id, res); setTimeout(() => { if (waiting.delete(id)) res(null); }, ms); }); } };
+}
+
 let failedChecks = 0;
 // Headless Chromes that are NOT this process's descendants: another suite's or an agent's browser sharing the box.
 // Five gate reds on 2026-10-14 were rows green solo; each cost a solo re-run to classify. The tally line now says so.
@@ -88,17 +104,19 @@ type ScratchOptions = {
   serverEnv?: Record<string, string>;
   portFrom?: number;
   // Tests may seed a log before boot or instrument asset I/O in the child.
-  prepare?: (scratch: string) => void | Promise<void>;
+  prepare?: (scratch: string, port: number) => void | Promise<void>;
   preload?: string;
   /** worlds to found before boot (joining never founds one); `owner` founds them (default "owner"). */
   worlds?: string[];
   owner?: string;
+  /** each stdout line as it is written (a file sink is block-buffered by the child: a live log read needs the pipe) */
+  onLine?: (line: string) => void;
 };
 
 /** Own the child and prove its identity before opening any product door. */
 export async function scratchSequencer(name: string, opts: ScratchOptions = {}) {
-  const PORT = freePort(opts.portFrom ?? 8950);
-  const BASE = `http://127.0.0.1:${PORT}`;
+  let PORT = freePort(opts.portFrom ?? 8950);
+  let BASE = `http://127.0.0.1:${PORT}`;
   // under the gate's per-suite dir when there is one: on Windows tmpdir() is TEMP, which run.ts leaves alone (setting it hung
   // suites, 10-23), so a failure's [bench] logs would land where CI never uploads them
   const SCRATCH = mkdtempSync(join(process.env.PROTOCOL_SCRATCH || tmpdir(), `ew-${name}-`));
@@ -141,29 +159,52 @@ export async function scratchSequencer(name: string, opts: ScratchOptions = {}) 
   process.once("unhandledRejection", (err) => { void die(1, err instanceof Error ? err.stack ?? String(err) : String(err)); });
   for (const sig of ["SIGINT", "SIGTERM"] as const) process.once(sig, () => { void die(130, `interrupted: ${sig}`); });
   const track = (p: Bun.Subprocess) => { procs.push(p); return p; };
-  await opts.prepare?.(SCRATCH);
+  await opts.prepare?.(SCRATCH, PORT);
   if (opts.worlds?.length) foundWorlds(join(SCRATCH, "worlds"), opts.worlds, opts.owner);
   const EIDOVERSE_DIR = opts.serverEnv?.EIDOVERSE_DIR ?? process.env.EIDOVERSE_DIR ?? join(ROOT, "..", "eidoverse-video");
-  const seq = track(Bun.spawn([process.execPath, ...(opts.preload ? ["--preload", opts.preload] : []), join(ROOT, "server", "server.ts")], {
-    cwd: ROOT,
-    env: { ...process.env, JOIN_TOKEN: "", EIDOVERSE_DIR, ...opts.serverEnv,
-      PORT: String(PORT), WORLDS_DIR: join(SCRATCH, "worlds"), RELAY_STATE_DIR: SCRATCH, BENCH_NONCE: NONCE },
-    stdout: Bun.file(join(SCRATCH, "sequencer.log")), stderr: Bun.file(join(SCRATCH, "sequencer.stderr.log")),
-  }));
-  let up = false;
-  for (let i = 0; i < 80 && !up; i++) {
-    if (seq.exitCode !== null) await die(2, `sequencer exited ${seq.exitCode} before readiness`);
-    try {
-      const r = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(1000) });
-      if (r.ok) {
-        const j = await r.json() as { nonce?: string };
-        if (j.nonce !== NONCE) await die(2, `:${PORT} answered with another sequencer's nonce`);
-        up = true;
+  // freePort probes then releases, so another suite can take the port before our child binds it: that is the runner, not
+  // the product, so a squatter (a responder that isn't our child) or our child's failed bind moves us to a fresh port, at most 3 times
+  let seq!: Bun.Subprocess;
+  for (let attempt = 1; ; attempt++) {
+    if (attempt > 1) {
+      for (const f of ["sequencer.log", "sequencer.stderr.log"]) { try { renameSync(join(SCRATCH, f), join(SCRATCH, `attempt${attempt - 1}.${f}`)); } catch { /* never written */ } }
+      PORT = freePort(opts.portFrom ?? 8950); BASE = `http://127.0.0.1:${PORT}`;
+    }
+    seq = track(Bun.spawn([process.execPath, ...(opts.preload ? ["--preload", opts.preload] : []), join(ROOT, "server", "server.ts")], {
+      cwd: ROOT,
+      env: { ...process.env, JOIN_TOKEN: "", EIDOVERSE_DIR, ...opts.serverEnv,
+        PORT: String(PORT), WORLDS_DIR: join(SCRATCH, "worlds"), RELAY_STATE_DIR: SCRATCH, BENCH_NONCE: NONCE },
+      stdout: opts.onLine ? "pipe" : Bun.file(join(SCRATCH, "sequencer.log")), stderr: Bun.file(join(SCRATCH, "sequencer.stderr.log")),
+    }));
+    if (opts.onLine) { const out = seq.stdout as ReadableStream<Uint8Array>; void (async () => { const d = new TextDecoder(); let buf = "";
+      for await (const c of out) { const t = d.decode(c); buf += t; try { appendFileSync(join(SCRATCH, "sequencer.log"), t); } catch { /* evidence only */ }
+        let nl; while ((nl = buf.indexOf("\n")) >= 0) { opts.onLine!(buf.slice(0, nl)); buf = buf.slice(nl + 1); } } })(); }
+    let up = false, taken = "";
+    for (let i = 0; i < 80 && !up && !taken; i++) {
+      if (seq.exitCode !== null) {
+        await sleep(50);
+        let err = ""; try { err = readFileSync(join(SCRATCH, "sequencer.stderr.log"), "utf8"); } catch { /* none */ }
+        if (/EADDRINUSE|address already in use|port \d+ in use/i.test(err)) { taken = `our child could not bind :${PORT}`; break; }
+        await die(2, `sequencer exited ${seq.exitCode} before readiness`);
       }
-    } catch { /* not listening yet */ }
-    if (!up) await sleep(250);
+      try {
+        const r = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(1000) });
+        if (r.ok) {
+          const j = await r.json() as { nonce?: string; pid?: number };
+          if (j.nonce === NONCE) up = true;
+          else if (j.pid !== seq.pid) taken = `:${PORT} is held by another process (pid ${j.pid})`;
+          else await die(2, `:${PORT} answered with another sequencer's nonce`);   // our own child, wrong identity: a real bug
+        }
+      } catch { /* not listening yet */ }
+      if (!up && !taken) await sleep(250);
+    }
+    if (up) break;
+    if (!taken) await die(2, `sequencer never came up on :${PORT}`);
+    try { seq.kill(); } catch { /* exited */ }
+    await Promise.race([seq.exited, sleep(2000)]);
+    if (attempt >= 3) await die(2, `${taken}, and on 2 fresh ports before it`);
+    console.error(`[bench] ${taken}; retrying on a fresh port`);
   }
-  if (!up) await die(2, `sequencer never came up on :${PORT}`);
   return { PORT, BASE, SCRATCH, NONCE, EIDOVERSE_DIR, seq, track, record, cleanup, die, sleep };
 }
 
@@ -217,7 +258,7 @@ export async function scratchBench(name: string, opts: ScratchOptions & { headed
   // recovery (client/lib/gpulost.js) answers a browser-destroyed device with a reload, which would yank the page out
   // from under a probe mid-check. Seed one recent loss so the rule "a second loss inside 2 min doesn't reload" applies:
   // the renderer stops (no leak), the page stays, and DOM/state probes run as before. Recovery itself is
-  // gpulost-test.mjs (pure) and gpulost-probe.mjs (its own harness), neither of which loads this.
+  // gpulost-test.mjs (pure), which doesn't load this.
   await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: "try { if (!sessionStorage.getItem('ew-gpu-lost')) sessionStorage.setItem('ew-gpu-lost', JSON.stringify([Date.now()])); } catch {}" });
   const evalJson = async (expr: string) => {
     const r = await cdp.send<any>("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true });

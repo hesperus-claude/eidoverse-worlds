@@ -1,15 +1,9 @@
 // shared/humanoid.js — the VRM humanoid bone vocabulary, and what counts as a
 // well-formed pose over it.
 //
-// Why this exists: `pose` is the one tool that lets a body be put in a shape
-// nothing else can express, and until now it accepted ANY object. A typo'd
-// bone name, a quaternion with three components, a [0,0,0,0] — all were taken
-// silently, rode the presence packet, and did nothing on every renderer. The
-// author's only feedback was a snapshot round-trip through a GPU host, which
-// is not a feedback loop anyone can pose a body with.
-//
-// So: one vocabulary, one validator, three runtimes. The bone list is VRM 1.0's
-// (three-vrm normalizes VRM0 rigs onto these names, so this is what
+// One vocabulary, one validator, three runtimes: a typo'd bone name or a
+// malformed quaternion is reported, never taken silently. The bone list is VRM
+// 1.0's (three-vrm normalizes VRM0 rigs onto these names, so this is what
 // `getNormalizedBoneNode` answers to on both).
 
 /** Bones every humanoid rig has. */
@@ -120,10 +114,8 @@ export function normalizeQuat(v) {
   if (!n.every(Number.isFinite)) return { why: 'has a non-finite component' };
   const len = Math.hypot(n[0], n[1], n[2], n[3]);
   if (len < EPS) return { why: 'zero length — a quaternion needs a direction' };
-  // Always normalize; only SAY so when the input was off unit by enough to
-  // mean something. Hand-written quaternions land a couple of thousandths
-  // out (this repo's own DOWNED_POSE does), and reporting that is noise
-  // that trains the reader to ignore the line the real problems arrive on.
+  // Always normalize; only SAY so when the input was off unit by enough to mean something (hand-written quaternions
+  // land a couple of thousandths out, and reporting that is noise).
   const off = Math.abs(len - 1);
   return { q: off <= 1e-9 ? n : n.map((c) => c / len), renormalized: off > 1e-2 };
 }
@@ -154,9 +146,8 @@ export function poseChannels(v) {
  * `delta` the new bones; a bone whose value is null in `delta` is RELEASED
  * back to the clip. Returns a new object, or null when nothing is left held.
  *
- * Merge is what sitting already did for free — a sit is a clip, and a pose
- * composes over a clip — and what a held pose did not: posing an arm while
- * kneeling replaced the kneel, and the body stood up.
+ * Merge lets a pose compose over a clip (posing an arm while kneeling keeps
+ * the kneel).
  */
 export function mergePose(base, delta) {
   const out = { ...(base && typeof base === 'object' ? base : {}) };
@@ -171,10 +162,7 @@ export function mergePose(base, delta) {
  * anim tool (joints, and {stop: true} to let go), and the browser console's
  * EW.pose and EW.clearPose. `replace` makes the named bones their whole pose;
  * otherwise they merge over what the target holds. A null pose releases
- * theirs whole, as anim {stop} does and as posing yourself with null does. It used to go
- * out as `pose: null`, which both receivers read as a request with no pose
- * in it, so someone letting go of another body that way got no release and
- * no error.
+ * theirs whole, as anim {stop} does and as posing yourself with null does.
  */
 export function puppetPose(bones, replace = false) {
   if (bones == null) return { pose: {} };

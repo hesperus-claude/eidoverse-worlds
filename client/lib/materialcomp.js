@@ -1,5 +1,5 @@
 // materialcomp — the browser host for the `material` component: an image on a named node of the thing's model
-// (shared/material.js says what a bag means). Main's picture on a part, moved here (R 10-27: a picture is a quad of its own).
+// (shared/material.js says what a bag means). Main's picture on a part, moved here (a picture is a quad of its own).
 //
 //   1. NEVER mutate the node's material: glTF materials are shared across primitives and instances, so painting one
 //      screen by writing `map` paints every screen. Clone, texture the clone, restore the original on removal.

@@ -1,27 +1,11 @@
-// rolespanels.js — the two dock panels of roles and moderation (research roles 10-06, S7 and S8; PLAN decisions 10-06).
-// Each thing lives in exactly one place (research §7):
-//   MODERATION (dock: a shield; shown only while you hold mute, kick, ban or pauseScripts — it follows your-rights)
-//     Bans     bans in force, then mutes, each with its lift where you may; ended bans
-//              collapsed. Lifting follows the authority's rule (an owner, the author, or someone who outranks the author).
-//     Log      the moderator log, newest first, with role changes merged in; a person filter and verb chips; older.
-//     Scripts  every script here: thing, name, sponsor, status, who paused it, Pause / Resume where you may.
-//   WORLD SETTINGS (dock: a flag; everyone reads, owners edit; editWorld holders edit Card and Places)
-//     Roles    the grid: permissions down, roles across (owner first, locked); dependencies grey a cell with the reason;
-//              place a role above another; holders under it; + Role; delete a held role by moving its people (one batch).
-//              Narrow (a phone, or the panel squeezed): one role at a time.
-//     Access   who can come in, what arrivals and guests are, how many at once; a warning when the default role holds
-//              moderation powers or generate; then who is listed, and adding someone (accesspanel.js).
-//     World    capacity (entities, guests' entities together, largest avatar), physics on/off (R 10-14 14:13:
-//              "not being able to edit these things would annoy people"). Opening it writes NOTHING: the effective value
-//              (what is written, else this server's default as schema reports it) is shown grey; an edit sends ONLY the
-//              field that changed (a policy number's absence is the server's default, PROTOCOL §9.2).
-//     Card     the world's name and blurb (@world.about).   Places  spawn and bounds.   Old world  what translation carried.
-// Rows here are DOM like every panel; in a headset they are the same frame as a quad (domquad.js XR_FRAMES), rows stay
-// rows, and every control is a button or a select (no hover, no long-press).
-import { bus, report } from './base.js';
-import { net, sendRequest, replica, identities } from './net.js';
+// rolespanels — the Moderation (only while you hold a moderation right) and World Settings (everyone reads, owners
+// edit) dock panels. Writes only the field that changed, never on open (absence = the server's default, PROTOCOL
+// §9.2). In a headset these are quads: every control is a button or select (no hover, no long-press).
+import { bus, report, CONFIG } from './base.js';
+import { net, sendRequest, replica, identities, personName } from './net.js';
 import { makeSection, moderationFrame, worldSettingsFrame, setDockEntry, toast } from './ui.js';
 import * as R from '../../shared/protocol/roles.js';
+import { refusalText } from '../../shared/protocol/refusal.js';   // a label `what` ("door: invite-only"): the door's words, code and fix
 import { DOORS, doorOf, doorWrites, leftWords, listedIn } from '../../shared/protocol/access.js';
 import { paintListed } from './accesspanel.js';
 import { serverNow, serverUntil } from './serverclock.js';   // straight from the clock: via remotes.js this closes an import cycle and the re-export is unbound at load
@@ -33,14 +17,13 @@ const wc = () => replica.st?.entities?.['@world']?.c ?? {};
 const me = () => { const r = net.myRights ?? {}; return { id: net.you, role: r.role ?? 'member', rank: r.rank ?? 0, permissions: r.permissions ?? [] }; };
 const has = (k) => R.isOwner(me()) || me().permissions.includes(k);
 const isOwner = () => R.isOwner(me());
-const nameOf = (id) => { for (const [n, v] of identities) if (v === id) return n; return net.names?.[id] ?? replica.nameOf?.(id) ?? id; };
 const rankOfId = (id) => R.effectiveOf(wc(), id).rank;
-const ago = (ts) => { const s = Math.round((Date.now() - ts) / 1000); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
-const ends = (until) => { if (until == null) return 'never'; const s = Math.round((until - Date.now()) / 1000); return s <= 0 ? 'ended' : s < 3600 ? `in ${Math.ceil(s / 60)} min` : s < 86400 ? `in ${Math.round(s / 3600)} h` : `in ${Math.round(s / 86400)} d`; };
+const ago = (ts) => { const s = Math.round((serverNow() - ts) / 1000); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
+const ends = (until) => { if (until == null) return 'never'; const s = Math.round((until - serverNow()) / 1000); return s <= 0 ? 'ended' : s < 3600 ? `in ${Math.ceil(s / 60)} min` : s < 86400 ? `in ${Math.round(s / 3600)} h` : `in ${Math.round(s / 86400)} d`; };
 const badge = (id) => { const e = R.effectiveOf(wc(), id); const b = R.badgeOf(e); return b ? ` <span class="who-badge" data-tone="${b.tone}">${esc(b.text)}</span>` : ''; };
 async function act(verb, args, what, refresh) {
   const r = await sendRequest(verb, args);
-  if (r?.ok) toast(`${what}: done`, 'info'); else toast(`${what}: ${r?.refused?.reason ?? 'refused'}`, 'warn', 8000);
+  if (r?.ok) toast(`${what}: done`, 'info'); else toast(r?.refused ? refusalText(what, r) : `${what}: refused`, 'warn', 8000);
   await refresh?.(); return r;
 }
 /** May I lift this record? (the authority's rule, mirrored for drawing the button; the authority decides) */
@@ -57,9 +40,9 @@ async function paintBans(body) {
   const now = r.now ?? [];
   // names from the authority's reply (its directory knows absent people; this page knows only who is here)
   const named = new Map([...now.map((x) => [x.who, x.name]), ...(r.ended ?? []).map((m) => [m.who, m.name])]);
-  const nm = (id) => named.get(id) ?? nameOf(id);
+  const nm = (id) => named.get(id) ?? personName(id);
   const row = (who, rec, kind, lift) => `<div class="rp-row" data-who="${esc(who)}"><div class="rp-main"><b>${esc(nm(who))}</b>${badge(who)} <span class="rp-dim">${esc(kind)}</span></div>`
-    + `<div class="rp-sub">${rec.reason ? `${esc(rec.reason)} · ` : ''}by ${esc(rec.by ?? nameOf(rec.actor))}${rec.ts ? ` · ${ago(rec.ts)}` : ''} · ends ${ends(rec.until)}</div>`
+    + `<div class="rp-sub">${rec.reason ? `${esc(rec.reason)} · ` : ''}by ${esc(rec.by ?? personName(rec.actor))}${rec.ts ? ` · ${ago(rec.ts)}` : ''} · ends ${ends(rec.until)}</div>`
     + `${lift ? `<button type="button" class="rp-btn" data-lift="${lift}" data-who="${esc(who)}">${lift === 'unban' ? 'Unban' : 'Unmute'}</button>` : ''}</div>`;
   const bans = now.filter((x) => x.ban), mutes = now.filter((x) => x.mute);
   body.innerHTML = `<h4 class="rp-h">Banned now</h4>${bans.length ? bans.map((x) => row(x.who, x.ban, 'banned', mayLift(x.ban, 'ban') && 'unban')).join('') : '<p class="rp-note">nobody</p>'}`
@@ -74,9 +57,9 @@ async function paintLog(body, { more = false } = {}) {
   if (!r?.ok) { body.innerHTML = `<p class="rp-note">${esc(r?.refused?.reason ?? "couldn't read the log")}</p>`; return; }
   const recs = (r.records ?? []).filter((x) => !modVerbs.size || modVerbs.has(x.verb) || (modVerbs.has('ban') && x.verb === 'unban') || (modVerbs.has('mute') && x.verb === 'unmute'));
   const line = (x) => `<div class="rp-row"><div class="rp-main"><span class="rp-dim">${new Date(x.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span> `
-    + `<b>${esc(x.by ?? nameOf(x.actor))}</b>${x.actor && x.actor !== 'system' ? badge(x.actor) : ''} <span class="rp-verb" data-verb="${esc(x.verb)}">${esc(x.verb === 'role' ? (x.role ? `made ${x.role}` : 'took a role from') : x.verb)}</span> <b>${esc(x.name ?? nameOf(x.who))}</b></div>`
+    + `<b>${esc(x.by ?? personName(x.actor))}</b>${x.actor && x.actor !== 'system' ? badge(x.actor) : ''} <span class="rp-verb" data-verb="${esc(x.verb)}">${esc(x.verb === 'role' ? (x.role ? `made ${x.role}` : 'took a role from') : x.verb)}</span> <b>${esc(x.name ?? personName(x.who))}</b></div>`
     + `<div class="rp-sub">${[x.reason, x.channels ? x.channels.join(' + ') : null, x.until !== undefined ? `ends ${ends(x.until)}` : null, x.verb === 'auto-cooldown' ? x.why : null].filter(Boolean).map(esc).join(' · ')}</div></div>`;
-  const head = `<div class="rp-filters"><input type="search" class="rp-search" placeholder="find a person by name" value="${esc(modWho ? nameOf(modWho) : '')}">`
+  const head = `<div class="rp-filters"><input type="search" class="rp-search" placeholder="find a person by name" value="${esc(modWho ? personName(modWho) : '')}">`
     + `<div class="pm-chips">${VERB_CHIPS.map(([v, l]) => `<button type="button" class="pm-chip" data-v="${v}" aria-pressed="${modVerbs.has(v)}">${l}</button>`).join('')}</div></div>`;
   if (!more) body.innerHTML = `${head}<div class="rp-list"></div>`;
   const list = body.querySelector('.rp-list');
@@ -100,7 +83,7 @@ async function paintScripts(body) {
     const blocked = paused && !!x.pausedBy && x.pausedBy !== me().id && rankOfId(x.pausedBy) > me().rank;
     const btn = may && !blocked ? `<button type="button" class="rp-btn" data-id="${esc(x.id)}" data-s="${esc(x.script)}" data-p="${paused ? 0 : 1}">${paused ? 'Resume' : 'Pause'}</button>` : '';
     return `<div class="rp-row"><div class="rp-main"><b>${esc(x.id)}</b> <code>${esc(String(x.script).replace(/^script:/, ''))}</code> <span class="rp-status" data-s="${esc(x.status)}">${esc(x.status)}</span></div>`
-      + `<div class="rp-sub">sponsor ${esc(x.sponsor ? nameOf(x.sponsor) : 'nobody')}${x.sponsor ? badge(x.sponsor) : ''}${paused ? ` · paused${x.pausedBy ? ` by ${esc(nameOf(x.pausedBy))}` : ''}${x.pausedTs ? `, ${ago(x.pausedTs)}` : ''}` : ''}</div>${btn}</div>`;
+      + `<div class="rp-sub">sponsor ${esc(x.sponsor ? personName(x.sponsor) : 'nobody')}${x.sponsor ? badge(x.sponsor) : ''}${paused ? ` · paused${x.pausedBy ? ` by ${esc(personName(x.pausedBy))}` : ''}${x.pausedTs ? `, ${ago(x.pausedTs)}` : ''}` : ''}</div>${btn}</div>`;
   }).join('');
   body.innerHTML = rows || '<p class="rp-note">no scripts here</p>';
   body.querySelectorAll('button[data-s]').forEach((b) => { b.onclick = () => act('set', { id: b.dataset.id, component: b.dataset.s, value: { paused: b.dataset.p === '1' }, merge: true }, `${b.dataset.p === '1' ? 'pause' : 'resume'} ${b.dataset.id}`, () => paintScripts(body)); });
@@ -138,17 +121,16 @@ function paintRoles(body) {
   const head = (r) => `<th scope="col"><div class="rp-rname">${esc(r.name)}</div><div class="rp-dim">${holdersOf(r.id).length} ${holdersOf(r.id).length === 1 ? 'holder' : 'holders'}</div>`
     + (edit && r.custom ? `<select class="rp-above" data-r="${esc(r.id)}" title="place it above…">${roles.filter((x) => x.id !== r.id && x.id !== 'owner').map((x) => `<option value="${esc(x.id)}" ${R.rolesOf(wc()).find((y) => y.rank < r.rank)?.id === x.id ? 'selected' : ''}>above ${esc(x.name)}</option>`).join('')}</select><button type="button" class="rp-x" data-del="${esc(r.id)}" title="delete ${esc(r.name)}">×</button>` : '') + '</th>';
   const holders = (r) => { const ids = holdersOf(r.id); if (!ids.length) return '';
-    return `<div class="rp-holders"><b>${esc(r.name)}</b>: ${ids.map((id) => `<span class="rp-holder">${esc(nameOf(id))}${grant && (isOwner() || (rankOfId(id) < me().rank && r.rank < me().rank)) && r.id !== 'owner' ? ` <select class="rp-change" data-who="${esc(id)}"><option value="">change ▸</option>${R.grantableRoles(wc(), { ...me(), permissions: me().permissions }).filter((x) => x.id !== r.id && x.id !== 'owner').map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}<option value="::remove">remove (default role)</option></select>` : ''}${timeOf(id, r, grant)}</span>`).join(' · ')}</div>`; };
-  // a timed grant (roles:<id>.until, upstream #258): how long is left, and (for whoever may change it) when it should end —
-  // picking a time restarts it from now; "no end" makes it permanent. Ownership never ends by itself.
-  const timeOf = (id, r, may) => { const u = wc()[`roles:${id}`]?.until; const left = Number.isSafeInteger(u) ? ` <span class="rp-dim">(${esc(leftWords(u, Date.now()))})</span>` : '';
+    return `<div class="rp-holders"><b>${esc(r.name)}</b>: ${ids.map((id) => `<span class="rp-holder">${esc(personName(id))}${grant && (isOwner() || (rankOfId(id) < me().rank && r.rank < me().rank)) && r.id !== 'owner' ? ` <select class="rp-change" data-who="${esc(id)}"><option value="">change ▸</option>${R.grantableRoles(wc(), { ...me(), permissions: me().permissions }).filter((x) => x.id !== r.id && x.id !== 'owner').map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}<option value="::remove">remove (default role)</option></select>` : ''}${timeOf(id, r, grant)}</span>`).join(' · ')}</div>`; };
+  // a timed grant (upstream #258): picking a time restarts it from now, "no end" makes it permanent; ownership never ends
+  const timeOf = (id, r, may) => { const u = wc()[`roles:${id}`]?.until; const left = Number.isSafeInteger(u) ? ` <span class="rp-dim">(${esc(leftWords(u, serverNow()))})</span>` : '';
     if (!may || r.id === 'owner' || !(isOwner() || (rankOfId(id) < me().rank && r.rank < me().rank))) return left;
     return `${left} <select class="rp-until" data-who="${esc(id)}"><option value="">ends ▸</option><option value="never">no end</option><option value="3600000">in 1 hour</option><option value="86400000">in 1 day</option><option value="604800000">in 1 week</option></select>`; };
   let html;
   if (narrow(body)) {   // one role at a time (phone, VR, a squeezed panel)
     if (!roles.some((r) => r.id === gridRole)) gridRole = roles[0]?.id;
     const r = roles.find((x) => x.id === gridRole);
-    // the role's own header (holders, reorder, delete) above its one column, as the wide grid shows it (house review I68)
+    // the role's own header (holders, reorder, delete) above its one column, as the wide grid shows it (I68)
     html = `<label class="rp-field">role <select class="rp-pick">${roles.map((x) => `<option value="${esc(x.id)}" ${x.id === gridRole ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>`
       + `<table class="rp-grid rp-one"><thead><tr><th></th>${head(r)}</tr></thead><tbody>${R.PERMISSION_NAMES.map((k) => `<tr><th scope="row"><b>${k}</b><div class="rp-dim">${esc(R.PERMISSIONS[k].text)}</div></th>${cell(r, k)}</tr>`).join('')}</tbody></table>${holders(r)}`;
   } else {
@@ -170,10 +152,10 @@ function paintRoles(body) {
     if (rank <= lo || rank >= hi) return toast('no room there: move another role first', 'warn');
     const d = defsValue(); d[rid] = { ...d[rid], rank }; writeDefs(d, `place ${rid} above ${below.name}`).then(() => paintRoles(body)); }; });
   body.querySelectorAll('select.rp-change').forEach((s) => { s.onchange = () => { const v = s.value; if (!v) return; const who = s.dataset.who;
-    (v === '::remove' ? act('delete', { id: '@world', component: `roles:${who}` }, `${nameOf(who)}: back to the default role`) : act('set', { id: '@world', component: `roles:${who}`, value: { role: v }, ...(wc()[`roles:${who}`] ? { merge: true } : {}) }, `make ${nameOf(who)} ${v}`)).then(() => paintRoles(body)); }; });
+    (v === '::remove' ? act('delete', { id: '@world', component: `roles:${who}` }, `${personName(who)}: back to the default role`) : act('set', { id: '@world', component: `roles:${who}`, value: { role: v }, ...(wc()[`roles:${who}`] ? { merge: true } : {}) }, `make ${personName(who)} ${v}`)).then(() => paintRoles(body)); }; });
   body.querySelectorAll('select.rp-until').forEach((s) => { s.onchange = () => { const v = s.value; if (!v) return; const who = s.dataset.who;
     const { until: _u, ...cur } = wc()[`roles:${who}`] ?? {};
-    act('set', { id: '@world', component: `roles:${who}`, value: v === 'never' ? cur : { ...cur, until: serverUntil(Number(v)) } }, `${nameOf(who)}: ${v === 'never' ? 'no end' : `ends ${ends(serverNow() + Number(v))}`}`).then(() => paintRoles(body)); }; });
+    act('set', { id: '@world', component: `roles:${who}`, value: v === 'never' ? cur : { ...cur, until: serverUntil(Number(v)) } }, `${personName(who)}: ${v === 'never' ? 'no end' : `ends ${ends(serverNow() + Number(v))}`}`).then(() => paintRoles(body)); }; });
   body.querySelectorAll('button[data-del]').forEach((b) => { b.onclick = () => deleteRole(b.dataset.del, body); });
   body.querySelector('button[data-add]')?.addEventListener('click', () => addRole(body));
 }
@@ -187,7 +169,7 @@ function addRole(body) {
   box.querySelector('.pm-go').onclick = () => {
     const name = inp.value.trim(); if (!name) return inp.focus();
     // an id of its own: a name that slugs like an existing role's (or two names with no Latin letters) must never land on
-    // that role's key and overwrite its permissions (review 10-07)
+    // that role's key and overwrite its permissions
     const base = name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').replace(/^[^a-z]+/, '').slice(0, 20) || 'role';
     const defs = defsValue(); const taken = (x) => R.BUILTIN_IDS.includes(x) || !R.isRoleId(x) || Object.hasOwn(defs, x);
     let id = base; for (let n = 2; taken(id); n++) id = `${base}-${n}`;
@@ -232,7 +214,7 @@ function paintAccess(body) {
     + `<p class="rp-dim">when set, guests can't come in; agents are exempt</p>`
     + `<p class="rp-dim">moderators and owners always get in${a.soft ? ` · recommended: ${a.soft}` : ''}</p>${warn}${edit ? '' : ro()}`;
   body.querySelectorAll('button[data-door]').forEach((bt) => { bt.onclick = () => { const d = bt.dataset.door; if (d === door) return;
-    const out = d === 'invite-only' || d === 'watch' ? [...new Set(identities.values())].filter((id) => !listedIn(wc(), id, Date.now())).length : 0;
+    const out = d === 'invite-only' || d === 'watch' ? [...new Set(identities.values())].filter((id) => !listedIn(wc(), id, serverNow())).length : 0;
     if (out && !confirm(`${out} ${out === 1 ? 'person' : 'people'} here ${out === 1 ? 'has' : 'have'} no role and will have to leave${d === 'watch' ? ' (they may watch)' : ''}. Close the door?`)) return;
     const ops = doorWrites(d, wc()).map((w) => ({ verb: 'set', args: { id: '@world', component: w.component, value: w.value } }));
     act(ops.length === 1 ? ops[0].verb : 'batch', ops.length === 1 ? ops[0].args : { ops }, `door: ${d}`).then(() => paintAccess(body)); }; });
@@ -298,7 +280,7 @@ function paintCard(body) {
   const ab = wc().about ?? {}; const edit = has('editWorld');
   body.innerHTML = `<label class="rp-field">Name <input data-k="name" maxlength="80" value="${esc(ab.name ?? '')}" ${edit ? '' : 'disabled'}></label>`
     + `<label class="rp-field rp-wide">Description <textarea data-k="text" rows="4" maxlength="2000" ${edit ? '' : 'disabled'}>${esc(ab.text ?? '')}</textarea></label>`
-    + `<p class="rp-dim">address: <code>${esc(new URLSearchParams(location.search).get('world') ?? '')}</code></p>${edit ? '<button type="button" class="rp-btn" data-save>Save</button>' : ro('the owner (or someone with editWorld)')}`;
+    + `<p class="rp-dim">address: <code>${esc(CONFIG.params.get('world') ?? '')}</code></p>${edit ? '<button type="button" class="rp-btn" data-save>Save</button>' : ro('the owner (or someone with editWorld)')}`;
   body.querySelectorAll('input,textarea').forEach((x) => x.addEventListener('keydown', (e) => e.stopPropagation()));
   body.querySelector('[data-save]')?.addEventListener('click', () => act('set', { id: '@world', component: 'about', value: { name: body.querySelector('[data-k=name]').value, text: body.querySelector('[data-k=text]').value } }, 'the card', () => paintCard(body)));
 }

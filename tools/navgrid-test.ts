@@ -9,14 +9,15 @@
 // to stand; and to keep the single straight leg it always had on open ground.
 process.env.AGENT_BODY_ENGINE = "verlet";
 process.env.WORLD_TOKEN = "";
+const { MOVER } = await import("../shared/mover.js");
 const { FLOOR, UPPER, RISE, GOING, STAIR_FOOT, boxes, buildGlb } = await import("./two-storey-fixture.ts");
-const { scratchSequencer, mkCheck, sleep, legacyVerb, sceneId } = await import("./harness.ts");
+const { scratchSequencer, mkCheck, sleep, legacyVerb, sceneId, trackTicks } = await import("./harness.ts");
 const { tryUntil } = await import("./protocol/wait.ts");
 const { check, tally } = mkCheck();
 
 const h = await scratchSequencer("navgrid", { serverEnv: { SKIP_OPT_SWEEP: "1", TRUST_NAMES: "1" }, worlds: ["navgrid"], owner: "router", portFrom: 9460 });
 const { WorldAgent } = await import("../mcpl/agent.ts");
-const a: any = new WorldAgent({ name: "router", world: "navgrid", url: h.BASE.replace("http", "ws") + "/ws" });
+const a: any = new WorldAgent({ name: "router", world: "navgrid", url: h.BASE.replace("http", "ws") + "/ws", tickEveryMs: trackTicks(MOVER.walk.run) });
 const near = (v: number, want: number, tol = 0.05) => Math.abs(v - want) <= tol;
 const at = () => `(${a.pos.x.toFixed(2)}, ${a.pos.y.toFixed(3)}, ${a.pos.z.toFixed(2)})`;
 try {
@@ -32,7 +33,7 @@ try {
     [-2.5, 0.2, -2.5, -2.3, 3, 2.5], [2.3, 0.2, -2.5, 2.5, 3, 2.5],
     [-2.3, 0.2, -2.5, 2.3, 3, -2.3], [-2.3, 0.2, 2.3, 2.3, 3, 2.5],
   ]), pos: [SX, a.heightAt(SX, 0), 0], yaw: 0 });
-  await tryUntil("the tower's and vault's supports are registered", () => a.supportIds?.get("tower") && a.supportIds?.get("vault"), { ms: 5000, step: 50 });
+  await tryUntil("the tower's and vault's supports are registered", () => a.supportIds?.get(sceneId(a, "tower")) && a.supportIds?.get(sceneId(a, "vault")), { ms: 5000, step: 50 });
   await a.supportReady();
   await sleep(300);
 

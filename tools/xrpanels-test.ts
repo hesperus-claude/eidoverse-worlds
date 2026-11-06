@@ -12,6 +12,7 @@
 // instead of the list's key).
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
 // a 2D context that records what was asked of it and never draws
@@ -25,11 +26,8 @@ const calls: string[] = [];
 
 const { renderCanvas, hitRegion, resolveDelta } = await import("../client/lib/panels.js");
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("xrpanels");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const W = 522, ROW = 44;
 const paint = (fields: any[]) => { const c = document.createElement("canvas"); const regions = renderCanvas(c, fields, { width: W, rowH: ROW, title: "t" }); return { c, regions }; };
 const at = (regions: any[], action: string) => regions.filter((r) => r.action === action);
@@ -120,5 +118,4 @@ console.log("\nfields added 09-23 paint on the quad without throwing, and stay d
   }
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

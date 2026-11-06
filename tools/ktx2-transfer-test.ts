@@ -6,8 +6,9 @@ import { findKtx2Encoder, ktx2EncodeArgs } from "../server/optimize.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-let pass = 0, fail = 0;
-const check = (n: string, ok: boolean, d = "") => { ok ? pass++ : fail++; console.log(`  ${ok ? "\x1b[32m✓" : "\x1b[31m✗"}\x1b[0m ${n}${ok ? "" : `  ${d}`}`); };
+import { suite } from "./protocol/suite.ts";
+const S = suite("ktx2-transfer");
+const check = (n: string, ok: unknown, d?: unknown) => S.check(n, ok, d);
 const enc = findKtx2Encoder();
 if (!enc) { console.log("  (no KTX2 encoder on this host — nothing to test)"); process.exit(0); }
 const isToktx = enc.toLowerCase().includes("toktx");
@@ -43,4 +44,4 @@ try {
   }
 } catch (e) { check("test ran", false, String(e).slice(0, 300)); }
 finally { rmSync(tmp, { recursive: true, force: true }); }
-console.log(`${fail ? "\x1b[31m" : "\x1b[32m"}${pass} passed, ${fail} failed\x1b[0m`); process.exit(fail ? 1 : 0);
+S.done();

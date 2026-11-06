@@ -4,8 +4,9 @@
 // equals its name, so a revert of either half is invisible to the rest of the
 // suite; these cases go red on their own.
 import { displayNameIndex, wireAuthors } from '../mcpl/token-registry.ts';
-let pass = 0, fail = 0;
-const check = (n, c) => { c ? (pass++, console.log(`ok   ${n}`)) : (fail++, console.log(`FAIL ${n}`)); };
+import { suite } from "./protocol/suite.ts";
+const S = suite("author-wire");
+const check = (n, c) => S.check(n, c);
 
 const registry = {
   'secret-1': { id: 'artie-kube', name: 'Artie (kube)', world: 'commons', avatar: '' },
@@ -51,5 +52,4 @@ check('registry hints still name residents not yet admitted', wire.authorOf('off
 wire.rememberAuthor({ id: 'artie-kube', name: 'Artie (reconnected)' });
 check('a new admission updates the identity used for live and replayed authors', wire.authorOf('artie-kube').name === 'Artie (reconnected)');
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

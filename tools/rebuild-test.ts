@@ -7,8 +7,9 @@
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, statSync, utimesSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-let pass = 0, fail = 0;
-const check = (n: string, ok: boolean, d: unknown = "") => { ok ? pass++ : fail++; console.log(`  ${ok ? "\x1b[32m✓" : "\x1b[31m✗"}\x1b[0m ${n}${ok ? "" : `  ${JSON.stringify(d)}`}`); };
+import { suite } from "./protocol/suite.ts";
+const S = suite("rebuild");
+const check = (n: string, ok: unknown, d?: unknown) => S.check(n, ok, d);
 const root = mkdtempSync(join(tmpdir(), "rebuild-"));
 const fake = join(root, "fake.ts"), receipts = join(root, "receipts.txt");   // TS, run by bun (upload.ts OPT_CMD): a #!/bin/sh fake is no executable on Windows
 writeFileSync(fake, `import { readFileSync, appendFileSync, mkdirSync, writeFileSync, writeSync, existsSync, rmSync } from "node:fs";
@@ -256,4 +257,4 @@ check("route: 4 rebuilds per IP per minute pass, the 5th → 429 and queues noth
 const other = await route(new Request("http://x/rebuild?path=store/abc123.glb", { method: "POST", headers: { "x-real-ip": "8.8.8.8", authorization: "Bearer t0k" } }), viaProxy);
 check("…and the window is per IP (another address still passes)", other.status === 200, other.status);
 await optIdle();
-console.log(`${fail ? "\x1b[31m" : "\x1b[32m"}${pass} passed, ${fail} failed\x1b[0m`); process.exit(fail ? 1 : 0);
+S.done();

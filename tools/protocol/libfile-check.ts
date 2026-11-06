@@ -10,6 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { scratch } from "./common.ts";
+import { suite } from "./suite.ts";
 
 const root = scratch("libfile");
 const ladder = ["patched", "opt", "library"].map((d) => { const p = path.join(root, d); fs.mkdirSync(p, { recursive: true }); return p; });
@@ -18,8 +19,7 @@ process.env.PATCH_DIR = ladder[0]; process.env.OPT_DIR = ladder[1]; process.env.
 const { resolveLibFile, libraryFile, libraryRel } = await import("../../server/libfile.ts");
 const { LADDER } = await import("../../server/config.ts");
 
-let pass = 0, fail = 0;
-const ok = (c, name, info) => { if (c) { pass++; console.log("  ✓", name); } else { fail++; console.log("FAIL", name, info === undefined ? "" : JSON.stringify(info)); } };
+const { ok, done } = suite("libfile-check", { cap: Infinity });
 const at = (i, name) => path.join(ladder[i], name);
 const put = (i, name, body = "fixture") => fs.writeFileSync(at(i, name), body);
 
@@ -84,6 +84,5 @@ put(2, "clips/space clip.vrma");
 ok(libraryFile("clips/space clip.vrma", /\.vrma$/i) === at(2, "clips/space clip.vrma") && libraryFile("clips/space clip.vrma", /\.glb$/i) === null,
   "L19 a clip resolves by the same reading, and only with its own extension");
 
-console.log(`[libfile-check] ${pass} passed, ${fail} failed`);
 fs.rmSync(root, { recursive: true, force: true });
-process.exit(fail ? 1 : 0);
+done();

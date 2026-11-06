@@ -1,4 +1,4 @@
-// credits — who made a thing what it is, as a view over the log (batch 2; R 10-07: "Credits come from History"). Never
+// credits — who made a thing what it is, as a view over the log. Never
 // stored: no hand credits, no author field (L2). The editor's History tab shows it as filter modes (client/lib/
 // historyrows.js historyView); this is the per-thing grouping it and an agent share.
 //
@@ -10,7 +10,7 @@
 // authority's own corrections are left out (a follow-up inside your own act — clearing a reference to what you deleted —
 // is still credited to you). Consecutive moves by one person less than five minutes apart are one session ("moved it",
 // not "moved it ×591": the Commons has people with hundreds of imported nudges).
-import { opsOf } from './protocol/fold.js';
+import { opsQuiet } from './protocol/fold.js';
 
 export const SESSION_MS = 5 * 60 * 1000;
 const BUILDING = new Set(['create', 'set', 'delete', 'place', 'turn', 'batch', 'undo', 'redo', 'publish', 'update', 'spawn', 'comp', 'light', 'motion', 'remove', 'mount', 'move', 'scale', 'unmount', 'label', 'edit']);
@@ -34,7 +34,6 @@ export function phraseOf(op) {
   if (c === 'lock') return 'locked it';
   return `changed its ${c}`;
 }
-const opsQuiet = (e) => { try { return opsOf(e); } catch { return []; } };
 
 export function creditsOf(entries, id, { nameOf = (x) => x } = {}) {
   const bySeq = new Map(); for (const e of entries) if (e && typeof e === 'object' && Number.isInteger(e.seq)) bySeq.set(e.seq, e);

@@ -9,13 +9,12 @@
 // Same stub set as remotes-lifecycle-test; snapshots go in through _dispatch.
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { suite } from "./protocol/suite.ts";
+import { DIALECT, VERSION } from "../shared/protocol/fold.js";
 GlobalRegistrator.register();
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const S = suite("chat-resync-wire");
+const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 const stubs: any = await import("./remotes-stubs.mjs");
 const { mock } = await import("bun:test");
@@ -25,7 +24,7 @@ for (const m of ["core", "assets", "world", "chat", "fp_view", "boot", "ui", "av
 const { _dispatch } = (await import("../client/lib/net.js")) as any;
 const say = (seq: number) => ({ seq, ts: Date.now(), actor: "cairn", verb: "say", args: { text: `#${seq}` } });
 const snapshot = (throughSeq: number, entries: any[]) => ({ type: "snapshot", you: "tester",
-  yourRights: { role: "member" }, present: [], state: null, entries, throughSeq });
+  yourRights: { role: "member" }, present: [], state: {}, dialect: DIALECT, v: VERSION, entries, throughSeq });
 
 console.log("a re-join's snapshot resyncs chat from the last delivered seq");
 await _dispatch(snapshot(100, [say(101), say(102)]));
@@ -41,5 +40,4 @@ check("…from the last seq the old socket had (in the chat's numbering, unscale
 await _dispatch(snapshot(140, []));
 check("a third resyncs from the second's", stubs.resyncCalls[1] === 130, JSON.stringify(stubs.resyncCalls));
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+S.done();

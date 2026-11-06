@@ -21,6 +21,7 @@ import {
   SEAT_METHOD, MIN_PATCH_VERTS, MAX_PATCH_SPREAD_Y,
 } from "../client/lib/seatcore.js";
 import { qAxisAngle } from "../client/lib/motioneval.js";
+import { pause } from "./protocol/wait.ts";
 
 let failures = 0;
 const check = (label: string, ok: boolean, detail?: string) => {
@@ -229,7 +230,7 @@ console.log("verdict cache (shared browser/agent implementation)");
     if (failNext) { failNext = false; rej(new Error("roster unreachable")); return; }
     pendingResolves.push(res);
   }));
-  const settle = () => new Promise((r) => setTimeout(r, 5));
+  const settle = () => pause("the verdict cache's queued fetch runs", 5);
   const accepted = (rev: number) => ({ rev, entries: [
     { name: "claude", seat: { pose: "sitchair", status: "accepted", contactY: 0.2055 } },
     { name: "aletheia", seat: { pose: "sitchair", status: "accepted", contactY: 0.2791 } },

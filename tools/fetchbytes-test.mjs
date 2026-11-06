@@ -6,6 +6,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
 HTMLCanvasElement.prototype.getContext = function () { const a = new Proxy(function () {}, { get: (_t, k) => (k === 'width' ? 100 : a), apply: () => a, set: () => true }); return new Proxy({}, { get: (_t, k) => (k === 'measureText' ? () => ({ width: 100 }) : a), set: () => true }); };
 import { plugin } from 'bun';
+import { suite } from "./protocol/suite.ts";
 const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
 plugin({ name: 'core-stub', setup(build) {
   build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('./core-stub.mjs') }));
@@ -29,8 +30,8 @@ const _setTimeout = globalThis.setTimeout;
 globalThis.setTimeout = (fn, ms, ...a) => _setTimeout(fn, ms >= 700 ? 1 : ms, ...a);
 
 const { fetchBytes } = await import('../client/lib/assets.js');
-let pass = 0, fail = 0;
-const check = (name, ok, note = '') => { if (ok) { pass++; console.log(`  ok    ${name}`); } else { fail++; console.log(`  FAIL  ${name}${note ? `  -- ${note}` : ''}`); } };
+const S = suite("fetchbytes");
+const check = (name, ok, note) => S.check(name, ok, note);
 const count = (p) => calls.filter((c) => c === p).length;
 const rejects = async (p) => { try { await p; return null; } catch (e) { return e; } };
 // a call that rejects when it should resolve is a FAIL line, never an uncaught rejection
@@ -63,5 +64,4 @@ console.log('FETCHBYTES — concurrent callers');
   const [{ buf: a }, { buf: b }] = await Promise.all([resolves(p1), resolves(p2)]);
   check('both callers get the same bytes', a && a === b && a.byteLength === 32); }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+S.done();

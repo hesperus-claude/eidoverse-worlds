@@ -1,5 +1,5 @@
-// server/solids.ts — a model's solid parts, measured from its triangles (review 10-06 S0-3: nobody could walk into a
-// building, because the authority took each model's ONE bounding box as solid).
+// server/solids.ts — a model's solid parts, measured from its triangles, so a body can walk into a building
+// (rather than the model's one bounding box being solid).
 //
 // The authority already reads a catalogue entry's `solids` (boxes in the model's frame; shared/protocol/authority.js obbs): the lab's
 // shelf and swing frame are hand-written that way. This measures them for a library model, from the same triangles the

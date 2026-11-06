@@ -137,7 +137,7 @@ await Promise.resolve();
 warming.dispose();
 assert.equal(disposed, 0);
 finish();
-await new Promise((r) => setTimeout(r, 0));
+await new Promise((r) => setImmediate(r));
 assert.equal(disposed, 1);
 assert.equal(assetDisposed, 0);
 

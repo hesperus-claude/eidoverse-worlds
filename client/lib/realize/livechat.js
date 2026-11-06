@@ -9,9 +9,9 @@
 import { bus } from '../base.js';
 import { logChat } from '../chat.js';
 
-// #57: performance receipts. voiceCapable = actors with a live voice leg
-// (seeded by snapshot, kept current by surface-transition); pendingSpeech =
-// says held awaiting a `performed` receipt (seq → fallback timer).
+// voiceCapable = actors with a live voice leg (seeded by snapshot, kept
+// current by surface-transition); pendingSpeech = says held awaiting a
+// `performed` receipt (seq → fallback timer).
 const voiceCapable = new Map();
 const pendingSpeech = new Map();
 const PERFORMANCE_TIMEOUT_MS = 2500;
@@ -25,13 +25,10 @@ bus.on('surfaces', (people) => {
 });
 bus.on('surface-transition', ({ actor, surface, gen, retired }) => {
   if (!isVoiceLeg(surface)) return;
-  // gen null = the leg DIED unreplaced (r-review: this event never fired
-  // before — set-only bookkeeping held dead capability forever and every say
-  // from that actor ate the full performance timeout against a gone leg).
-  // Retire only OUR CURRENT idea of the leg: if a successor's transition
-  // already landed (delivery is per-socket, order across sockets is not
-  // guaranteed), the stale retirement names an older gen and must not strip
-  // the live one.
+  // gen null = the leg DIED unreplaced: drop it, or every say from that actor
+  // waits out the full timeout. Retire only our CURRENT gen: a successor's
+  // transition may already have landed (order across sockets is not
+  // guaranteed), and a stale retirement must not strip the live one.
   if (gen == null) {
     if (retired == null || voiceCapable.get(actor) === retired) voiceCapable.delete(actor);
   } else {
@@ -39,27 +36,16 @@ bus.on('surface-transition', ({ actor, surface, gen, retired }) => {
   }
 });
 bus.on('performed', ({ actor, seq, gen }) => {
-  // A receipt cancels a hold only from the right author and NOT from a stale
-  // (predecessor) voice generation (B2). It carries actor/gen for exactly this.
-  // The gen test is `>=`, not `===` (Opus-5 review): a say held while gen 7 was
-  // live may legitimately be performed by a SUCCESSOR leg (gen 9) after a
-  // mid-hold takeover — the successor inherits the utterance and attests under
-  // its own current gen, which the server stamps as performed.gen. Requiring
-  // strict equality would ignore that valid receipt and double-speak the line
-  // locally. Only a receipt OLDER than the hold's generation (a retired leg's
-  // late frame) must be refused; current-or-newer is a real performance.
+  // A receipt cancels a hold only from the right actor, and `gen >=` the hold's:
+  // a SUCCESSOR leg may perform a say held under an older gen after a mid-hold
+  // takeover; only an OLDER gen (a retired leg's late frame) is refused.
   const held = pendingSpeech.get(seq);
   if (held && held.actor === actor && gen >= held.gen) {
     clearTimeout(held.timer);
     pendingSpeech.delete(seq);
-    // The SUCCESS path still performs VISUALLY (review finding 9): a receipt
-    // proves the voice lane carried the audio, but bubbles/mouth ride bus
-    // events — cancel-only receipts made the system look broken exactly when
-    // it worked (fallback drew everything, success drew nothing). performed:
-    // true keeps TTS out (tts.js speakOwnSays skips it — the leg already made
-    // the sound). Skipped when the say carried spoken display metadata: that
-    // is precisely the field antra's spec leaves in charge of display/caption
-    // continuation, so a caption-paced bubble is not drawn twice.
+    // Success still draws the bubble/mouth (they ride bus events); performed:
+    // true keeps TTS out (tts.js speakOwnSays). Skipped for a spoken say, whose
+    // display/caption continuation is already in charge of the bubble.
     if (!held.spoken) bus.emit('speech', { ...held.say, performed: true });
   }
 });
@@ -76,24 +62,14 @@ export function handleLiveCause(entry) {
         ...(args.spoken === true && Number.isSafeInteger(args.utt)
           ? { spoken: true, utt: args.utt, t0: args.t0 } : {}),
       });
-      // PERFORMANCE, decided by receipts, not flags (#57 B1; re-review B2:
-      // `spoken` is author-controlled display metadata riding #100's typed
-      // say door, so it must never gate performance — a claim is not a
-      // receipt). If the author has a live voice leg, HOLD the local speech
-      // path briefly: a valid attest arrives as `performed` and we skip (the
-      // voice lane carried it); no receipt inside the window means the leg is
-      // dead or deaf and we fall back — the half-dead-sidecar case degrades
-      // to local TTS instead of silence. Authors with no voice leg speak
-      // immediately, spoken flag or not. `spoken/utt/t0` shape only the
-      // caption/display continuation above.
+      // PERFORMANCE is decided by receipts, never by `spoken` (author-controlled
+      // display metadata; a claim is not a receipt). An author with a live voice
+      // leg is HELD briefly: a `performed` receipt skips local speech, no receipt
+      // in the window falls back to local TTS. No voice leg: speak immediately.
       const say = { actor, text: args.text };
       if (voiceCapable.has(actor)) {
-        // Bind the hold to WHO is speaking and WHICH voice generation is
-        // live now (B2): the receipt that cancels it must match {actor,
-        // seq, gen}. A wrong actor, or a predecessor generation's receipt,
-        // must not cancel THIS hold — otherwise a receipt born under a
-        // retired leg, submitted after reconnect, suppresses a fallback
-        // that should have fired.
+        // Bind the hold to {actor, seq, gen}: a wrong actor or a retired leg's
+        // receipt must not suppress a fallback that should fire.
         const gen = voiceCapable.get(actor);
         const timer = setTimeout(() => {
           pendingSpeech.delete(entry.seq);

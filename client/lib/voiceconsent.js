@@ -20,38 +20,18 @@ import { bus } from './base.js';
 const KEY = 'eido.audio.prefs';
 // sttConsent is TRI-STATE and must stay so: null = never asked, true =
 // accepted, false = refused. A boolean cannot tell "not asked" from "said no",
-// so a refusal would be re-prompted on the next mic-on — turning a no into a
-// recurring negotiation, which is the opposite of asking once (review catch).
-// 🔴 volWorld DEFAULTS TO 1, not 0.6 (R, 2026-08-16: "maybe we should set world
-// volume to 100% by default as well. We don't really have anything to test it
-// against right now but at least it will be starting from a default that makes
-// sense").
-//
-// volumeFor('world') now has exactly one caller: the world bus in
-// client/lib/sounds.js (#192, the `sound` component), which is the
-// component-editing work this slider was held ready for. From 2026-08-16 until
-// then it deliberately had NONE (R: "we shipped some PRs related to this and
-// closed them because it was getting into component-editing territory and we
-// decided to punt on it") — a parked feature with a visible control, which is
-// a different thing from a control that lies. Anything else that plays placed
-// or ambient audio should end in that same bus rather than reading the
-// preference on its own, so the slider stays one control over one thing.
-//
-// 1.0 rather than 0.6 for exactly that reason: 0.6 was a guess about the
-// balance of a mix that does not exist yet. When ambient audio does land, the
-// first person to hear it should hear it as authored, not through a 40% cut
-// nobody chose on purpose.
+// so a refusal would be re-prompted on the next mic-on.
+// volWorld defaults to 1 (as authored, no cut nobody chose). Its one caller is
+// the world bus in client/lib/sounds.js (the `sound` component); anything else
+// that plays placed or ambient audio should end in that bus, so the slider stays
+// one control over one thing.
 const DEFAULTS = { recvVoice: false, volVoices: 1, volWorld: 1, volTts: 1, sttConsent: null,
   // Sensitivity, not an absolute level: it scales the margin a sound must clear
   // ABOVE the measured room noise (see onsetTick). 0.06 is the lowest value that
   // took zero false triggers across 200 simulated room/noise combinations while
   // never missing speech, so the slider has honest room in both directions.
-  // 60% = -24 dBFS. R's number, found by TESTING IT IN HER ROOM — "seems like
-  // 60% is a good place" — which beats my four earlier defaults, every one of
-  // them reasoned from published reference levels rather than measured against
-  // a real mic at a real gain. The slider is honest and 1:1 now, so anyone
-  // else's number is a drag away; this is a good place to start, not a claim
-  // about everyone's room.
+  // 60% = -24 dBFS, a default measured against a real mic in a real room (not
+  // reasoned from reference levels); a starting place, not a claim about every room.
   micFloor: 0.12,
   // Push-to-talk: the gate opens on a HELD KEY instead of on measured level.
   // Off by default — voice activation is the mode everything above was tuned
@@ -89,12 +69,8 @@ export function setReceiveVoice(on) {
 
 /** Momentary silence WITHOUT revoking consent: the stream keeps arriving and
  *  keeps advancing, so unmuting drops you back into a sentence already in
- *  progress — the way you rejoin a human voice you had stopped attending to.
- *  Distinct from setReceiveVoice(false), which is the privacy act: that one
- *  tears the inbound path down so no media is negotiated at all. Silence and
- *  consent are different questions and this is the one people press often.
- *  (R, in world 12:11: the deafen was killing the utterance and starting the
- *  next one — a cut, not a mute.) */
+ *  progress. Distinct from setReceiveVoice(false), the privacy act, which tears
+ *  the inbound path down so no media is negotiated at all. */
 let hushed = false;
 export const isHushed = () => hushed;
 export function setHush(on) {
@@ -126,14 +102,12 @@ export function setPttMode(on) {
   prefs.pttMode = next; save();
   // micstate drops a held key on this event (a mode you leave should not
   // leave a phantom finger on the gate), and the panel dims the sensitivity
-  // row — under PTT the floor drives nothing, and a control that does
-  // nothing must not look like it does. That rule is this file's history.
+  // row: under PTT the floor drives nothing, and must not look like it does.
   bus.emit('audio:ptt', next);
   return next;
 }
 
-// mic sensitivity (R, 17:19: typing sounds pinged the ear) — the floor below
-// which mic activity is treated as room noise, not speech onset
+// mic sensitivity: the floor below which mic activity is treated as room noise, not speech onset
 export const micFloor = () => prefs.micFloor;
 export function setMicFloor(v) {
   prefs.micFloor = Math.max(0, Math.min(0.2, Number(v) || 0));
@@ -180,42 +154,14 @@ function defaultAsk() {
   ));
 }
 
-/** How many times the measured room noise a sound must be, to count as speech.
- *
- *  🔴 THE ONE DEFINITION. This formula lived in FOUR places (the gate, the gate's
- *  own info dump, and two panel readouts) and had already drifted once — the
- *  panel kept an old additive version after the gate went multiplicative, so the
- *  two reported different thresholds (2026-08-09). Anything that needs it
- *  imports it from here.
- *
- *  Range 1.5x…20x, widened after R found the old 5x ceiling too low: "even
- *  someone talking in another room here is hitting 100% from time to time."
- *  She was right — distant speech lands around 3-4x a quiet room's floor, so a
- *  5x maximum left almost no rejection headroom, while her own voice clears the
- *  floor by more than 30x. The top of the range is now genuinely strict and the
- *  bottom still catches a whisper.
- */
-// THE THRESHOLD IS A dB POSITION, not a multiplier over the room.
-//
-// R, after three rounds of the marker and the colour disagreeing: "maybe it's
-// time to search online for how other people have programmed mic sensitivity
-// sliders". Discord's model, and it is better than what I built:
-//
+// THE THRESHOLD IS A dB POSITION, not a multiplier over the room (Discord's model):
 //   • one widget, two jobs — the live level bar and the draggable threshold
 //     share one track, on a dB scale (roughly -60..0 dBFS)
 //   • the marker DOES NOT MOVE. The level moves past it.
-//   • colour by GATE STATE, not by level: below the marker is muted, above is
-//     live
-//
-// My room-relative version (level >= noise x k) meant the threshold moved as the
-// room changed — so drawing the marker where the gate opens made it slide away
-// from the cursor, and drawing it where the cursor was made the colour flip
-// somewhere else. There is no way to draw two coordinate systems as one mark.
-// A fixed dB threshold removes the conflict at the root rather than papering it.
-//
-// dB also fixes the crushed scale: on a linear RMS meter a quiet room and speech
-// are both jammed into the left edge, which is why the useful part of the slider
-// kept feeling like a sliver. In dB they are 25 points apart.
+//   • colour by GATE STATE, not by level: below the marker is muted, above is live
+// A room-relative threshold moves as the room changes, so marker and colour can't
+// agree; and on a linear RMS meter a quiet room and speech both crowd the left
+// edge, where in dB they are 25 points apart. Every reader imports these helpers.
 
 /** The gate threshold in dBFS. 0% = -60 dB (everything), 100% = 0 dB (nothing).
  *  Linear in dB, which is already logarithmic in amplitude — the standard shape
@@ -230,5 +176,5 @@ export const toDb = (amp) => 20 * Math.log10(Math.max(amp, 1e-6));
 
 /** Where a level sits on the meter, 0..1 across the same -60..0 dB span the
  *  threshold uses. ONE function for both, so the bar and the marker cannot
- *  land in different places — that mismatch is this control's whole history. */
+ *  land in different places. */
 export const meterPos = (amp) => Math.max(0, Math.min(1, (toDb(amp) + 60) / 60));

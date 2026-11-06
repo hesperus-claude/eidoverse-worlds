@@ -1,5 +1,5 @@
 // tools/protocol/r11-check.ts — review round 11 (REVIEW-stern-r11, REVIEW-claims-r11 repo items, 2026-10-17): the
-// fixes, each row red first (against 00a5e276) and most held by a mutation below (C5 has none).
+// fixes, each row red first (against 00a5e276) and held by a mutation below.
 //   bun tools/protocol/r11-check.ts                 every row
 //   bun tools/protocol/r11-check.ts --only C4,X1    just those
 //   bun tools/protocol/r11-check.ts --tree <dir>    against another checkout's shared/ + mcpl/ + client/ (a mutant)
@@ -22,6 +22,7 @@ import { ENGINE, scratch, copyTree, linkInto, readLF } from "./common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
+import { suite } from "./suite.ts";
 import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
 
 const argv = process.argv.slice(2);
@@ -30,7 +31,9 @@ const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? a
 // [name, file under the tree, find, replace, rows]
 const MUTANTS: [string, string, string, string, string[]][] = [
   // C1–C3, C6's mutants RETIRED with their rows (recut A2; #260 390); C4 is held by this one
-  ["a stored pause doesn't close the gates", "shared/protocol/consent.js", "if (sw === \"refuse\" || sw === \"ask\") { t.move = false; t.touch = false; }", "if (sw === \"refuse\" || sw === \"ask\") { t.move = true; t.touch = true; }", ["C4"]],
+  ["the door doesn't take the retired words", "shared/protocol/verbspec.js", ", delegate: { type: \"any\", doc: \"retired (recut A2)\" }", ", delegateX: { type: \"any\", doc: \"retired (recut A2)\" }", ["C5"]],
+  ["a stored table migrates only narrower: a pause still refuses", "shared/protocol/consent.js", "return t.paused || modes.includes(\"deny\") ? \"refuse\"", "return modes.includes(\"deny\") ? \"refuse\"", ["C4"]],
+  ["a stored table migrates only narrower: a closed cell still refuses", "shared/protocol/consent.js", "return t.paused || modes.includes(\"deny\") ? \"refuse\"", "return t.paused ? \"refuse\"", ["C4"]],
   ["a seated declaration says nothing", "mcpl/tools.ts", "and grants nothing${seated}`); }", "and grants nothing`); }", ["B1"]],
   ["a declaration dropped", "mcpl/ping-wire.ts", "const d = typeof declares === \"string\" && declares ? { declares } : {};", "const d = {};", ["B2"]],
   ["the consent code's old words", "shared/protocol/refusalcodes.js", "(touch, pose, shove, displace…)", "(touch, pose, shove, move…)", ["D1"]],
@@ -174,13 +177,11 @@ const cases: Case[] = [
     good: (o) => o.rows.every((r: any) => r && r.name === "ghost" && r.listed === false && /ghost was removed/.test(r.help)) && o.local },
 ];
 
-let pass = 0, fail = 0;
+const SUITE = suite("r11-check", { cap: 900 });
 for (const c of cases) {
   if (ONLY && !ONLY.includes(c.id)) continue;
   let o: any; try { o = await c.run(session()); } catch (e) { o = { threw: String(e?.stack ?? e).slice(0, 600) }; }
   let good = false; try { good = !o?.threw && !!c.good(o); } catch { good = false; }
-  if (good) { pass++; console.log(`ok   ${c.id} ${c.what}`); }
-  else { fail++; console.log(`FAIL ${c.id} ${c.what}\n     ${JSON.stringify(o)?.slice(0, 900)}`); }
+  SUITE.ok(good, `${c.id} ${c.what}`, o);
 }
-console.log(`[r11-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+SUITE.done();

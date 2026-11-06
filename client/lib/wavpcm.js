@@ -1,11 +1,8 @@
-// wavpcm — WAV (PCM s16) → {pcm, sampleRate}. A pure function, deliberately in
-// its own file with NO imports: the moment it pulled in core.js it dragged in
-// `location` and stopped being testable outside a browser, which is how a
-// twelve-line parser ends up unverified.
+// wavpcm — WAV (PCM s16) → {pcm, sampleRate}. A pure function with NO imports, so
+// it stays testable outside a browser (core.js would drag in `location`).
 //
-// The sample rate is PARSED, never assumed. Piper emits 22050Hz mono today, but
-// a voice at another rate would otherwise play back at the wrong pitch with
-// nothing in the output to indicate why.
+// The sample rate is PARSED, never assumed: a voice at another rate than Piper's
+// 22050Hz would otherwise play back at the wrong pitch.
 
 export function decodeWavToPcm(arrayBuffer) {
   const dv = new DataView(arrayBuffer);

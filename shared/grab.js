@@ -1,7 +1,6 @@
 // grab — what a hand may do with a thing: the `grabbable` component, as data.
 //
-// One component for every way a person picks a thing up (research: notes/eidoverse/RESEARCH-grab-2026-10-06.md, "The
-// shape we build"). The cross-platform pattern it follows: grabbing is its OWN component, apart from dynamics (Meta's
+// One component for every way a person picks a thing up. The cross-platform pattern it follows: grabbing is its OWN component, apart from dynamics (Meta's
 // physics-less hand grab, Resonite Grabbable, Horizon's Interaction vs Motion); a grip is a named point in the thing's
 // frame (VRChat ExactGrip, Unity Attach Transform, Godot GrabPoint); no grip means it's held where it was grabbed
 // (Unreal Free); use-while-held is its own button with a down and an up (VRChat OnPickupUseDown/Up, Unity Activated);
@@ -41,6 +40,7 @@ import { materialize, COMPONENTS } from './protocol/componentspec.js';
 import { BUILTIN_IDS, isWhoValue, isBase, whoWords } from './protocol/roles.js';
 import { isReservedAnimName } from './animdefs.js';
 import { isRedacted } from './protocol/fold.js';
+import { isNum, isObj } from './protocol/is.js';
 
 export const WHO = BUILTIN_IDS;
 // a `who` may also name a world's custom role: the shape is roles.js's, existence the authority's (whoRank)
@@ -53,7 +53,7 @@ export const HOLD_POSES = ['hand', 'carry', 'torch', 'pistol', 'shoulder'];
 export const ANIM_RE = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
 export const HANDS = ['left', 'right', 'either'];
 export const ROLES = ['primary', 'secondary'];
-/** A grip's grasp (R 10-17: was fingers; the XR-hands / robotics word): how the hand closes on it. */
+/** A grip's grasp (the XR-hands / robotics word): how the hand closes on it. */
 export const GRASPS = ['fist', 'pinch', 'point', 'flat', 'open', 'trigger'];
 export const RELEASES = COMPONENTS.grabbable.enums.release; // drop, stay, return
 export const KEYS = Object.keys(COMPONENTS.grabbable.fields);
@@ -79,9 +79,7 @@ const ACTION_RE = /^[a-z][a-z0-9_-]{0,31}$/i;
 const WORD_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/i;
 const MAX_GRIPS = 8, MAX_FITS = 8, LIM = 1e4;
 
-const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
-const num = (x) => typeof x === 'number' && Number.isFinite(x);
-const nums = (a, n, lim = LIM) => Array.isArray(a) && a.length === n && a.every((x) => num(x) && Math.abs(x) <= lim);
+const nums = (a, n, lim = LIM) => Array.isArray(a) && a.length === n && a.every((x) => isNum(x) && Math.abs(x) <= lim);
 const unitQ = (q) => nums(q, 4, 1.0001) && Math.abs(Math.hypot(...q) - 1) < 1e-3;
 
 // ---------------------------------------------------------------- reading
@@ -110,7 +108,7 @@ export function grabOf(c) {
   if (v === undefined && isObj(c.physics) && c.physics.kind === 'dynamic') return fill({ who: isWho(c.physics.who) ? c.physics.who : DEFAULT_WHO }, 'physics', c.home);
   return null;
 }
-/** A `home` component, read with its defaults ({pos, q, parent?, scale?}), or null. The one home (shape audit 10-16). */
+/** A `home` component, read with its defaults ({pos, q, parent?, scale?}), or null. The one home. */
 export function homeOf(h) {
   return isObj(h) && nums(h.pos, 3, 1e5) ? { pos: h.pos, q: unitQ(h.q) ? h.q : [0, 0, 0, 1], ...(isObj(h.parent) && typeof h.parent.to === 'string' ? { parent: { to: h.parent.to } } : {}), ...(h.scale !== undefined ? { scale: h.scale } : {}) } : null;
 }
@@ -119,23 +117,23 @@ function fill(v, source, home) {
   g.enabled = v.enabled !== false;
   g.who = isWho(v.who) ? v.who : DEFAULTS.who;
   g.steal = v.steal !== false;
-  g.range = num(v.range) ? Math.min(10, Math.max(0.1, v.range)) : DEFAULTS.range;
+  g.range = isNum(v.range) ? Math.min(10, Math.max(0.1, v.range)) : DEFAULTS.range;
   g.priority = Number.isInteger(v.priority) ? Math.max(-10, Math.min(10, v.priority)) : 0;
   g.hold = HOLDS.includes(v.hold) ? v.hold : 'auto';
-  // anim: any name (the body resolves it; unknown → its default hold). pose: the spelling before 10-17, a stored value not yet renamed
+  // anim: any name (the body resolves it; unknown → its default hold). pose: the older spelling, a stored value not yet renamed
   const anim = v.anim !== undefined ? v.anim : v.pose === 'two-hand' ? undefined : v.pose;
   g.anim = typeof anim === 'string' && ANIM_RE.test(anim) ? anim : null;
   g.grips = isObj(v.grips) ? Object.fromEntries(Object.entries(v.grips).map(([k, x]) => [k, gripOf(x)]).filter(([k, x]) => x && NAME_RE.test(k))) : {};
   g.twoHanded = v.twoHanded === true || (v.anim === undefined && v.pose === 'two-hand');
   g.carries = v.carries === true;
-  g.throw = num(v.throw) ? Math.min(3, Math.max(0, v.throw)) : 1;
+  g.throw = isNum(v.throw) ? Math.min(3, Math.max(0, v.throw)) : 1;
   g.release = RELEASES.includes(v.release) ? v.release : 'drop';
-  g.returnAfter = num(v.returnAfter) ? Math.min(3600, Math.max(0, v.returnAfter)) : 0;
+  g.returnAfter = isNum(v.returnAfter) ? Math.min(3600, Math.max(0, v.returnAfter)) : 0;
   g.home = homeOf(home);   // the thing's home component (grabbable.home is gone)
   g.fits = Array.isArray(v.fits) ? v.fits.filter((x) => typeof x === 'string' && WORD_RE.test(x)).map((x) => x.toLowerCase()) : [];
   g.use = useOf(v.use);
   g.prompt = typeof v.prompt === 'string' && v.prompt ? v.prompt.slice(0, 40) : null;
-  g.fx = null;   // reserved (shape audit 10-16)
+  g.fx = null;   // reserved
   return g;
 }
 /** `use` as {down, up} (either may be null): a bare action name is its down. */
@@ -145,7 +143,7 @@ export function useOf(u) {
   return null;
 }
 /** The returning modes need a home: stamped by the authority when one is wanted and none is set. */
-export const wantsHome = (v) => isObj(v) && (v.release === 'return' || (num(v.returnAfter) && v.returnAfter > 0));
+export const wantsHome = (v) => isObj(v) && (v.release === 'return' || (isNum(v.returnAfter) && v.returnAfter > 0));
 
 /** The hold pose a body without tracked hands takes for this thing: the named one when the body knows it (HOLD_POSES
  *  today; a world's anim-pose later), else its default: by size (one hand under HAND_SIZE, both arms at or above it; a
@@ -173,7 +171,7 @@ export function fitsSocket(g, sock) {
   const acc = Array.isArray(sock?.accepts) ? sock.accepts.map((x) => String(x).toLowerCase()) : [];
   return !!g && acc.length > 0 && g.fits.some((k) => acc.includes(k));
 }
-export const socketRadius = (sock) => (num(sock?.radius) ? sock.radius : SOCKET_RADIUS);
+export const socketRadius = (sock) => (isNum(sock?.radius) ? sock.radius : SOCKET_RADIUS);
 
 /** What every client is told of a hold (the authority's presence plane, sent whenever it changes and in every join cut):
  *  who holds it, with which hand, by which grip or at which offset, and the second hand. Never logged. */
@@ -263,7 +261,7 @@ export function checkGrabbable(v, at = 'grabbable') {
   const held = Object.keys(v).find((k) => RESERVED_KEYS.includes(k));
   if (held) return bad('reserved', `${at}.${held} is reserved: held for a shape that isn't settled, and nothing may write it`, `leave ${held} out`);
   if (v.home !== undefined) return bad('schema', `${at}.home: where a thing goes home to is its own home component now`, "home {pos, q?, scale?, parent?: {to}} (the authority stamps it for a returning grabbable)", ['home']);
-  let r = keys(at, v, KEYS, 'grabbable'); if (r) return r;
+  let r = checkKeys(at, v, KEYS, 'grabbable'); if (r) return r;
   for (const k of ['enabled', 'steal', 'twoHanded', 'carries']) if (v[k] !== undefined && typeof v[k] !== 'boolean') return bad('shape', `${at}.${k} is true or false`);
   if (v.who !== undefined && !isWho(v.who)) return bad('shape', `${at}.who is a role (${WHO.join(', ')} or this world's own), {permission: '<name>'} or {roles: [...]} (who may pick it up)`);
   if (v.hold !== undefined && !HOLDS.includes(v.hold)) return bad('shape', `${at}.hold is ${HOLDS.join(', ')} (auto: press-to-hold in VR, sticky on desktop)`);
@@ -271,7 +269,7 @@ export function checkGrabbable(v, at = 'grabbable') {
   if (isReservedAnimName(v.anim)) return bad('shape', `${at}.anim "${v.anim}" is reserved: it names ad-libbed anims, never a pose or clip`, 'name the pose or clip');
   if (v.release !== undefined && !RELEASES.includes(v.release)) return bad('shape', `${at}.release is ${RELEASES.join(', ')}`);
   for (const [k, lo, hi, what] of [['range', 0.1, 10, 'm from the hand'], ['throw', 0, 3, 'a multiplier on the release velocity'], ['returnAfter', 0, 3600, 's unheld before it goes home']])
-    if (v[k] !== undefined && !(num(v[k]) && v[k] >= lo && v[k] <= hi)) return bad(num(v[k]) ? 'bounds' : 'shape', `${at}.${k} is ${v[k]}; it is ${lo}..${hi} (${what})`);
+    if (v[k] !== undefined && !(isNum(v[k]) && v[k] >= lo && v[k] <= hi)) return bad(isNum(v[k]) ? 'bounds' : 'shape', `${at}.${k} is ${v[k]}; it is ${lo}..${hi} (${what})`);
   if (v.priority !== undefined && !(Number.isInteger(v.priority) && v.priority >= -10 && v.priority <= 10)) return bad('shape', `${at}.priority is a whole number -10..10 (higher wins when several things are in reach)`);
   if (v.grips !== undefined) {
     if (!isObj(v.grips)) return bad('shape', `${at}.grips must be {<name>: {pos, q?, hand?, role?, grasp?, part?}}`);
@@ -279,7 +277,7 @@ export function checkGrabbable(v, at = 'grabbable') {
     for (const n of names) { const g = v.grips[n], gat = `${at}.grips.${n}`;
       if (!NAME_RE.test(n)) return bad('shape', `${at}.grips: a grip's name is letters, digits, - and _ (up to 32)`);
       if (!isObj(g)) return bad('shape', `${gat} must be {pos, q?, hand?, role?, grasp?, part?}`);
-      if ((r = keys(gat, g, GRIP_KEYS, 'a grip'))) return r;
+      if ((r = checkKeys(gat, g, GRIP_KEYS, 'a grip'))) return r;
       if (!nums(g.pos, 3)) return bad('shape', `${gat}.pos must be [x, y, z] in the thing's own frame (where the palm goes)`);
       if (g.q !== undefined && !unitQ(g.q)) return bad('shape', `${gat}.q is a unit quaternion [x, y, z, w] (the palm's frame: +Z out of the palm, +Y along the fingers' base)`);
       if (g.hand !== undefined && !HANDS.includes(g.hand)) return bad('shape', `${gat}.hand is ${HANDS.join(', ')}`);
@@ -299,17 +297,19 @@ export function checkGrabbable(v, at = 'grabbable') {
 export function checkAccepts(sk, sat) {
   if (sk.accepts !== undefined && !(Array.isArray(sk.accepts) && sk.accepts.length >= 1 && sk.accepts.length <= MAX_FITS && sk.accepts.every((x) => typeof x === 'string' && WORD_RE.test(x))))
     return bad('shape', `${sat}.accepts is 1 to ${MAX_FITS} keywords: a released thing whose grabbable.fits shares one snaps in`);
-  if (sk.radius !== undefined && !(num(sk.radius) && sk.radius >= 0.02 && sk.radius <= 1)) return bad('shape', `${sat}.radius is 0.02..1 m (how near a release must be to snap in; default ${SOCKET_RADIUS})`);
+  if (sk.radius !== undefined && !(isNum(sk.radius) && sk.radius >= 0.02 && sk.radius <= 1)) return bad('shape', `${sat}.radius is 0.02..1 m (how near a release must be to snap in; default ${SOCKET_RADIUS})`);
   return null;
 }
 
-function keys(at, v, allowed, what) {
-  for (const k of Object.keys(v)) if (!allowed.includes(k)) { const dym = near(k, allowed);
+/** An unknown key in `v` refused with a did-you-mean (sockbody.js shares it). */
+export function checkKeys(at, v, allowed, what) {
+  for (const k of Object.keys(v)) if (!allowed.includes(k)) { const dym = nearMiss(k, allowed);
     return bad('schema', `${at}: unknown key '${k}'${dym.length ? `; did you mean '${dym[0]}'?` : ''}`, `${what} takes: ${allowed.join(', ')}`, dym); }
   return null;
 }
 const bad = (code, reason, fix = '', didYouMean = null) => ({ code, reason, fix, ...(didYouMean?.length ? { didYouMean } : {}) });
-function near(k, allowed) {
+// a near miss: a prefix either way, or an edit distance of at most a third of the word
+export function nearMiss(k, allowed) {
   const x = String(k).toLowerCase();
   const lev = (a, b) => { const d = Array.from({ length: b.length + 1 }, (_, j) => j);
     for (let i = 1; i <= a.length; i++) { let prev = d[0]; d[0] = i; for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = t; } }

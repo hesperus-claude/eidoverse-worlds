@@ -9,7 +9,7 @@
 //   the wire — this client's own pose packets carry `mic` and `hear` (booleans), so peers can know;
 //   hover only (owner, 10-02) — nothing is drawn beside a plate for voice state: a NEAR peer with hearing off wears no
 //     mark, and a live flip of `hear` changes no pixel beside the plate (measured in the render); the card says it;
-//   the plate's size — its width and fade are platesize.js's answer for the world distance (tools/platesize-test.ts
+//   the plate's size — its width and fade are platesize.js's answer for the world distance (tools/plateanchor-test.ts
 //     holds the curve itself);
 //   occlusion (MEASURED IN THE RENDER) — plate, mark and typing pill are depth-tested sprites cleared of their own body:
 //     a wall between eye and plate hides the name; a box riding ANOTHER avatar hides it; a box riding the plate's OWN

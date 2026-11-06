@@ -59,8 +59,7 @@ const visible = (a) => { try { return a.when ? !!a.when() : true; } catch { retu
 // and a keyword merely STARTING with what you typed ("hi" → "hide") is never STRONG.
 //
 // STRONG (>= 850): a title exact/prefix, an exact keyword, or the key itself — a
-// confident match. (The lantern once used it to guess command-or-speech; it no
-// longer guesses: Enter says, Tab does. Kept for surfaces that want confidence.)
+// confident match, for surfaces that want confidence.
 const WORD_SPLIT = /[\s\-_/·:▸.,()'"]+/;
 
 function tier(q, text) {

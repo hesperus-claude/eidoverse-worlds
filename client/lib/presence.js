@@ -1,5 +1,5 @@
 // presence — present / away / busy, for the profile icon's corner dot
-// (bottom-right, the Discord/Slack convention; R, 09-05). Automatic between
+// (bottom-right, the Discord/Slack convention). Automatic between
 // present and away (tab hidden, or no input for AWAY_S); busy is a choice made
 // in the profile and held until you change it. Rides every pose packet as
 // `presence` (net.js; shared/presencewire.js is the validator) — no receiver reads it at this rung;
@@ -15,8 +15,7 @@ let lastInput = performance.now();
 export const presence = () => manual ?? auto;
 export function setPresence(s) {
   // away and busy are CHOICES and hold until you choose present (which hands
-  // control back to the clock). The first cut nulled 'away' too, so it could
-  // never be set by hand — R caught it live on 09-05 ("away doesn't work").
+  // control back to the clock).
   manual = (s === 'away' || s === 'busy') ? s : null;
   emit();
 }

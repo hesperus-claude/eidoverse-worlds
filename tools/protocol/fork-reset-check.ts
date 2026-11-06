@@ -14,13 +14,13 @@ import { ENGINE, scratch } from "./common.ts";
 import { readLog, fold } from "../../shared/protocol/fold.js";
 import { idAliases } from "./idalias.ts";
 import { tryUntil } from "./wait.ts";
+import { suite } from "./suite.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 const IDS = idAliases();   // R 10-17: the suite's names ride as placeholders and minted ids
 
 const root = scratch("forkreset");
 const MODEL = "eidoverse/assets/models/crate_large_red.glb";   // a real catalogue model (the engine measures it)
-let pass = 0, fail = 0;
-const ok = (cond, what, detail?) => { if (cond) pass++; else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 400)}` : ""}`); } };
+const { ok, done } = suite("fork-reset-check", { quiet: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const W = path.join(root, "w"); fs.mkdirSync(W, { recursive: true });
 const env = (extra = {}) => ({ ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), SKIP_OPT_SWEEP: "1", HOST: "127.0.0.1",
@@ -185,18 +185,17 @@ ok(["fl-src", "fl-rate", "fl-one"].every((n) => tool(["found", n, "--owner", "Fa
   const firstRate = made.indexOf("rate");
   ok(made[0] === "ok" && firstRate > 0 && firstRate <= 5 && made.slice(firstRate).every((x) => x === "rate"), "FL2 ACT_RATE=5 reaches the world's authority: a sixth act in the window is refused rate", made);
   fay.close(); fr.close(); P.proc.kill(); }
-{ const Q = await start({ FORK_GAP_SEC: "1", FORK_PER_HOUR: "2" });
+{ const GAP = 1, Q = await start({ FORK_GAP_SEC: String(GAP), FORK_PER_HOUR: "2" });
   const fay = await sock(Q.port); await fay.join("fl-one", "Fay");
   const gapPast = (t) => tryUntil("the server's 1 s fork gap has passed", () => Date.now() - t > 1200, { ms: 3000, step: 50 });
   const f1 = await fay.raw({ type: "world-fork", to: "fl-cap1" }, "world-forked", 8000), t1 = Date.now(), early = await fay.raw({ type: "world-fork", to: "fl-early" }, "world-forked", 8000), tEarly = Date.now();
   ok(tEarly - t1 < 900, "FL3 (setup) the early copy was asked inside the 1 s gap (a descheduled host would make FL3 a false red)", tEarly - t1);   // bot review #495
   await gapPast(t1); const f2 = await fay.raw({ type: "world-fork", to: "fl-cap2" }, "world-forked", 8000), t2 = Date.now();
   await gapPast(t2); const f3 = await fay.raw({ type: "world-fork", to: "fl-cap3" }, "world-forked", 8000);
-  ok(f1?.type === "world-forked" && early?.type === "error" && /one copy every 1 s/.test(early.error) && f2?.type === "world-forked", "FL3 FORK_GAP_SEC=1: a copy straight after is refused, one a second later happens", [f1, early, f2].map((m) => m?.error ?? m?.type));
+  ok(f1?.type === "world-forked" && early?.type === "error" && new RegExp(`every ${GAP} s\\b`).test(early.error) && f2?.type === "world-forked", "FL3 FORK_GAP_SEC=1: a copy straight after is refused, one a second later happens", [f1, early, f2].map((m) => m?.error ?? m?.type));
   ok(f3?.type === "error" && /2 times in the last hour \(this server allows 2\)/.test(f3.error) && !fs.existsSync(path.join(W, "fl-cap3")),
     "FL4 FORK_PER_HOUR=2: a third copy within the hour is refused, and nothing is written", f3);
   fay.close(); Q.proc.kill(); }
 
 ann.close(); bob.close(); S.proc.kill();
-console.log(`[fork-reset-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();
