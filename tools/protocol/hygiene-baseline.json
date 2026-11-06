@@ -11,6 +11,9 @@
  "tools/avatar-test.ts": {
   "own-ok": 1
  },
+ "tools/axes-test.ts": {
+  "own-ok": 1
+ },
  "tools/build-gate-test.ts": {
   "own-ok": 1
  },
@@ -31,6 +34,12 @@
  },
  "tools/colour-picker-bench.ts": {
   "bare-wait": 2
+ },
+ "tools/compose-test.ts": {
+  "own-ok": 1
+ },
+ "tools/confirmcenter-test.ts": {
+  "own-ok": 1
  },
  "tools/consent-client-test.ts": {
   "own-ok": 1
@@ -114,6 +123,9 @@
   "bare-wait": 1,
   "own-ok": 1
  },
+ "tools/media-trust-tabs-test.ts": {
+  "own-ok": 1
+ },
  "tools/models-field-test.ts": {
   "own-ok": 1
  },
@@ -145,6 +157,9 @@
  "tools/places-test.ts": {
   "bare-wait": 7
  },
+ "tools/predict-pending-test.ts": {
+  "own-ok": 1
+ },
  "tools/protocol/access-check.ts": {
   "bare-wait": 7
  },
@@ -168,6 +183,9 @@
  },
  "tools/protocol/build-probe.ts": {
   "bare-wait": 5
+ },
+ "tools/protocol/catalogue-check.ts": {
+  "own-ok": 1
  },
  "tools/protocol/client-check.ts": {
   "bare-wait": 48
@@ -193,11 +211,17 @@
  "tools/protocol/fork-reset-check.ts": {
   "bare-wait": 2
  },
+ "tools/protocol/freeze-check.ts": {
+  "own-ok": 1
+ },
  "tools/protocol/gates-check.ts": {
   "own-ok": 1
  },
  "tools/protocol/grab-check.ts": {
   "raw-symlink": 1
+ },
+ "tools/protocol/hello-refused-check.ts": {
+  "own-ok": 1
  },
  "tools/protocol/identity-check.ts": {
   "bare-wait": 46
@@ -245,6 +269,9 @@
  "tools/protocol/refusedjoin-check.ts": {
   "bare-wait": 11
  },
+ "tools/protocol/reset-race-check.ts": {
+  "own-ok": 1
+ },
  "tools/protocol/roles-check.ts": {
   "raw-symlink": 2
  },
@@ -275,6 +302,9 @@
  "tools/protocol/simckpt-check.ts": {
   "own-ok": 1
  },
+ "tools/protocol/siminputs-check.ts": {
+  "own-ok": 1
+ },
  "tools/protocol/statecache-check.ts": {
   "own-ok": 1
  },
@@ -285,6 +315,9 @@
   "raw-symlink": 1
  },
  "tools/protocol/upgrade-check.ts": {
+  "own-ok": 1
+ },
+ "tools/protocol/vocab-fixtures-check.ts": {
   "own-ok": 1
  },
  "tools/protocol/xss-probe.ts": {
@@ -309,6 +342,9 @@
   "own-ok": 1
  },
  "tools/shape-attach-test.ts": {
+  "own-ok": 1
+ },
+ "tools/shape-import-test.ts": {
   "own-ok": 1
  },
  "tools/shape-physics-test.ts": {
@@ -348,6 +384,9 @@
   "own-ok": 1
  },
  "tools/water/import-golden-check.ts": {
+  "own-ok": 1
+ },
+ "tools/windows-guard-test.ts": {
   "own-ok": 1
  }
 }

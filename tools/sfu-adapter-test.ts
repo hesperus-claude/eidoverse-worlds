@@ -237,7 +237,7 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
   let hooked = false; pcR.setLocalDescription = async (d: any) => { await sld(d); hooked = true; revokeSfuLeg(WR, "lis"); };   // the revoke lands after the last await, before the send
   registerSfuSender(WR, "lis", (p: any) => sent.push(p));
   setSfuConsent(WR, "lis", 2, true);                 // negotiation fires: sfu-route, then the awaits, then sfu-offer
-  await new Promise((r) => setTimeout(r, 600));
+  await pause("the negotiation runs to where an offer would go", 600);
   check("a leg revoked mid-negotiation is sent no offer (the route was sent, the offer was not)",
     hooked && sent.some((p) => p.type === "sfu-route") && !sent.some((p) => p.type === "sfu-offer"), `hooked=${hooked} sent=${JSON.stringify(sent.map((p) => p.type))}`);
 }
@@ -250,7 +250,7 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
   pcR.setLocalDescription = async (d: any) => { await sld(d); mintSfuCredential(WR, "lis", 1, 4); };   // retired and re-minted after the last await
   registerSfuSender(WR, "lis", (p: any) => sent.push(p));
   setSfuConsent(WR, "lis", 2, true);
-  await new Promise((r) => setTimeout(r, 600));
+  await pause("the negotiation runs to where an offer would go", 600);
   check("a leg re-minted mid-negotiation is sent no offer from its predecessor's negotiation",
     sent.some((p) => p.type === "sfu-route") && !sent.some((p) => p.type === "sfu-offer"), `sent=${JSON.stringify(sent.map((p) => p.type))}`);
 }

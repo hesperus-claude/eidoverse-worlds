@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch } from "../protocol/common.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
+import { tryUntil } from "../protocol/wait.ts";
 let fail = 0;
 const C = (id, what, good, info) => { console.log(`${good ? "ok  " : "FAIL"} ${id} ${what}`); if (!good) { fail++; if (info !== undefined) console.log("     ", JSON.stringify(info).slice(0, 600)); } };
 const dry = JSON.parse(Bun.spawnSync(["bun", path.join(ENGINE, "tools/water/import.ts"), path.join(ENGINE, "world-data/water/manifest.json"), "--dry"], { cwd: ENGINE, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } }).stdout.toString());
@@ -19,7 +20,7 @@ let out = ""; const rd = (async () => { for await (const c of pv.stdout) out += 
 let err = ""; (async () => { for await (const c of pv.stderr) err += new TextDecoder().decode(c); })();
 let effect = null;
 try {
-  for (let i = 0; i < 300 && !/Preview:/.test(out) && pv.exitCode === null; i++) await Bun.sleep(100);
+  await tryUntil("the preview says it is up", () => /Preview:/.test(out) || pv.exitCode !== null, { ms: 30000, step: 100 });
   C("P0", "the preview comes up with the bundle's scene", /Preview:/.test(out), { out: out.slice(-300), err: err.slice(-400) });
   if (/Preview:/.test(out)) {
     const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
@@ -30,5 +31,5 @@ try {
     ws.close();
   }
   C("P1", `the manifest's effect '${name}' is stored in the preview world (the particles child's emitter can fetch it)`, !!name && effect?.ok === true && (effect?.reply?.effect?.name === name || effect?.effect?.name === name), effect);
-} finally { pv.kill("SIGTERM"); await Promise.race([pv.exited, Bun.sleep(5000)]); }
+} finally { pv.kill("SIGTERM"); await tryUntil("the preview exits", () => pv.exitCode !== null || pv.signalCode !== null, { ms: 5000 }); }
 console.log(`[preview-check] ${fail ? `${fail} failed` : "all passed"}`); process.exit(fail ? 1 : 0);
