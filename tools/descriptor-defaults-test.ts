@@ -13,6 +13,8 @@ import { RECORDS, LIGHT_DEFAULTS } from "../shared/components.js";
 import { inspectSchema, fieldAt, addOps, editOps } from "../shared/editschema.js";
 import { DEFAULTS as GRAB_DEFAULTS } from "../shared/grab.js";
 import { scratchWorld } from "./protocol/scratchworld.ts";
+import { admitVideoSources } from "../shared/video.js";
+admitVideoSources(["solstice"]);   // a video names a source this server admits (PR #5): the fixture's, as a picture gets a src
 
 let pass = 0, fail = 0, unwritten = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -27,7 +29,7 @@ const GROUP: Record<string, string> = { "look-at": "look-at" };
 const entOf = (d: any): any => {
   const bag = materializedOf(Object.keys(DESCRIPTORS).find((c) => DESCRIPTORS[c] === d)!);
   if (!bag || typeof bag !== "object" || !d.fields.some((f: any) => f.path != null)) return null;
-  const value = d.key === "sound" || d.key === "picture" ? { src: "store/x", ...bag } : d.key === "story" ? { title: "t", text: "x", ...bag } : d.key === "text" ? { text: "hi", ...bag } : d.key === "look-at" ? { target: "@viewer", ...bag } : d.key === "particles" ? { effect: "fire", ...bag } : bag;
+  const value = d.key === "sound" || d.key === "picture" ? { src: "store/x", ...bag } : d.key === "story" ? { title: "t", text: "x", ...bag } : d.key === "text" ? { text: "hi", ...bag } : d.key === "look-at" ? { target: "@viewer", ...bag } : d.key === "particles" ? { effect: "fire", ...bag } : d.key === "video" ? { source: "solstice", ...bag } : bag;
   return { model: "store/x.glb", pos: [0, 0, 0], yaw: 0, [d.key]: value };
 };
 

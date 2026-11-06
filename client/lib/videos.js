@@ -32,7 +32,7 @@
 //      AudioContext is the shared unlock queue's business (audiounlock.js), as every placed sound's is.
 import { THREE, camera } from './core.js';
 import { bus } from './base.js';
-import { net } from './net.js';
+import { net, sendJoined } from './net.js';
 import { entities, bagOf } from './world.js';
 import { audioContext } from './audioctx.js';
 import { worldBusNode } from './sounds.js';
@@ -100,7 +100,7 @@ function setState(s, state, why = null) {
 // ---- the connection ----
 function closeConn(s, { tell = true } = {}) {
   clearTimeout(s.timer); s.timer = null;
-  if (tell && s.session && net.ws?.readyState === 1) { try { net.ws.send(JSON.stringify({ type: 'video-close', session: s.session })); } catch { /* gone */ } }
+  if (tell && s.session) { try { sendJoined({ type: 'video-close', session: s.session }); } catch { /* gone */ } }
   s.session = null; s.req = null;
   try { s.pc?.close(); } catch { /* closed */ } s.pc = null;
   if (s.audio) { try { s.audio.src.disconnect(); s.audio.gain.disconnect(); s.audio.panner.disconnect(); } catch { /* fine */ } s.audio = null; }
@@ -139,8 +139,7 @@ async function connect(s, rev) {
   await new Promise((res) => { if (pc.iceGatheringState === 'complete') return res(); const t = setTimeout(res, ICE_GATHER_MS); pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } }); });
   if (!current(s.id, rev) || s.pc !== pc) { try { pc.close(); } catch { /* fine */ } return; }
   s.req = `v${++reqN}`;
-  if (net.ws?.readyState !== 1) { retry(s, rev, 'not connected to the world'); return; }
-  net.ws.send(JSON.stringify({ type: 'video-offer', id: s.id, sdp: pc.localDescription.sdp, req: s.req }));
+  if (!sendJoined({ type: 'video-offer', id: s.id, sdp: pc.localDescription.sdp, req: s.req })) { retry(s, rev, 'not connected to the world'); return; }
   clearTimeout(s.timer);
   s.timer = setTimeout(() => { if (current(s.id, rev) && s.pc === pc && !s.frames) retry(s, rev, 'no picture arrived'); }, CONNECT_WATCHDOG_MS);
 }
