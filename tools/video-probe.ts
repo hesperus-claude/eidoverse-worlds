@@ -89,7 +89,7 @@ async function join_(br: any, name: string) {
   const pg = await br.page();
   pg.on('pageerror', (e: any) => errs.push(`${name}: ${e.message}`));
   pg.on('console', (m: any) => { const x = m.text(); if (/\[gpu\]|\[renderer\]|context lost|reloading/i.test(x)) console.log(`   ${name} console: ${x.slice(0, 200)}`); });
-  pg.on('framenavigated', (f: any) => { if (f === pg.mainFrame()) console.log(`   ${name} navigated: ${f.url().slice(0, 120)}`); });
+  pg.on('framenavigated', (f: any) => console.log(`   ${name} navigated: ${f.url().slice(0, 120)}`)); // cdp-pw reports top-frame navigations only
   // every text frame the page's sockets receive that mentions video, recorded in the page: the CDP driver (cdp-pw.mjs) has
   // no websocket event, and an on() it doesn't know records nothing
   await pg.addInitScript(() => { const W = window.WebSocket; (window as any).__wsIn = [];
