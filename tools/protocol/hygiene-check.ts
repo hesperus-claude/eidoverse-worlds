@@ -66,7 +66,7 @@ export const RULES: Record<string, RegExp> = {
 const SELF = "tools/protocol/hygiene-check.ts";   // its fixtures are the bad shapes on purpose
 const EXEMPT: Record<string, string[]> = { "chrome-flags": ["tools/protocol/chrome.ts"], "raw-symlink": ["tools/protocol/common.ts"], "bare-wait": ["tools/protocol/wait.ts"], "own-until": ["tools/protocol/wait.ts"], "lab-clock": ["tools/protocol/clock.ts"], "own-ok": ["tools/protocol/suite.ts"], "agent-url": ["tools/dummy.ts"], "redaction-parse": ["shared/protocol/fold.js"] };   // dummy is the show host's service: WORLD_URL is how it is told where to connect
 const SUITE_ONLY = new Set(["bare-wait", "own-until", "playwright", "own-ok", "posix-mode"]);   // the waiting rules are about tests; server code may wait on purpose
-const ALL_TOOLS = new Set(["chrome-flags", "agent-url"]);
+const ALL_TOOLS = new Set(["chrome-flags", "agent-url", "slash-path"]);   // slash-path: a --preload file is no import, so the gate set misses it
 const TOOLS_ONLY = new Set(["agent-url"]);   // mcpl/ has its own owner and its server builds its agent from the env on purpose
 
 export function scan(text: string): Record<string, number> {
