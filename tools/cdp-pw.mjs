@@ -95,7 +95,12 @@ function makePage(C, S, { targetId, browserContextId }) {
   C.listen((m) => {
     if (m.sessionId !== S) return;
     const p = m.params;
-    if (m.method === 'Runtime.consoleAPICalled') { const text = p.args.map((a) => a.value ?? a.description ?? '').join(' '); const type = p.type === 'warning' ? 'warning' : p.type; for (const f of handlers.console) f({ type: () => type, text: () => text }); }
+    if (m.method === 'Runtime.consoleAPICalled') {
+      const text = p.args.map((a) => a.value ?? a.description ?? '').join(' '); const type = p.type === 'warning' ? 'warning' : p.type;
+      // playwright's ConsoleMessage has location() too: a probe that reads it on an error crashed here (xr-lifecycle, CI 42190828916)
+      const at = p.stackTrace?.callFrames?.[0], location = { url: at?.url ?? '', lineNumber: at?.lineNumber ?? 0, columnNumber: at?.columnNumber ?? 0 };
+      for (const f of handlers.console) f({ type: () => type, text: () => text, location: () => location });
+    }
     else if (m.method === 'Runtime.exceptionThrown') { const d = p.exceptionDetails; const e = new Error(d?.exception?.description ?? d?.text ?? 'page error'); for (const f of handlers.pageerror) f(e); }
     else if (m.method === 'Page.javascriptDialogOpening') {
       const dialog = { message: () => p.message, type: () => p.type, accept: (t) => send('Page.handleJavaScriptDialog', { accept: true, ...(t !== undefined ? { promptText: t } : {}) }), dismiss: () => send('Page.handleJavaScriptDialog', { accept: false }) };

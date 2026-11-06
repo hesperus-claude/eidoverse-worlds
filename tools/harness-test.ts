@@ -64,5 +64,16 @@ try {
     } finally { rmSync(dir, { recursive: true, force: true }); }
   }
 } finally { rmSync(scratch, { recursive: true, force: true }); }
+{ // cdp-pw (the probes' driver) gives a console message what playwright's does: type, text, location
+  const { launchCdp } = await import('./cdp-pw.mjs');
+  const b = await launchCdp(); const msgs: any[] = [];
+  try {
+    const pg = await b.page();
+    pg.on('console', (m: any) => { try { msgs.push({ type: m.type(), text: m.text(), url: m.location().url }); } catch (e) { msgs.push({ threw: String(e) }); } });
+    await pg.evaluate(() => { console.error('cdp-pw-console-sentinel'); });
+    await until('the console message arrives', () => msgs.length > 0, { ms: 10_000 }).catch(() => {});
+  } finally { await b.close(); }
+  check('cdp-pw: a console message has type(), text() and location()', msgs.some((m) => m.type === 'error' && m.text === 'cdp-pw-console-sentinel' && typeof m.url === 'string'), JSON.stringify(msgs));
+}
 console.log(`${tally.passed} passed, ${tally.failed} failed`);
 process.exit(tally.failed ? 1 : 0);
