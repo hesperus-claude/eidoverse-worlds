@@ -177,6 +177,7 @@ function needThing(ctx, id) {
 // are admit's; this only turns what was asked into a plain value.
 // @world.bounds as the readers use it: a malformed one already in a log (written before the authority checked it) is
 // treated as no bounds, never a crash in every create's reply (review T0d)
+const MOTION_AXES = AXES;   // shared/axes.js: all six letters
 const boundsOf = (st) => { const B = st.entities["@world"]?.c.bounds; const v3 = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
   return B && v3(B.min) && v3(B.max) ? B : null; };
 // resolve a component value fully (R7): defaults written out, conveniences converted, stamps applied; shape and rights are
@@ -204,10 +205,11 @@ function resolve(ctx, id, comp, value, prev) {
   if (comp === "sky" && value && typeof value === "object" && !Array.isArray(value) && value.ts === undefined) value = { ...value, ts: Math.floor(ctx.w.now()) };
   // every parameter written down (PROTOCOL §4): the definition's defaults and per-kind rules (componentspec materialize)
   const filled = (v, list) => { if (list.length) ctx.notes.push({ id, component: comp, filled: list, why: "defaults written out so the engine can't change them later" }); return v; };
-  // an axis is a vector (PROTOCOL §9.2): on every `axis` field (motion.axis, openable.axis, look-at.forward/up) a letter, signed or not, is stored as its vector
-  if (value && typeof value === "object" && !Array.isArray(value)) for (const [f, t] of Object.entries(COMPONENTS[comp.split(":")[0]]?.fields ?? {}))
-    if (t === "axis" && typeof value[f] === "string" && Object.hasOwn(AXES, value[f].toLowerCase())) {
-      const kept = AXES[value[f].toLowerCase()].slice(); ctx.notes.push({ id, component: comp, field: f, sent: value[f], kept, why: "an axis is stored as a vector" }); value = { ...value, [f]: kept }; }
+  if (isLookAt(comp) && value && typeof value === "object" && !Array.isArray(value)) { const AXV = POSITIVE_AXES;   // the letters the door takes (tools/lookat-forward-check: no negative letter)
+    for (const f of ["forward", "up"]) if (typeof value[f] === "string" && AXV[value[f]]) value = { ...value, [f]: AXV[value[f]].slice() }; }
+  // an axis is a vector (PROTOCOL §9.2): the letters the readers take are stored as their vectors
+  if ((comp === "motion" || comp.startsWith("motion:")) && value && typeof value === "object" && !Array.isArray(value) && typeof value.axis === "string" && MOTION_AXES[value.axis.toLowerCase()]) {
+    ctx.notes.push({ id, component: comp, field: "axis", sent: value.axis, kept: MOTION_AXES[value.axis.toLowerCase()], why: "an axis is stored as a vector" }); value = { ...value, axis: MOTION_AXES[value.axis.toLowerCase()].slice() }; }
   if (comp === "parent" && value && typeof value === "object" && !Array.isArray(value) && "order" in value) { const { order, ...rest } = value; ctx.notes.push({ id, component: comp, field: "order", sent: order, why: "siblings have no stored order: dropped" }); value = rest; }
   if (comp === "motion" && value && typeof value === "object") { const m = materialize("motion", value); const v = filled(m.value, m.filled);
     if (v.t0 === undefined) { v.t0 = ctx.w.now(); ctx.notes.push({ id, component: "motion", field: "t0", kept: v.t0, why: "stamped by the authority" }); } return v; }

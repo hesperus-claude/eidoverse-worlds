@@ -79,7 +79,7 @@ console.log("\nthe Inspector offers only what the door takes; every axis takes t
     { model: "store/x.glb", pos: [0, 0, 0], yaw: 0, physics: materialize("physics", { kind: "dynamic" }).value },
     { model: "store/x.glb", pos: [0, 0, 0], yaw: 0, "look-at": { target: "@viewer", forward: [0.6, 0, 0.8] } },   // a custom forward: its current-value option
     { model: "store/x.glb", pos: [0, 0, 0], yaw: 0, motion: { type: "spin" } }];   // a spin switched to path
-  // a known gap pinned as STILL red so a fix flips it (and its entry goes); none open (signed axes are taken everywhere)
+  // a known gap pinned as STILL red so a fix flips it (and its entry goes); none open
   const GAPS: Record<string, string> = {};
   const gapSeen = new Set<string>();
   const row = (name: string, key: string, ok: boolean, detail: string) => {
@@ -95,17 +95,20 @@ console.log("\nthe Inspector offers only what the door takes; every axis takes t
       offeredRows++; offered.add(`${g.group}.${f.k} ${j(o.v)}`); row(`the Inspector offers ${g.group}.${f.k} ${j(o.v)}, and the door takes it`, `${g.group}.${f.k} ${j(o.v)}`, !!r.ok, j(r.refused ?? r));
     }
   }
-  // signed axes everywhere: every axis row offers -x, -y and -z (and each, sent above, is taken)
-  for (const k of ['openable.axis "-x"', 'motion.type "path"', 'look-at.forward "[0.6,0,0.8]"', ...["motion.axis", "look-at.forward", "look-at.up"].flatMap((a) => ["-x", "-y", "-z"].map((l) => `${a} ${j(l)}`))]) check(`the Inspector's ${k} was offered and sent`, offered.has(k));
+  // every axis row offers x, y and z, never a signed letter (R 10-11; each sent above is taken)
+  for (const k of ['motion.type "path"', 'look-at.forward "[0.6,0,0.8]"', ...["motion.axis", "look-at.forward", "look-at.up", "openable.axis"].flatMap((a) => ["x", "y", "z"].map((l) => `${a} ${j(l)}`))]) check(`the Inspector's ${k} was offered and sent`, offered.has(k));
+  for (const k of ["motion.axis", "look-at.forward", "look-at.up", "openable.axis"].flatMap((a) => ["-x", "-y", "-z"].map((l) => `${a} ${j(l)}`))) check(`the Inspector doesn't offer ${k} (a negative turn is a negative angle)`, !offered.has(k));
   { const la = seed({ model: "store/x.glb", pos: [0, 0, 0], yaw: 0, "look-at": { target: "@viewer", forward: [0.6, 0, 0.8] } });
     const plan: any = editOps(D.rec(la), la, { "look-at.forward": "[0.6,0,0.8]" }); const v = plan.ops.flat(9).find((o: any) => o?.args?.component === "look-at")?.args?.value;
     check("a custom forward's current-value option is sent as its vector", same(v?.forward, [0.6, 0, 0.8]), j(v)); }
   { const op = seed({ model: "store/x.glb", pos: [0, 0, 0], yaw: 0, openable: { open: false } }); const r = D.call("set", { id: op, component: "openable", value: { open: false, axis: "-x" } });
-    check("openable.axis '-x' is stored as its vector", r.ok && same(D.rec(op).openable?.axis ?? D.rec(op).c?.openable?.axis, [-1, 0, 0]), j(r.ok ? D.rec(op) : r)); }
+    check("openable.axis '-x' is refused: a negative axis is a vector", !r.ok, j(r.ok ? D.rec(op) : r)); }
   check("the Inspector offers a look-at forward row", (fieldAt(inspectSchema(entOf(DESCRIPTORS.LookAt), "x"), "look-at.forward") as any)?.options?.length > 0);
   // the door's `axis` type, on every registry field of that type: x, y, z or a vector taken; anything else refused
   const BASE: Record<string, any> = { motion: { type: "pendulum" }, openable: { open: false }, "look-at": { target } };
-  const TAKES = ["x", "y", "z", "-x", "-y", "-z", "X", [0, 0, -1], [1, 0, 0]], REFUSES = ["w", "", "+x", 5, [0, 0], ["x"]];
+  // motion takes every letter (MOTION_AXES); look-at and openable take x, y, z or a vector (a negative axis is a vector)
+  const SIGNED = new Set(["motion"]);
+  const TAKES = (k: string) => ["x", "y", "z", ...(SIGNED.has(k) ? ["-x", "-y", "-z", "X"] : []), [0, 0, -1], [1, 0, 0]], REFUSES = (k: string) => ["w", "", "+x", 5, [0, 0], ["x"], ...(SIGNED.has(k) ? [] : ["-x"])];
   const named = (text: string) => [...new Set((text.match(/(?<![\w-])-?[xyz](?=\s*\||\s*$|\s*,|\s*\)|\s+or\b)/g) ?? []).map((x) => x.trim()))];
   const axes = Object.entries(COMPONENTS as any).flatMap(([key, c]: any) => Object.entries(c.fields ?? {}).filter(([, t]) => t === "axis").map(([field]) => [key, field]));
   check("the axis fields are found (motion.axis, openable.axis, look-at.forward and .up)", axes.length >= 4, j(axes));
@@ -113,9 +116,9 @@ console.log("\nthe Inspector offers only what the door takes; every axis takes t
   for (const [key, field] of axes) {
     check(`${key}.${field}: a base the door takes`, !!BASE[key], key);
     const verdict = (v: any) => { const r = D.call("set", { id: post, component: key, value: { ...BASE[key], [field]: v }, dry: true }); return { ok: !!r.ok, words: r.ok ? "" : `${r.refused?.reason ?? ""} ${r.refused?.fix ?? ""}` }; };
-    for (const v of TAKES) check(`${key}.${field} ${j(v)}: the door takes it`, verdict(v).ok);
+    for (const v of TAKES(key)) check(`${key}.${field} ${j(v)}: the door takes it`, verdict(v).ok);
     const said = new Set<string>();
-    for (const v of REFUSES) { const r = verdict(v); row(`${key}.${field} ${j(v)}: the door refuses it`, `refuses ${key}.${field} ${j(v)}`, !r.ok, r.words); if (!r.ok) said.add(r.words); }
+    for (const v of REFUSES(key)) { const r = verdict(v); row(`${key}.${field} ${j(v)}: the door refuses it`, `refuses ${key}.${field} ${j(v)}`, !r.ok, r.words); if (!r.ok) said.add(r.words); }
     const help = new RegExp(`${field}\\?\\s*\\(([^)]*)\\)`).exec(String((COMPONENTS as any)[key].help))?.[1] ?? "";
     if (key === "look-at") check(`look-at's help has a ${field}? clause (its loop below would be vacuous without one)`, help !== "", String((COMPONENTS as any)[key].help));
     for (const l of named(help)) check(`${key}'s help names ${field} '${l}', and the door takes it`, verdict(l).ok, help);

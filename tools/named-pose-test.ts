@@ -3,6 +3,7 @@
 import { noWorldUrl } from "./no-world.ts";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
+import { helloOf } from "../shared/protocol/hello.js";
 
 const part = process.argv.includes("--part") ? process.argv[process.argv.indexOf("--part") + 1] : "wire";
 const { mkCheck } = await import("./harness.ts");
@@ -163,7 +164,7 @@ async function wirePart() {
     const snap: any = await new Promise((res, rej) => {
       const t = setTimeout(() => rej(new Error(`${id} join timed out`)), 5000);
       ws.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); if (m.type === "snapshot") { clearTimeout(t); res(m); } };
-      ws.onopen = () => ws.send(JSON.stringify({ type: "join", world: WORLD, id, avatar: AVATAR, replica: true }));
+      ws.onopen = () => ws.send(JSON.stringify({ type: "join", hello: helloOf(), world: WORLD, id, avatar: AVATAR, replica: true }));
     });
     let n = 0;
     const send = (extra: Record<string, unknown>) => ws.send(JSON.stringify({ type: "pose", pose: { p: [2, 0, 2], yaw: 0, speed: 0, clip: "idle", pitch: 0, mark: ++n, ...extra } }));

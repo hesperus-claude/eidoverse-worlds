@@ -193,7 +193,7 @@ console.log("broker (a scratch server with a capture donor, then scratch sequenc
   const sockets: WebSocket[] = [];
   async function connect(id: string, extras = {}, world = "screenshot-test", at = { origin, token: "screenshot-test-door" }) {
     const messages: any[] = []; const ws = new WebSocket(at.origin.replace("http:", "ws:") + "/ws"); sockets.push(ws);
-    ws.onopen = () => ws.send(JSON.stringify({ type: "join", world, id, ...(at.token ? { token: at.token } : {}), replica: true, ...extras }));
+    ws.onopen = () => ws.send(JSON.stringify({ type: "join", hello: helloOf(), world, id, ...(at.token ? { token: at.token } : {}), replica: true, ...extras }));
     ws.onmessage = (e) => messages.push(JSON.parse(String(e.data)));
     await until(`${id}'s join`, () => messages.some((m) => m.type === "snapshot"));
     return { ws, messages, send: (m: object) => ws.send(JSON.stringify(m)) };

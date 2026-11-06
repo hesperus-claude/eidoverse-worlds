@@ -12,6 +12,7 @@ import type { HnSession } from "../server/auth.ts";
 import { foundWorlds, freePort, ROOT } from "./harness.ts";
 import { pause, until } from "./protocol/wait.ts";
 import { suite } from "./protocol/suite.ts";
+import { helloOf } from "../shared/protocol/hello.js";
 
 const S = suite("native-login");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
@@ -101,7 +102,7 @@ console.log("NATIVE LOGIN — over a real server's HTTP + WS");
   async function connect(world: string, session: string) {
     const messages: any[] = []; let closed = 0;
     const ws = new WebSocket(origin.replace("http:", "ws:") + "/ws", { headers: { cookie: session } } as any); sockets.push(ws);
-    ws.onopen = () => ws.send(JSON.stringify({ type: "join", world, id: "untrusted-client-name", replica: true }));
+    ws.onopen = () => ws.send(JSON.stringify({ type: "join", hello: helloOf(), world, id: "untrusted-client-name", replica: true }));
     ws.onmessage = (e) => messages.push(JSON.parse(String(e.data))); ws.onclose = (e) => { closed = e.code; };
     await until(`a join result for ${world}`, () => closed !== 0 || messages.some((m) => m.type === "snapshot"));
     return { ws, messages };

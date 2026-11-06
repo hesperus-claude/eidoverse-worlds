@@ -11,6 +11,7 @@ const { until: waitUntil, tryUntil } = await import("./protocol/wait.ts");
 const { scratchSequencer, mkCheck } = await import("./harness.ts");
 const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");
+const { helloOf } = await import("../shared/protocol/hello.js");
 const { join } = await import("node:path");
 const { check, tally } = mkCheck();
 const { fixture, postureFixture } = await import("./body-fixture.ts");
@@ -258,7 +259,7 @@ try {
     await new Promise<void>((res, rej) => {
       const t = setTimeout(() => rej(new Error("owner join timed out")), 5000);
       ws.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); if (m.type === "snapshot") { clearTimeout(t); res(); } };
-      ws.onopen = () => ws.send(JSON.stringify({ type: "join", world: "body-test", id: OWNER, avatar: AVATAR, replica: true }));
+      ws.onopen = () => ws.send(JSON.stringify({ type: "join", hello: helloOf(), world: "body-test", id: OWNER, avatar: AVATAR, replica: true }));
     });
     // a reach onto another body is behind its touch gate, off by default (R 10-28): the owner opens it, as a browser would
     let touchOn: any = null; const prev = ws.onmessage;

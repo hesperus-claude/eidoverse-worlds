@@ -384,7 +384,7 @@ export function inspectSchema(ent, id, live = {}) {
   const laKeys = Object.keys(c).filter((k) => (k === 'look-at' || k.startsWith('look-at:')) && isBag(c[k]));
   if (laKeys.length) {
     // the door's axis letters (componentspec `axis`: x, y, z or a vector); a stored vector shows as itself
-    const AX = ['z', 'x', 'y', '-z', '-x', '-y'];
+    const AX = ['z', 'x', 'y'];
     const axOf = (f, dflt) => (typeof f === 'string' ? f : Array.isArray(f) ? (axisName({ axis: f }) === 'custom' ? JSON.stringify(f) : axisName({ axis: f })) : dflt);
     const fwdOf = (f) => axOf(f, 'z');
     const axOpts = (cur, front) => [...AX, ...(AX.includes(cur) ? [] : [cur])].map((v) => ({ v, label: front && v === 'z' ? '+z (its front)' : v }));
@@ -459,8 +459,8 @@ export function inspectSchema(ent, id, live = {}) {
       fields.push({ t: 'enum', k: k('type'), label: `${P}type`, value: ty, options: types.map((v) => ({ v, label: v })) });
       if (['pendulum', 'spin', 'oscillate'].includes(ty)) {
         const ax = axisName(m, ty === 'pendulum' ? 'x' : 'y');
-        // every axis letter the door takes, signed ones too; a custom axis still shows as itself
-        const opts = Object.keys(AXES).map((v) => ({ v, label: v }));
+        // x, y, z only (a negative turn is a negative angle); a stored negative or custom axis still shows as itself
+        const opts = ['x', 'y', 'z'].map((v) => ({ v, label: v }));
         fields.push({ t: 'enum', k: k('axis'), label: `${P}axis`, value: ax, options: opts.some((o) => o.v === ax) ? opts : [...opts, { v: ax, label: ax }] });
       }
       const card = MOTION_CARD[ty];
@@ -507,7 +507,7 @@ export function inspectSchema(ent, id, live = {}) {
     if (slides) ['x', 'y', 'z'].forEach((a, i) => fields.push({ t: 'num', k: `slide|${i}`, label: `slide ${a}`, value: +o.slide[i] || 0, def: 0, step: 0.05, dp: 2, ...limitsOf('openable', 'slide'), hint: SPEC.openable.docs.slide }));
     else {
       fields.push(O('angle', { label: 'turns', value: Number.isFinite(o.angle) ? o.angle : Math.PI / 2, hint: 'how far it turns when open; negative turns the other way' }));
-      fields.push(O('axis', { label: 'hinge axis', value: axisName(o, 'y'), options: Object.keys(AXES).map((v) => ({ v, label: v })), hint: 'y: an upright hinge (a door); x: a lid or a hatch' }));
+      fields.push(O('axis', { label: 'hinge axis', value: axisName(o, 'y'), options: ['x', 'y', 'z'].map((v) => ({ v, label: v })), hint: 'y: an upright hinge (a door); x: a lid or a hatch' }));
       if (Array.isArray(box) && !o.part) {
         fields.push({ t: 'btn', k: 'hingeL', label: 'hinge on its left edge', hint: 'puts its pivot on the -x edge of its box (it turns about the pivot)' });
         fields.push({ t: 'btn', k: 'hingeR', label: 'hinge on its right edge', hint: 'puts its pivot on the +x edge of its box' });
