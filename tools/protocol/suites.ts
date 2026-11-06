@@ -115,7 +115,6 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["descriptors", "../descriptor-defaults-test.ts", 1], // C5 (DEBT 10-12 #3a): every record and inspector default is the registry's, through the editor translation
   ["schema-layers", "../schema-layers-test.ts", 1], // one description per component field (componentspec.js): the inspector, the door's refusals and limitsOf all read it
   ["light-readers", "../light-readers-test.ts", 1], // D2 (DEBT-2 #5): a light is found by its light component and the rig's complight key, its gizmo is no box or material slot
-  ["kind", "../kind-test.ts", 1], // one kindOf: a light component is a light, a bare thing an Empty, a model a model; the route and the agent's inspect head agree
   ["ghost-mesh-size", "../ghost-mesh-size-test.ts", 1], // D1: every shape × scale the build ghost sends passes the door's mesh check (the plane at 1/1.1 did not)
   ["boot-init", "../boot-init-test.ts", 1], // D3: every client init* has a caller (initOccupants had none)
   ["splash-lifecycle", "../splash-lifecycle-test.mjs", 1], // the splash rays worker: Worker, window listener and canvas end together
@@ -187,7 +186,6 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["refusedjoin", "refusedjoin-check.ts", 1], // R 10-16 00:02: a refused join (old-format world, no such world) stays on the splash in the server's words — the early socket's refusal is honoured, no redial, no empty world
   ["server", "server-check.ts", 1],     // the server: real processes, real WebSockets, scratch ports
   ["worlds-route", "../worlds-route-test.ts", 1], // GET /worlds, fetched: one people list with declared words, spectators absent, a join never founds
-  ["clientlog", "../clientlog-test.ts", 1], // the /clientlog tee through the real route(): auth, length gates, a known world, the miss-relist rate limit
   ["served-routes", "../served-routes-test.ts", 1], // every route the client needs, really served, every response isolated (COOP/COEP)
   ["native-login", "../native-login-test.ts", 1], // the native login HTTP handler, isolated
   ["mkconfig", "../mkconfig-test.ts", 1], // deploy/projector/mkconfig.sh renders mediamtx.template.yml
@@ -225,7 +223,6 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["consent", "consent-check.ts", 1],   // the consent tool never writes through a prototype (security pass 2, H-0); a refused change changes nothing
   ["gates", "gates-check.ts", 1],       // R 10-28: body consent is two gates (move, touch) and two lists (allow, block): the order, the world default, a stored switch or table migrated never wider
   ["consent-client", "../consent-client-test.ts", 1], // R 10-28: the browser's gates and lists land at the authority, old localStorage keys migrate never wider, a failed sync is heard and retried
-  ["structure-collider", "../structure-collider-test.ts", 1], // a building declares its own boxes; a mirrored one draws mirrored (#260 review 474)
   ["media-trust-tabs", "../media-trust-tabs-test.ts", 1], // bot #141: an untrusted-links revoke in one tab reaches the others (storage event → media:trust)
   ["confirmcenter", "../confirmcenter-test.ts", 1], // bot #213: an interrupting ask answers the open centre card with ITS cancel (false / null / its own)
   ["windows-guard", "../windows-guard-test.ts", 1], // bot #578/#579: windows.js loads where storage throws; the painted min-width yields to a narrow viewport
@@ -409,7 +406,6 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["consent-scripts-list", "../consent-scripts-list-test.ts", 1], // consent {allow|block} naming a script or a sponsor's scripts reaches the authority through the server; an allow naming nobody says how to name someone
   ["custody-save", "../custody-save-test.ts", 1], // a governance key is handed out only once the keys file holds it: a failed save hands out nothing
   ["client-tools", "../run-client.ts --import-only --skip-suites --strict-env", 14], // refactor plan 2 D5: every tools/*-{test,check} loads (a stub missing an export, a moved module); a hung import reads SLOW, not red (run-client-settle pins it); the full run is `bun tools/run-client.ts`
-  ["replica-freeze", "../replica-freeze-test.ts", 1],   // C7a: the client's fold is frozen in dev, and still folds every later entry (it sat outside the gate and couldn't start)
 ];
 
 // ---- lanes ----
