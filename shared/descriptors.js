@@ -32,8 +32,7 @@
 // RECORDS is generated from this table) or as a registered default (none yet: each would be a registry change and a pin
 // regeneration, spec/registry-pin.json D8). See DECIDED below.
 
-import { COMPONENTS, materialize } from './componentspec.js';
-import { rateOf } from './names.js';
+import { rateOf } from './protocol/names.js';
 import { COMPONENTS, materialize } from './protocol/componentspec.js';
 import { AXES } from './axes.js';
 

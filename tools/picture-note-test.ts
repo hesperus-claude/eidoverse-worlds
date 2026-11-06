@@ -29,7 +29,6 @@ plugin({ name: 'picture-note-stubs', setup(b) {
 } });
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import { suite } from "./protocol/suite.ts";
 GlobalRegistrator.register();
 
 const stub: any = await import('./guard-label-stub.mjs');

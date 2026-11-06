@@ -15,7 +15,7 @@
 import {
   planStructure, normalize, wallBoxes, deriveRooms, derivePortals, roomAt, levelAt,
   edgeCells, edgeBetween, edgeKey, cellKey, APERTURES, GRID_DEFAULTS,
-  describeHere, describeStructure, localizePoint, levelParts, TRIM, cornerFills, wallRuns, wallPolylines, sweepProfile, wallProfile, levelSweeps, capProfile, clipProfileV, refineProfile, makeShader, diagOf, halfTriangle, triPrism, halfFloored, segmentEnds, nodeAtPoint, nodeGraph, cellNodes, routeCells, routeLocal, passable, makeShader,
+  describeHere, describeStructure, localizePoint, levelParts, TRIM, cornerFills, wallRuns, wallPolylines, sweepProfile, wallProfile, levelSweeps, capProfile, clipProfileV, refineProfile, makeShader, diagOf, halfTriangle, triPrism, halfFloored, segmentEnds, nodeAtPoint, nodeGraph, cellNodes, routeCells, routeLocal, passable,
 } from "../shared/structure.js";
 import { suite } from "./protocol/suite.ts";
 

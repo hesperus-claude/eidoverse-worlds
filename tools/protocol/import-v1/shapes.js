@@ -3,24 +3,21 @@
 // (translate-v1.js, and the oracle that mirrors it): a world the server founds is written in today's spelling from its
 // first entry, so no runtime reader or command repairs one. Pure: components in, components (or ops) out.
 //
-// The rules:
+// The rules (notes/eidoverse/shape-audit/physics-motion.md §4, §5, §7):
 //   motion   a bare motion naming a `part` is that node's motion: motion:<partSlot(part)> {node: part} (a motion already on
 //            that node wins); a keyed motion with no node gets its key's tag; amplitude → amp (amp wins); a letter axis →
 //            its vector; a pendulum with no period read 3.5 s, with no damp 0, with no maxAmp 1.1 (the old push): written;
-//            a whole motion's `pivot` field → the thing's pivot component a whole PENDULUM with no pivot component swung
-//            about [0, 2, 0] (the old motioneval.js): written as its pivot component.
+//            a whole motion's `pivot` field → the thing's pivot component; a whole PENDULUM with no pivot component swung
+//            about [0, 2, 0]: written as its pivot component.
 //   collider exact → mesh.   physics  no kind read as dynamic; material → surface; layers, mask, ccd dropped.
 // …and the render-media-env family (render-media-env.md §3, §4, §13–§15):
 //   light      no decay fell off as three.js decay 1.7: written, and with no intensity 16; day → daytime; shadows dropped
-//   model      (v2) a content address eido:sha256/<hex> → the library path the host's index names, its hash beside it as
+//   model      a content address eido:sha256/<hex> → the library path the host's index names, its hash beside it as
 //              model-hash (only with a resolver)
-//   @world (repairWorld):
-/dormantRated → tz, azimuth degrees → radians, weatherSeconds → transition,
-//              forecast dwellSec/transitionSec → dwell/transition; sun, fill, world dropped
-//   terrain colours → ints, the sim's defaults written,
-//              terrain.water → water grass knobs → the flora spelling (mapGrassArgs, the reader's own mapping); a preset
-//              is kept by its name, as the door keeps one
-// A particle Essential's name and a grass preset's name are stored as written: nothing rewrites them to an address.
+//   @world (repairWorld): the sky's clock/dormantRated → tz, azimuth degrees → radians, weatherSeconds → transition,
+//              forecast dwellSec/transitionSec → dwell/transition; terrain colours → ints, the sim's defaults written,
+//              terrain.water → water; grass knobs → the flora spelling.
+// A particle Essential's name and a grass preset's name are stored as written (R 10-17).
 import { grassAtWrite } from "../../../shared/protocol/assetref.js";
 import { eidoHex } from "../../../shared/eido.js";
 import { COMPONENTS, materialize } from "../../../shared/protocol/componentspec.js";
@@ -29,7 +26,7 @@ import { AXES as AXIS_VECTORS } from "../../../shared/axes.js";
 import { isSocketC } from "../../../shared/protocol/authority/sockets.js";
 import { lifter, isLegacyParent } from "./sockets.js";
 import { emptyState, applyInPlace } from "../../../shared/protocol/fold.js";
-import { isObj } from "./is.js";
+import { isObj } from "../../../shared/protocol/is.js";
 /** The light rig's falloff before a light said its own (client/lib/lightrig.js, three.js decay). */
 export const OLD_LIGHT_DECAY = 1.7;
 /** …and its intensity when a light wrote none (lightrig.js requestLight; not the registry's default). */
@@ -145,13 +142,13 @@ export function repairWorld(c0) {
 const withSkyDefaults = (sky) => { const out = { ...sky }; for (const [k, v] of Object.entries(COMPONENTS.sky.defaults)) if (out[k] === undefined) out[k] = v; return out; };
 
 // ---------- a stored socket map, and a parent or home naming a slot, as socket children (PLAN-sockets-entities) ----------
-const legacyHome = (v) => bag(v) && isLegacyParent(v.parent);
+const legacyHome = (v) => isObj(v) && isLegacyParent(v.parent);
 /** The hosts a projection holds in the first spelling of attachment points, in id order: one that stores a `sockets` map;
  *  one a parent or a home names a slot of; one whose socket child still holds a body block. */
 export function legacyHosts(st) {
   const hosts = new Set();
   for (const [k, e] of Object.entries(st.entities)) { const c = e.c;
-    if (bag(c.sockets)) hosts.add(k);
+    if (isObj(c.sockets)) hosts.add(k);
     if (isLegacyParent(c.parent) && st.entities[c.parent.to]) hosts.add(c.parent.to);
     if (legacyHome(c.home) && st.entities[c.home.parent.to]) hosts.add(c.home.parent.to);
     if (isSocketC(c) && c.socket.body !== undefined && st.entities[c.parent?.to]) hosts.add(c.parent.to); }
@@ -161,7 +158,7 @@ export function legacyHosts(st) {
  *  station), what sat at a slot moved into its child where it was. `ever`: every id the world made (never reused). */
 export function liftHostOps(st, ever, h) {
   const L = lifter(st, ever); const c = L.s.entities[h].c; L.stored(true);   // what a log holds is re-spelled, not judged anew
-  const made = bag(c.sockets) ? L.liftStored(h) : L.liftHost(h, {}, { stored: false });
+  const made = isObj(c.sockets) ? L.liftStored(h) : L.liftHost(h, {}, { stored: false });
   L.liftBodies(h);
   const mine = new Set([h, ...Object.values(made)]);
   return { ops: L.out, made, moved: [...new Set(L.out.map((o) => o.id).filter((id) => !mine.has(id)))] };
@@ -186,10 +183,9 @@ export const RENAMED_FIELDS = Object.freeze({ grabbable: Object.freeze({ pose: "
 export const motionType = (m) => (m?.type === "bob" ? "oscillate" : m?.type);
 /** The RENAMED_FIELDS entry a component key reads by: a part's motion (motion:<slot>) is a motion. */
 export const renamedFieldsKey = (comp) => (typeof comp === "string" && comp.startsWith("motion:") ? "motion" : comp);
-const fbag = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 export function renameFields(comp0, v) {
   const comp = renamedFieldsKey(comp0);
-  if (!fbag(v) || !Object.hasOwn(RENAMED_FIELDS, comp)) return { value: v, renamed: [] };
+  if (!isObj(v) || !Object.hasOwn(RENAMED_FIELDS, comp)) return { value: v, renamed: [] };
   if (comp === "motion") { const t = motionType(v); return t === v.type ? { value: v, renamed: [] } : { value: { ...v, type: t }, renamed: [{ field: "type", from: v.type, to: t }] }; }
   let out = v; const renamed = []; const edit = () => (out === v ? (out = { ...v }) : out);
   if (comp === "picture" || comp === "sound") for (const f of ["alt", "look"]) if (f in out) { edit(); const a = out[f]; delete out[f];
@@ -198,8 +194,8 @@ export function renameFields(comp0, v) {
     if (comp === "grabbable" && p === "two-hand") { if (out.twoHanded === undefined) out.twoHanded = true; renamed.push({ field: "pose", from: p, to: { twoHanded: out.twoHanded } }); }
     else if (p === null) renamed.push({ field: "pose", to: null });   // a stored null is a removal (anim is never null)
     else { if (out.anim === undefined) out.anim = p; renamed.push({ field: "pose", to: "anim" }); } }
-  if (comp === "grabbable" && fbag(out.grips) && Object.values(out.grips).some((g) => fbag(g) && "fingers" in g)) { edit();
-    out.grips = Object.fromEntries(Object.entries(out.grips).map(([k, g]) => { if (!fbag(g) || !("fingers" in g)) return [k, g];
+  if (comp === "grabbable" && isObj(out.grips) && Object.values(out.grips).some((g) => isObj(g) && "fingers" in g)) { edit();
+    out.grips = Object.fromEntries(Object.entries(out.grips).map(([k, g]) => { if (!isObj(g) || !("fingers" in g)) return [k, g];
       const { fingers, ...r } = g; renamed.push({ field: `grips.${k}.fingers`, to: fingers === null ? null : "grasp" });
       return [k, { ...r, ...(r.grasp === undefined && fingers !== null ? { grasp: fingers } : {}) }]; })); }
   return { value: out, renamed };
