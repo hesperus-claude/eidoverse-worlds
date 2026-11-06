@@ -6,6 +6,7 @@ import { mkdtempSync, writeFileSync, readFileSync, statSync, utimesSync } from "
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { suite } from "./protocol/suite.ts";
+import { until } from "./protocol/wait.ts";
 const { glbPerf, glbPerfOfFile, glbPerfIo } = await import("../server/glbperf.ts");
 const S = suite("glbperf-file");
 const check = (n: string, ok: unknown, d?: unknown) => S.check(n, ok, d);
@@ -82,9 +83,12 @@ check("a truncated file is unreadable (null), not a partial rank", glbPerfOfFile
   const T = Math.floor(Date.now() / 1000) - 60; utimesSync(f, T, T);
   const before = glbPerfOfFile(f), st0 = statSync(f);
   const small = png.slice(); new DataView(small.buffer).setUint32(16, 256);
+  // the replacement comes after the file system's change clock has ticked: NTFS keeps ctime at ~1 ms, so a rewrite in
+  // the same tick can't be told apart by any stat field (Cyllene: 42 of 50 such rewrites kept size, mtime, ino, ctime)
+  const tick = join(dir, "tick"); await until("the change clock passes the original's ctime", () => { writeFileSync(tick, "x"); return statSync(tick).ctimeMs > st0.ctimeMs; }, { ms: 5000 });
   writeFileSync(f, glb(small, "image/png", 1000)); utimesSync(f, T, T);
   const st1 = statSync(f), after = glbPerfOfFile(f), fresh = glbPerf(new Uint8Array(readFileSync(f)));
-  check("collision setup: same size and mtime after the replacement", st1.size === st0.size && st1.mtimeMs === st0.mtimeMs, [st0.size, st1.size, st0.mtimeMs, st1.mtimeMs]);
+  check("collision setup: same size and mtime after the replacement", st1.size === st0.size && st1.mtimeMs === st0.mtimeMs && st1.ctimeMs > st0.ctimeMs, [st0.size, st1.size, st0.mtimeMs, st1.mtimeMs, st0.ctimeMs, st1.ctimeMs]);
   check("a same-size replacement with its mtime restored is re-ranked (not the cached rank of the old bytes)",
     JSON.stringify(after) === JSON.stringify(fresh) && JSON.stringify(after) !== JSON.stringify(before), [before, after]); }
 S.done();
