@@ -13,7 +13,7 @@ import { request, actIndexOf, isBanned } from "../../shared/protocol/authority.j
 import { suite } from "./suite.ts";
 import { COMPONENTS } from "../../shared/protocol/componentspec.js";
 
-const { ok, done } = suite("directory-check", { quiet: true, cap: 300 });
+const { ok, mode, done } = suite("directory-check", { quiet: true, cap: 300 });
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dir-check-"));
 const file = path.join(tmp, "worlds", ".directory.json");
 
@@ -33,8 +33,7 @@ const file = path.join(tmp, "worlds", ".directory.json");
   ok(d.resolve({ sub: "human:discord:333", name: "Bea" }) === leg, "D7 binding an account to a legacy identity lets that account wear it");
   let threw: string | null = null; try { d.bind(leg, "human:discord:111"); } catch (e) { threw = String((e as Error)?.message ?? e); }
   ok(threw && /alias/.test(threw) && /portable identity/.test(threw), "D8 an account can't wear two identities; the refusal names the path that joins two (an alias merge, with portable identity), not a bind", threw);
-  // Windows has no POSIX modes (stat reports 666 for any writable file; access is the profile's ACL), so this row is POSIX-only
-  if (process.platform !== "win32") ok((fs.statSync(file).mode & 0o777) === 0o600, "D9 the directory file is 0600", (fs.statSync(file).mode & 0o777).toString(8));
+  mode("D9 the directory file is 0600", file, 0o600);
   const again = directoryAt(file);
   ok(again.resolve({ sub: "human:discord:111", name: "Annie" }) === ann && again.nameOf(twin) === "Annie", "D10 it survives a reopen");
   ok(JSON.stringify(again.names([ann, twin, "u-nobody"])) === JSON.stringify({ [ann]: "Annie", [twin]: "Annie" }), "D11 names() gives display names only (never accounts), skipping unknown ids");

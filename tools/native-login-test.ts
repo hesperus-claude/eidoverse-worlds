@@ -4,7 +4,7 @@
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/native-login-test.ts
 import { generateKeyPairSync, createPublicKey, sign, randomBytes } from "node:crypto";
-import { mkdtempSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createNativeLogin } from "../server/native-login.ts";
@@ -141,7 +141,7 @@ console.log("NATIVE LOGIN — over a real server's HTTP + WS");
     check("W8 logout of the native session", (await post("/logout", {}, { cookie: native })).status === 200);
     const [wn, wb] = [(await fetch(origin + "/whoami", { headers: { cookie: native } })).status, (await fetch(origin + "/whoami", { headers: { cookie: browser } })).status];
     check("W9 ...ends it alone: native 401, browser still 200", wn === 401 && wb === 200, { native: wn, browser: wb });
-    check("W10 sessions persist private (0600)", (statSync(join(scratch, "sessions.json")).mode & 0o777) === 0o600, (statSync(join(scratch, "sessions.json")).mode & 0o777).toString(8));
+    S.mode("W10 sessions persist private (0600)", join(scratch, "sessions.json"), 0o600);
   } finally { for (const ws of sockets) ws.close(); server.kill(); await server.exited; }
 }
 

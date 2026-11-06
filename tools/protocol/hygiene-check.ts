@@ -28,6 +28,9 @@
 //                 which hangs ~2 min on a mirrored-network host). Pass the test's own server: tools/no-world.ts noWorldUrl().
 //                 Checked over tools/ only.
 //   own-ok        a suite counting its own rows (`let pass = 0, fail = 0`) instead of importing suite.ts.
+//   posix-mode    a file's mode asserted equal to an octal literal (`=== 0o600`) on a line that doesn't say what Windows does:
+//                 NTFS has no POSIX modes (stat says 666), so the row fails there or passes vacuously. Use suite.ts `mode()`,
+//                 which reports the row not applicable on Windows (CI 42190828916: native-login W10, mkconfig).
 //   ungated       a test-named file (-test, -check, -probe, .test, -bench, -mutants under tools/, tools/protocol/, tools/water/,
 //                 mcpl/) that no SUITES row runs or imports: every test is in the gate or gone (R 10-29). The ones still out
 //                 are listed in tools/protocol/ungated.json with one line why; that list only shrinks.
@@ -55,11 +58,12 @@ export const RULES: Record<string, RegExp> = {
   "agent-url": /\bnew\s+WorldAgent\s*\(\s*(?:\{(?![^{}]*\burl\b)[^{}]*\})?\s*\)/g,
   "own-ok": /\blet\s+(?:pass|passes|passed)\s*=\s*0\s*,\s*(?:fail|fails|failed)\s*=\s*0\b|\blet\s+(?:fail|fails|failed)\s*=\s*0\s*,\s*(?:pass|passes|passed)\s*=\s*0\b/g,
   "redaction-parse": /\.body\??\.values\b/g,
+  "posix-mode": /^(?![^\n]*(?:win32|\bWIN\b|NO_MODES))[^\n]*===?\s*0o[0-7]{3}\b[^\n]*/gm,
   "playwright": /\bfrom\s+["']playwright(?:-core)?["']|\b(?:require|import)\(\s*["']playwright(?:-core)?["']/g,
 };
 const SELF = "tools/protocol/hygiene-check.ts";   // its fixtures are the bad shapes on purpose
 const EXEMPT: Record<string, string[]> = { "chrome-flags": ["tools/protocol/chrome.ts"], "raw-symlink": ["tools/protocol/common.ts"], "bare-wait": ["tools/protocol/wait.ts"], "own-until": ["tools/protocol/wait.ts"], "lab-clock": ["tools/protocol/clock.ts"], "own-ok": ["tools/protocol/suite.ts"], "agent-url": ["tools/dummy.ts"], "redaction-parse": ["shared/protocol/fold.js"] };   // dummy is the show host's service: WORLD_URL is how it is told where to connect
-const SUITE_ONLY = new Set(["bare-wait", "own-until", "playwright", "own-ok"]);   // the waiting rules are about tests; server code may wait on purpose
+const SUITE_ONLY = new Set(["bare-wait", "own-until", "playwright", "own-ok", "posix-mode"]);   // the waiting rules are about tests; server code may wait on purpose
 const ALL_TOOLS = new Set(["chrome-flags", "agent-url"]);
 const TOOLS_ONLY = new Set(["agent-url"]);   // mcpl/ has its own owner and its server builds its agent from the env on purpose
 
@@ -167,9 +171,10 @@ if (import.meta.main) {
     "own-ok": "let pass = 0, fail = 0; let fails = 0, passes = 0;",
     "redaction-parse": 'if (e.kind === "redaction") for (const t of e.body.values) p.add(t.seq); const v = e.body?.values;',
     "playwright": 'import { chromium } from "play' + 'wright"; const { chromium: c2 } = await import("playwright-core");',
+    "posix-mode": 'check("W10 private", (statSync(f).mode & 0o777) === 0o600);\nok(st.mode == 0o644, "D9");',
   };
-  const want: Record<string, number> = { "bare-wait": 4, "own-until": 2, "url-path": 1, "shell-interp": 1, "raw-symlink": 1, "colon-list": 1, "version-regex": 1, "slash-path": 1, "chrome-flags": 2, "lab-clock": 3, "redaction-parse": 2, "playwright": 2, "agent-url": 3, "own-ok": 2 };
-  const good = 'await until("the crate rests", () => crate.rest); await pause("the 2 s refractory window", 2000); const d = fileURLToPath(new URL("../f/", import.meta.url)); Bun.spawnSync(["sh", "-c", \'git archive "$1"\', "sh", c]); linkInto(t, at); if (/[\\\\/]tools[\\\\/]/.test(p)) walk(p); const poll = (p) => post("/native/poll", p); const r = pathList(process.env.PROTOCOL_WORLDS); ok(translatorVersion(TRANSLATOR) >= 14); Bun.spawn([CHROME, ...chromeArgs({ port, profile }), url]); const n = rows.filter((r) => /chrom(e|ium).*--headless/.test(r)); // a --headless Chrome clock.advance(100); pin(LAB_EPOCH); const t = pinned(); if (process.env.PROTOCOL_NOW === "1") unpinned(f); const { ok, done } = suite("x"); let pass = rows.length; new WorldAgent({ name: "a", url: noWorldUrl() }); new WorldAgent({ url, name }); new WorldAgent(opts); const red = redactionsIn(E); const body = redactedBodies(E, red); const values = Object.values(body);';
+  const want: Record<string, number> = { "bare-wait": 4, "own-until": 2, "url-path": 1, "shell-interp": 1, "raw-symlink": 1, "colon-list": 1, "version-regex": 1, "slash-path": 1, "chrome-flags": 2, "lab-clock": 3, "redaction-parse": 2, "playwright": 2, "agent-url": 3, "own-ok": 2, "posix-mode": 2 };
+  const good = 'S.mode("W10 private", f, 0o600);\nok(WIN ? isFile : st.mode === 0o600);\nok(process.platform === "win32" || m === 0o600);\nawait until("the crate rests", () => crate.rest); await pause("the 2 s refractory window", 2000); const d = fileURLToPath(new URL("../f/", import.meta.url)); Bun.spawnSync(["sh", "-c", \'git archive "$1"\', "sh", c]); linkInto(t, at); if (/[\\\\/]tools[\\\\/]/.test(p)) walk(p); const poll = (p) => post("/native/poll", p); const r = pathList(process.env.PROTOCOL_WORLDS); ok(translatorVersion(TRANSLATOR) >= 14); Bun.spawn([CHROME, ...chromeArgs({ port, profile }), url]); const n = rows.filter((r) => /chrom(e|ium).*--headless/.test(r)); // a --headless Chrome clock.advance(100); pin(LAB_EPOCH); const t = pinned(); if (process.env.PROTOCOL_NOW === "1") unpinned(f); const { ok, done } = suite("x"); let pass = rows.length; new WorldAgent({ name: "a", url: noWorldUrl() }); new WorldAgent({ url, name }); new WorldAgent(opts); const red = redactionsIn(E); const body = redactedBodies(E, red); const values = Object.values(body);';
   let i = 1;
   for (const k of Object.keys(RULES)) check(`H${i++} ${k}: caught in its known-bad form (${want[k]}), and not in the right way`, (scan(bad[k])[k] ?? 0) === want[k] && !(scan(good)[k] ?? 0), { bad: scan(bad[k]), good: scan(good) });
   // own-until has one false friend in the tree ('const poll = (p: any) => post(...)', native-login-test); it's a request, not a loop

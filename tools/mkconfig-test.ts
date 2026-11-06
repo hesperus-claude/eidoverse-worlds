@@ -28,7 +28,7 @@
 //
 //   bun tools/mkconfig-test.ts   (E and F parse with Bun.YAML, Bun 1.2.21 or later)
 import { fileURLToPath } from "node:url";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { suite } from "./protocol/suite.ts";
@@ -53,7 +53,7 @@ console.log('— A. the defaults render —');
   check('the key is in the YAML as the publisher password', !!r.yaml && r.yaml.includes(`pass: "${r.stdout}"\n`));
   check('no placeholder survives', !!r.yaml && !/^[^#\n]*\$\{/m.test(r.yaml));
   check('loopback everywhere', !!r.yaml && /rtmpAddress: "127\.0\.0\.1:1935"/.test(r.yaml));
-  check('mode 600', (statSync(r.out).mode & 0o777) === 0o600);
+  S.mode('mode 600', r.out, 0o600);
 }
 
 const base = { PROJECTOR_BIND: '0.0.0.0', PROJECTOR_PUBLISH_KEY: '0123456789abcdef' };
