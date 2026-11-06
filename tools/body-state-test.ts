@@ -139,14 +139,22 @@ try {
   await waitUntil("the peer's sample", () => peer.people.get(owner.name)?.pose?.clip === "idle" && !peer.people.get(owner.name)?.pose?.pose);
   peer.clip = "sit"; peer.tick();
   await waitUntil("the peer's sample", () => owner.people.get(peer.name)?.pose?.clip === "sit");
-  owner.reaches.set("rightHand", { t: { who: peer.name, point: "knee_r" } });
+  // A hand on a body whose touch gate is shut (off by default) is stripped by the relay and withdrawn by
+  // the owner (agent.ts reach-refused) whenever a tick lands, racing these reads: the peer opens its gate.
+  check("(setup) the peer opens its touch gate", (await peer.request("consent", { touch: true }))?.ok === true);
+  const relayed = (t: any) => eq(peer.people.get(owner.name)?.pose?.reach?.rightHand?.t, t) && eq(owner.reaches.get("rightHand")?.t, t);
+  owner.reaches.set("rightHand", { t: { who: peer.name, point: "knee_r" } }); owner.tick();
+  await waitUntil("the relayed reach", () => relayed({ who: peer.name, point: "knee_r" }));
   const targetSeated = await read(owner, { detail: "all", points: ["hand_r"] });
   check("a reach toward an unevaluated seated body does not claim arrival or return usable targets",
     !targetSeated.ok && targetSeated.reachEvaluation?.rightHand?.ok === false && !targetSeated.contacts?.hand_r?.reachTarget);
-  owner.reaches.set("rightHand", { t: { p: [0, 1.2, .1], space: peer.name }, palm: false });
+  // Beside the peer, in no body's capsule: the three bodies share the origin, and a point inside them is body-late's to refuse.
+  owner.reaches.set("rightHand", { t: { p: [-.4, 1.2, .1], space: peer.name }, palm: false }); owner.tick();
+  await waitUntil("the relayed reach", () => relayed({ p: [-.4, 1.2, .1], space: peer.name }));
   check("a point in a seated body's known root frame remains usable without posture geometry",
     (await read(owner, { detail: "all" })).reachEvaluation?.rightHand?.ok === true);
   owner.releaseReach(); peer.clip = "idle"; peer.tick();
+  check("(setup) the peer shuts its touch gate again", (await peer.request("consent", { touch: false }))?.ok === true);
   owner.heldPose = bones; owner.heldPoseAuthored = false; owner.clip = "idle";
   check("internal retired physics does not leak into self readback", (await read(owner)).overrides.state === "none");
   owner.clip = "ragdoll"; owner.tick();
