@@ -76,10 +76,13 @@ const whole = readFileSync(join(dir, "png.glb")); writeFileSync(join(dir, "cut.g
 check("a truncated file is unreadable (null), not a partial rank", glbPerfOfFile(join(dir, "cut.glb")) === null);
 // antra's collision (#207 review, 09-29): the rank cache was keyed on size + mtime. A same-size replacement with the
 // mtime restored kept the old file's rank. Here the PNG head goes 512×256 → 256×256: same length, different cost.
+// The mtime is set to a whole second first: a sub-ms mtime doesn't survive the seconds float utimes takes on NTFS (100 ns
+// ticks; CI 42190828916 read …297.1191 back as …297.1184), so restoring it would make no collision there.
 { const f = join(dir, "swap.glb"); writeFileSync(f, glb(png, "image/png", 1000));
+  const T = Math.floor(Date.now() / 1000) - 60; utimesSync(f, T, T);
   const before = glbPerfOfFile(f), st0 = statSync(f);
   const small = png.slice(); new DataView(small.buffer).setUint32(16, 256);
-  writeFileSync(f, glb(small, "image/png", 1000)); utimesSync(f, st0.mtimeMs / 1000, st0.mtimeMs / 1000);
+  writeFileSync(f, glb(small, "image/png", 1000)); utimesSync(f, T, T);
   const st1 = statSync(f), after = glbPerfOfFile(f), fresh = glbPerf(new Uint8Array(readFileSync(f)));
   check("collision setup: same size and mtime after the replacement", st1.size === st0.size && st1.mtimeMs === st0.mtimeMs, [st0.size, st1.size, st0.mtimeMs, st1.mtimeMs]);
   check("a same-size replacement with its mtime restored is re-ranked (not the cached rank of the old bytes)",
