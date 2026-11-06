@@ -17,7 +17,9 @@
 //   version-regex a version floor written as a regex of digits (`@(1[4-9]|[2-9][0-9])`): it breaks at the next decade. Parse
 //                 the number (translate-v1.js translatorVersion) and compare.
 //   slash-path    a resolved filesystem path tested with a `/`-only pattern (`/\/tools\//.test(p)`): never matches on
-//                 Windows, so the check quietly does nothing there.
+//                 Windows, so the check quietly does nothing there. Also a path-suffix regex (`/mcpl\/agent\.ts$/`) on a line
+//                 that doesn't convert the path first, and a regex built as `'/' + file` (a bun plugin filter sees the native
+//                 path): CI 42190828916, flight and voice-wire-mutation. Use common.ts slashed / pathEnd.
 //   chrome-flags  a Chromium launched with its own flag list (a quoted headless or remote-debugging-port flag) instead of
 //                 chrome.ts chromeArgs: five launchers each had a different list, and an OS's flag lived in a workflow's env.
 //                 Checked over all of tools/, where the benches that launch browsers outside the gate live.
@@ -50,7 +52,7 @@ export const RULES: Record<string, RegExp> = {
   "colon-list": /[^\n]*(?:process\.env\.\w+|\broots\b|\bdirs\b)[^\n]*\.split\(\s*["']:["']\s*\)/g,
   "version-regex": /@\(\d\[\d-\d\]\|/g,
   "lab-clock": /\bdelete\s+process\.env(?:\.PROTOCOL_NOW|\[\s*["'`]PROTOCOL_NOW["'`]\s*\])|process\.env(?:\.PROTOCOL_NOW|\[\s*["'`]PROTOCOL_NOW["'`]\s*\])\s*=(?!=)/g,
-  "slash-path": /[^\n]*\\\/(?:tools|shared|server|client|mcpl|spec|worlds?)\\\/[^\n]*\.test\(\s*(?:p|f|file|abs|full|dir|d)\s*\)/g,
+  "slash-path": /[^\n]*\\\/(?:tools|shared|server|client|mcpl|spec|worlds?)\\\/[^\n]*\.test\(\s*(?:p|f|file|abs|full|dir|d)\s*\)|^(?![^\n]*(?:\.replace\(\/\\\\\/g|\bslashed\(|\bfwd\(|\[\\\\\/\]))[^\n]*(?<!\\)\/[A-Za-z_][\w-]*\\\/(?:[^\/\n\\]|\\.)*\\\.(?:ts|js|mjs|json)\$\/[^\n]*|\bnew RegExp\(\s*(?:(["'])\/\1\s*\+|`\/\$\{)/gm,
   "chrome-flags": /["'`]--(?:headless\b|remote-debugging-port\b)/g,
   // the gate runs under Bun, and under Bun on Windows playwright neither launches (its pipe descriptors don't pass through
   // Bun's spawn) nor connects over CDP: browser-check hung to its timeout on every Windows run until 10-22. Gate suites drive
@@ -163,7 +165,7 @@ if (import.meta.main) {
     "colon-list": "const roots = (process.env.PROTOCOL_WORLDS ?? \"\").split(\":\");",
     "version-regex": "ok(/@(1[4-9]|[2-9][0-9])$/.test(TRANSLATOR));",
     "lab-clock": 'T += 100; process.env.PROTOCOL_NOW = String(T); process.env["PROTOCOL_NOW"] = "1"; delete process.env.PROTOCOL_NOW;',
-    "slash-path": 'if (/\\/tools\\/[^/]+\\.(ts|mjs)$|\\/tools\\/protocol\\//.test(p)) walk(p);',
+    "slash-path": 'if (/\\/tools\\/[^/]+\\.(ts|mjs)$|\\/tools\\/protocol\\//.test(p)) walk(p);\nconst ALLOWED = [/mcpl\\/agent\\.ts$/, /client\\/lib\\/controller\\.js$/];\nb.onLoad({ filter: new RegExp(\'/\' + m.file + \'$\') }, f);',
     // split: the whole flag in this file would make suites.ts read the hygiene suite as one that launches a browser
     "chrome-flags": 'Bun.spawn([CHROME, "--headless=new", `--remote-' + 'debugging-port=${port}`, url]);',
     // split, like chrome-flags: the whole import in this file would make suites.ts read hygiene as a browser suite
@@ -173,8 +175,8 @@ if (import.meta.main) {
     "playwright": 'import { chromium } from "play' + 'wright"; const { chromium: c2 } = await import("playwright-core");',
     "posix-mode": 'check("W10 private", (statSync(f).mode & 0o777) === 0o600);\nok(st.mode == 0o644, "D9");',
   };
-  const want: Record<string, number> = { "bare-wait": 4, "own-until": 2, "url-path": 1, "shell-interp": 1, "raw-symlink": 1, "colon-list": 1, "version-regex": 1, "slash-path": 1, "chrome-flags": 2, "lab-clock": 3, "redaction-parse": 2, "playwright": 2, "agent-url": 3, "own-ok": 2, "posix-mode": 2 };
-  const good = 'S.mode("W10 private", f, 0o600);\nok(WIN ? isFile : st.mode === 0o600);\nok(process.platform === "win32" || m === 0o600);\nawait until("the crate rests", () => crate.rest); await pause("the 2 s refractory window", 2000); const d = fileURLToPath(new URL("../f/", import.meta.url)); Bun.spawnSync(["sh", "-c", \'git archive "$1"\', "sh", c]); linkInto(t, at); if (/[\\\\/]tools[\\\\/]/.test(p)) walk(p); const poll = (p) => post("/native/poll", p); const r = pathList(process.env.PROTOCOL_WORLDS); ok(translatorVersion(TRANSLATOR) >= 14); Bun.spawn([CHROME, ...chromeArgs({ port, profile }), url]); const n = rows.filter((r) => /chrom(e|ium).*--headless/.test(r)); // a --headless Chrome clock.advance(100); pin(LAB_EPOCH); const t = pinned(); if (process.env.PROTOCOL_NOW === "1") unpinned(f); const { ok, done } = suite("x"); let pass = rows.length; new WorldAgent({ name: "a", url: noWorldUrl() }); new WorldAgent({ url, name }); new WorldAgent(opts); const red = redactionsIn(E); const body = redactedBodies(E, red); const values = Object.values(body);';
+  const want: Record<string, number> = { "bare-wait": 4, "own-until": 2, "url-path": 1, "shell-interp": 1, "raw-symlink": 1, "colon-list": 1, "version-regex": 1, "slash-path": 3, "chrome-flags": 2, "lab-clock": 3, "redaction-parse": 2, "playwright": 2, "agent-url": 3, "own-ok": 2, "posix-mode": 2 };
+  const good = 'const ALLOWED = ["mcpl/agent.ts"]; ALLOWED.includes(slashed(f));\nb.onLoad({ filter: new RegExp(pathEnd(m.file)) }, f);\n(/\\/client\\/lib\\/x\\.js$/.test(a.importer.replace(/\\\\/g, "/")));\nS.mode("W10 private", f, 0o600);\nok(WIN ? isFile : st.mode === 0o600);\nok(process.platform === "win32" || m === 0o600);\nawait until("the crate rests", () => crate.rest); await pause("the 2 s refractory window", 2000); const d = fileURLToPath(new URL("../f/", import.meta.url)); Bun.spawnSync(["sh", "-c", \'git archive "$1"\', "sh", c]); linkInto(t, at); if (/[\\\\/]tools[\\\\/]/.test(p)) walk(p); const poll = (p) => post("/native/poll", p); const r = pathList(process.env.PROTOCOL_WORLDS); ok(translatorVersion(TRANSLATOR) >= 14); Bun.spawn([CHROME, ...chromeArgs({ port, profile }), url]); const n = rows.filter((r) => /chrom(e|ium).*--headless/.test(r)); // a --headless Chrome clock.advance(100); pin(LAB_EPOCH); const t = pinned(); if (process.env.PROTOCOL_NOW === "1") unpinned(f); const { ok, done } = suite("x"); let pass = rows.length; new WorldAgent({ name: "a", url: noWorldUrl() }); new WorldAgent({ url, name }); new WorldAgent(opts); const red = redactionsIn(E); const body = redactedBodies(E, red); const values = Object.values(body);';
   let i = 1;
   for (const k of Object.keys(RULES)) check(`H${i++} ${k}: caught in its known-bad form (${want[k]}), and not in the right way`, (scan(bad[k])[k] ?? 0) === want[k] && !(scan(good)[k] ?? 0), { bad: scan(bad[k]), good: scan(good) });
   // own-until has one false friend in the tree ('const poll = (p: any) => post(...)', native-login-test); it's a request, not a loop
