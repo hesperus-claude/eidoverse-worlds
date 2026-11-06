@@ -18,7 +18,7 @@
 import "./fixture-ids.ts";
 import fs from "node:fs";
 import path from "node:path";
-import { ENGINE, scratch, copyTree, archiveTo } from "./common.ts";
+import { ENGINE, scratch, copyTree, archiveTo, linkInto } from "./common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
@@ -64,7 +64,7 @@ function tree(tag: string) {
   const d = scratch(tag);
   for (const sub of ["shared", "server", "tools", "defs", "client/lib"]) if (fs.existsSync(path.join(ENGINE, sub))) copyTree(path.join(ENGINE, sub), path.join(d, sub));
   for (const f of ["package.json", "bunfig.toml"]) if (fs.existsSync(path.join(ENGINE, f))) fs.copyFileSync(path.join(ENGINE, f), path.join(d, f));
-  fs.symlinkSync(fs.realpathSync(path.join(ENGINE, "node_modules")), path.join(d, "node_modules"));
+  linkInto(fs.realpathSync(path.join(ENGINE, "node_modules")), path.join(d, "node_modules"));
   return d;
 }
 if (argv.includes("--mutants")) {
@@ -86,7 +86,7 @@ if (argv.includes("--control")) {
   // of video-check, and the engine's node_modules, as batch2-check's control does.
   const d = scratch("vctl"); const r0 = archiveTo(ENGINE, BASE, ["shared", "server", "tools", "client/lib", "defs"], d);
   if (r0.exitCode === 0) {
-    fs.symlinkSync(fs.realpathSync(path.join(ENGINE, "node_modules")), path.join(d, "node_modules"));
+    linkInto(fs.realpathSync(path.join(ENGINE, "node_modules")), path.join(d, "node_modules"));
     fs.copyFileSync(path.join(ENGINE, "tools/protocol/video-check.ts"), path.join(d, "tools/protocol/video-check.ts"));
   }
   if (r0.exitCode !== 0) { console.log(`FAIL can't extract ${BASE}: ${r0.stderr}`); process.exit(1); }
@@ -301,7 +301,7 @@ const cases: Case[] = [
     good: (o) => ["changed", "down", "left"].every((k) => o[k].opened && o[k].del === 1 && o[k].closed && o[k].left === 0) && /changed/.test(o.changed.closed) && /left/.test(o.left.closed)
       && o.steady.opened && o.steady.del === 0 && o.steady.left === 1 },
   { id: "B6", what: "the operator revokes a source: its sessions are closed and DELETEd, its observation forgotten, and the door refuses it", async run(s) {
-      install({ sources: {} }); await until("no session is left from earlier cases", () => VS.sessionCount?.() === 0 || null, { ms: 3000 }); install(REG()); FAKE.log = []; FAKE.whepStatus = 201; const w = fakeWorld({ source: "solstice" }); const { c, sent } = viewer(w);
+      const left0 = VS.sessionCount?.() ?? 0, d0 = dels(); install({ sources: {} }); await until("earlier cases' sessions, revoked, reached the appliance", () => dels() >= d0 + left0 || null, { ms: 3000 }); install(REG()); FAKE.log = []; FAKE.whepStatus = 201; const w = fakeWorld({ source: "solstice" }); const { c, sent } = viewer(w);
       await VS.offer?.(c, { id: "screen", sdp: "o" }, 5e9); V.noteSourceState?.("solstice", { state: "live", at: Date.now() });
       install({ sources: {} }); await settled(sent, "the revoke's closes reached the appliance").catch(() => {});
       cast(s); s.call("olive", "create", { id: "screen", model: "crate", place: { at: [0, 0] } });
