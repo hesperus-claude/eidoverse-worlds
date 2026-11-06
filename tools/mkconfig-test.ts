@@ -56,11 +56,15 @@ console.log('— A. the defaults render —');
   S.mode('mode 600', r.out, 0o600);
 }
 
-const base = { PROJECTOR_BIND: '0.0.0.0', PROJECTOR_PUBLISH_KEY: '0123456789abcdef' };
+// off loopback a remote reader (the sequencer, PR #5) presents a read key the operator set; none is minted there
+const RK = { PROJECTOR_READ_KEY: 'fedcba9876543210' };
+const base = { PROJECTOR_BIND: '0.0.0.0', PROJECTOR_PUBLISH_KEY: '0123456789abcdef', ...RK };
+{ const r = render({ PROJECTOR_BIND: '0.0.0.0', PROJECTOR_PUBLISH_KEY: '0123456789abcdef' });
+  check('off loopback without PROJECTOR_READ_KEY: refused with exit 2, naming it, and no file', r.code === 2 && /set PROJECTOR_READ_KEY/.test(r.stderr) && r.yaml === null, `exit=${r.code} ${r.stderr}`); }
 
 console.log('— B. an explicit key of the allowed set lands verbatim —');
 for (const key of ['0123456789abcdef', 'Ab0/=._-9xyz12Qr', 'dGhpcyBpcyBhIHRlc3Q=', 'url-safe_key.v2/ok']) {
-  const r = render({ PROJECTOR_BIND: '0.0.0.0', PROJECTOR_PUBLISH_KEY: key });
+  const r = render({ PROJECTOR_BIND: '0.0.0.0', PROJECTOR_PUBLISH_KEY: key, ...RK });
   check(`${JSON.stringify(key)} renders`, r.code === 0 && !!r.yaml && r.yaml.includes(`pass: "${key}"\n`) && r.stdout === key, `exit=${r.code} ${r.stderr}`);
 }
 
@@ -121,13 +125,16 @@ else {
     check(`user ${JSON.stringify(user)} is the string ${JSON.stringify(user)}`, c?.authInternalUsers?.[0]?.user === user, JSON.stringify(c?.authInternalUsers?.[0]?.user));
   }
   const zeros = '0000000000000000';
-  const k = parsed(render({ PROJECTOR_BIND: '0.0.0.0', PROJECTOR_PUBLISH_KEY: zeros }));
+  const k = parsed(render({ PROJECTOR_BIND: '0.0.0.0', PROJECTOR_PUBLISH_KEY: zeros, ...RK }));
   check('a 16-zero key is the string, not the number 0', k?.authInternalUsers?.[0]?.pass === zeros, JSON.stringify(k?.authInternalUsers?.[0]?.pass));
   for (const path of ['123', 'true']) {
     const c = parsed(render({ ...base, PROJECTOR_PATH: path }));
-    const perms = (c?.authInternalUsers ?? []).flatMap((u: any) => u.permissions ?? []).map((x: any) => x.path);
+    // publish, the read key's read and loopback's read name the path; loopback's api permission (PR #5: the sequencer reads
+    // each source's state there) names none, as mediamtx's api action takes no path
+    const all = (c?.authInternalUsers ?? []).flatMap((u: any) => u.permissions ?? []);
+    const perms = all.filter((x: any) => x.action !== 'api').map((x: any) => x.path), api = all.filter((x: any) => x.action === 'api');
     check(`path ${JSON.stringify(path)} is the string, as the paths key and in each permission`,
-      !!c && Object.keys(c.paths ?? {}).includes(path) && perms.length === 2 && perms.every((x: unknown) => x === path), JSON.stringify({ paths: Object.keys(c?.paths ?? {}), perms }));
+      !!c && Object.keys(c.paths ?? {}).includes(path) && perms.length === 3 && perms.every((x: unknown) => x === path) && api.length === 1 && api[0].path === undefined, JSON.stringify({ paths: Object.keys(c?.paths ?? {}), perms, api }));
   }
   // mediamtx's YAML reader also takes YAML 1.1's yes/no/on/off, unquoted, as
   // booleans, keys included; a YAML 1.2 parser like Bun's reads them as
@@ -135,7 +142,7 @@ else {
   for (const word of ['on', 'yes']) {
     const r = render({ ...base, PROJECTOR_PUBLISH_USER: word, PROJECTOR_PATH: word });
     check(`user and path ${JSON.stringify(word)} are written quoted, as the paths key too`,
-      !!r.yaml && r.yaml.includes(`user: "${word}"\n`) && r.yaml.includes(`\n  "${word}":\n`) && (r.yaml.match(new RegExp(`path: "${word}"\n`, 'g')) ?? []).length === 2,
+      !!r.yaml && r.yaml.includes(`user: "${word}"\n`) && r.yaml.includes(`\n  "${word}":\n`) && (r.yaml.match(new RegExp(`path: "${word}"\n`, 'g')) ?? []).length === 3,
       r.yaml?.split('\n').filter((l) => l.includes(word)).join(' | ') ?? `exit=${r.code}`);
   }
   const d = parsed(render({}));
@@ -149,7 +156,7 @@ for (const bind of ['0.0.0.0:1935', 'localhost:8554']) {
     hp.code === 2 && /PROJECTOR_BIND is a host or an IPv6 address, not host:port/.test(hp.stderr) && hp.yaml === null, `exit=${hp.code} ${hp.stderr}`);
 }
 if (YAML) {
-  const v6 = render({ PROJECTOR_BIND: 'fe80::1', PROJECTOR_PUBLISH_KEY: '0123456789abcdef' });
+  const v6 = render({ PROJECTOR_BIND: 'fe80::1', PROJECTOR_PUBLISH_KEY: '0123456789abcdef', ...RK });
   const c = parsed(v6);
   check('fe80::1 renders', v6.code === 0, v6.stderr);
   check('each address on the bind is [fe80::1]:port',
