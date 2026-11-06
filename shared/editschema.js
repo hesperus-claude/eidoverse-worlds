@@ -1422,7 +1422,7 @@ export function editOps(ent, id, edits, live = {}) {
         if (writeField('Video', k, key, f, raw, b)) { /* written */ }
         else if (['volume', 'radius', 'near', 'width'].includes(k)) { const was = { volume: 0.8, radius: 12, near: 1.5, width: 4 }[k];   // no row yet: the screen is being made
           const n = num({ value: b[k] ?? was }, raw); if (n == null || outOfDoor('video', k, round(n), key)) break; b[k] = round(n); }
-        else if (k === 'source' || k === 'alt' || k === 'lit') { const v = String(raw ?? '').trim(); if (v) b[k] = v; else if (k === 'alt') delete b.alt; else b[k] = v; }
+        else if (k === 'source' || k === 'description' || k === 'lit') { const v = String(raw ?? '').trim(); if (v) b[k] = v; else if (k === 'description') delete b.description; else b[k] = v; }
         else errors.push(`${key}: no such field`);
         break;
       }
