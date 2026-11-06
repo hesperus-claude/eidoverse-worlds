@@ -28,9 +28,17 @@ try {
   row('pref → first', await pref('first'), null);
   row('pref → off', await pref('off'), IN_VR);
   row('pref → third', await pref('third'), null);
-  // the killswitch, released on a mirroring pref: headless frames are slow enough to trip it
-  await ev(() => { globalThis.__xrMirror.holdKill = false; });
+  // the killswitch, released on a mirroring pref. Its trigger is 30 frames over 30 ms: a slow headless frame clock trips
+  // it on its own, a fast one never does (macOS CI 42190828916: 16 ms frames, not tripped in 150 s), so each XR frame
+  // is made to cost 35 ms until it trips. The killswitch itself still has to see and act on the slow frames.
+  const t0 = Date.now();
+  await ev(() => { globalThis.__xrMirror.holdKill = false; globalThis.__slowFrames = true;
+    const s = globalThis.EW.renderer.xr.getSession();
+    const burn = () => { if (!globalThis.__slowFrames) return; const t = performance.now(); while (performance.now() - t < 35); s.requestAnimationFrame(burn); };
+    s.requestAnimationFrame(burn); });
   const tripped = await pg.waitForFunction(() => !!document.querySelector('.xr-mirror-off'), null, { timeout: 150000, polling: 1000 }).then(() => true, () => false);
+  await ev(() => { globalThis.__slowFrames = false; });
+  console.log(`  · killswitch tripped after ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   check('(setup) the killswitch tripped', tripped && (await ev(() => globalThis.__xrMirror.killed === true)));
   row('the killswitch trips', await text(), KILLED);
   const box = await ev(() => { const b = document.querySelector('.xr-mirror-off'); if (!b) return null; const r = b.getBoundingClientRect();
