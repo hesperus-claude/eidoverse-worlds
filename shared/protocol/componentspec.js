@@ -3,7 +3,7 @@
 // Every parameter is written down (PROTOCOL §4). The authority writes a
 // component's defaults into the stored value when it's created or set (materialize, below): `defaults` always, and each
 // `when` rule ({if: {field: value}, absent: [fields], set: {…}}) when it holds. So a renderer never supplies a number the
-// log doesn't hold for a value written since 10-16 (an older light reads 16 / 1.7 until repair-shapes writes them: components.js), and changing a default here never changes an old world. A default that lives only in help text or a
+// log doesn't hold (an old world's lights get theirs written by the importer), and changing a default here never changes an old world. A default that lives only in help text or a
 // renderer is a bug (pretrans-check D7); a changed default, type or enum is a changed meaning (spec/registry-pin.json, D8).
 //
 // ONE description, derived readers: a field's type (`fields`), default (`defaults`/`when`),
