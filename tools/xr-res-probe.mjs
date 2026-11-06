@@ -22,7 +22,7 @@ async function session(res) {
     if (B?.createProjectionLayer) { const f = B.createProjectionLayer; B.createProjectionLayer = function (init) { window.__layerAsk.push(['proj', init?.scaleFactor ?? null]); return f.call(this, init); }; }
   });
   await pg.addInitScript((r) => { try { localStorage.setItem('ew-xr-prefs', JSON.stringify({ res: r })); } catch {} }, res);
-  await pg.goto(`${world.origin}/?world=staging&name=resprobe&key=${world.key}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await pg.goto(`${world.origin}/?world=staging&name=resprobe&key=${world.key}&xr=1`, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await visorShown(pg, { timeout: 120000 });
   // the settings row, as a person finds it
   const row = await pg.evaluate(async () => {

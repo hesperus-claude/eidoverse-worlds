@@ -167,8 +167,12 @@ export async function visorShown(pg, { timeout = 90000, me = false } = {}) {
   await pg.waitForFunction((m) => { const b = document.querySelector('#xrbtn'); return !!b && getComputedStyle(b).display !== 'none' && (!m || !!globalThis.EW?.me?.()); }, me, { timeout });
 }
 
-/** Click the real visor and wait until three presents. */
+/** Click the real visor and wait until three presents. The page must be an XR boot (`&xr=1`): on a host with WebGPU the
+ *  click otherwise reloads to WebGL and never presents (backend_choice.js), so a probe without it is red on a GPU host
+ *  and green on a GPU-less one (xr-res on macOS, CI 42190828916). Refused on every host. */
 export async function enterVR(pg, { timeout = 30000 } = {}) {
+  const xrBoot = await pg.evaluate(() => new URLSearchParams(location.search).get('xr') === '1');
+  if (!xrBoot) throw new Error('enterVR: the page was not booted with &xr=1 (on a WebGPU host the click reloads to WebGL instead of entering)');
   await pg.evaluate(() => document.querySelector('#xrbtn').click());
   await pg.waitForFunction(() => globalThis.EW?.renderer?.xr?.isPresenting, null, { timeout, polling: 250 });
 }
