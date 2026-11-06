@@ -18,7 +18,7 @@ async function run(mode, { hold = true, slowMs = 0 } = {}) {
   pg.on('pageerror', (e) => errs.push(`[${mode}] ${e}`));
   await iwerInit(pg);
   await pg.addInitScript((m) => { try { localStorage.setItem('ew-xr-prefs', JSON.stringify({ mirror: m })); } catch {} }, mode);
-  await pg.goto(`${world.origin}/?world=staging&name=mirrorprobe&key=${world.key}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await pg.goto(`${world.origin}/?world=staging&name=mirrorprobe&key=${world.key}&xr=1`, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await visorShown(pg, { timeout: 120000 });
   await drawn(pg, 60);
   // The killswitch (30 frames over 30 ms → off) is a separate property with its own run below. Held here so a slow
