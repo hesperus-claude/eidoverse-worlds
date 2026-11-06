@@ -42,6 +42,7 @@ import { denyAllFlight, devFlightProvider, worldFlightProvider, resolveFlight, r
   from '../shared/flightcap.js';
 import { readFileSync } from 'node:fs';
 import { suite } from "./protocol/suite.ts";
+import { slashed } from "./protocol/common.ts";
 
 const S = suite("flight");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
@@ -878,7 +879,7 @@ console.log('\nISOLATION -- nothing in the running world reaches flight yet');
       if (e === 'node_modules' || e.startsWith('.')) continue;
       const p = join(dir, e);
       if (statSync(p).isDirectory()) walk(p, out);
-      else if (/\.(js|ts|mjs)$/.test(e)) out.push(p);
+      else if (/\.(js|ts|mjs)$/.test(e)) out.push(slashed(p));   // repo-relative with `/` on every OS: compared by name below
     }
     return out;
   };
@@ -912,13 +913,13 @@ console.log('\nISOLATION -- nothing in the running world reaches flight yet');
   // the old scan rather than absent from it. It is listed here rather than
   // exempted: it takes no capability decision, it is handed forces by a caller
   // that already resolved one, so the per-importer checks below skip it.
-  const ALLOWED = [/mcpl\/agent\.ts$/, /client\/lib\/controller\.js$/, /mcpl\/physics\.ts$/];
+  const ALLOWED = ['mcpl/agent.ts', 'client/lib/controller.js', 'mcpl/physics.ts'];
   // Only the two ENTRY POINTS must gate; physics.ts is downstream of a gate.
-  const GATEKEEPERS = [/mcpl\/agent\.ts$/, /client\/lib\/controller\.js$/];
+  const GATEKEEPERS = ['mcpl/agent.ts', 'client/lib/controller.js'];
   check(`only expected modules import flight (${importers.length})`,
-        importers.length > 0 && importers.every(f => ALLOWED.some(re => re.test(f))),
+        importers.length > 0 && importers.every(f => ALLOWED.includes(f)),
         importers.join(', '));
-  for (const f of importers.filter(f => GATEKEEPERS.some(re => re.test(f)))) {
+  for (const f of importers.filter(f => GATEKEEPERS.includes(f))) {
     const src = readFileSync(f, 'utf8');
     check(`${f.split('/').pop()} resolves a capability before it flies`,
           /resolveFlight\(/.test(src));

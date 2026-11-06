@@ -81,3 +81,8 @@ export function pathList(v: string | undefined): string[] {
 
   return (v ?? "").split(path.delimiter).filter(Boolean);
 }
+/** A native path with `/` separators, so it can be compared with a `/` literal on every OS (hygiene slash-path). */
+export const slashed = (p: string) => p.split(path.sep).join("/");
+/** Regex source for "a path ending in `rel`" (`rel` written with `/`), whichever separator the OS uses: for a filter
+ *  (a bun plugin's onLoad) that sees the native path before anything can convert it. */
+export const pathEnd = (rel: string) => `(?:^|[\\\\/])${rel.split("/").map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\\\\/]")}$`;
