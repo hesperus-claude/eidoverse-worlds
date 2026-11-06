@@ -6,7 +6,7 @@
 // mounted thing, a driven thing, unknown comps); channels() flattens every
 // num with a dotted address; editOps turns dotted edits into the FEWEST
 // door requests (three transform channels = one whole `set transform`; two
-// socket fields = one merged `set sockets`), honours relative math on the face
+// a socket is a child entity: the host's Sockets card lists them, del deletes one), honours relative math on the face
 // scale (degrees), the door's ranges (a value it takes is written as typed), read-only fields, and never mutates the record
 // it reads. Where the old test checked what an edit DOES (a pose, a lock), the
 // ops go through the real door on a scratch world (tools/protocol/scratchworld.ts)
@@ -34,8 +34,11 @@ const sets = (r: any, comp: string) => flat(r.ops).filter((o: any) => o.verb ===
 const dels = (r: any, comp: string) => flat(r.ops).filter((o: any) => o.verb === "delete" && o.args.component === comp);
 const val = (r: any, comp: string) => sets(r, comp)[0]?.args.value;
 
-const chair = { model: "furniture/chair.glb", pos: [1, 0, 2], yaw: 1.5708, actor: "r", ts: 1,
-  sockets: { seat: { pos: [0, 0.5, 0], body: {} }, side: { pos: [0.4, 0.5, 0], q: [0, 0.479425538604203, 0, 0.8775825618903728], body: {} } }, "local/recipe": { wood: 2 }, lock: true };   // side: heading 1 rad
+const chair = { model: "furniture/chair.glb", pos: [1, 0, 2], yaw: 1.5708, actor: "r", ts: 1, "local/recipe": { wood: 2 }, lock: true };
+// its two socket children (view records): side turned heading 1 rad
+const SIDE_Q = [0, 0.479425538604203, 0, 0.8775825618903728];
+const seats = { seat: { parent: { to: "c1", offset: [0, 0.5, 0] }, socket: { name: "seat" }, station: {} }, side: { parent: { to: "c1", offset: [0.4, 0.5, 0], q: SIDE_Q }, socket: { name: "side" }, station: {} } };
+const chairW = { c1: chair, ...seats };
 // a lamp: a thing with a light component (there are no light-verb lights now)
 const lamp = { pos: [0, 2, 0], yaw: 0, actor: "r", ts: 1, light: { color: 0xff8800, intensity: 20, range: 6, important: true } };
 const swing = { model: "swing.glb", pos: [5, 0, 5], yaw: 0, actor: "r", ts: 1, motion: { type: "pendulum", axis: [1, 0, 0], amp: 0.4, period: 3, t0: 123 }, "motion:plank": { type: "spin", rpm: 10 } };
@@ -61,14 +64,15 @@ console.log("\nthe fold record is the one input (C7b): every fixture read as `c`
 
 console.log("\nschema is a function of the record:");
 {
-  const s = inspectSchema(chair, "c1");
+  const s = inspectSchema(chair, "c1", { world: chairW });
   const G = s.groups.map((g) => g.group);
   // step 3: the channel box's Rotate channels are their own group, `rot` (tools/channelbox-test.ts)
   check("a chair: pos · rot · parent · flags · sockets · hmat (its Material card, R 10-10) · comp", JSON.stringify(G) === '["pos","rot","parent","flags","sockets","hmat","comp"]', JSON.stringify(G));
   check("locked → transform stays editable and says moving it asks first (the door decides, §5)", fieldAt(s, "pos.x")!.disabled !== true && /locked — moving it asks first/.test(fieldAt(s, "pos.x")!.hint), JSON.stringify(fieldAt(s, "pos.x")));
   // 09-23: raw rows are `json` fields (multi-line, validated as you type), no longer single-line text
   check("unknown comp 'local/recipe' is a raw-JSON field; sockets/lock are NOT duplicated there", fieldAt(s, "comp.local/recipe")?.t === "json" && !fieldAt(s, "comp.sockets") && !fieldAt(s, "comp.lock"));
-  check("sockets: a list + per-slot channels", fieldAt(s, "sockets.slots")?.t === "list" && Math.abs(fieldAt(s, "sockets.side|rot|1")?.value - 1) < 1e-6);
+  check("sockets: one row per socket child (its id, its name), no per-slot channels (each child is edited as itself)", fieldAt(s, "sockets.slots")?.t === "list" && JSON.stringify(fieldAt(s, "sockets.slots")?.rows.map((r: any) => [r.id, r.label])) === '[["seat","seat"],["side","side"]]' && !fieldAt(s, "sockets.side|rot|1") && fieldAt(s, "sockets.add")?.t === "btn", JSON.stringify(fieldAt(s, "sockets.slots")));
+  check("…and no sockets card without socket children", !inspectSchema(chair, "c1", { world: { c1: chair } }).groups.some((g: any) => g.group === "sockets"));
   const l = inspectSchema(lamp, "lamp");
   check("a lamp: a light group from the component's values", fieldAt(l, "light.intensity")?.value === 20 && fieldAt(l, "light.important")?.value === true && fieldAt(l, "light.range")?.value === 6);
   // an older light (no intensity, no decay) draws at 16 / 1.7 (components.js lightOf): the row shows what draws, and still offers the registry default as its reset (#147)
@@ -119,13 +123,24 @@ console.log("\nedits → the fewest door ops:");
   check("…and the door refuses it `locked`; the chair hasn't moved", refused.ok === false && refused.refused?.code === "locked" && WL.rec("c1").pos[0] === 1, JSON.stringify(refused));
   const through = WL.send(rl.ops[0], { throughLock: true });
   check("…with throughLock (the person answered \"move anyway\") it moves, lock kept", through.ok && WL.rec("c1").pos[0] === 3 && WL.rec("c1").lock === true,   /* lock true is stored as true: recut B2 */ JSON.stringify(through.refused));
-  const rs = editOps(chair, "c1", { "sockets.seat|pos|1": "+=0.1", "sockets.side|rot|1": "*=2" });
-  const cs = sets(rs, "sockets");
-  check("two socket edits = ONE merged set sockets keeping the other slot", cs.length === 1 && flat(rs.ops).length === 1 && near(cs[0].args.value.seat.pos[1], 0.6) && near(cs[0].args.value.side.q[1], Math.sin(1)) && near(cs[0].args.value.side.q[3], Math.cos(1)) && cs[0].args.value.side.pos[0] === 0.4, JSON.stringify(cs));
-  const rd = editOps(chair, "c1", { "sockets.del": "seat" });
-  check("del keeps the rest", val(rd, "sockets").seat === undefined && val(rd, "sockets").side);
-  const rd2 = editOps({ ...chair, sockets: { seat: { pos: [0, 0.5, 0] } } }, "c1", { "sockets.del": "seat" });
-  check("deleting the last slot removes the comp (delete sockets)", dels(rd2, "sockets").length === 1 && sets(rd2, "sockets").length === 0, JSON.stringify(rd2));
+  // a host's sockets are its socket children, each edited as itself (its pos, rot): read and sent against a real world's state
+  const WS = scratchWorld("editschema").seed({ c1: unlocked, ...seats }); const SE = WS.state().entities;
+  const kid = (name: string) => Object.keys(WS.state().entities).find((k) => WS.state().entities[k].c.parent?.to === "c1" && WS.state().entities[k].c.socket?.name === name);
+  const seatId = kid("seat"), sideId = kid("side");
+  const r1 = editOps(SE[seatId].c, seatId, { "pos.y": "+=0.1" }, { world: SE }), r2 = editOps(SE[sideId].c, sideId, { "pos.yaw": "*=2" }, { world: SE });
+  const ts = [...sets(r1, "transform"), ...sets(r2, "transform")];
+  check("a socket child's pos and heading are its own transform (local to its host), one set transform each", flat(r1.ops).length === 1 && flat(r2.ops).length === 1 && ts.length === 2
+    && ts[0].args.id === seatId && near(ts[0].args.value.pos[1], 0.6) && ts[1].args.id === sideId && near(ts[1].args.value.q[1], Math.sin(1)) && near(ts[1].args.value.q[3], Math.cos(1)) && ts[1].args.value.pos[0] === 0.4, JSON.stringify([r1, r2]));
+  const old = editOps(SE.c1.c, "c1", { "sockets.seat|pos|1": 0.7 }, { world: SE });
+  check("the old slot address is an error naming the child's own fields, nothing sent", !old.ops.length && /a socket is a thing of its own/.test(old.errors[0] ?? ""), JSON.stringify(old));
+  const sentS = WS.sendAll([...r1.ops, ...r2.ops]);
+  check("…through the door: the seat child stands at y 0.6, the side child turned to 2 rad, both still c1's", sentS.ok && near(WS.state().entities[seatId].c.transform.pos[1], 0.6) && near(WS.state().entities[sideId].c.transform.q[1], Math.sin(1)) && WS.state().entities[sideId].c.parent?.to === "c1", JSON.stringify(sentS.refused));
+  const rd = editOps(WS.state().entities.c1.c, "c1", { "sockets.del": "seat" }, { world: WS.state().entities });
+  check("del deletes that socket child and keeps the rest (no set sockets)", flat(rd.ops).length === 1 && flat(rd.ops)[0].verb === "delete" && flat(rd.ops)[0].args.id === seatId && flat(rd.ops)[0].args.component === undefined, JSON.stringify(rd));
+  const sentD = WS.sendAll(rd.ops);
+  check("…through the door the seat is gone and the side stays", sentD.ok && !kid("seat") && kid("side") === sideId, JSON.stringify(sentD.refused));
+  const rd2 = editOps(WS.state().entities.c1.c, "c1", { "sockets.del": "side" }, { world: WS.state().entities });
+  check("deleting the last slot deletes its child: no delete sockets (that spelling is gone)", flat(rd2.ops).length === 1 && flat(rd2.ops)[0].verb === "delete" && flat(rd2.ops)[0].args.id === sideId && dels(rd2, "sockets").length === 0, JSON.stringify(rd2));
   const rL = editOps(lamp, "lamp", { "light.intensity": "-=10%", "light.daytime": true, "light.color": "#00ff00" });
   const lv = sets(rL, "light");
   check("light edits = ONE set light: intensity 18, daytime full (was day:false), color parsed, range and important kept", lv.length === 1 && flat(rL.ops).length === 1 && lv[0].args.value.intensity === 18 && lv[0].args.value.daytime === "full" && lv[0].args.value.color === 0x00ff00 && lv[0].args.value.range === 6 && lv[0].args.value.important === true, JSON.stringify(lv));
@@ -138,7 +153,7 @@ console.log("\nedits → the fewest door ops:");
   check("label trimmed, hidden as comp true, + adds an empty comp, bad JSON reported", val(rF, "label") === "the swing" && val(rF, "hidden") === true && JSON.stringify(val(rF, "notice")) === "{}" && rF.errors.some((e: string) => /comp\.nope/.test(e)), JSON.stringify(rF));
   check("a scale below the slider's 0.01 is written as typed (a mirror, which the door takes)", JSON.stringify(val(editOps({ ...chair }, "c1", { "pos.scale": -3 }), "transform")?.scale) === "[-3,-3,-3]");
   check("an unknown field is an error, not an op", (() => { const x = editOps(chair, "c1", { "light.intensity": 3 }); return x.errors.length === 1 && !x.ops.length; })());
-  check("a viewport gesture (sockets.add) is refused with guidance", /gesture/.test(editOps(chair, "c1", { "sockets.add": 1 }).errors[0] ?? ""));
+  check("a viewport gesture (sockets.add) is refused with guidance", /gesture/.test(editOps(chair, "c1", { "sockets.add": 1 }, { world: chairW }).errors[0] ?? ""));
   const before = JSON.stringify(chair);
   editOps(chair, "c1", { "sockets.seat|pos|0": 9, "flags.lock": false, "comp.local/recipe": "{\"wood\":3}" });
   check("editOps never mutates the record", JSON.stringify(chair) === before);
@@ -170,9 +185,8 @@ console.log("\nthe survivors of the mutation sweep, bound:");
       return dels(editOps(h, "c1", { "flags.hidden": "no" }), "hidden").length === 1 && dels(editOps(h, "c1", { "flags.lock": "off" }), "lock").length === 1 && dels(editOps(h, "c1", { "flags.hidden": "false" }), "hidden").length === 1; })());
   check("…and clearing a flag that isn't set sends nothing (no delete of an absent component)", editOps(unlocked, "c1", { "flags.hidden": "no" }).ops.length === 0);
   check("comp.+ of a type already there is refused; comp.+ '' is ignored", /already has/.test(editOps(unlocked, "c1", { "comp.+": "local/recipe" }).errors[0] ?? "") && editOps(unlocked, "c1", { "comp.+": "" }).ops.length === 0);
-  check("sockets.del of a missing slot is an error, nothing sent", editOps(unlocked, "c1", { "sockets.del": "nope" }).ops.length === 0 && /no slot/.test(editOps(unlocked, "c1", { "sockets.del": "nope" }).errors[0] ?? ""));
-  const ns = val(editOps(unlocked, "c1", { "sockets.back|pos|1": 0.7 }), "sockets");
-  check("a new slot name declares a seat (pos default [0,0.5,0], no rotation, body) and keeps the others", ns.back.pos[1] === 0.7 && ns.back.pos[0] === 0 && ns.back.q === undefined && ns.back.yaw === undefined && !!ns.back.body && !!ns.seat && !!ns.side, JSON.stringify(ns));
+  check("sockets.del of a missing socket is an error, nothing sent", editOps(unlocked, "c1", { "sockets.del": "nope" }, { world: chairW }).ops.length === 0 && /no socket "nope"/.test(editOps(unlocked, "c1", { "sockets.del": "nope" }, { world: chairW }).errors[0] ?? ""));
+  check("remove.sockets deletes every socket child", JSON.stringify(flat(editOps(unlocked, "c1", { "remove.sockets": true }, { world: chairW }).ops)) === '[{"verb":"delete","args":{"id":"seat"}},{"verb":"delete","args":{"id":"side"}}]');
   const ch = channels(inspectSchema(swing, "s"));
   check("channels() carries the group and lists pos before motion", ch[0].group === "pos" && ch.findIndex((c) => c.group === "motion") > ch.findIndex((c) => c.group === "pos"));
   check("a label longer than 80 chars is refused, with the count (the authority caps it at 80)", (editOps(unlocked, "c1", { "flags.label": "x".repeat(100) }).errors ?? []).some((e) => /label: 100 characters; at most 80/.test(e)));
@@ -233,7 +247,7 @@ console.log("\npicture + sound: schema groups, validated before any op:");
   check("no picture/sound yet: Components offers + picture… and + sound… (client gestures)", addBtns.includes("add:picture") && addBtns.includes("add:sound"), JSON.stringify(addBtns));
   check("…and on a thing with no parts list too (batch 2: a picture of its own needs no part)", ["add:picture", "add:sound"].every((k) => inspectSchema(crate, "c").groups.find((g: any) => g.group === "comp").fields.some((f: any) => f.k === k)));
   check("…and + seat… too (the first seat in one step)", addBtns.includes("add:seat"));
-  check("…but not once it has sockets", !inspectSchema({ ...crate, sockets: { seat: { pos: [0, 0.5, 0] } } }, "c", { parts }).groups.find((g: any) => g.group === "comp").fields.some((f: any) => f.k === "add:seat"));
+  check("…but not once it has sockets", !inspectSchema(crate, "c", { parts, world: { c: crate, s: { parent: { to: "c" }, socket: { name: "seat" } } } }).groups.find((g: any) => g.group === "comp").fields.some((f: any) => f.k === "add:seat"));
   const gesture = editOps(crate, "c", { "comp.add:picture": true }, { parts });
   check("the add button is a gesture: editOps refuses it, sends nothing", !gesture.ops.length && /gesture/.test(gesture.errors[0] ?? ""), JSON.stringify(gesture));
   const hang = editOps(crate, "c", { "picture.src": PNG }, { parts });
@@ -272,15 +286,12 @@ console.log("\npicture + sound: schema groups, validated before any op:");
 
 console.log("\nthe JSON escape hatch: every typed group, addressed to its comp, and never a way around the rules:");
 {
-  const ent = { pos: [0, 0, 0], sockets: { seat: { pos: [0, 0.5, 0], yaw: 0, part: "plank" } }, particles: { preset: "fire", seed: 7 }, "motion:arm": { type: "spin" } };
+  const ent = { pos: [0, 0, 0], particles: { preset: "fire", seed: 7 }, "motion:arm": { type: "spin" } };
   const sch = inspectSchema(ent, "x");
   const hatch = (g: string) => sch.groups.find((x: any) => x.group === g)?.fields.find((f: any) => f.t === "json");
-  check("sockets carries a collapsed JSON hatch that commits comp.sockets", hatch("sockets")?.collapsed === true && hatch("sockets")?.commit === "comp.sockets" && /"part": "plank"/.test(hatch("sockets")?.value ?? ""));
-  check("particles too (its seed has no field)", hatch("particles")?.commit === "comp.particles" && /"seed": 7/.test(hatch("particles")?.value ?? ""));
+  check("particles carries a collapsed JSON hatch that commits comp.particles (its seed has no field)", hatch("particles")?.collapsed === true && hatch("particles")?.commit === "comp.particles" && /"seed": 7/.test(hatch("particles")?.value ?? ""));
   check("a motion:<part> key gets its own hatch", hatch("motion")?.commit === "comp.motion:arm");
-  check("a model's description doesn't dump the hatches (comp.<type> is the address)", !/\{ \"seat\"/.test(describeSchema(sch)));
-  const part = editOps(ent, "x", { "comp.sockets": JSON.stringify({ seat: { pos: [0, 0.5, 0], yaw: 0, part: "seatboard" } }) });
-  check("editing through the hatch replaces the comp wholesale", val(part, "sockets")?.seat?.part === "seatboard", JSON.stringify(part));
+  check("a model's description doesn't dump the hatches (comp.<type> is the address)", !/\{ \"seed\"/.test(describeSchema(sch)));
   const url = editOps(ent, "x", { "comp.picture": JSON.stringify({ src: "http://x.example.org/a.png", part: "screen" }) });
   check("comp.picture as JSON still runs normalizePicture: an http link is refused, nothing sent", !url.ops.length && /https/.test(url.errors[0] ?? ""), JSON.stringify(url));
   const bad = editOps(ent, "x", { "comp.local/recipe": "{ nope" });
@@ -368,11 +379,11 @@ console.log("\nmesh (a parametric body with no model):");
   check("mesh edits = ONE set mesh: size x 1.5, shape cylinder, the rest kept", sets(r, "mesh").length === 1 && flat(r.ops).length === 1 && v?.shape === "cylinder" && JSON.stringify(v?.size) === "[1.5,2,3]", JSON.stringify(v));
   check("a size below the door's 0.05 is refused in its words, nothing sent; an unknown shape is an error, not an op", !editOps(cube, "m1", { "mesh.size.z": "0" }).ops.length && /must be ≥ 0\.05/.test(editOps(cube, "m1", { "mesh.size.z": "0" }).errors[0] ?? "") && /one of/.test(editOps(cube, "m1", { "mesh.shape": "cone" }).errors[0] ?? "") && editOps(cube, "m1", { "mesh.shape": "cone" }).ops.length === 0);
   const addL = editOps(cube, "m1", { "comp.+": "Light" });
-  check("Add Component ▸ Light on a mesh thing makes a CHILD light (one place per thing), as on a model", flat(addL.ops).some((o: any) => o.verb === "create" && o.args.id === "$light" && o.args.components?.parent?.to === "m1"), JSON.stringify(addL));
+  check("Add Component ▸ Light on a mesh thing makes a CHILD light (the editor's guidance: its pose is its own), as on a model", flat(addL.ops).some((o: any) => o.verb === "create" && o.args.id === "$light" && o.args.components?.parent?.to === "m1"), JSON.stringify(addL));
   const addM = editOps(chair, "c1", { "comp.+": "Mesh" });
-  check("Add Component ▸ Mesh on a model is refused with the one-place text", addM.ops.length === 0 && /one place per thing/.test(addM.errors[0] ?? ""), JSON.stringify(addM.errors));
+  check("Add Component ▸ Mesh on a model writes the mesh on it (components compose, Mica 11-04)", JSON.stringify(val(addM, "mesh")) === JSON.stringify({ shape: "box", size: [1, 1, 1] }) && !addM.errors.length, JSON.stringify(addM));
   const addM2 = editOps(lamp, "lamp", { "comp.+": "Mesh" });
-  check("…and on a light too", addM2.ops.length === 0 && /one place per thing/.test(addM2.errors[0] ?? ""), JSON.stringify(addM2.errors));
+  check("…and on a light too", JSON.stringify(val(addM2, "mesh")) === JSON.stringify({ shape: "box", size: [1, 1, 1] }) && !addM2.errors.length, JSON.stringify(addM2));
   const addM3 = editOps({ pos: [0, 0, 0], yaw: 0, actor: "r", ts: 1 }, "e", { "comp.+": "Mesh" });
   check("on an Empty it writes mesh {shape: box, size: [1,1,1]}", JSON.stringify(val(addM3, "mesh")) === JSON.stringify({ shape: "box", size: [1, 1, 1] }), JSON.stringify(addM3));
   check("the header says what it is: 'box'", inspectSchema(cube, "m1").sections.libLabel === "box", JSON.stringify(inspectSchema(cube, "m1").sections.libLabel));
@@ -427,7 +438,7 @@ console.log("\ntrusted drafts (the ladder's second rung):");
 // a thing that has its component: a value it refuses is an error and no op. A refused key in an edit with valid ones drops
 // alone; the others still commit (an agent's multi-field edit keeps what was right).
 {
-  const { DESCRIPTORS, materializedOf } = await import("../shared/protocol/descriptors.js");
+  const { DESCRIPTORS, materializedOf } = await import("../shared/descriptors.js");
   const BAD: Record<string, string> = { num: "zz", color: "zz", enum: "no-such-option" };
   const tried: string[] = [], rowless: string[] = [], wrong: string[] = [], skipped: string[] = [];
   for (const [card, d] of Object.entries<any>(DESCRIPTORS)) {

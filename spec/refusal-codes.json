@@ -14,11 +14,11 @@
   },
   "unreadable": {
    "meaning": "the log folds to a status the authority won't write to",
-   "when": "a write while the fold says no-world/unknown-version"
+   "when": "a write while the fold says no-world/unknown-version/unsupported-feature"
   },
-  "repair-needed": {
-   "meaning": "the world's stored values are in an old spelling no reader serves; the maintenance command must run first",
-   "when": "any write (not a read, not leave) to a world needing lift-sockets, a grabbable, picture or sound rename, or repair-shapes (authority maintenanceNeeds); the text names `bun tools/protocol/world.ts repair <name>`"
+  "unsupported-feature": {
+   "meaning": "a feature this world or server can't use (docs/DESIGN-log-vocabulary.md §F F-1)",
+   "when": "a feature's verb before the world declares it; founding a world requiring a feature this server doesn't implement"
   },
   "ambiguous": {
    "meaning": "the request's result is unknown: some or all of it may be written; never ok, never a plain failure",
@@ -102,10 +102,6 @@
    "meaning": "someone is on it",
    "when": "a hand verb (grab, put, punt, throw, drop) on a thing someone sits or stands on, or a seat that's taken"
   },
-  "revert-war": {
-   "meaning": "that's a dispute: an owner settles it",
-   "when": "reverting someone's work on a thing already reverted across people twice in the hour, below owner"
-  },
   "shape": {
    "meaning": "the request or value isn't the right shape",
    "when": "a wrong type, a missing part, a bad name, a bad placeholder, anything the shape rules refuse"
@@ -166,10 +162,6 @@
    "meaning": "that caption line was refused by the caption rules",
    "when": "a resend, an out-of-order n, a superseded leg"
   },
-  "one-place": {
-   "meaning": "a thing is in one place",
-   "when": "two ways of saying where it is (a socket and a parent, two seats…)"
-  },
   "world": {
    "meaning": "@world can't be that",
    "when": "deleting or locking @world"
@@ -185,10 +177,6 @@
   "schema-fixed": {
    "meaning": "a schema never changes meaning",
    "when": "changing or deleting a set schemas:<name>"
-  },
-  "grid-fixed": {
-   "meaning": "the terrain grid is fixed while it has tiles",
-   "when": "changing terrain-grid with tiles under it"
   },
   "syntax": {
    "meaning": "the script doesn't parse",
@@ -285,6 +273,10 @@
   "physical": {
    "meaning": "physics decided that, not an edit",
    "when": "undo of a throw, drop or leave"
+  },
+  "undo-unavailable": {
+   "meaning": "that act can't be undone, and nothing was",
+   "when": "undo or rollback of an imported act the translation's lift-sockets rewrote (cause: migration-transformed, with the act and its ops): the whole request refuses, never a partial undo"
   },
   "disabled": {
    "meaning": "it's switched off",
@@ -442,10 +434,6 @@
    "meaning": "that would put it inside something solid",
    "when": "a hang or place into a thing's solid parts"
   },
-  "no-grid": {
-   "meaning": "no terrain grid",
-   "when": "a sculpt on ground without terrain-grid"
-  },
   "no-model": {
    "meaning": "nothing to measure",
    "when": "measure of a thing with no model or mesh"
@@ -482,11 +470,5 @@
    "meaning": "a link points outside what you publish",
    "when": "publish of a set whose refs name things outside it"
   }
- },
- "renamed": {
-  "hands-full": "hold-limit",
-  "underfoot": "beneath",
-  "no-body": "not-pushable",
-  "no-such": "not-found"
  }
 }

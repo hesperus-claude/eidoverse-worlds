@@ -13,12 +13,14 @@ import { join } from "node:path";
 // carry their restore-at-boot blocks, so this import order IS the unsplit
 // file's boot order: mkdir → session restore → ban restore (§15, step 7a).
 import { TRUST_NAMES } from "./config.ts";
+import { checkHello, missingFeatures, versionLine } from "../shared/protocol/hello.js";
+import { featureDecision, KNOWN_FEATURES } from "../shared/protocol/features.js";
 // how often a person may change the name they show (moderation: a name is how people recognise who did what)
 const RENAME_COOLDOWN_MS = Math.max(0, Number(process.env.RENAME_COOLDOWN_DAYS ?? 7)) * 86400000;
 import { PORT, HOST, JOIN_TOKEN, RENDERER_TOKEN, RECORD, ROOT, WORLDS_DIR, LIBRARY_DIR, OPT_DIR, MSG_RATE, FRAME_MS, FRAME_SKIP_BUFFERED, SNAP_TIMEOUT_MS, SNAP_SWEEP_GRACE_MS, SNAP_SWEEP_EVERY_MS } from "./config.ts";
 import { type HnSession, agentTokens, accountOf } from "./auth.ts";
 import { addrSanctionsFor, saveAddrSanctions, notPersisted } from "./moderation.ts";
-import { entryFor, doorOfWorld, whoOf, settleAccess, sweepAccess, setLoadedWorlds, NOT_YET_CLOSE, type Expel } from "./access.ts";
+import { entryFor, doorOfWorld, whoOf, settleAccess, sweepAccess, setLoadedWorlds, unavailable, unavailableClose, toldOf, type Told, type Expel } from "./access.ts";
 import { isOperator, mintSetupToken } from "./operators.ts";
 import { setupLine } from "./setup.ts";
 import { resolveLibFile } from "./libfile.ts";
@@ -26,11 +28,11 @@ import { summarizeGlb } from "./geometry.ts";
 // The world itself (a log + the embodied plane) and the registry. The boot
 // sweep below stays HERE: waking scripted worlds with the server is boot
 // policy, not world mechanics.
-import { World, type Client, worlds, getWorld, worldExists, wireSettledPose, wireRights, authorityNow } from "./world.ts";
+import { World, type Client, worlds, getWorld, wireSettledPose, wireRights, authorityNow } from "./world.ts";
 import { isWorldSaved } from "./worldlog.ts";
-import { oldWorldAt, bootNotice, noFoldRefusal, interruptedVisitorText } from "./oldworlds.ts";
-import { isSwapUnfinished } from "./livehost.ts";
-import { oldFormatRefused, provenWho, ownerOf } from "./upgrade.ts";
+import { bootNotice, noFoldRefusal, interruptedVisitorText } from "./oldworlds.ts";
+import { warmIndex } from "./worldindex.ts";
+import { oldFormatRefused, provenWho } from "./upgrade.ts";
 import { backupsDirProblem } from "./backups.ts";
 import { isNativeSession } from "./native-login.ts";
 import { custodyFileIn, directoryFileIn } from "./keyfiles.ts";
@@ -303,6 +305,8 @@ try {
 // Old-format worlds are not served, and the operator is TOLD (they were skipped in silence above): one block per world with
 // the translator's command, this WORLDS_DIR filled in (server/oldworlds.ts).
 try { const notice = bootNotice(WORLDS_DIR); if (notice) console.log(notice); } catch (err) { console.error("[boot] old-world notice failed", err); }
+// the access index (worldindex.ts): every world's state, door and (an old one's) owners, read before the first request
+try { await warmIndex((n) => worlds.has(n)); } catch (err) { console.error("[boot] access index failed", err); }
 { const bad = backupsDirProblem(WORLDS_DIR); if (bad) console.log(`[boot] ${bad}. Upgrades of old-format worlds refuse until it is moved.`); }
 
 let nextClientNum = 1;
@@ -381,43 +385,6 @@ function admitJoin(c: Client, ws: { send(d: string): void; close(code?: number, 
       c.ws.close?.(4005, "bad world name");
       return null;
     }
-    // Joining never FOUNDS a world (security review 10-06 H3; RFC-005 §3.2.7 "founding is not joining"): a name with no
-    // world behind it is refused, and only a world is served (the old protocol has no runtime here: an old log is
-    // translated once, by the operator, into a new world).
-    if (worldExists(wname) && isSwapUnfinished(join(WORLDS_DIR, wname))) {   // an in-place translation stopped mid-swap: never served (boot names the recovery)
-      ws.send(JSON.stringify({ type: "error", error: interruptedVisitorText(wname) }));
-      c.ws.close?.(4005, "interrupted conversion");
-      return null;
-    }
-    if (worldExists(wname) && !isWorldSaved(wname)) {   // a world saved in an old format: it is translated once, by the operator
-      // (server/oldworlds.ts: a first-protocol log.jsonl is translatable; a log saved before the 2026-10-07 names pass is
-      // re-translated from its original log, or refounded). The visitor is told in plain words that nothing is lost and
-      // who converts it; the command line is the operator's, in the boot notice. A directory holding no old log at all
-      // (an empty one) is no world: it is refused as one.
-      const old = oldWorldAt(WORLDS_DIR, wname);
-      // …with the structured reason beside the words: who may upgrade it, and the doc (server/upgrade.ts; docs/WIRE.md 4005)
-      const who = provenWho(c, msg), operator = isOperator(who?.account ?? null);
-      const refuse = (owner: "bound" | "name" | null) => { ws.send(JSON.stringify({ type: "error", error: old ? old.visitor : `there's no world called "${wname}" here — check the link that brought you here`,
-        ...(old ? { refused: oldFormatRefused(old.kind, old.visitor, operator, owner) } : {}) }));
-        c.ws.close?.(4005, old ? "old-format world" : "no such world"); };
-      // a signed-in non-operator may be its owner: world.ts owner-of answers (cached), then the refusal goes
-      if (old?.kind === "translatable" && who && !operator) void ownerOf(wname, who, { join: true }).then((o) => refuse(o?.recognised ?? null), () => refuse(null));
-      else refuse(null);
-      return null;
-    }
-    if (!worldExists(wname)) {
-      // nothing to watch YET is not a refusal (upstream #258: 4011, redialled): an observer started before the world is
-      // founded gets in once someone founds it. A body is refused as before (joining never founds).
-      if (msg.spectate || msg.renderer) {
-        ws.send(JSON.stringify({ type: "error", error: `there's no world called "${wname}" yet — nothing to watch` }));
-        c.ws.close?.(NOT_YET_CLOSE, "no such world yet");
-        return null;
-      }
-      ws.send(JSON.stringify({ type: "error", error: `there's no world called "${wname}" here — check the link that brought you here` }));
-      c.ws.close?.(4005, "no such world");
-      return null;
-    }
-    const w = getWorld(wname);
     // C1 (security review 10-06): what this join proves is decided from THIS join's own credentials. Nothing a previous
     // join on this socket proved carries over (a token presented once used to make every later join on the socket
     // "verified", so a second join could wear any agent's name).
@@ -447,7 +414,7 @@ function admitJoin(c: Client, ws: { send(d: string): void; close(code?: number, 
       c.id = n.name;
     }
     // H2: an identity is never a name — a name shaped like one (u-…) would pass for the person who wears it
-    if (!c.id || /^(world|\*|system|sim)$/i.test(c.id) || /^script:/i.test(c.id) || /^u-[a-z2-7]{20}$/i.test(c.id)) {
+    if (!c.id || /^(world|\*|system|sim)$/i.test(c.id) || /^script:/i.test(c.id) || /^u-[a-z2-7]{20}(?:[a-z2-7]{4})?$/i.test(c.id)) {
       ws.send(JSON.stringify({ type: "error", error: `that name is reserved for the world itself` }));
       ws.close(4004, "reserved name");
       return null;
@@ -533,6 +500,25 @@ function admitJoin(c: Client, ws: { send(d: string): void; close(code?: number, 
       c.account = account;
       c.anonymous = !account;
     }
+    // No existence oracle (§F F-3): a world that doesn't exist and one this principal may not discover get the same bytes
+    // (access.ts unavailable). A watcher's close redials (upstream #258: an observer started early gets in once it is founded).
+    const unavailableHere = () => { const u = unavailable(wname);
+      ws.send(JSON.stringify({ type: "error", code: u.code, error: u.message })); c.ws.close?.(unavailableClose(!!(msg.spectate || msg.renderer)), u.code); return null; };
+    // What this joiner may be told (access.ts toldOf, the one predicate): a world discoverable to them opens; an interrupted
+    // in-place conversion or an old-format world is diagnosed only to the operator and (an old one) its recognised owner, with
+    // its structured reason (server/upgrade.ts; docs/WIRE.md 4005); to anyone else it is world-unavailable, as a missing or
+    // private world. Asked of the door on disk, before loading: a refused join never loads or pins the world. Joining never
+    // FOUNDS a world (security review 10-06 H3; RFC-005 §3.2.7).
+    { const dir = directoryFor(WORLDS_DIR);   // read-only: an undiscoverable world records nothing about who asked
+      const answer = (t: Told) => {
+        if (t.kind === "interrupted") { ws.send(JSON.stringify({ type: "error", error: interruptedVisitorText(wname) })); c.ws.close?.(4005, "interrupted conversion"); }
+        else if (t.kind === "old") { ws.send(JSON.stringify({ type: "error", error: t.old.visitor, refused: oldFormatRefused(t.old.kind, t.old.visitor, t.operator, t.owner) })); c.ws.close?.(4005, "old-format world"); }
+        else if (t.kind === "unavailable") unavailableHere();
+        return null; };
+      const told = toldOf(wname, { account: c.account ?? null, actorId: c.account ? dir.idOfSub(c.account) : null, trustedRenderer: !!c.trustedRenderer }, provenWho(c, msg));
+      if (told instanceof Promise) { void told.then(answer); return null; }
+      if (told.kind !== "door") return answer(told); }
+    const w = getWorld(wname);
     // A display name is not proof of anything, so two people may never show the same one at once, and an anonymous
     // visitor may not wear a name an account has claimed here (H1/M3: typing someone's name to stand in for them).
     // RENAME COOLDOWN (R 10-11: "you can only rename yourself every so often (moderation reasons)"): a typed name that
@@ -807,9 +793,8 @@ function buildSnapshot(w: World, c: Client) {
     // snapshot = the authority's cut of the world (the joiner folds it, then the log stream) + who's present now
     return {
       type: "snapshot",
-      // (no renderSceneVersion: upstream #248's render-scene projection isn't served here — server/render-scene.ts reads the
-      // first protocol's fold — so a native client isn't told to ask for it)
-      world: w.name,
+      // (no renderSceneVersion: upstream #248's render-scene projection isn't served here (it read the first protocol's
+      // fold, docs/NATIVE-WORLD-RENDERING.md), so a native client isn't told to ask for it)
       you: c.id,
       // when this account may next change its name (and the name it just tried, if that was too soon)
       ...(c.account && !c.tokenVerified ? { renameAfter: (directoryFor(WORLDS_DIR).entry(c.actorId ?? "")?.renamedAt ?? 0) + RENAME_COOLDOWN_MS, renameCooldownDays: RENAME_COOLDOWN_MS / 86400000 } : {}),
@@ -826,11 +811,12 @@ function buildSnapshot(w: World, c: Client) {
       recording: RECORD,
       // the world: the authority's cut (its fold, head, your undoable acts, names, holds), which the joiner folds and then
       // advances with the `log` stream. A joiner's cost is the size of the WORLD, not the length of its history.
-      cut: { ...w.log.info(), ...w.log.clientCut(actorIdOf(c)) },
+      ...w.log.info(), ...w.log.clientSnapshot(actorIdOf(c)),   // flat (D5): {dialect, v, world, name, seq, state, physics, names, holds, mine, you}
+      ...versionLine(featureDecision(w.log.live?.entries ?? [], KNOWN_FEATURES).requires),   // F-3 step 5: the authoritative {dialect, v, requires}
       // chat isn't world state, and speech is arrival-only (R 10-18): a joiner is sent no line said before it came, so the
       // window is always empty. chatTotal is how many lines a history page could still show this joiner: for an admin
       // (owner, operator) every line the master log holds; for everyone else none
-      state: { recentChat: [], chatTotal: w.isAdmin(c) ? (w.state.chatTotal ?? 0) : 0 },
+      chat: { recentChat: [], chatTotal: w.isAdmin(c) ? (w.state.chatTotal ?? 0) : 0 },
       throughSeq: w.log.snapSeq,
       // the body roster rides along — a joiner resolves names with no
       // extra round-trip (bbox geometry follows as its own message)
@@ -993,6 +979,9 @@ const server = Bun.serve({
               return;
             }
           }
+          // F-3 step 2 (docs/DESIGN-log-vocabulary.md §F): the global hello, before any world lookup; the refusal names no world
+          { const r = checkHello(msg.hello);   // always: a join with no hello is a client this server doesn't speak to
+            if (r) { ws.send(JSON.stringify(r)); c.ws.close?.(4005, "update-required"); return; } }
           // leave previous world (travel is: leave A, join B). Review finding
           // 6: travel never runs the ws-close handler, so without the reap a
           // traveling primary left a live, credentialed orphan mic behind —
@@ -1019,11 +1008,16 @@ const server = Bun.serve({
             clients.delete(ws);
             return;
           }
+          // F-3 step 4: only after access is granted, the world's required features against the client's (step 5 repeats them)
+          if (msg.hello !== undefined) {
+            const r = missingFeatures(featureDecision(w.log?.live?.entries ?? [], KNOWN_FEATURES).requires, msg.hello.features);
+            if (r) { ws.send(JSON.stringify(r)); ws.close(4005, "unsupported-feature"); clients.delete(ws); return; }
+          }
           c.replica = msg.replica === true;
           installJoin(c, w);
           // speech is arrival-only (R 10-18): this connection hears says after the cut it is about to adopt, and reads back
           // none at or below it (history, the authority's history) unless it is an admin's (world.ts sayFloor)
-          c.arrivedSeq = w.log.head;
+          c.arrivedSeq = w.log.seq;
           // The server's clock, just before the snapshot, for a join that asks
           // (`clock: true`): the world's authority clock, the one frames and
           // clock replies carry (spec/PHYSICS.md §5.1). A browser seeks shared

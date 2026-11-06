@@ -46,7 +46,7 @@ console.log(`${files.length} logs, ${diffs} unexplained differences`);
 // the reference reader's own suites. test_reader.py regenerates logs/ from its builders: they must come out byte-identical
 const before = new Map(files.map((f) => [f, fs.readFileSync(here + f, "utf8")]));
 let suiteFails = 0;
-for (const t of ["test_reader.py", "test_chain.py", "test_gov.py", "ed25519/test_vectors.py"]) {   // test_gov: governance (§13), with the add-key rule (review 10-07 H4); the ed25519 row: §2.4 Keys
+for (const t of ["test_reader.py", "test_chain.py", "test_gov.py", "test_story.py", "ed25519/test_vectors.py"]) {   // test_gov: governance (§13), with the add-key rule (review 10-07 H4); the ed25519 row: §2.4 Keys
   const r = py([t]); const out = (r.stdout.toString() + r.stderr.toString()).trim().split("\n");
   console.log(`${r.exitCode === 0 ? "ok  " : "FAIL"} python ${t}: ${out.find((l) => /^\d+\/\d+ passed/.test(l)) ?? out.at(-1)}`);
   if (r.exitCode !== 0) { suiteFails++; console.log(out.slice(-8).join("\n")); }
@@ -57,7 +57,7 @@ if (drift.length) { suiteFails++; console.log(`FAIL test_reader.py rewrote ${dri
 // logs but never what this server writes). Found a world through the engine authority, write a few kinds of request, then
 // the reference reader must say ok with 0 malformed, the Python chain verifier must accept every head and signature,
 // and a value altered after the fact must break the chain.
-{ const { openLive } = await import("../../server/livehost.ts"); const { request } = await import("../../shared/protocol/authority.js");
+{ const { openLive } = await import("./labhost.ts"); const { request } = await import("../../shared/protocol/authority.js");
   const os = await import("node:os"); const path = await import("node:path");
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "engine-conf-")); let T = 1800000000000;
   const w: any = openLive(path.join(tmp, "w"), "w", { now: () => (T += 100), custodyFile: path.join(tmp, "custody.json") });
@@ -73,7 +73,7 @@ if (drift.length) { suiteFails++; console.log(`FAIL test_reader.py rewrote ${dri
     [ch.status === "ok" && ch.unsigned_tail === 0 && ch.last_signed === text.trimEnd().split("\n").length - 1, "the chain verifier accepts every head and signature the engine wrote", ch],
     [(() => { const salted = (x: any) => typeof x?.salt === "string" && /^[A-Za-z0-9_-]{22}$/.test(x.salt);
       const L = text.trimEnd().split("\n").slice(1).map((l) => JSON.parse(l));
-      return L.every((e: any) => e.kind === "change" ? (e.verb === "batch" ? e.body.ops : [{ verb: e.verb, ...e.body }]).every((o: any) => o.verb !== "set" || salted(o)) : !["act", "say", "sim"].includes(e.kind) || salted(e.body))
+      return L.every((e: any) => e.kind === "change" ? (e.op === "batch" ? e.body.ops : [{ op: e.op, ...e.body }]).every((o: any) => o.op !== "set" || salted(o)) : !["request", "say", "physics"].includes(e.kind) || salted(e.body))
         && L.some((e: any) => e.kind === "say"); })(), "every set, and every act/say/sim body, carries a 16-byte salt (§2.4; round-2 R3: chat is most of the personal data)", null],
     [bad.status === "broken", "a value altered after the fact breaks the chain", bad]];
   // a fork's genesis (parent {world, seq, head}) and a founder's own tier-0 key (review 10-07 H4, H5): the spec's readers take them

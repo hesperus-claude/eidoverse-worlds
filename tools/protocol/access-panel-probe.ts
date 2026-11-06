@@ -14,6 +14,7 @@ import path from "node:path";
 import { scratchBench, mkCheck } from "../harness.ts";
 import { readLog, fold } from "../../shared/protocol/fold.js";
 import { pageWaiter, tryUntil } from "./wait.ts";
+import { helloOf } from "../../shared/protocol/hello.js";
 
 const ENGINE = path.resolve(import.meta.dir, "../..");
 const ME = "accbot", WORLD = "accp", AWAY = "accp-away";
@@ -33,8 +34,8 @@ const page = (js: string) => evalJson(`(async () => { ${js} })()`);
 // a plain socket in a world; its identity is the one its snapshot names
 const sock = (world: string, name: string) => new Promise<{ ws: WebSocket; id: string }>((res, rej) => {
   const ws = new WebSocket(BASE.replace("http", "ws") + "/ws");
-  ws.onopen = () => ws.send(JSON.stringify({ type: "join", world, id: name, avatar: "", replica: true }));
-  ws.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); if (m.type === "snapshot" && m.cut?.you) res({ ws, id: m.cut.you }); };
+  ws.onopen = () => ws.send(JSON.stringify({ type: "join", hello: helloOf(), world, id: name, avatar: "", replica: true }));
+  ws.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); if (m.type === "snapshot" && m.actor) res({ ws, id: m.actor }); };
   ws.onerror = rej; setTimeout(() => rej(new Error(`${name} never joined ${world}`)), 15000);
 });
 const P = `document.querySelector('#__acc .ap-listed')`;

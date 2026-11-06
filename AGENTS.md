@@ -19,7 +19,7 @@ there is no scene file. Every write goes through one **authority**
 place, use, say, undo, grab…), the authority turns it into the plain writes it
 would make, and one gate, `admit`, checks those writes against who you are,
 which components they change, locks, where things land and rate. Accepted,
-the authority appends your request as an `act` entry and its result as a `change`
+the authority appends your request as a `request` entry and its result as a `change`
 entry caused by it; refused, it answers `{ok: false, refused: {code,
 reason, fix}}` — the `fix` line says how to get what you wanted.
 
@@ -169,13 +169,13 @@ set     {id, component, value, merge?}            # replace one component (merge
 delete  {id, component?}                          # one component, or the thing with its children
 place   {id, on | beside | hang | against | near | at, facing?, …}   # the authority solves the numbers
 turn    {id, axis, deg, space?, about?}
-batch   {ops: [{verb, args}, …]}                  # several writes as one act, all or nothing
+batch   {requests: [{verb, args}, …]}             # several writes as one request, all or nothing
 use     {id, action?, args?}                      # the universal interact; members may
 say     {text, to?}
 undo    {act? | label?}                           # your own acts (rank decides others'); undo {act: <the undo>} is redo
 publish {from, name}                              # save a thing and its children as a blueprint
 update  {copy, to}                                # move a copy to a newer blueprint version
-sky {…} · weather {…} · sculpt {…}                # the world's sky, weather and terrain (owner)
+sky {…} · weather {…}                            # the world's sky and weather (owner)
 upload {text} · scripts {id?} · adopt {id, script}   # scripts (below)
 grab · put · drop · throw · punt · move · wait    # carrying and physics (below)
 consent {…} · body {to, kind, spec?} · reach {who, point} · inbox   # your consent gates and lists; acting on another body (below)
@@ -195,7 +195,7 @@ change, and which two things may share. So:
   point at the new thing, write a **placeholder**: `$` and a name.
 
   ```
-  act {verb: "batch", args: {ops: [
+  act {verb: "batch", args: {requests: [
     {verb: "create", args: {id: "$table", model: "…/table.glb", components: {label: "table"}}},
     {verb: "create", args: {id: "$lamp", model: "…/lamp.glb", components: {parent: {to: "$table"}}}},
     {verb: "place",  args: {id: "$lamp", on: "$table"}}]}}
@@ -216,7 +216,7 @@ change, and which two things may share. So:
   reply says what it cleared. It works even where you couldn't edit the
   referring thing (its lock or another's key doesn't stop it), doesn't make
   you the author of what it clears (the change names those ops as the
-  authority's, `followUps`), and leaves a script's scope alone. What rested
+  authority's, `cascade`), and leaves a script's scope alone. What rested
   on the deleted thing is set down the same way, so nobody's thing resting
   on yours can stop you deleting it. `lint` reports any stored reference that names
   nothing.
@@ -232,14 +232,14 @@ request also takes:
 - `throughLock: true` — act through a lock you are allowed to lift.
 
 and the building writes (`create`, `set`, `delete`, `place`, `turn`,
-`batch`, `use`, `undo`, `publish`, `update`, `upload`, `adopt`, `sculpt`,
+`batch`, `use`, `undo`, `publish`, `update`, `upload`, `adopt`,
 `sky`, `weather`, `caption`, `create-world`) take `dry: true`: the authority
 checks it and says what it would write; nothing is logged. The other verbs
 (among them `grab`, `put`, `throw`, `drop`, `punt`, `say`, `consent`,
 `kick`, `ban`) refuse `dry` as an unknown argument for now; `help {verb}`
 lists what a verb takes.
 
-A refused write is still on the record (except: dry runs, reads, moves and other presence such as pose, reach and consent, rate refusals, which are counted, and a request refused for its placeholders), as an attempt act that changed
+A refused write is still on the record (except: dry runs, reads, moves and other presence such as pose, reach and consent, rate refusals, which are counted, and a request refused for its placeholders), as an attempt request that changed
 nothing: its verb, the names of the arguments it carried and the refusal
 code, never the values (those are kept in memory for diagnosis only);
 `world_debug` shows the reason. A refusal of what your body does (`move`,
@@ -273,8 +273,9 @@ is 29 tools, and what used to be bespoke verbs are their modes:
 The old names (`take_off`, `fold_wings`, `clear_pose`, `ragdoll`, `light`,
 `remove`, `blueprint_place`, `kick`, `list_bans`, `library_sheet`…) are
 refused with the call that does it now; `walk_to`/`snapshot`/`spawn`/
-`check_model` and anim's old names run nothing and name the tool that does it now (`move`, `screenshot`, `create`,
-`measure`, `anim`), until 2026-12-01, when the note goes too (R 10-28; mcpl/tools.ts TOOL_RENAMED). `world_verb` is
+`check_model` and anim's old names are unknown tools: refused like any name
+this server never served, and nothing runs (`move`, `screenshot`, `create`,
+`measure`, `anim` do those now). `world_verb` is
 removed: `act {verb, args}` takes this authority's verbs, and an old verb
 (`comp`, `motion`, `mount`, `grant`, `epoch`…) is refused as `removed`
 with the call that does it now (`help {verb}` says the same). Every tool that
@@ -320,12 +321,10 @@ thing's rotation order) · `rot.qx rot.qy rot.qz rot.qw` · `rot.order`
 `flags.lock flags.hidden flags.label flags.description` · `light.color
 light.intensity light.range light.important light.daytime` · `motion.type motion.axis motion.amp
 motion.period motion.phase motion.damp …` (a part's motion as
-`motion.<part>|amp`; `motion.rest` stops it) · `sockets.<slot>|pos|0..2
-sockets.<slot>|rot|0..2 sockets.<slot>|anim sockets.del` (a host's socket
-children, read and written as one map) · `particles.*` · `comp.<type>` (raw JSON
+`motion.<part>|amp`; `motion.rest` stops it) · `sockets.del` (a host's socket
+children by name; each is a thing of its own, edited by its id) · `particles.*` · `comp.<type>` (raw JSON
 for any component no group speaks for; `comp.+` adds one) · `parent.to` /
-`parent.unparent`. The transform channels become one `set transform`;
-socket fields one `set sockets`, lifted into the socket children. Numbers take Maya's relative math —
+`parent.unparent`. The transform channels become one `set transform`. Numbers take Maya's relative math —
 `"+=1"`, `"-=0.5"`, `"*=-1"`, `"+=10%"` — against the current value;
 angles are typed in degrees. A child's transform is LOCAL to its parent.
 **The world itself is `@world`**: `inspect {id: "@world"}` shows its Sky,
@@ -348,10 +347,10 @@ The ones you'll reach for:
 | `description` | how it is described to anyone who reads rather than sees it (≤ 500); what it can do and its state are read out from its other components, so don't restate them. A visible nameplate is a child thing with `text {billboard: "yaw"}` |
 | `parent` | `{to}`: it rides another thing (to sit at a socket, parent it to the socket child) |
 | `pivot` | `{pos}`: where it turns and scales from |
-| `light` | `{kind: point\|spot, color, intensity, range, angle, inner, decay, daytime: dim\|full, important}` — a light on its own thing: a lamp is a model with a light child (`parent {to: <the model>}`; one place per thing, so a light never shares an entity with a model or mesh); `daytime: "full"` burns at noon too, `important` claims a slot first (more such lights than slots: the nearest cast) |
+| `light` | `{kind: point\|spot, color, intensity, range, angle, inner, decay, daytime: dim\|full, important}` — on any thing, a model's or a mesh's too (components compose); a light on its own child (`parent {to: <the model>}`) has a pose of its own to aim and move; `daytime: "full"` burns at noon too, `important` claims a slot first (more such lights than slots: the nearest cast) |
 | `motion` | `{type: pendulum\|spin\|orbit\|oscillate\|path, …}`: spin `degPerSec` or `period`; oscillate `axis`, `amp` (m), `period`, `phase?` (back and forth along its axis, a sine; up by default); orbit `radius`, `center?`, `period` or `degPerSec`, `face?`; path `points`, `speed` or `duration`, `loop?`; the authority stamps `t0` |
 | `openable` | `{open, locked?, angle?, axis?, slide?, time?, part?}`: it opens and closes when used (a door, a gate, a lid); it turns about its `pivot`, or slides; every client animates it |
-| `socket`, `station` | an attachment point is a child entity: `socket {name, part?, accepts?, radius?}` (its pose is its transform, local to its host), and `station {action, anim, anchor, exit?, leaveBy?, who?}` on the same child makes it a place a person can sit, ride, stand (below); `anim` is an open name of a pose or a clip (one the body doesn't know is its default; absent, picked from the action). The old map `sockets` is reserved: a write of it is lifted into socket children |
+| `socket`, `station` | an attachment point is a child entity: `socket {name, part?, accepts?, radius?}` (its pose is its transform, local to its host), and `station {action, anim, anchor, exit?, leaveBy?, who?}` on the same child makes it a place a person can sit, ride, stand (below); `anim` is an open name of a pose or a clip (one the body doesn't know is its default; absent, picked from the action). The old map `sockets` is reserved: a write of it is refused (legacy) |
 | `reactions` | `{<action>: handler}`: what `use {id, action}` does (below) |
 | `places` | `{<name>: {at} \| {min, max} \| null}`: named places to walk to, in its own frame (on `@world`: world coordinates); see "Named places" |
 | `lock` | `true`: binds everyone, owners included — no component set, added or removed, no move, reparent, new model or removal, on it or anything attached to it. Anyone at the rank its setter holds now, or above, may act through it (`throughLock: true`) or lift it (below) |
@@ -800,11 +799,8 @@ component for ride along as `imported:<name>`. Old runtime scripts are kept
 as a record on `@world` and never run: `scripts` lists them as
 `needs-reinstall` (docs/SCRIPTS.md says how to port one).
 
-A world founded before 2026-10-07 states its protocol number in a field of
-its own (`genesis {version: 4, …}`) and this server doesn't open it; with its
-server stopped, `bun tools/protocol/migrate-genesis.ts --apply <world dir>`
-moves it to `{dialect: "eidoverse-log", v: 4}` (same state digest, a new world
-id). The worlds dir's key files are renamed to `.custody.json` /
+This protocol's own pre-release worlds were never deployed, so none is migrated: a log this server's reader
+doesn't fold is refused, loudly. The worlds dir's key files are renamed to `.custody.json` /
 `.directory.json` on the next boot, so its people keep their identities.
 
 ## Assets — files you CAN upload today

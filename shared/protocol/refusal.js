@@ -51,7 +51,7 @@ export function plainRefusal(what, reply, nameOf = () => null) {
 /** The verb a lock refusal asks about: what the request would do to the locked thing. */
 export function lockVerb(req) {
   if (req?.verb === "undo") return "Undo";
-  const ops = req?.verb === "batch" ? (req.args?.ops ?? []) : [req];
+  const ops = req?.verb === "batch" ? (req.args?.requests ?? []) : [req];
   const comp = (o) => o?.args?.component;
   if (ops.some((o) => o?.verb === "delete" && comp(o) === undefined)) return "Delete";
   if (ops.some((o) => o?.verb === "set" && comp(o) === "model")) return "Replace";

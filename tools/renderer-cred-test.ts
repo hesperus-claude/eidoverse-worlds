@@ -1,6 +1,6 @@
 // The renderers' credential and a private world's HTTP reads (#260 house I143, I144): the cases access-test.ts held
 // before it was retired, against a scratch server.
-//   - a client merely SAYING renderer (with the door key) may not watch an invite-only world (4010);
+//   - a client merely SAYING renderer (with the door key) may not watch an invite-only world (world-unavailable: 4011, as for no world);
 //   - the renderers' credential WITHOUT the renderer flag opens no door (4003);
 //   - a renderer holding the renderers' credential watches it, and a later closing doesn't remove it;
 //   - a stranger (the door key, no membership) gets 404 from /snap and /heightmap of an invite-only world, where the
@@ -8,6 +8,7 @@
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/renderer-cred-test.ts
 import { scratchSequencer, mkCheck } from "./harness.ts";
+import { helloOf } from "../shared/protocol/hello.js";
 
 const W = "closed", DOOR = "door-key", RKEY = "renderer-key";
 const h = await scratchSequencer("renderercred", { worlds: [W], owner: "keeper",
@@ -23,7 +24,7 @@ const open = (id: string, extra: Record<string, unknown>) => new Promise<Conn>((
   const t = setTimeout(done, 3000);
   ws.onmessage = (e) => { const m = JSON.parse(String(e.data)); c.msgs.push(m); if (m.type === "snapshot") { clearTimeout(t); done(); } };
   ws.onclose = (e) => { c.closedWith = e.code; clearTimeout(t); done(); };
-  ws.onopen = () => ws.send(JSON.stringify({ type: "join", world: W, id, replica: true, ...extra }));
+  ws.onopen = () => ws.send(JSON.stringify({ type: "join", hello: helloOf(), world: W, id, replica: true, ...extra }));
 });
 let rq = 0;
 const req = (c: Conn, verb: string, args: any) => new Promise<any>((res) => {
@@ -46,7 +47,7 @@ try {
   check("(setup) the owner makes the world invite-only", a.ok === true, JSON.stringify(a));
 
   const fake = await open("fake-renderer", { renderer: true, token: DOOR });
-  check("a client merely SAYING renderer (door key) may not watch the invite-only world", fake.closedWith === 4010 && !fake.snap(), `code=${fake.closedWith}`);
+  check("a client merely SAYING renderer (door key) may not watch the invite-only world (world-unavailable, as for no world)", fake.closedWith === 4011 && !fake.snap(), `code=${fake.closedWith}`);
   const sneaky = await open("sneaky", { token: RKEY });
   check("the renderers' credential without the renderer flag opens no door", sneaky.closedWith === 4003 && !sneaky.snap(), `code=${sneaky.closedWith}`);
   const real = await open("mac-renderer", { renderer: true, token: RKEY });

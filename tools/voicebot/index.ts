@@ -31,6 +31,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { helloOf } from "../../shared/protocol/hello.js";
 
 const WORLD_URL = process.env.WORLD_URL ?? "ws://127.0.0.1:8940/ws";
 const WORLD_TOKEN = process.env.WORLD_TOKEN ?? "";
@@ -136,15 +137,15 @@ let head = -1;                             // the log's head at join: lines at o
 
 function connectWorld() {
   const ws = new WebSocket(WORLD_URL);
-  ws.onopen = () => ws.send(JSON.stringify({ type: "join", world: WORLD_NAME, id: "voice", avatar: "", spectate: true, token: WORLD_TOKEN, replica: true }));
+  ws.onopen = () => ws.send(JSON.stringify({ type: "join", hello: helloOf(), world: WORLD_NAME, id: "voice", avatar: "", spectate: true, token: WORLD_TOKEN, replica: true }));
   ws.onclose = () => { log("world socket closed — reconnecting"); setTimeout(connectWorld, 1500); };
   ws.onmessage = (ev) => {
     const msg = JSON.parse(String(ev.data));
     if (msg.type === "error") { log(`world says: ${msg.error}`); return; }
     if (msg.type === "snapshot") {
-      Object.assign(names, msg.cut?.names ?? {});
-      head = Number.isInteger(msg.cut?.head) ? msg.cut.head : -1;
-      log(`watching world "${WORLD_NAME}" as spectator (${msg.state?.recentChat?.length ?? 0} recent lines skipped — live lines only)`);
+      Object.assign(names, msg.names ?? {});
+      head = Number.isInteger(msg.seq) ? msg.seq : -1;
+      log(`watching world "${WORLD_NAME}" as spectator (${msg.chat?.recentChat?.length ?? 0} recent lines skipped — live lines only)`);
       return;
     }
     if (msg.type !== "log") return;

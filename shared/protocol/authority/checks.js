@@ -2,13 +2,12 @@
 // own engine reads (valueCheck), media sources, the typed fields and the terrain's shape, unknown and dropped keys, the
 // registry's schema (schemaCheck, schemaRefusal), particle effects, handlers, and a rest's claim against the engine
 // (restCheck) (refactor split, 2026-10-17; moved from authority.js's gate section unchanged). guess is above it, through UP.
-import { ONE_PLACE } from "../../components.js";
-import { checkSockets, checkSocket, checkStation } from "../../sockbody.js";
+import { checkSocket, checkStation } from "../../sockbody.js";
 import { checkGrabbable } from "../../grab.js";
-import { isEntityId, isComponent, isIdentity, PURGED } from "../fold.js";
+import { forecastSpellingRefusal } from "../../forecast.js";
+import { isEntityId, isComponent, isIdentity, REDACTED } from "../fold.js";
 import { COMPONENTS, defOf, registered, baseOf, isNamespaced, outOfRange, rangeWords } from "../componentspec.js";
 import { partSlot } from "../names.js";
-import * as TR from "../sculpt.js";
 import * as R from "../roles.js";
 import { graphemes, cleanText } from "../../text.js";
 import { mediaTier } from "../../mediasrc.js";
@@ -37,13 +36,6 @@ function valueCheck(s, { id, comp, value: v }, { carry = false, now = null } = {
   if (on === "world" && id !== "@world") refuse("world-only", `${comp.split(":")[0]} is a world setting: it goes on @world, not on ${id}`, `set {id: '@world', component: '${comp}', value: …}`);
   if (on === "thing" && id === "@world") refuse("thing-only", `${comp} belongs to a thing; @world is the world itself`, "make a thing (create) and put it there");
   if (comp === "parent" && v?.to === "@world") refuse("thing-only", `@world isn't a thing to be inside: a thing with no parent already sits in the world`, `delete {id: '${id}', component: 'parent'}`);
-  // one place per thing (R 10-11 00:37; the answer: anything that needs its own place goes on a child): a light and a model
-  // never share an entity, so a light's pose is its own and the editor's gizmo moves one thing. Existing logs keep folding
-  // (the fold never refuses); the importer splits them; a carried value (an import) passes.
-  // a mesh is a body of its own, as a model is: never beside a model or a light on one thing. The words are shared with the
-  // Inspector (components.js ONE_PLACE), so a refusal reads the same from either
-  if (!carry && (comp === "light" || comp === "model" || comp === "mesh")) { const c = s.entities[id]?.c ?? {};
-    for (const has of ["model", "light", "mesh"]) if (has !== comp && c[has] !== undefined) refuse("one-place", ONE_PLACE.reason(id, has, comp), ONE_PLACE.fix(id, has, comp)); }
   if (id === "@world" && comp.startsWith("roles:") && (!isIdentity(comp.slice(6)) || !CTX.knownId(comp.slice(6))))
     refuse("shape", !isIdentity(comp.slice(6)) ? `roles:${comp.slice(6)} names no one: a role is given to an identity (u-…), not a typed name` : `roles:${comp.slice(6)} is an identity this server doesn't know`,
       !isIdentity(comp.slice(6)) ? "whois {name} finds a person's identity; then set roles:<identity>" : "whois {name} finds the identity behind a person's name; a person whose identity this server doesn't know has to join or sign in on this server first, and until then this set is refused again", { didYouMean: guess(comp.slice(6), Object.keys(s.entities["@world"]?.c ?? {}).filter((k) => k.startsWith("roles:")).map((k) => k.slice(6))) });
@@ -93,7 +85,6 @@ function valueCheck(s, { id, comp, value: v }, { carry = false, now = null } = {
   if (comp === "physics" && obj) whoOk(v.who, at);
   if (comp === "grabbable" && obj) whoOk(v.who, at);
   if (comp === "reactions" && obj) for (const [act, h] of Object.entries(v)) if (h && typeof h === "object") whoOk(h.who, `${at}.${act}`);
-  if (comp === "sockets" && obj) for (const [slot, sk] of Object.entries(v)) if (sk?.body && typeof sk.body === "object") whoOk(sk.body.who, `${at}.${slot}.body`);
   if (comp === "station" && obj) whoOk(v.who, at);
   if (comp === "transform") { if (!obj || !nums(v.pos, 3) || !nums(v.q, 4, 1.0001) || !nums(v.scale, 3, 1e3) || Object.keys(v).some((k) => !["pos", "q", "scale"].includes(k)))
     refuse("shape", `${at} must be {pos: [x,y,z], q: [x,y,z,w], scale: [x,y,z]}, finite and within bounds`, "pos within ±100 km, q a rotation, scale within ±1000");
@@ -130,6 +121,7 @@ function valueCheck(s, { id, comp, value: v }, { carry = false, now = null } = {
   if (comp.startsWith("motion:") && obj && "node" in v && !(typeof v.node === "string" && v.node.length >= 1 && v.node.length <= 256)) refuse("shape", `${at}.node is the name of a node in its model, as the file spells it (1–256 characters)`, "measure {id} lists its model's parts");
   if (comp === "motion" && obj && "pivot" in v && !carry) refuse("derived", `${at}.pivot: a whole thing's motion turns about its pivot component, not a field of the motion`, `set {id: '${id}', component: 'pivot', value: {pos: [x, y, z]}} (its own frame); a part's motion (motion:<part>) takes pivot`);
   if (comp === "home") { const okQ = (q) => nums(q, 4, 2) && Math.abs(Math.hypot(...q) - 1) < 1e-3;
+    if (obj && v.parent && typeof v.parent === "object" && v.parent.socket !== undefined) refuse("legacy", `${at}.parent.socket is the old spelling: a socket is a child entity now`, `home {parent: {to: <the socket's id>}} (inspect {id: '${v.parent.to}'} lists its sockets)`);
     // one spelling (shape audit 10-16): scale is [x, y, z] (a number is taken at write and stored as one; an older stored
     // number is carried by a fork or a lift), parent is {to}
     const okScale = (sc) => (nums(sc, 3) && sc.every((x) => x > 0)) || (carry && typeof sc === "number" && sc > 0);
@@ -182,17 +174,6 @@ function valueCheck(s, { id, comp, value: v }, { carry = false, now = null } = {
   schemaCheck(at, comp, v, { carry });
   // physics.material (a surface's name) is renamed physics.surface and reserved with surfaces (shape audit 10-16): the
   // check that it names one of this world's surfaces returns when the field opens
-  if (comp === "terrain-grid") { const ok = v.spacing > 0 && Number.isInteger(v.tile) && v.tile >= 1 && v.tile <= 64 && Array.isArray(v.extent) && v.extent.length === 2 && v.extent.every((n) => Number.isInteger(n) && n >= 1 && n <= 4096)
-      && Array.isArray(v.origin) && v.origin.length === 2 && v.origin.every(isNum) && (v.limits === undefined || (Number.isInteger(v.limits.raise) && Number.isInteger(v.limits.lower) && v.limits.raise >= 0 && v.limits.lower >= 0));
-    if (!ok) refuse("shape", `${at} must be {spacing > 0, tile 1–64, origin [x, z], extent [nx, nz], limits? {raise, lower} (mm)}`, COMPONENTS["terrain-grid"].help); }
-  if (comp.startsWith("terrain-tile:")) { const g = s.entities[id]?.c["terrain-grid"]; const ij = TR.parseKey(comp);
-    if (!g) refuse("no-grid", `${id} has no terrain-grid`, "set terrain-grid on the ground first");
-    if (!ij || ij[0] >= g.extent[0] || ij[1] >= g.extent[1]) refuse("shape", `${comp} isn't a tile of ${id}'s ${g.extent.join("×")} grid`, "keys are <i>-<j>, counted from the grid origin");
-    if (!Array.isArray(v.mm) || v.mm.length !== g.tile ** 2 || !v.mm.every(Number.isInteger)) refuse("shape", `${at}.mm must be ${g.tile ** 2} integers (millimetres)`, "");
-    const lo = -(g.limits?.lower ?? Infinity), hi = g.limits?.raise ?? Infinity;
-    if (v.mm.some((n) => n < lo || n > hi)) refuse("bounds", `${at} goes outside the grid's limits (−${g.limits.lower} … +${g.limits.raise} mm)`, "terrain-grid.limits (SL's raise/lower)"); }
-  // well-shaped and still here: the translator didn't see it (the door stores no old spelling)
-  if (comp === "sockets") refuse("legacy", `${at} is the old spelling: each socket is a child entity now`, "create {components: {parent: {to: <host>}, transform: {pos}, socket: {name, …}}}");
 }
 // batch 2 (10-07): pictures, sounds, stories, signs and look-at, beyond their catalogue shape
 const LOOK_WORDS = ["@viewer", "@nearest"];
@@ -297,7 +278,7 @@ const DROPPED_FIX = {
   "picture.part": "a picture is a quad of its own; an image on a node of a model is set {id, component: 'material', value: {node, texture}}",
   "picture.flip": "an image on a node of a model is set {id, component: 'material', value: {node, texture}}",
   "terrain.water": "set {id: '@world', component: 'water', value: {level, color?, opacity?, kind?, flow?}}",
-  "sky.clock": "a tz present is the wall clock: {tz: 'Europe/Paris'} (the sky act still takes clock: 'real')",
+  "sky.clock": "a tz present is the wall clock: {tz: 'Europe/Paris'}",
   "sky.weatherSeconds": "transition (seconds) is the one spelling",
 };
 const DROPPED_DYM = { "motion.amplitude": ["amp"], "physics.material": ["surface"], "light.day": ["daytime"], "sky.weatherSeconds": ["transition"], "sky.clock": ["tz"], "terrain.water": ["water"] };
@@ -342,8 +323,7 @@ function schemaCheck(at, comp, v, { carry = false } = {}) {
     if (def.choices && !def.choices.includes(v)) refuse("shape", `${at} is one of ${def.choices.join(", ")}, got ${JSON.stringify(v).slice(0, 40)}`, def.help ?? "");
     if (def.maxLen !== undefined && graphemes(v) > def.maxLen) refuse("bounds", `${at} is ${graphemes(v).toLocaleString("en")} characters; it must be ≤ ${def.maxLen}`, def.help ?? "");
     if (def.cleanAs) { const bad = cleanText(v, { lines: def.cleanAs === "lines" }); if (bad) refuse("shape", `${at} ${bad.why}`, bad.fix); } }
-  // a socket's whole shape (shared/sockbody.js: closed keys, ranges, enums, one driver per thing), in its own words
-  if (name === "sockets") { const bad = checkSockets(v, at); if (bad) refuse(bad.code, bad.reason, bad.fix || COMPONENTS.sockets.help, bad.didYouMean ? { didYouMean: bad.didYouMean } : undefined); }
+  if (name === "sky") { const bad = forecastSpellingRefusal(v?.forecast, at); if (bad) refuse(bad.code, bad.reason, bad.fix, { didYouMean: bad.didYouMean }); }
   if (name === "socket") { const bad = checkSocket(v, at); if (bad) refuse(bad.code, bad.reason, bad.fix || COMPONENTS.socket.help, bad.didYouMean ? { didYouMean: bad.didYouMean } : undefined); }
   // what a body does at a socket (shape audit 10-16): the core, closed; the reserved keys refused as reserved
   if (name === "station") { const bad = checkStation(v, at); if (bad) refuse(bad.code, bad.reason, bad.fix || COMPONENTS.station.help, { ...(bad.didYouMean ? { didYouMean: bad.didYouMean } : {}), ...(bad.code === "reserved" ? { status: "reserved" } : {}) }); }
@@ -402,7 +382,7 @@ function schemaCheck(at, comp, v, { carry = false } = {}) {
 // number"); a field it changes must be inside a component the thing has (a toggle on a plain crate wrote an invisible
 // openable); toggle flips true/false fields; an impulse swings a pendulum. Rights stay a use-time question (reactionCap).
 function effectCheck(s, id, act, h) {
-  const c = s.entities[id]?.c ?? {}; const isObj = (x) => x && typeof x === "object" && !Array.isArray(x) && x !== PURGED;
+  const c = s.entities[id]?.c ?? {}; const isObj = (x) => x && typeof x === "object" && !Array.isArray(x) && x !== REDACTED;
   const where = `reactions.${act}`;
   const would = (comp, value) => { try { valueCheck(s, { id, comp, value }); }
     catch (e) { if (!(e instanceof Refusal)) throw e; refuse(e.code, `${where} would set ${id}.${comp} to something the authority refuses: ${e.reason}`, e.fix, e.didYouMean ? { didYouMean: e.didYouMean } : undefined); } };

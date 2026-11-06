@@ -20,8 +20,6 @@
 // spectator` for ONE person (a role is membership here, never a state: a world that admits only people listed lets
 // everyone else watch with access.watch, or no one).
 
-import { statSync } from "node:fs";
-import { join } from "node:path";
 import { WORLDS_DIR, JOIN_TOKEN } from "./config.ts";
 import { serverBans, findBan, doorLocked, LOCKED_WHY } from "./moderation.ts";
 import { isOperator } from "./operators.ts";
@@ -29,13 +27,12 @@ import { sessionOfRequest, accountOf } from "./auth.ts";
 import { directoryFor } from "./directory.ts";
 import { accountAgeRefusal } from "./accountage.ts";
 import { effectiveOf, isOwner, MOD_POWERS } from "../shared/protocol/roles.js";
-import { opsOf } from "../shared/protocol/fold.js";
 import { isBanned } from "../shared/protocol/authority.js";
-import { modLogAt } from "./custody.ts";
-import { readLogBytes } from "./durable.ts";
 import { addressOf } from "./peer.ts";
 import { entryOf, doorOf as doorOfWc, listedIn, timedGrants, leftWords, ACCESS_WARN_MS } from "../shared/protocol/access.js";
-import { worldDirNamed, type World, type Client } from "./world.ts";
+import { type World, type Client } from "./world.ts";
+import { type OldWorld } from "./oldworlds.ts";
+import { lookup, ownerIn, type IndexEntry } from "./worldindex.ts";
 
 /** Close code for "this world is not open to you": refused at the door, or removed because access ended or changed.
  *  Clients don't redial it (4006 is moderation's, 4005 a bad link). */
@@ -43,6 +40,12 @@ export const ACCESS_CLOSE = 4010;
 /** Close code for "there is nothing here YET": a spectator of a world nobody has founded. Not a refusal: clients redial
  *  it with their usual backoff, so an observer started early joins once the world exists. */
 export const NOT_YET_CLOSE = 4011;
+/** The one refusal for a world that doesn't exist and one this principal may not discover: the same bytes for both (no
+ *  existence oracle, docs/DESIGN-log-vocabulary.md §F F-3). */
+export const unavailable = (name: string) => ({ code: "world-unavailable", message: `No accessible world named ${name}.` });
+/** Its close code, by what the joiner asked for (never by what exists): a watcher redials (an observer started before a
+ *  founding gets in once the world exists), a body doesn't. */
+export const unavailableClose = (watching: boolean) => (watching ? NOT_YET_CLOSE : 4005);
 
 /** An identity as the door sees it. `account`: the account a credential proved (null = a guest); `actorId`: the world's
  *  opaque id for it (server/directory.ts); `trustedRenderer`: the renderers' credential (may watch anywhere, never
@@ -62,48 +65,32 @@ export function doorOf(w: World): string { return doorOfWc(wcOfWorld(w)); }
 
 // ---- a world's door, without loading the world ----------------------------------------------------------------------
 // Listing and HTTP reads must answer "may this caller see world X?" for worlds nobody is in. Loading them would do it,
-// but a loaded world is never unloaded, so a /worlds call would pull every world on disk into memory for good. Instead:
-// the change entries in world.jsonl that touch @world's access, default-role, role-defs and roles:*, folded set/delete in order,
-// cached until the file changes. (Only those keys: nothing else about the world is read.) Its moderator log
-// (world.mod.jsonl, never in the world log) comes with it: a ban or kick there must close the door before the world is
-// loaded, as after (Antra's review of f91840e5 P1: a banned member's first /geom after a restart answered 200).
-const doorCache = new Map<string, { key: string; wc: Record<string, any>; mod: any[] }>();
-const DOOR_LINE = /"id"\s*:\s*"@world"/;
-const isDoorComp = (k: unknown) => typeof k === "string" && (k === "access" || k === "default-role" || k === "role-defs" || k.startsWith("roles:"));   // role-defs: a custom role's powers (the moderation bypass)
+// but a loaded world is never unloaded, so a /worlds call would pull every world on disk into memory for good. Instead the
+// door is read off the access index (worldindex.ts: @world's door components and the moderator log, read from disk when
+// they change, never because of who asks).
 /** Set by server.ts: the loaded worlds (a loaded world's own fold is the truth). */
 let loadedWorlds: () => Map<string, World> = () => new Map();
 export function setLoadedWorlds(fn: () => Map<string, World>) { loadedWorlds = fn; }
+const doorOfEntry = (name: string, e: IndexEntry): Door | null => (e.kind === "saved" && e.door ? { name, wc: e.door.wc, label: doorOfWc(e.door.wc), mod: e.door.mod } : null);
 
-/** A world's door by name: the loaded world's, else read from disk; null when there is no such world. */
+/** A world's door by name: the loaded world's, else the index's; null when there is no such saved world (missing, mid-swap,
+ *  an old format, or a moderator log that can't be read). Every name makes the same index lookup. */
 export function doorFor(name: string): Door | null {
-  const live = loadedWorlds().get(name);
-  if (live) return doorOfWorld(live);
-  if (!/^[a-z0-9_-]{1,64}$/i.test(name) || !worldDirNamed(name)) return null;   // its own case only, as the join door (world.ts)
-  const file = join(WORLDS_DIR, name, "world.jsonl");
-  let st; try { st = statSync(file); } catch { return null; }
-  const modFile = join(WORLDS_DIR, name, "world.mod.jsonl");
-  let ms: { size: number; mtimeMs: number } | null = null; try { ms = statSync(modFile); } catch { ms = null; }
-  const key = `${st.size}:${st.mtimeMs}:${ms ? `${ms.size}:${ms.mtimeMs}` : "-"}`;
-  const hit = doorCache.get(name);
-  if (hit?.key === key) return { name, wc: hit.wc, label: doorOfWc(hit.wc), mod: hit.mod };
-  // unreadable moderator log: no door (as an unreadable world log), never a door that forgets its bans
-  let mod: any[]; try { mod = modLogAt(modFile).mod; } catch { return null; }
-  const wc: Record<string, any> = {};
-  try {
-    for (const line of readLogBytes(file, { cut: false }).toString("utf8").split("\n")) {   // a torn last line is not the log's yet (#260 bot 7)
-      if (!line || !DOOR_LINE.test(line)) continue;
-      let e: any; try { e = JSON.parse(line); } catch { continue; }
-      if (e?.kind !== "change") continue;
-      let ops: any[] = []; try { ops = opsOf(e); } catch { continue; }   // a batch's ops, or a single set/delete's own body
-      for (const o of ops) {
-        if (o?.id !== "@world" || !isDoorComp(o.comp)) continue;
-        if (o.verb === "set" && o.value && typeof o.value === "object") wc[o.comp] = o.value;
-        else if (o.verb === "delete") delete wc[o.comp];
-      }
-    }
-  } catch { return null; }
-  doorCache.set(name, { key, wc, mod });
-  return { name, wc, label: doorOfWc(wc), mod };
+  if (!/^[a-z0-9_-]{1,64}$/i.test(name)) return null;
+  const live = loadedWorlds().get(name), e = lookup(name, { loaded: !!live });
+  return live ? doorOfWorld(live) : doorOfEntry(name, e);
+}
+
+/** Who goes past this door whatever it says: operators, and owners and holders of a moderation power (what @world.access
+ *  always said). The one reading for entryFor and discoverable. The bypass is for people this world LISTS (an explicit role
+ *  row): a power handed to everyone through default-role or role-defs must not open an invite-only door (final review M1,
+ *  10-18); an ended timed grant is absent at `now` (security review 10-18 M6): the door reads it as not listed, loaded or not,
+ *  before the authority's sweep writes its end (expire-roles), so an unloaded world's HTTP reads and a join don't honour it
+ *  indefinitely. */
+function bypassOf(wc: Record<string, any>, account: string | null, actorId: string | null, now: number): { listed: boolean; bypass: boolean } {
+  const eff = actorId ? effectiveOf(wc, actorId, { anon: !account }) : null;
+  const listed = !!actorId && listedIn(wc, actorId, now);
+  return { listed, bypass: isOperator(account) || (listed && (isOwner(eff) || MOD_POWERS.some((p: string) => eff?.permissions?.includes(p)))) };
 }
 
 /** May `who` be in this world — with a body, or watching? null = yes; else the refusal (code, reason, words).
@@ -120,14 +107,7 @@ export function entryFor(door: Door, who: Who, mode: EntryMode, { now = Date.now
     const ban = gb ?? findBan(serverBans, account, addr, now, door.name) ?? (actorId && bannedHere(actorId) ? { by: "a moderator" } as any : null);
     if (ban) return { code: 4006, reason: "banned", why: `you are banned from ${gb ? "these worlds" : `"${door.name}"`}${ban.reason ? ` — ${ban.reason}` : ""}` };
   }
-  // operators, owners and holders of a moderation power always get in (what @world.access always said)
-  const eff = actorId ? effectiveOf(door.wc, actorId, { anon: !account }) : null;
-  // the bypass is for people this world LISTS (an explicit role row): a power handed to everyone through default-role or
-  // role-defs must not open an invite-only door (final review M1, 10-18)
-  // an ended timed grant is absent at `now` (security review 10-18 M6): the door reads it as not listed, loaded or not, before the
-  // authority's sweep writes its end (expire-roles) — so an unloaded world's HTTP reads and a join don't honour it indefinitely
-  const listed = !!actorId && listedIn(door.wc, actorId, now);
-  const bypass = isOperator(account) || (listed && (isOwner(eff) || MOD_POWERS.some((p: string) => eff?.permissions?.includes(p))));
+  const { listed, bypass } = bypassOf(door.wc, account, actorId ?? null, now);
   // a ban file the server couldn't read: the door is locked to everyone it doesn't know (moderation.ts doorLocked); the renderer holds the operator's own key and never embodies
   if (doorLocked() && !isOperator(account) && !listed && !who.trustedRenderer) return { code: ACCESS_CLOSE, reason: "locked", why: LOCKED_WHY };
   const e = entryOf(door.wc, { actor: actorId ?? undefined, anon: !account, bypass, trustedRenderer: !!who.trustedRenderer }, door.name, now);
@@ -143,9 +123,43 @@ export function entryFor(door: Door, who: Who, mode: EntryMode, { now = Date.now
   return null;
 }
 
+/** May `who` learn that this world exists: its door shows itself to them (public or listed to them, a grant, a power that
+ *  bypasses the door). The one predicate behind /worlds, the join, /access and redial; anything else is `unavailable`. */
+export function discoverable(door: Door | null, who: Who | null, now = Date.now()): boolean {
+  if (!door) return false;
+  const { account = null, actorId = null } = who ?? {};
+  if (isOperator(account)) return true;
+  const { bypass } = bypassOf(door.wc, account, actorId, now);
+  return entryOf(door.wc, { actor: actorId ?? undefined, anon: !account, bypass, trustedRenderer: !!who?.trustedRenderer }, door.name, now).may !== "none";
+}
+// ---- what a name is to someone (§F F-3: no existence oracle; Mica 11-05, #23 rulings 4 and "timing oracle") ----
+/** What `who` may be told about `name`: `door` (a saved world discoverable to them), `interrupted` (an in-place conversion
+ *  stopped mid-swap) or `old` (saved in an older format), else `unavailable`, what a missing world gets. Decided from the
+ *  access index (worldindex.ts lookup: the same calls for every name, no world opened): the two diagnoses go only to the
+ *  operator and, for an old world, its recognised owner (worldindex.ts ownerIn, from the owners the entry holds: no log
+ *  read, no CLI). Anyone else gets `unavailable` from the same lookup, as a missing name does. `proven` is the account a
+ *  credential proved (upgrade.ts provenWho), never a typed name. A Promise only while an old world's owners are still being
+ *  read (it appeared or changed a moment ago). */
+export type Told = { kind: "door"; door: Door } | { kind: "unavailable" } | { kind: "interrupted" }
+  | { kind: "old"; old: OldWorld; operator: boolean; owner: "bound" | "name" | null; ownerName?: string };
+export function toldOf(name: string, who: Who | null, proven: { account: string; name: string } | null = null): Told | Promise<Told> {
+  const no: Told = { kind: "unavailable" };
+  if (!/^[a-z0-9_-]{1,64}$/i.test(name)) return no;
+  const live = loadedWorlds().get(name), e = lookup(name, { loaded: !!live });   // the one index read, whatever the name is
+  const operator = isOperator(proven?.account ?? null);
+  const door = live ? doorOfWorld(live) : doorOfEntry(name, e);
+  if (door) return discoverable(door, who) ? { kind: "door", door } : no;
+  if (e.kind === "interrupted") return operator ? { kind: "interrupted" } : no;
+  if (e.kind !== "old") return no;
+  if (operator) return { kind: "old", old: e.old, operator, owner: null };
+  const old = e.old;
+  const asOwner = (): Told => { const o = ownerIn(e, proven); return o?.recognised ? { kind: "old", old, operator, owner: o.recognised, ownerName: o.owner } : no; };
+  // its owners still being read (the world appeared or changed a moment ago): a signed-in asker waits for them
+  return e.ready && proven ? e.ready.then(asOwner, () => no) : asOwner();
+}
 /** May `who` at least watch this world (it is on their map, its reads answer)? */
 export function visibleTo(door: Door | null, who: Who | null, now = Date.now()): boolean {
-  return !!door && entryFor(door, who ?? { account: null }, "watch", { now }) === null;
+  return discoverable(door, who, now) && entryFor(door!, who ?? { account: null }, "watch", { now }) === null;
 }
 /** What `who` may do at this door: enter | watch | none, with the refusal's words. */
 export function youAt(door: Door, who: Who | null): { you: "enter" | "watch" | "none"; why?: string } {
@@ -163,6 +177,14 @@ export function httpCaller(req: Request): Who | null {
   const s = sessionOfRequest(req);
   if (s && (s.scopes.includes("worlds:join") || s.scopes.includes("worlds:spectate"))) return whoAccount(s.sub);   // one sign-in, every world (main #255: a session's old nativeWorld no longer narrows it)
   return bearerCaller(req) ?? null;
+}
+/** The account and credential name an HTTP caller proves (httpCaller's, with the name an old world's owner check reads). */
+export function httpProven(req: Request): { account: string; name: string } | null {
+  const s = sessionOfRequest(req);
+  if (s && (s.scopes.includes("worlds:join") || s.scopes.includes("worlds:spectate"))) return { account: s.sub, name: s.name ?? "" };
+  if (!/^Bearer\b/i.test(req.headers.get("authorization") ?? "")) return null;
+  const tok = bearerOf(req); if (!tok || (JOIN_TOKEN && tok === JOIN_TOKEN)) return null;
+  const a = accountOf(tok); return a && "account" in a ? { account: a.account, name: a.name } : null;
 }
 /** Who an `Authorization: Bearer` proves, ignoring any cookie: undefined when none is sent, null when it proves nobody. */
 export function bearerCaller(req: Request): Who | null | undefined {

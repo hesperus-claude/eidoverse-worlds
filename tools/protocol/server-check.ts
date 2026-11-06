@@ -23,6 +23,7 @@ import { enc } from "../../shared/protocol/names.js";
 import { worldPose } from "../../shared/hierarchy.js";
 import { idAliases } from "./idalias.ts";
 import { shellWord } from "../../server/oldworlds.ts";
+import { helloOf } from "../../shared/protocol/hello.js";
 const IDS = idAliases();
 
 
@@ -51,11 +52,13 @@ async function freePort(from: number) { for (let p = from; p < from + 200; p++) 
   const ok2 = await new Promise((res) => { try { const s = Bun.listen({ hostname: "0.0.0.0", port: p, socket: { data() {} } }); s.stop(true); res(true); } catch { res(false); } }); if (ok2) return p; } throw new Error("no free port"); }
 const procs: any[] = [];
 process.on("exit", () => { for (const p of procs) try { p.kill(); } catch {} });
+// S6's operator (an enrolled agent): an old-format world is said only to the operator and its owner (F23, Mica 11-05)
+const OPTOK = path.join(root, "op-tokens.json"); fs.writeFileSync(OPTOK, JSON.stringify({ "tok-opal": { id: "Opal" } }));
 async function startServer(tree: string, worlds: string, opt: string, tag: string) {
   const port = await freePort(8990 + procs.length * 7);
   const logf = path.join(root, `${tag}.log`);
   const p = Bun.spawn(["bun", "server/server.ts"], { cwd: tree, env: { ...process.env, PORT: String(port), WORLDS_DIR: worlds, OPT_DIR: opt, SKIP_OPT_SWEEP: "1", TRUST_NAMES: "1", RENAME_COOLDOWN_DAYS: "0.001",
-    BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0", JOIN_TOKEN: "", SERVER_OPERATORS: "", EIDO_FLIGHT_REHEARSAL: "" }, stdout: Bun.file(logf), stderr: Bun.file(logf + ".err") });
+    BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0", JOIN_TOKEN: "", SERVER_OPERATORS: "agent:token:opal", AGENT_TOKENS_PATH: OPTOK, EIDO_FLIGHT_REHEARSAL: "" }, stdout: Bun.file(logf), stderr: Bun.file(logf + ".err") });
   procs.push(p);
   if (await tryUntil(`the ${tag} server answers /worlds`, async () => (await fetch(`http://127.0.0.1:${port}/worlds`, { signal: AbortSignal.timeout(1000) })).ok, { ms: 115_000, step: 150 })) return { port, proc: p, log: logf }; // bounded: on this host a closed local port can drop the SYN instead of refusing it
   throw new Error(`${tag} server didn't come up: ${fs.existsSync(logf + ".err") ? fs.readFileSync(logf + ".err", "utf8").slice(-800) : ""}`);
@@ -67,7 +70,7 @@ async function client(port: number, world: string, id: string, extra: any = {}) 
   const msgs: any[] = []; const waiters = new Map(); let n = 0;
   ws.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); msgs.push(m); if (m.type === "reply") { const f = waiters.get(m.id); if (f) { waiters.delete(m.id); f(m.reply); } } };
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
-  ws.send(JSON.stringify({ type: "join", world, id, avatar: "", ...extra }));
+  ws.send(JSON.stringify({ type: "join", hello: helloOf(), world, id, avatar: "", ...extra }));
   await tryUntil(`${id}'s join is answered`, () => msgs.some((m) => m.type === "snapshot" || m.type === "error"), { ms: 3000, step: 50 });
   const c = {
     id, ws, msgs, snapshot: msgs.find((m) => m.type === "snapshot"),
@@ -84,7 +87,7 @@ async function client(port: number, world: string, id: string, extra: any = {}) 
 function heldBy(c: any) {
   let k = null;
   for (const m of c.msgs) {
-    if (m.type === "snapshot" && m.cut?.state) { k = makeReplica(); k.adopt(JSON.parse(JSON.stringify(m.cut))); }
+    if (m.type === "snapshot" && m.state) { k = makeReplica(); k.adopt(JSON.parse(JSON.stringify(m))); }
     else if (m.type === "log" && k) k.ingest(JSON.parse(JSON.stringify(m.entries)), m.from);
   }
   return k;
@@ -106,22 +109,22 @@ const srv = await startServer(ENGINE, W4, OPT, "main");
 { const ws0 = await (await fetch(`http://127.0.0.1:${srv.port}/worlds`)).json();
   ok(ws0.worlds?.some((w) => w.name === "garden" && w.loaded === false), "S1 /worlds lists the world on disk before anyone loads it (travel discovery)", ws0); }
 const ann = await client(srv.port, "garden", "Ann", REPLICA);
-ok(ann.snapshot?.cut?.dialect === "eidoverse-log" && ann.snapshot?.cut?.v === 4, "S1 the snapshot says which log this is and which protocol reads it: {dialect, v}", ann.snapshot?.cut);
+ok(ann.snapshot?.dialect === "eidoverse-log" && ann.snapshot?.v === 4, "S1 the snapshot says which log this is and which protocol reads it: {dialect, v}", ann.snapshot?.cut);
 ok(ann.snapshot?.yourRights?.role === "owner", "S1 the founder is the owner (the tool's account local:ann is the name Ann joins as on a TRUST_NAMES server)", ann.snapshot?.yourRights);
-const ANN = ann.snapshot?.cut?.you;
-ok(/^u-[a-z2-7]{20}$/.test(ANN ?? ""), "S1 a joiner is told its identity: an opaque directory id, not its name (round-2 R1)", ann.snapshot?.cut?.you);
+const ANN = ann.snapshot?.actor;
+ok(/^u-[a-z2-7]{20}$/.test(ANN ?? ""), "S1 a joiner is told its identity: an opaque directory id, not its name (round-2 R1)", ann.snapshot?.actor);
 ok(!fs.existsSync(path.join(W4, "garden", "log.jsonl")), "S1 no v1 log appears beside the new one (no genesis, no land-rush grant)");
 const bob = await client(srv.port, "garden", "Bob", REPLICA), vic = await client(srv.port, "garden", "Vic", REPLICA);
 // an owner grants a PERSON: the id their arrival carries (presence knows people; roles know ids), never a typed name
 const idSeen = (name: string) => ann.msgs.find((m: any) => m.type === "arrive" && m.id === name)?.actorId;
 await tryUntil("Ann sees Bob and Vic arrive", () => idSeen("Bob") && idSeen("Vic"), { ms: 2000 });
 const BOB = idSeen("Bob"), VIC = idSeen("Vic");
-ok(BOB && BOB === bob.snapshot?.cut?.you && VIC === vic.snapshot?.cut?.you, "S1 an arrival carries the person's identity, the same one they're told", [BOB, VIC]);
+ok(BOB && BOB === bob.snapshot?.actor && VIC === vic.snapshot?.actor, "S1 an arrival carries the person's identity, the same one they're told", [BOB, VIC]);
 for (const [who, id, role] of [["Bob", BOB, "builder"], ["Vic", VIC, "member"]]) ok((await ann.req("set", { id: "@world", component: `roles:${id}`, value: { role } })).ok, `S1 Ann makes ${who} a ${role}`);
 // SB: a door ban (moderator log, by id) also closes the authority at JOIN — it only refused requests, so a banned person
 // could still walk in, be seen and look around (old-vs-new review 10-06 #1: two sources of truth for bans)
 { const mal = await client(srv.port, "garden", "Mal", REPLICA); await sleep(150);
-  const MAL = mal.snapshot?.cut?.you; mal.close(); await sleep(100);
+  const MAL = mal.snapshot?.actor; mal.close(); await sleep(100);
   ok((await ann.req("ban", { who: MAL, reason: "test" })).ok, "SB1 Ann bans Mal through the authority");
   const again = await client(srv.port, "garden", "Mal", REPLICA);
   ok(!again.snapshot && again.of("error").some((m) => /banned/.test(m.error)), "SB2 a door-banned person can't join (no snapshot, told why)", again.msgs.map((m) => m.type));
@@ -136,7 +139,7 @@ const c1 = await bob.req("create", { id: "cup", model: "test/cup.glb", place: { 
 const placed = c1.notes?.find((n) => n.placed)?.placed;
 ok(c1.ok && Math.abs(placed?.restsAt - 0.75) < 0.002 && placed?.on === IDS.of("tbl"), "S2 place ON it: the engine catalogue measured the GLB's top at 0.75 m", c1);
 await tryUntil("the cup, parented to the table, is in Vic's own fold", () => heldBy(vic)?.view()?.entities?.[IDS.of("cup")]?.parent?.to === IDS.of("tbl"), { ms: 2000 });
-ok(vic.of("log").length >= 2 && vic.of("log").every((m: any) => Array.isArray(m.entries) && m.entries.every((e: any) => typeof e.kind === "string" && typeof e.verb === "string" && !("args" in e))), "S2 another client is sent the raw entries (log), every one a typed entry (kind, verb, body; never a v1 {verb, args})", vic.of("log").map((m: any) => m.entries?.map((e: any) => e.kind)));
+ok(vic.of("log").length >= 2 && vic.of("log").every((m: any) => Array.isArray(m.entries) && m.entries.every((e: any) => typeof e.kind === "string" && typeof (e.verb ?? e.op) === "string" && !("args" in e))), "S2 another client is sent the raw entries (log), every one a typed entry (kind, verb, body; never a v1 {verb, args})", vic.of("log").map((m: any) => m.entries?.map((e: any) => e.kind)));
 { const m = heldBy(vic)?.view()?.entities?.[IDS.of("cup")]?.parent; const loc = fold(readLog(fs.readFileSync(path.join(W4, "garden", "world.jsonl")))).entities[IDS.of("cup")].c.transform.pos;
   ok(m?.to === IDS.of("tbl") && Array.isArray(m?.offset) && Math.abs(m.offset[0] - loc[0]) < 1e-9 && Math.abs(m.offset[2] - loc[2]) < 1e-9 && Math.abs(m.offset[2]) < 0.5, "S2 in that client's own fold the cup hangs from the table at the authority's LOCAL transform (the table stands at z = 3; the cup's offset is near 0)", [m, loc]); }
 
@@ -170,8 +173,8 @@ await sleep(200);
 const L = readLog(fs.readFileSync(path.join(W4, "garden", "world.jsonl")));
 const st = fold(L);
 ok(st.status === "ok" && !st.diagnostics.some(([, k]) => String(k).startsWith("malformed")), "S4 the log on disk reads back strictly", st.diagnostics.slice(0, 3));
-ok(L.every((e, i) => i === 0 || e.ts >= L[i - 1].ts) && L.filter((e) => e.kind === "act").length >= 6, "S4 ts never decreases; every write is an act + its result");
-ok(L.filter((e) => e.kind === "act").every((e) => [ANN, BOB].includes(e.actor) || (e.actor === VIC && e.body?.refused) || (e.actor === "system" && e.verb === "repair-shapes")), "S4 acts are stamped with the connection's identity, never the payload's (Vic's are his refused attempts, recorded: round-2 R7; the founding's repair-shapes marker is the system's, review r8 M3)", [...new Set(L.map((e) => e.actor))]);
+ok(L.every((e, i) => i === 0 || e.ts >= L[i - 1].ts) && L.filter((e) => e.kind === "request").length >= 6, "S4 ts never decreases; every write is an act + its result");
+ok(L.filter((e) => e.kind === "request").every((e) => [ANN, BOB].includes(e.actor) || (e.actor === VIC && e.body?.refused) || (e.actor === "system" && e.verb === "repair-shapes")), "S4 acts are stamped with the connection's identity, never the payload's (Vic's are his refused attempts, recorded: round-2 R7; the founding's repair-shapes marker is the system's, review r8 M3)", [...new Set(L.map((e) => e.actor))]);
 for (const c of [ann, bob, vic, spec]) ok(digest(heldBy(c).st) === digest(st), `S4 what ${c.id} holds (its own fold of what it was sent) = the log on disk (digest)`);
 ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync was needed (one snapshot each)", [ann, bob, vic].map((c) => c.of("snapshot").length));
 { // the sky (which the v1 projection could only resync for) is just another entry in the stream now
@@ -183,10 +186,10 @@ ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync wa
 // ---- S5: an agent's tools (mcpl/tools.ts) over this connection ----
 { const { HANDLERS } = await import("../../mcpl/tools.ts");
   const { WorldAgent } = await import("../../mcpl/agent.ts");
-  // the real MCPL body (mcpl/agent.ts), joined as Bob: its snapshot sets ag.cut, and its request() awaits reply
+  // the real MCPL body (mcpl/agent.ts), joined as Bob: its snapshot sets ag.snapshot, and its request() awaits reply
   const ag: any = new WorldAgent({ url: `ws://127.0.0.1:${srv.port}/ws`, name: "Bob", world: "garden", avatar: "" });
-  await ag.connect(); await tryUntil("the agent has its cut", () => ag.cut, { ms: 2000, step: 50 });
-  ok(ag.cut?.dialect === "eidoverse-log" && ag.cut?.v === 4, "S5 the MCPL agent learns from its snapshot which log this is and which protocol reads it", ag.cut);
+  await ag.connect(); await tryUntil("the agent has its cut", () => ag.snapshot, { ms: 2000, step: 50 });
+  ok(ag.snapshot?.dialect === "eidoverse-log" && ag.snapshot?.v === 4 && !("minor" in (ag.snapshot ?? {})), "S5 the MCPL agent learns from its snapshot which log this is and which protocol reads it", ag.snapshot);
   ag.verb = () => { throw new Error("a world's building tool must not fire-and-forget"); };
   // R 10-17: the agent names what it makes with a placeholder; the reply says the handle and the id it became
   const sp = await HANDLERS.create(ag, { model: "test/cup.glb", place: { at: [2, 2] }, id: "$agentcup" }, {} as any, "create");
@@ -226,11 +229,13 @@ ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync wa
   ok(!wh.isError && /Bob: set /.test(wh.content[0].text) && /say "hello, Ann"|hello, Ann/.test(wh.content[0].text), "S5d world_history in a world reads the log (acts and says), not v1's chat-only history", wh.content[0].text.slice(0, 400));
   // S5e: the agent at a thing's sockets (shared/sockbody.js): look says what each does; sit picks by action/slot, asks
   // the authority (who), and keeps to how the seat lets you go (leaveBy) and whether it takes you from another (fromSeat)
-  ok((await ann.req("create", { id: "carriage", model: "test/table.glb", place: { at: [9, 9] }, components: { sockets: {
-    throne: { pos: [0, 0.5, 0], body: { who: "owner" } },
-    box: { pos: [0.6, 0.5, 0], body: { action: "drive", leaveBy: "script" } },
-    rumble: { pos: [-0.6, 0.5, 0], body: { action: "ride", leaveBy: "menu" } } } } })).ok, "S5e (Ann builds a carriage: an owner's throne, a driver's box that holds you, a rumble seat)");
-  // its seats are socket children (PLAN-sockets-entities: the map is lifted at the door): wait for all three
+  // its seats are socket children
+  const { addSocket } = await import("../../shared/requests.js");
+  ok((await ann.req("batch", { requests: [{ verb: "create", args: { id: "carriage", model: "test/table.glb", place: { at: [9, 9] } } },
+    addSocket("$carriage", { name: "throne" }, { pos: [0, 0.5, 0], station: { who: "owner" } }),
+    addSocket("$carriage", { name: "box" }, { pos: [0.6, 0.5, 0], station: { action: "drive", leaveBy: "script" } }),
+    addSocket("$carriage", { name: "rumble" }, { pos: [-0.6, 0.5, 0], station: { action: "ride", leaveBy: "menu" } })] })).ok, "S5e (Ann builds a carriage: an owner's throne, a driver's box that holds you, a rumble seat)");
+  // wait for all three
   await tryUntil("the agent has the carriage's three seats", () => ag.socketsOf(IDS.of("carriage")).length >= 3, { ms: 2000, step: 50 });
   const seatId = (n: string) => ag.socketsOf(IDS.of("carriage")).find((x: any) => x.name === n)?.id;
   const lk = (await HANDLERS.look(ag, {}, {} as any, "look")).content[0].text;
@@ -261,7 +266,7 @@ ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync wa
   const { WorldAgent } = await import("../../mcpl/agent.ts");
   const T = (r: any) => r?.content?.[0]?.text ?? "";
   // CM1 a kick: bystanders are told who removed whom (names), never the reason; the person removed is told the reason
-  const kim = await client(srv.port, "garden", "Kim", REPLICA); await sleep(150); const KIM = kim.snapshot?.cut?.you;
+  const kim = await client(srv.port, "garden", "Kim", REPLICA); await sleep(150); const KIM = kim.snapshot?.actor;
   const nB = vic.of("moderated").length; const nS = spec.of("moderated").length;
   ok((await ann.req("kick", { who: KIM, reason: "the secret reason" })).ok, "CM1 (Ann kicks Kim, with a reason)");
   await tryUntil("both bystanders are told of the kick, and Kim is told why", () => vic.of("moderated").length > nB && spec.of("moderated").length > nS && kim.of("error").length, { ms: 3000, step: 50 });   // both bystanders, not just vic (raced under load, 10-07)
@@ -279,7 +284,7 @@ ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync wa
   await tryUntil("Vic is sent the next log message", () => vic.of("log").length > nv, { ms: 3000, step: 50 });
   ok(vic.of("log").slice(nv).some((m) => m.names?.[KIM] === "Kim"), "CM2 the log that carries a role for someone who never acted names them (narration said \"made u-…\")", vic.of("log").slice(nv).map((m) => m.names));
   // CM3 whois: a name → identity, scoped to this world; the authority's role; here or not
-  const zed = await client(srv.port, "garden", "Zed", REPLICA); await zed.req("say", { text: "hi, I'm Zed" }); const ZED = zed.snapshot?.cut?.you; zed.close(); await sleep(200);
+  const zed = await client(srv.port, "garden", "Zed", REPLICA); await zed.req("say", { text: "hi, I'm Zed" }); const ZED = zed.snapshot?.actor; zed.close(); await sleep(200);
   const wz = await vic.req("whois", { name: "zed" });
   ok(wz.ok && wz.people?.length === 1 && wz.people[0].id === ZED && wz.people[0].here === false && wz.people[0].role === "builder" /* a new world's newcomer role (R 10-21) */ && !("kind" in wz.people[0]) && !JSON.stringify(wz).includes("local:"),
     "CM3 whois finds someone absent by name (case-folded): their identity, role, not here, and never their account", wz);
@@ -372,7 +377,7 @@ ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync wa
   // SWEEP-3 G1a: body_state still says posture (main's name for the clip), beside bodyMode and clip
   const bst = JSON.parse(T(await HANDLERS.body_state(oz, {}, {} as any, "body_state")));
   ok("posture" in bst && bst.posture === bst.clip && "bodyMode" in bst, "CM6p body_state carries posture, a twin of clip", JSON.stringify({ posture: bst.posture, clip: bst.clip, bodyMode: bst.bodyMode }));
-  ok(typeof historyLine === "function" && historyLine({ seq: 9, ts: 0, actor: "ann", kind: "act", verb: "imported", body: { verb: "comp", args: { id: "x", type: "label", data: "old" }, from: 4 } }) === `#9 ann: comp {"id":"x","type":"label","data":"old"} (imported from the old log, #4)`, "CM6 an imported entry prints the verb and args it was written with, not `legacy {}`");
+  ok(typeof historyLine === "function" && historyLine({ seq: 9, ts: 0, actor: "ann", kind: "request", verb: "imported", body: { verb: "comp", args: { id: "x", type: "label", data: "old" }, from: 4 } }) === `#9 ann: comp {"id":"x","type":"label","data":"old"} (imported from the old log, #4)`, "CM6 an imported entry prints the verb and args it was written with, not `legacy {}`");
   // CM7 look speaks door terms: no world_verb, no comp {…}, no dismount
   ok((await ann.req("create", { id: "bell", model: "test/cup.glb", components: { reactions: { ring: { kind: "set", component: "label", value: "rung" } }, lock: true }, place: { at: [3, 3] } })).ok, "CM7 (Ann makes a bell that rings, locked)");
   await tryUntil("Oz holds the bell", () => oz.entities.has(IDS.of("bell")), { ms: 3000, step: 50 });
@@ -387,8 +392,8 @@ ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync wa
   ok(lastSay?.isError && /rate|too many|slow/i.test(T(lastSay)), "CM8 a say refused by the rate limit comes back as an error in words (it said \"said\")", T(lastSay));
   oz.close();
   // CM9 the join and a chat line, without dead weight
-  const st0 = ann.snapshot?.state ?? {};
-  ok(JSON.stringify(Object.keys(st0).sort()) === '["chatTotal","recentChat"]' && ann.snapshot?.cut?.state?.["@world"], "CM9 a log-folding joiner's snapshot carries the chat window beside the cut, not a second, v1-shaped copy of the world", Object.keys(st0));
+  const st0 = ann.snapshot?.chat ?? {};
+  ok(JSON.stringify(Object.keys(st0).sort()) === '["chatTotal","recentChat"]' && ann.snapshot?.state?.["@world"], "CM9 a log-folding joiner's snapshot carries the chat window (`chat`) beside the fold, not a second, v1-shaped copy of the world", Object.keys(st0));
   const nl = vic.of("log").length; const raw: string[] = []; const on = (ev: any) => { if (String(ev.data).includes('"log"')) raw.push(String(ev.data)); }; vic.ws.addEventListener("message", on);
   ok((await ann.req("say", { text: "hi" })).ok, "CM9 (Ann says hi)"); await tryUntil("Vic is sent Ann's hi", () => vic.of("log").length > nl, { ms: 3000, step: 50 }); vic.ws.removeEventListener("message", on);
   const line = raw.find((d) => d.includes('"text":"hi"')) ?? ""; const e0 = JSON.parse(line || "{}").entries?.[0] ?? {};
@@ -418,8 +423,9 @@ ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync wa
   ok(tr.code === 0 && /0 divergences/.test(tr.out) && /mtime unchanged: true/.test(tr.out) && /approved by the operator/.test(tr.out), "S6 translate, approved, writes a new world and reports 0 divergences", tr.out);
   ok(Buffer.compare(before, fs.readFileSync(v1log)) === 0, "S6 the v1 log's bytes are unchanged (R9)");
   const [g, t1] = fs.readFileSync(path.join(W4, "oldtown-new", "world.jsonl"), "utf8").split("\n").slice(0, 2).map((l) => JSON.parse(l));
-  ok(g.body.minor === 0 && typeof g.body.nonce === "string" && /^ed25519:/.test(g.body.sequencer) && !("translatedFrom" in g.body), "S6 genesis is §2.4's (minor, nonce, sequencer; no translatedFrom)", g.body);
-  ok(t1.verb === "translated" && /^eidoverse\/translate-v1@/.test(t1.body.from?.translator) && /^[0-9a-f]{16}$/.test(t1.body.from?.fold), "S6 the act after genesis names the engine translator and the v1 fold build", t1.body);
+  ok(!("minor" in g.body) && typeof g.body.nonce === "string" && /^ed25519:/.test(g.body.sequencer) && !("translatedFrom" in g.body), "S6 genesis is §2.4's (minor, nonce, sequencer; no translatedFrom)", g.body);
+  ok(g.body.provenance?.writer?.name === "eidoverse-translate-v1" && /^\d+\.0\.0$/.test(g.body.provenance.writer.version) && t1.verb === "translated" && JSON.stringify(t1.body.provenance) === JSON.stringify(g.body.provenance) && !("translator" in (t1.body.from ?? {})) && /^[0-9a-f]{16}$/.test(t1.body.from?.fold),
+    "S6 genesis carries the import tool's provenance (writer eidoverse-translate-v1), the act after it repeats it, and its from names the parent and the v1 fold build, no translator", { g: g.body.provenance, t1: t1.body });
   ok(tool(["translate", "oldtown", "oldtown-new"]).code !== 0, "S6 translating onto an existing world is refused");
   // the old world as the old fold reads its log (the translator's own reader; nothing serves v1 any more) vs the new copy
   const { emptyState: v1Empty, foldEntry: v1Fold } = await import("./import-v1/fold.js");
@@ -427,13 +433,13 @@ ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync wa
   // v1's mount names its socket `slot`; today's (and shared/hierarchy.js, the renderer's reading) `socket`
   const v1Translated = (st: any) => ({ ...st, entities: Object.fromEntries(Object.entries<any>(st.entities).map(([id, e]) => [id, e.parent && "slot" in e.parent ? { ...e, parent: (({ slot, ...p }) => ({ ...p, socket: slot }))(e.parent) } : e])) });
   const old = { snapshot: { state: v1Translated(v1st) } }, neu = await client(srv.port, "oldtown-new", "Ann", REPLICA);
-  const oldv1 = await client(srv.port, "oldtown", "Ann");
+  const oldv1 = await client(srv.port, "oldtown", "Opal", { agentToken: "tok-opal" });
   await tryUntil("the old world's joiner is closed", () => oldv1.ws.readyState === 3, { ms: 2000, step: 50 });
   const OLD_SAY = `"oldtown" was saved by an older version of Eidoverse and needs a one-time conversion by whoever runs this server or the world's owner. Nothing is lost — the world's log is kept as it was.`;
-  ok(!oldv1.snapshot && oldv1.of("error").some((m) => m.error === OLD_SAY) && oldv1.ws.readyState === 3, "S6 the server doesn't serve the old world itself: the visitor is told, in plain words, that it needs a one-time conversion and nothing is lost (owner 10-15)", oldv1.msgs.map((m) => m.type === "error" ? m.error : m.type));
+  ok(!oldv1.snapshot && oldv1.of("error").some((m) => m.error === OLD_SAY) && oldv1.ws.readyState === 3, "S6 the server doesn't serve the old world itself: the operator is told, in plain words, that it needs a one-time conversion and nothing is lost (owner 10-15; a stranger is told world-unavailable: F23, access-check O7)", oldv1.msgs.map((m) => m.type === "error" ? m.error : m.type));
   ok(oldv1.of("error").every((m) => !/\bbun\b|tools\/|world\.ts/.test(m.error)), "S6 …with no command line a visitor can't run", oldv1.of("error").map((m) => m.error)); oldv1.close();
   { const { WorldAgent } = await import("../../mcpl/agent.ts");   // an agent is told the same, as its join's error (not a join timeout)
-    const ag: any = new WorldAgent({ url: `ws://127.0.0.1:${srv.port}/ws`, name: "Bob", world: "oldtown", avatar: "" });
+    const ag: any = new WorldAgent({ url: `ws://127.0.0.1:${srv.port}/ws`, name: "Opal", world: "oldtown", avatar: "", agentToken: "tok-opal" });
     let why = ""; try { await ag.connect(); } catch (e) { why = String((e as Error).message); } try { ag.close(); } catch {}
     // the world's words as the cause inside the agent's own sentence (upstream #247: "the world refused the join: …")
     ok(why.startsWith(`the world refused the join: ${OLD_SAY.replace(/\.+$/, "")}. `) && /server's operator/.test(why) && /TRANSLATING-OLD-WORLDS\.md/.test(why), "S6 an agent joining the old world is refused with the same words (its connect rejects with them; mcpl travel reports them), then who may upgrade it and the doc (upgrade-check US7)", why); }
@@ -441,13 +447,13 @@ ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync wa
   ok(tool(["found", "prenamed", "--owner", "Ann"]).code === 0, "S6 a world to age into a pre-names one");
   { const fp = path.join(W4, "prenamed", "world.jsonl"); const lines = fs.readFileSync(fp, "utf8").split("\n");
     const g = JSON.parse(lines[0]); const { v, ...rest } = g.body; g.body = { ...rest, version: v }; lines[0] = JSON.stringify(g); fs.writeFileSync(fp, lines.join("\n")); }
-  const pre = await client(srv.port, "prenamed", "Ann", REPLICA); await tryUntil("the prenamed world's joiner is closed", () => pre.ws.readyState === 3, { ms: 2000, step: 50 });
+  const pre = await client(srv.port, "prenamed", "Opal", { ...REPLICA, agentToken: "tok-opal" }); await tryUntil("the prenamed world's joiner is closed", () => pre.ws.readyState === 3, { ms: 2000, step: 50 });
   const preSay = pre.of("error").at(-1)?.error ?? "";
   ok(!pre.snapshot && /^"prenamed" /.test(preSay) && /whoever runs this server/.test(preSay) && /kept as it was/.test(preSay) && !/\bbun\b|tools\/|world\.ts|translate /.test(preSay) && preSay !== OLD_SAY.replace("oldtown", "prenamed"),
     "S6 a pre-names world is refused in its own plain words (no command line)", preSay); pre.close();
   fs.mkdirSync(path.join(W4, "hollow"));   // a directory with no log in it: no world, not an old one
   const hol = await client(srv.port, "hollow", "Ann", REPLICA);
-  ok(!hol.snapshot && /no world called "hollow"/.test(hol.of("error").at(-1)?.error ?? ""), "S6 an empty directory is no world (it was told it was an old-format one)", hol.of("error").map((m) => m.error)); hol.close();
+  ok(!hol.snapshot && /No accessible world named hollow\./.test(hol.of("error").at(-1)?.error ?? ""), "S6 an empty directory is no world (it was told it was an old-format one)", hol.of("error").map((m) => m.error)); hol.close();
   // what a person SEES: each thing's world pose as the renderer composes it (shared/hierarchy.js). A riding thing's own
   // v1 pos is its unused pre-mount pose, so comparing raw `pos` would compare a hidden field (translate-v1@2 DROPPED)
   const r6 = (v) => v.map((n) => Math.round(n * 1e6) / 1e6);
@@ -456,7 +462,7 @@ ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync wa
   const E = (s) => Object.fromEntries(Object.entries(s.entities).filter(([, e]) => !e?.socket).map(([id, e]) => { const p = worldPose(s.entities, id);
     const via = s.entities[e.parent?.to]?.socket ? s.entities[e.parent.to] : null;
     return [id, { model: e.model, at: r6(p.pos), q: r6(p.q), label: e?.label, parent: via ? via.parent?.to : e.parent?.to, socket: via ? via.socket.name : e.parent?.socket }]; }));
-  const neuView = viewState(stateFromWire(neu.snapshot.cut.state));   // what the page draws: the view of its own fold of the cut
+  const neuView = viewState(stateFromWire(neu.snapshot.state));   // what the page draws: the view of its own fold of the cut
   // the old server's records keep the old spelling (lib, comp.*): lift them to today's flat record so worldPose reads both sides the same way
   const lift = (s) => ({ ...s, entities: Object.fromEntries(Object.entries(s.entities).map(([id, e]) => { const { comp, lib, ...rest } = e; return [id, { ...rest, ...(lib !== undefined ? { model: lib } : {}), ...(comp ?? {}) }]; })) });
   ok(JSON.stringify(E(lift(old.snapshot.state))) === JSON.stringify(E(neuView)), "S6 the new copy shows the same things to today's client, where they are (mounted at an offset and at a socket)", [E(lift(old.snapshot.state)), E(neuView)]);
@@ -464,9 +470,9 @@ ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync wa
   const seatC = replica[replica[enc("mug_1")].c.parent?.to]?.c;
   ok(seatC?.socket?.name === "seat" && seatC.parent?.to === enc("lamp_1") && JSON.stringify(seatC.transform.pos) === "[0.3,0.75,0.1]" && !("socket" in replica[enc("mug_1")].c.parent) && replica[enc("mug_1")].c.transform.pos.every((v) => Math.abs(v) < 1e-9),
     "S6 a translated mount is in the authority's shape once the world is loaded: the socket is lamp_1's child at the socket's pos, and the mug rides it (parent {to: <the socket>}, at its origin)", [replica[enc("mug_1")].c.parent, replica[enc("mug_1")].c.transform, seatC]);
-  ok(neu.snapshot.cut?.dialect === "eidoverse-log" && neu.snapshot.cut?.v === 4 && neu.snapshot.yourRights?.role === "owner" && !old.snapshot.cut, "S6 the new copy says {dialect, v}, and Ann still owns it (the original log is read only by the translator)", [neu.snapshot.yourRights, old.snapshot.cut]);
+  ok(neu.snapshot.dialect === "eidoverse-log" && neu.snapshot.v === 4 && neu.snapshot.yourRights?.role === "owner" && !old.snapshot.cut, "S6 the new copy says {dialect, v}, and Ann still owns it (the original log is read only by the translator)", [neu.snapshot.yourRights, old.snapshot.cut]);
   { const h = await neu.req("history", { verbs: ["say"], limit: 50 });   // arrival-only (R 10-18): no window on join; the owner reads the master log
-    ok(JSON.stringify(neu.snapshot.state.recentChat) === "[]" && (h.entries ?? []).some((e: any) => e.body?.text === "hello from v1"), "S6 the chat comes across into the log (its owner reads it back; nobody's join replays it)", [neu.snapshot.state.recentChat, (h.entries ?? []).length]); }
+    ok(JSON.stringify(neu.snapshot.chat.recentChat) === "[]" && (h.entries ?? []).some((e: any) => e.body?.text === "hello from v1"), "S6 the chat comes across into the log (its owner reads it back; nobody's join replays it)", [neu.snapshot.chat.recentChat, (h.entries ?? []).length]); }
   const ed = await neu.req("set", { id: enc("lamp_1"), component: "label", value: "the new table" });
   ok(ed.ok, "S6 the translated world takes edits from its owner", ed);
   void old; neu.close(); }
@@ -474,19 +480,19 @@ ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync wa
 // ---- S8: clients that fold the log themselves (slice 3b): the cut at join, the log stream, no projection ----
 { ok(tool(["found", "meadow", "--owner", "Ann"]).code === 0, "S8 found a second world");
   const a = await client(srv.port, "meadow", "Ann", { replica: true });
-  ok(a.snapshot?.cut?.state?.["@world"] && Number.isInteger(a.snapshot.cut.head) && Array.isArray(a.snapshot.cut.mine), "S8 a log-folding client's snapshot carries the fold, its head and my undoable acts", Object.keys(a.snapshot?.cut ?? {}));
+  ok(a.snapshot?.state?.["@world"] && Number.isInteger(a.snapshot.seq) && Array.isArray(a.snapshot.mine), "S8 a log-folding client's snapshot carries the fold, its head and my undoable acts", Object.keys(a.snapshot?.cut ?? {}));
   await a.req("set", { id: "@world", component: "default-role", value: { role: "member" } });   // meadow's newcomers play (R 10-21: a new world's build)
   const bv = await client(srv.port, "meadow", "Bob", { replica: true }); // Bob folds the log too: nobody reads the projection
   ok(bv.snapshot?.yourRights?.role === "member", "S8 Bob arrives a member", bv.snapshot?.yourRights);
   const r1 = await a.req("create", { id: "box", model: "test/table.glb", place: { at: [1, 1] } });
-  ok((await a.req("set", { id: "@world", component: `roles:${bv.snapshot?.cut?.you}`, value: { role: "builder" } })).ok, "S8 Ann makes Bob a builder");
+  ok((await a.req("set", { id: "@world", component: `roles:${bv.snapshot?.actor}`, value: { role: "builder" } })).ok, "S8 Ann makes Bob a builder");
   await tryUntil("Bob is told he is a builder", () => bv.of("your-rights").at(-1)?.rights?.role === "builder", { ms: 2000 });
   ok(bv.of("your-rights").at(-1)?.rights?.role === "builder", "S8 …and Bob is told at once (the authority's role, not v1's stranger default)", bv.of("your-rights").map((m) => m.rights?.role));
   { const g = await fetch(`http://127.0.0.1:${srv.port}/geom?world=meadow&id=${IDS.of("box")}`, { signal: AbortSignal.timeout(3000) });
     ok(g.status === 200, "S8 an HTTP reader of the world's view (/geom) sees a thing just made (the view is rebuilt for its reader, never stale)", g.status); }
   bv.close();
-  ok(r1.ok && a.of("log").length >= 2 && a.of("log").every((m: any) => Array.isArray(m.entries) && m.entries.every((e: any) => typeof e.kind === "string" && typeof e.verb === "string" && !("args" in e))), "S8 it gets the log stream, entries only", a.of("log").length);
-  const c = makeReplica(); c.adopt(a.snapshot.cut);
+  ok(r1.ok && a.of("log").length >= 2 && a.of("log").every((m: any) => Array.isArray(m.entries) && m.entries.every((e: any) => typeof e.kind === "string" && typeof (e.verb ?? e.op) === "string" && !("args" in e))), "S8 it gets the log stream, entries only", a.of("log").length);
+  const c = makeReplica(); c.adopt(a.snapshot);
   for (const m of a.of("log")) c.ingest(m.entries, m.from);
   const disk = fold(readLog(fs.readFileSync(path.join(W4, "meadow", "world.jsonl"))));
   ok(digest(c.st) === digest(disk), "S8 its own fold of the stream = the log on disk (digest)");
@@ -495,8 +501,8 @@ ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync wa
   await tryUntil("the joiner that doesn't fold is closed", () => b.ws.readyState === 3, { ms: 2000, step: 50 });
   ok(!b.snapshot && /needs a client that folds its log/.test(b.of("error").at(-1)?.error ?? "") && b.ws.readyState === 3, "S8 a joiner that doesn't fold the log is refused, told why, and closed", [b.of("error").at(-1), b.ws.readyState]);
   const r2 = await a.req("set", { id: "box", component: "label", value: "after the refusal" }); await sleep(200);
-  ok(r2.ok && a.of("log").every((m: any) => Array.isArray(m.entries) && m.entries.every((e: any) => typeof e.kind === "string" && typeof e.verb === "string" && !("args" in e))), "S8 …and the world carries on, still sending only entries", a.of("log").length);
-  ok(a.snapshot.cut.mine.length === 0 && (await client(srv.port, "meadow", "Ann", { replica: true })).snapshot.cut.mine.includes(r2.act), "S8 a rejoin's undo stack holds my acts (Ctrl+Z survives a reload)");
+  ok(r2.ok && a.of("log").every((m: any) => Array.isArray(m.entries) && m.entries.every((e: any) => typeof e.kind === "string" && typeof (e.verb ?? e.op) === "string" && !("args" in e))), "S8 …and the world carries on, still sending only entries", a.of("log").length);
+  ok(a.snapshot.mine.length === 0 && (await client(srv.port, "meadow", "Ann", { replica: true })).snapshot.mine.includes(r2.act), "S8 a rejoin's undo stack holds my acts (Ctrl+Z survives a reload)");
   a.close(); }
 // ---- SP: physics at the server (design 20): who holds what is sent to everyone; a joiner's cut carries it and the sim;
 // a person who leaves while holding something drops it into the world ----
@@ -504,19 +510,19 @@ ok([ann, bob, vic].every((c) => c.of("snapshot").length === 1), "S4 no resync wa
   const a = await client(srv.port, "pitch", "Ann", REPLICA); await sleep(100);
   ok((await a.req("set", { id: "@world", component: "physics-engine", value: { engine: "eidosim@1.0.0" } })).ok, "SP Ann turns physics on");
   ok((await a.req("create", { id: "ball", model: "test/cup.glb", components: { physics: { kind: "dynamic", who: "member" } }, place: { at: [0, 1] } })).ok, "SP a cup anyone may carry");
-  const b = await client(srv.port, "pitch", "Bob", REPLICA); await sleep(150); const B = b.snapshot?.cut?.you;
+  const b = await client(srv.port, "pitch", "Bob", REPLICA); await sleep(150); const B = b.snapshot?.actor;
   ok((await b.req("move", { to: [0, 0, 0.5] })).ok && (await b.req("grab", { id: "ball" })).ok, "SP Bob arrives and picks it up");
   await tryUntil("Ann is told Bob holds the ball", () => a.of("holds").at(-1)?.holds?.[IDS.of("ball")]?.by === B, { ms: 2000 });
   ok(a.of("holds").at(-1)?.holds?.[IDS.of("ball")]?.by === B, "SP1 everyone is told who holds it (holds: presence, never logged)", a.of("holds"));
   const c = await client(srv.port, "pitch", "Cy", REPLICA);
-  ok(c.snapshot?.cut?.holds?.[IDS.of("ball")]?.by === B, "SP2 a joiner's cut says who holds what", c.snapshot?.cut?.holds);
-  ok(c.snapshot?.cut?.sim?.spec?.engine === "eidosim@1.0.0" && c.snapshot.cut.sim.sim?.epoch, "SP2 …and carries the sim where the authority's clock stands (a joiner folds later launches with it)", c.snapshot?.cut?.sim?.spec);
+  ok(c.snapshot?.holds?.[IDS.of("ball")]?.by === B, "SP2 a joiner's cut says who holds what", c.snapshot?.holds);
+  ok(c.snapshot?.physics?.spec?.engine === "eidosim@1.0.0" && c.snapshot.physics.sim?.epoch, "SP2 …and carries the sim where the authority's clock stands (a joiner folds later launches with it)", c.snapshot?.physics?.spec);
   // the hold record (grabbable, slice 3): which hand rides the same presence message, so every client draws it there
   ok((await b.req("grab", { id: "ball", hand: "left" })).ok, "SP5 Bob moves it to his left hand (presence: nothing logged)"); await tryUntil("Ann is told the ball is in Bob's left hand", () => a.of("holds").at(-1)?.holds?.[IDS.of("ball")]?.hand === "left", { ms: 2000 });
   ok(a.of("holds").at(-1)?.holds?.[IDS.of("ball")]?.hand === "left" && a.of("holds").at(-1)?.holds?.[IDS.of("ball")]?.by === B, "SP5 …and everyone is told which hand holds it", a.of("holds").at(-1));
   const n = a.of("log").length; b.close();
-  await tryUntil("Bob's leaving drops the ball (a launch, and nobody holds it)", () => a.of("log").slice(n).flatMap((m) => m.entries).some((e) => e?.kind === "sim" && e.verb === "launch" && e.body?.id === IDS.of("ball")) && a.of("holds").at(-1)?.holds?.[IDS.of("ball")] === undefined, { ms: 2000 });
-  await pause("a second copy would arrive within the old window", 400); const launched = a.of("log").slice(n).flatMap((m) => m.entries).filter((e) => e?.kind === "sim" && e.verb === "launch" && e.body?.id === IDS.of("ball"));
+  await tryUntil("Bob's leaving drops the ball (a launch, and nobody holds it)", () => a.of("log").slice(n).flatMap((m) => m.entries).some((e) => e?.kind === "physics" && e.verb === "launch" && e.body?.id === IDS.of("ball")) && a.of("holds").at(-1)?.holds?.[IDS.of("ball")] === undefined, { ms: 2000 });
+  await pause("a second copy would arrive within the old window", 400); const launched = a.of("log").slice(n).flatMap((m) => m.entries).filter((e) => e?.kind === "physics" && e.verb === "launch" && e.body?.id === IDS.of("ball"));
   ok(launched.length === 1 && a.of("holds").at(-1)?.holds?.[IDS.of("ball")] === undefined, "SP3 Bob leaves holding it: it's dropped into the world (a launch), and nobody holds it", [launched.length, a.of("holds").at(-1)]);
   // wait until the authority has it at rest: the authority's clock is the wall clock made monotonic, and this host's wall clock
   // has been seen to step BACK 1.4 s under load (WSL), which stalls physics time for as long (never reorders it)
@@ -560,7 +566,7 @@ await sleep(200);
 
 // ================= S7: joining never founds a world (security review 10-06 H3) =================
 { const ghost = await client(srv.port, "nobodyhome", "Ann", REPLICA);
-  ok(!ghost.snapshot && ghost.of("error").some((m) => /no world called "nobodyhome"/.test(m.error)) && !fs.existsSync(path.join(W4, "nobodyhome")),
+  ok(!ghost.snapshot && ghost.of("error").some((m) => m.code === "world-unavailable" && /No accessible world named nobodyhome\./.test(m.error)) && !fs.existsSync(path.join(W4, "nobodyhome")),
     "S7 joining a world name that doesn't exist is refused, and nothing is created on disk", [ghost.msgs.map((m) => m.type), fs.existsSync(path.join(W4, "nobodyhome"))]);
   ghost.close(); }
 
@@ -591,9 +597,9 @@ srv.proc.kill();
   { const { got, last: p } = await all(r); const texts = got.map((e) => e.args?.text);
     ok(got.length === N0 + lines && texts.at(-1) === `line ${lines - 1}` && texts.indexOf("line 0") === N0 && !p.hasMore,
       "SH1 after a restart, an admin (the owner) paging back with history reaches every chat line ever said here, in order, and says when it's done", [got.length, N0 + lines, texts.slice(0, 3), p.hasMore]); }
-  ok(r.snapshot?.state?.chatTotal === N0 + lines && JSON.stringify(r.snapshot?.state?.recentChat) === "[]", "SH2 the owner's join: no line replayed, and chatTotal counts every line the master log holds (not the ones since load)", [r.snapshot?.state?.chatTotal, N0 + lines, r.snapshot?.state?.recentChat?.length]);
+  ok(r.snapshot?.chat?.chatTotal === N0 + lines && JSON.stringify(r.snapshot?.chat?.recentChat) === "[]", "SH2 the owner's join: no line replayed, and chatTotal counts every line the master log holds (not the ones since load)", [r.snapshot?.chat?.chatTotal, N0 + lines, r.snapshot?.chat?.recentChat?.length]);
   const bob = await client(srvB.port, "garden", "Bob", REPLICA);
-  ok(JSON.stringify(bob.snapshot?.state?.recentChat) === "[]" && bob.snapshot?.state?.chatTotal === 0, "SH3 a non-admin's join carries no say from before it arrived (no backscroll) and no count of them", [bob.snapshot?.state?.recentChat?.length, bob.snapshot?.state?.chatTotal]);
+  ok(JSON.stringify(bob.snapshot?.chat?.recentChat) === "[]" && bob.snapshot?.chat?.chatTotal === 0, "SH3 a non-admin's join carries no say from before it arrived (no backscroll) and no count of them", [bob.snapshot?.chat?.recentChat?.length, bob.snapshot?.chat?.chatTotal]);
   { const { got } = await all(bob); const unf = await pager(bob)(undefined, undefined);
     ok(got.length === 0 && unf.entries.length === 0, "SH4 a non-admin's history page (filtered by say, or not) holds no line said before it arrived", [got.length, unf.entries.length, got.slice(0, 2)]); }
   { const hb = await bob.req("history", { verbs: ["say"], limit: 200 }); const ha = await r.req("history", { verbs: ["say"], limit: 200 });
@@ -627,41 +633,11 @@ srv.proc.kill();
   const srvB = await startServer(ENGINE, W4, OPT, "sk2");
   const c = await client(srvB.port, "crash", "Cy", REPLICA); await sleep(200);
   const L = readLog(fs.readFileSync(path.join(W4, "crash", "world.jsonl")));
-  const after = L.slice(before).map((e) => `${e.actor === "system" ? "system" : "?"}:${e.kind}:${e.verb}${e.body?.id ? `:${e.body.id}` : ""}`);
+  const after = L.slice(before).map((e) => `${e.actor === "system" ? "system" : "?"}:${e.kind}:${e.verb ?? e.op}${e.body?.id ? `:${e.body.id}` : ""}`);
   const k = heldBy(c); const bodies = Object.keys(k?.sim?.sim?.statics ?? {});   // a thing at rest is a static in the engine (shared/sim.js)
-  ok(after.includes(`system:act:return-held:${IDS.of("ball")}`) && after.includes(`system:act:return-home:${IDS.of("torch")}`), "SK1 after the restart, the authority settled both: the ball where the log had it (return-held), the torch home (release: return)", after);
-  ok(!Object.keys(c.snapshot?.cut?.holds ?? {}).length && bodies.includes(IDS.of("ball")) && bodies.includes(IDS.of("torch")), "SK2 …nobody holds them, and a joiner's engine has them back (colliders again)", [c.snapshot?.cut?.holds, bodies]);
+  ok(after.includes(`system:request:return-held:${IDS.of("ball")}`) && after.includes(`system:request:return-home:${IDS.of("torch")}`), "SK1 after the restart, the authority settled both: the ball where the log had it (return-held), the torch home (release: return)", after);
+  ok(!Object.keys(c.snapshot?.holds ?? {}).length && bodies.includes(IDS.of("ball")) && bodies.includes(IDS.of("torch")), "SK2 …nobody holds them, and a joiner's engine has them back (colliders again)", [c.snapshot?.holds, bodies]);
   c.close(); srvB.proc.kill(); }
-
-// ================= SL: the load's socket lift, per host, said to the flight recorder (review 10-12 S2-3) =================
-// A world stored in the old spelling, by hand, with one host the door can't lift (a slot called "front seat": a socket's
-// name is one word, and the name is a shape, not a value the lift carries) before a healthy one. WorldLog lifts at construction: the healthy host lifts, the bad one is
-// left as it was, and attaching the world says it to its flight recorder (world_debug, /debug), with the host's id.
-{ const WS = scratch("srvlift"); const script = path.join(WS, "lift.ts");
-  fs.writeFileSync(script, `// @ts-nocheck
-import fs from "node:fs"; import path from "node:path";
-const W = process.env.WORLDS_DIR, E = process.env.ENGINE;
-const { custodyAt } = await import(E + "/server/custody.ts"); const { custodyFileIn } = await import(E + "/server/keyfiles.ts");
-const { translate } = await import(E + "/tools/protocol/import-v1/translate-v1.js");
-const cu = custodyAt(custodyFileIn(W)); const keys = { key: cu.sequencer(), operator: cu.operator() };
-const old = [{ seq: 0, ts: 1, actor: "world", verb: "genesis", args: { v: 2, dialect: "eidoverse-log" } }, { seq: 1, ts: 2, actor: "ann", verb: "grant", args: { id: "ann", role: "owner" } },
-  { seq: 2, ts: 3, actor: "ann", verb: "spawn", args: { id: "a-cart", lib: "crate", pos: [0, 0, 0] } }, { seq: 3, ts: 4, actor: "ann", verb: "spawn", args: { id: "b-bench", lib: "crate", pos: [3, 0, 0] } },
-  { seq: 4, ts: 5, actor: "ann", verb: "comp", args: { id: "a-cart", type: "sockets", data: { "front seat": { pos: [0, 0.5, 0], body: { action: "sit" } } } } },
-  { seq: 5, ts: 6, actor: "ann", verb: "comp", args: { id: "b-bench", type: "sockets", data: { seat: { pos: [0, 0.5, 0], body: { action: "sit" } } } } }];
-fs.mkdirSync(path.join(W, "liftw"), { recursive: true }); fs.writeFileSync(path.join(W, "liftw", "world.jsonl"), translate(old, keys).out.map((e) => JSON.stringify(e)).join("\\n") + "\\n");
-const { WorldLog } = await import(E + "/server/worldlog.ts");
-const log = new WorldLog("liftw"); const notes = []; log.attach({ broadcast() {}, rightsChanged() {}, debug: (k, d) => notes.push({ kind: k, ...d }) });
-const st0 = log.live.state(); const kids0 = (h) => Object.values(st0.entities).filter((e) => e.c.parent?.to === h && e.c.socket).length;
-const atLoad = { notes, a: kids0("a-cart"), aMap: !!st0.entities["a-cart"].c.sockets, b: kids0("b-bench"), entries: log.live.entries.length };
-// the operator runs the maintenance command from inside the world (operator-repair {verb: "repair"}): the healthy host lifts, the one the door refuses is named
-const r = log.operatorRepair("opie", "repair", {});
-const st = log.live.state(); const kids = (h) => Object.values(st.entities).filter((e) => e.c.parent?.to === h && e.c.socket).length;
-console.log("SL " + JSON.stringify({ atLoad, r: { ok: r.ok, lift: r.steps?.lift }, a: kids("a-cart"), aMap: !!st.entities["a-cart"].c.sockets, b: kids("b-bench"), by: log.live.entries.find((e) => e?.verb === "lift-sockets")?.body?.by }));
-`);
-  const r = Bun.spawnSync(["bun", script], { env: { ...process.env, WORLDS_DIR: path.join(WS, "worlds"), ENGINE }, stdout: "pipe", stderr: "pipe" });
-  const line = String(r.stdout).split("\n").find((l) => l.startsWith("SL ")); const got = line ? JSON.parse(line.slice(3)) : null;
-  ok(!!got && got.atLoad.a === 0 && got.atLoad.b === 0 && got.atLoad.aMap && got.atLoad.notes.some((n) => n.kind === "repair-needed" && n.steps?.includes("lift-sockets") && n.blocking?.includes("lift-sockets")), "SL1 at load nothing is lifted (a load never writes: lead 10-18); the flight recorder is told the world needs lift-sockets and refuses writes meanwhile (repair-needed)", got);
-  ok(!!got && got.r.ok && got.b === 1 && got.a === 0 && got.aMap && got.by === "opie" && got.r.lift?.failed?.some((f) => f.host === "a-cart" && f.code === "shape") && got.r.lift?.made?.some((m) => m.host === "b-bench"), "SL1 …the operator's repair (operator-repair {verb: repair}) lifts the healthy host, recorded with the operator's id, and names the host the door refuses ({host, code}), left as it was", got); }
 
 console.log(`[server-check] ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

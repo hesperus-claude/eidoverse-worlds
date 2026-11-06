@@ -10,22 +10,18 @@
 // `collide`, `parent`, `comp.motion` with its `type` enum, `comp.sockets`, …,
 // `comp.light` on a thing of its own, `comp.collider`, and the Empty — a spawn with no
 // `lib`. (The old protocol's `kind: "light"` light entity is gone from the view:
-// the importer rewrites it to comp.light; shared/protocol/kind.js kindOf names
-// what a thing is.) `componentsOf` reads any folded entity as a component list,
-// and `entityOf` writes a component list back to those bytes (except a motion type in its old spelling, written in
-// today's word: names.js OLD_MOTION_TYPES); an instance's `key` says which comp-bag key it came from. Nothing in an existing
+// the importer rewrites it to comp.light.) `componentsOf` reads any folded entity as a component list,
+// and `entityOf` writes a component list back to those bytes; an instance's `key` says which comp-bag key it came from. Nothing in an existing
 // world is rewritten (RFC: updates are offered, never applied);
 // tools/components-corpus-test.ts proves the round trip on the conformance fixtures and every dir in COMPONENTS_CORPUS.
 //
 // Pure: no DOM, no three, no I/O. Server, browser, mcpl and tests import it.
 
-import { kindOf } from './protocol/kind.js';
 import { recordOf, recordComponents } from './protocol/view.js';
 import { materialize, COMPONENTS } from './protocol/componentspec.js';
-import { DESCRIPTORS, editorDefault, AXES } from './protocol/descriptors.js';
+import { DESCRIPTORS, editorDefault, AXES } from './descriptors.js';
 import { ESSENTIAL_NAMES } from './particle_effects.js';
 import { qNorm, qFromYaw } from './rot.js';
-import { motionType } from './protocol/names.js';
 import { WEATHERS, CLOUDS } from './forecast.js';
 
 // ------------------------------------------------------------ canonical bytes
@@ -134,7 +130,7 @@ const DEFS = [
   { name: 'Light', category: 'Rendering', summary: 'a point light',
     params: paramsOf('Light'),
     fallback: { visual: 'a glowing gizmo when the slot pool is spent', text: '(light)' },
-    note: 'wire: comp.light {color, intensity, range, important, day} on a thing of its own (one place per thing: never beside a model or mesh; an imported lamp becomes a Model with a Light child)' },
+    note: 'wire: comp.light {color, intensity, range, important, day}, on any thing (beside a model or a mesh too); Add Component ▸ Light on a model or a mesh puts it on a child a metre up, so its pose is its own' },
   // the motions' READS: a whole thing swings and turns about its Pivot component, else its origin (shape audit 10-16; a pendulum
   // was [0, 2, 0]); a part about its own origin; an orbit's part circles at 1 m
   { name: 'Pendulum', category: 'Motion', summary: 'swings back and forth about an axis',
@@ -204,12 +200,11 @@ const DEFS = [
   { name: 'Description', category: 'Core', summary: 'how it is described to anyone who reads it', params: paramsOf('Description', { text: { t: 'text', default: '', max: COMPONENTS.description.maxLen } }), fallback: { text: 'the description' } },
   { name: 'Captions', category: 'Media', readOnly: true, summary: 'live captions (written by the caption verb)', params: paramsOf('Captions', { feed: { t: 'json', default: null } }), fallback: { text: 'captions' } },
   { name: 'Stage', category: 'Media', summary: 'who is speaking (captionbot)', params: paramsOf('Stage', { speaker: { default: null } }), fallback: { text: 'components: stage' } },
-  // R 10-12 (primitives): a parametric body on a thing with no model, registered bare (componentspec `mesh`); one place per
-  // thing with a model and a light, as the authority refuses
+  // R 10-12 (primitives): a parametric body, registered bare (componentspec `mesh`); it may sit beside a model or a light
   { name: 'Mesh', category: 'Rendering', summary: 'a parametric body with no model: a box, sphere, cylinder, plane or capsule, sized in metres',
     params: paramsOf('Mesh', { size: { default: [1, 1, 1] } }),
     fallback: { visual: 'a grey body', text: '(a <shape>)' },
-    note: 'wire: comp.mesh {shape, size}; never beside a model or a light on one thing (give it a child). Its one material slot is \'surface\'' },
+    note: 'wire: comp.mesh {shape, size}; it may sit beside a model or a light. Its one material slot is \'surface\'' },
   { name: 'Annotation', category: 'Data', summary: 'any other data a world invents (recipe, notice, story…)',
     params: { type: { t: 'text', default: null, required: true }, data: { t: 'json', default: null } }, fallback: { text: 'components: <type>' } },
   // The world entity's components (design §3, shared/worldentity.js): `@world`
@@ -282,8 +277,8 @@ const omit = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => !
 
 const isBag = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
 // A comp-bag Light/Collider: the bag's keys map to the record's params by their
-// wire names (Light's `daytime: 'full'` is the record's burnsAtNoon, as an older
-// value's `day: false` was); any other daytime (or an older day) is kept verbatim in
+// wire names (Light's `daytime: 'full'` is the record's burnsAtNoon); any other
+// daytime is kept verbatim in
 // `wire`, and keys the record has no param for ride `extra.unknown`, so the bytes
 // always come back.
 const COMP_WIRE = { Light: { color: 'color', intensity: 'intensity', range: 'range', decay: 'decay', important: 'important' }, Collider: { shape: 'shape' } };
@@ -292,7 +287,6 @@ function compInstance(type, key, data) {
   for (const [k, v] of Object.entries(data)) {
     if (COMP_WIRE[type][k]) params[COMP_WIRE[type][k]] = v;
     else if (type === 'Light' && k === 'daytime') { if (v === 'full') params.burnsAtNoon = true; else wire = { ...(wire ?? {}), daytime: v }; }
-    else if (type === 'Light' && k === 'day') { if (v === false) params.burnsAtNoon = true; wire = { ...(wire ?? {}), day: v }; }   // the older spelling, remembered so its bytes come back
     else (extra.unknown ??= {})[k] = v;
   }
   return { type, key, params, ...(wire ? { wire } : {}), ...(Object.keys(extra).length ? { extra } : {}) };
@@ -300,11 +294,9 @@ function compInstance(type, key, data) {
 function compBag(inst) {
   const p = inst.params ?? {}; const bag = {};
   for (const [k, v] of Object.entries(p)) {
-    if (k === 'burnsAtNoon') { if (v === true) { if (inst.wire?.day !== undefined) bag.day = false; else bag.daytime = 'full'; } } else bag[k] = v;
+    if (k === 'burnsAtNoon') { if (v === true) bag.daytime = 'full'; } else bag[k] = v;
   }
-  if (inst.wire?.daytime !== undefined && bag.daytime === undefined && bag.day === undefined) bag.daytime = inst.wire.daytime;
-  // an older day: true comes back as written; an older day: false only while it still burns at noon (else it was edited off)
-  if (inst.wire?.day !== undefined && bag.day === undefined && bag.daytime === undefined && (inst.wire.day !== false || p.burnsAtNoon === true)) bag.day = inst.wire.day;
+  if (inst.wire?.daytime !== undefined && bag.daytime === undefined) bag.daytime = inst.wire.daytime;
   return Object.assign(bag, inst.extra?.unknown ?? {});
 }
 
@@ -330,8 +322,8 @@ export function componentsOf(ent) {
     if (key === 'hidden') { out.push({ type: 'Hidden', key, params: {}, wire: { value: data } }); continue; }
     if (key === 'label') { out.push({ type: 'Label', key, params: { text: data } }); continue; }
     if (key === 'description' && typeof data === 'string') { out.push({ type: 'Description', key, params: { text: data } }); continue; }
-    if ((key === 'motion' || key.startsWith('motion:')) && data && typeof data === 'object' && MOTION[motionType(data)]) {
-      const type = MOTION[motionType(data)];   // a value stored before the rename reads as today's (and is written back in today's word)
+    if ((key === 'motion' || key.startsWith('motion:')) && data && typeof data === 'object' && MOTION[data.type]) {
+      const type = MOTION[data.type];
       const known = Object.keys(RECORDS[type].params);
       const params = {}; const extra = {};
       for (const [k, v] of Object.entries(data)) {
@@ -473,9 +465,8 @@ const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
 /** The light an entity casts, normalized, or null: a plain-object comp.light on any entity (a bare light, or an imported
  *  lamp that is a model too). A field of the wrong type reads as its default — never a throw, never NaN reaching the rig. */
-// shape audit 10-16: a value a reader can't read is that component absent (one rule with kind.js isMeshBag): an unknown
-// kind is no light, never a point light. decay is part of the value (absent: the rig's old 1.7); daytime is dim | full (an
-// older value's day: false is full)
+// shape audit 10-16: a value a reader can't read is that component absent (one rule with isMeshBag): an unknown
+// kind is no light, never a point light. decay is part of the value (absent: the rig's old 1.7); daytime is dim | full
 export function lightOf(ent) {
   if (!ent || typeof ent !== 'object') return null;
   const src = isBag(ent?.light) ? ent.light : null;
@@ -486,11 +477,11 @@ export function lightOf(ent) {
   const decay = finite(src.decay) && src.decay >= 0 && src.decay <= 4 ? src.decay : undefined;   // unread: an older value (the rig's 1.7 and 16)
   return {
     color: finite(src.color) && src.color >= 0 && src.color <= 0xffffff ? Math.round(src.color) : LIGHT_DEFAULTS.color,
-    intensity: finite(src.intensity) && src.intensity >= 0 ? src.intensity : decay === undefined ? 16 : LIGHT_DEFAULTS.intensity,   // shaperepair OLD_LIGHT_INTENSITY
+    intensity: finite(src.intensity) && src.intensity >= 0 ? src.intensity : decay === undefined ? 16 : LIGHT_DEFAULTS.intensity,   // an older light's reading (16)
     range: finite(src.range) && src.range > 0 ? src.range : LIGHT_DEFAULTS.range,
     important: src.important === true,
     decay: decay ?? 1.7,
-    daytime: daytime ?? (src.day === false ? 'full' : 'dim'),
+    daytime: daytime ?? 'dim',
     // a spot's cone, glTF's half-angles (rad): angle = outer (default π/4), inner where the edge starts to soften
     // a point light is the default and says nothing more; a spot adds its kind and cone; a sun its kind (models.js leaves it to the rig)
     ...(src.kind === 'spot' ? (() => { const angle = finite(src.angle) && src.angle > 0 && src.angle <= Math.PI / 2 ? src.angle : Math.PI / 4;
@@ -510,46 +501,28 @@ export function colliderOf(ent) {
   return ent?.collide;
 }
 
-/** An Empty: an entity with nothing but a Transform (and whatever comps it
- *  carries) — no model, no light, no mesh. A pivot, a group parent, a target. */
-export const isEmpty = (ent) => !!ent && typeof ent === 'object' && kindOf(ent) === 'empty';
+/** A `mesh` component a reader may draw: a bag whose shape the registry names (a malformed mesh is absent, never a throw). */
+export const isMeshBag = (m) => isBag(m) && COMPONENTS.mesh.enums.shape.includes(m.shape);
 
 /** Why a `comp` of type light/collider would be refused, or null. The authority
  *  (server/verbs.ts vComp) and the inspector ask the same question, so a
  *  refusal reads the same from either. `data: null` (removal) is always fine.
  *  Keys a record does not name are allowed, as in every bag (annotations
  *  ride along); the ones it names must have their type. */
-/** One place per thing (R 10-11): the refusal's words, the same from the authority and the Inspector. `has` is what the thing
- *  already is (model | light | mesh), `wants` what was asked for. */
-export const ONE_PLACE = {
-  reason: (id, has, wants) => (has === 'light' ? `${id} is a light; a ${wants} goes on its own thing${wants === 'model' ? '' : ' under it'}`
-    : has === 'mesh' ? `${id} is a mesh; a ${wants} goes on its own thing${wants === 'light' ? ' under it' : ''}` : `${id} has a model; a ${wants} ${wants === 'light' ? 'goes on its own thing under it' : 'is its own thing'}`),
-  fix: (id, has, wants) => (wants === 'light' ? `create {components: {light: {…}, parent: {to: '${id}'}, transform: {pos: [0, 1, 0]}}}`
-    : wants === 'mesh' ? (has === 'light' ? 'create the mesh as its own thing and parent this light to it' : `create {components: {mesh: {…}, parent: {to: '${id}'}}}, or delete its model first`)
-    : has === 'light' ? 'create the model as its own thing and parent this light to it' : 'create the model as its own thing, or delete the mesh first'),
-  socket: {
-    reason: (id, comp) => `${id} is a socket (an attachment point); a ${comp} goes on its host, or on its own thing attached to it`,
-    fix: (id, comp) => `put the ${comp} on the thing the socket belongs to, or create a thing with parent {to: '${id}'} and give it the ${comp}`,
-  },
-};
 export const MESH_SHAPES = COMPONENTS.mesh.enums.shape;
 export function compRefusal(type, data, ent = null) {
   if (data == null) return null;
   if (type === 'mesh') {
-    if (ent?.model != null || ent?.model != null) return `${ONE_PLACE.reason('this thing', 'model', 'mesh')} (one place per thing) — ${ONE_PLACE.fix('it', 'model', 'mesh')}`;
-    if (isBag(ent?.light)) return `${ONE_PLACE.reason('this thing', 'light', 'mesh')} (one place per thing) — ${ONE_PLACE.fix('it', 'light', 'mesh')}`;
     if (!isBag(data) || !MESH_SHAPES.includes(data.shape)) return `a mesh component is {shape: ${MESH_SHAPES.join('|')}, size: [x, y, z]}`;
     if (data.size !== undefined && !(Array.isArray(data.size) && data.size.length === 3 && data.size.every((x) => finite(x) && x >= 0.05 && x <= 200))) return 'mesh size is [x, y, z] in metres, each 0.05 to 200';
     return null;
   }
   if (type === 'light') {
-    if (isBag(ent?.mesh)) return `${ONE_PLACE.reason('this thing', 'mesh', 'light')} (one place per thing) — Add Component ▸ Light makes that child`;
     if (!isBag(data)) return 'a light component is an object: {color?, intensity?, range?, decay?, important?, daytime?}';
     if (data.color !== undefined && !(Number.isInteger(data.color) && data.color >= 0 && data.color <= 0xffffff)) return 'light color is an integer 0…0xffffff (e.g. 16767392 for 0xffd9a0)';
     if (data.intensity !== undefined && !(finite(data.intensity) && data.intensity >= 0)) return 'light intensity is a number ≥ 0';
     if (data.range !== undefined && !(finite(data.range) && data.range > 0)) return 'light range is a number of metres > 0';
     if (data.important !== undefined && typeof data.important !== 'boolean') return 'light important is true or false';
-    if (data.day !== undefined && typeof data.day !== 'boolean') return 'light day is true or false (false = burns at noon; it is stored as daytime)';
     if (data.daytime !== undefined && !COMPONENTS.light.enums.daytime.includes(data.daytime)) return 'light daytime is dim (follows the day) or full (burns at noon too)';
     if (data.decay !== undefined && !(finite(data.decay) && data.decay >= 0 && data.decay <= 4)) return 'light decay is a falloff exponent 0..4 (2 = inverse square)';
     return null;

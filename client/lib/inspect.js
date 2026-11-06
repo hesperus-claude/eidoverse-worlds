@@ -8,7 +8,7 @@
 //   commitEdit(id, key, value, {live})
 //     live   → PREVIEW: the group's handler moves the realized object (a
 //              light brightens, a seat gizmo slides) — no log traffic;
-//     final  → COMMIT: editOps() turns the edit into the fewest door ops, sent as ONE request (shared/protocol/requests.js via
+//     final  → COMMIT: editOps() turns the edit into the fewest door ops, sent as ONE request (shared/requests.js via
 //              editwrites.sendOps): one act, undone by the authority's undo; expect carries the values as the gesture began.
 //
 //   registerHandler(group, fn(id, obj, k, value, opts) → handled?)
@@ -36,7 +36,6 @@ import { inspectSchema, editOps, fieldAt } from '../../shared/editschema.js';
 import { namedParts } from './parts.js';
 import { sameRotation } from '../../shared/euler.js';
 import { localOf } from '../../shared/hierarchy.js';
-import { kindOf } from '../../shared/protocol/kind.js';
 import { lightOf } from '../../shared/components.js';
 import { WORLD_ID, worldSchema, worldEditOps } from '../../shared/worldentity.js';
 import * as Edits from './editwrites.js';   // slice 3b: component edits are requests
@@ -91,8 +90,8 @@ function eulerHint(id, rec) {
 /** What only a live client knows about a thing: the schema AND the commit path read the same. */
 export function liveFor(id) {
   const obj = entities.get(id); const rec = foldRecord(id);
-  const light = kindOf(rec) === 'light';
-  return { casting: lightOf(rec) ? hooks.casting?.(id) : undefined, parts: obj && !light ? namedParts(obj) : undefined, materials: obj && !light ? materialsOf(obj) : undefined,
+  const drawn = obj && !obj.userData?.empty;   // an Empty draws nothing: its only mesh may be a light's gizmo
+  return { casting: lightOf(rec) ? hooks.casting?.(id) : undefined, parts: drawn ? namedParts(obj) : undefined, materials: drawn ? materialsOf(obj) : undefined,
     euler: eulerHint(id, foldRecord(id)),
     // this viewer's rotate order (viewprefs.js): how the channels read, never sent
     rotOrder: rotOrderFor(id),
@@ -145,7 +144,7 @@ export function planEdit(id, key, value) {
 /** Keep a rotate-order pick (a planEdit's rotOrder) as this viewer's: nothing is sent. */
 export const keepView = (id, plan) => { if (plan?.rotOrder) setRotOrder(id, plan.rotOrder); };
 /** Does this plan write a transform (a move/turn/scale)? The euler hint follows the pose. */
-export const movesPose = (ops) => ops.some((o) => (o.verb === 'batch' ? o.args.ops : [o]).some((x) => x.args?.component === 'transform'));
+export const movesPose = (ops) => ops.some((o) => (o.verb === 'batch' ? o.args.requests : [o]).some((x) => x.args?.component === 'transform'));
 
 // a scrubbed transform is a live drag for everyone else (E2: the same presence lane the gizmo uses, so co-builders see the
 // number move and the claim badge); the release's commit sends the last sample with end

@@ -14,6 +14,7 @@ import { ENGINE, scratch, copyTree, archiveTo, linkInto } from "./common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -84,7 +85,7 @@ function openWorld(name: string) {
   const logPath = path.join(root, "worlds", `${name}.jsonl`), storeDir = path.join(root, "store");
   const entries = F.readLog(readLogBytes(logPath)).map(D.posAt);
   const blobPath = (h: string) => path.join(storeDir, `${String(h).replace(/[^a-z0-9]/g, "-")}.json`);
-  return D.worldOf({ name, entries,
+  return D.worldOf({ catalogue: LAB_CATALOGUE, simModels: LAB_MODELS, name, entries,
     getBlob: (h: string) => JSON.parse(fs.readFileSync(blobPath(h), "utf8")),
     putBlob: (v: unknown) => { const s = F.jcs(v); const h = `sha256:${F.sha256(s)}`; putBlobFile(blobPath(h), s, h); return h; },
     now: () => pinned(), writeLine: (line: string) => appendDurable(logPath, line),
@@ -100,7 +101,7 @@ function session() {
 }
 const code = (r: any) => r?.refused?.code;
 const show = (r: any) => (r?.crashed ? `CRASH ${r.crashed}` : r?.ok ? "ok" : `refused ${r?.refused?.code}: ${String(r?.refused?.reason).slice(0, 120)}`);
-const launchesOf = (s: any) => s.entries().filter((e: any) => e.kind === "sim" && e.verb === "launch");
+const launchesOf = (s: any) => s.entries().filter((e: any) => e.kind === "physics" && e.verb === "launch");
 const shovesIn = (s: any, who: string) => (s.call(who, "inbox").messages ?? []).filter((m: any) => m.type === "body" && m.kind === "shove");
 // owner olive, builder bob, member vic; a world running eidosim; a crate (0.6 m) at the origin anyone may punt
 function cast(s: any, { physics = true } = {}) {
@@ -114,7 +115,7 @@ type Case = { id: string; what: string; run: (s: any) => any; good: (o: any) => 
 const cases: Case[] = [
   { id: "F1", what: "a builder's blast 1 m off the crate's -x side punts it outward (+x, lifted) as one force act, the launch caused by it", run(s) { cast(s);
       const n0 = s.entries().length; const r = s.call("bob", "force", { at: [-1, 0, 0] });
-      const acts = s.entries().slice(n0).filter((e: any) => e.kind === "act"); const l = launchesOf(s)[0];
+      const acts = s.entries().slice(n0).filter((e: any) => e.kind === "request"); const l = launchesOf(s)[0];
       return { r: show(r), punted: r.punted, acts: acts.map((e: any) => e.body?.verb ?? e.verb), act: r.act, cause: l?.cause, v: l?.body?.v }; },
     good: (o) => o.r === "ok" && o.punted?.length === 1 && o.acts.length === 1 && o.cause === o.act && o.v?.[0] > 1 && o.v?.[1] > 0.5 && Math.abs(o.v?.[2]) < 1e-6 },
   { id: "F2", what: "a member's blast is refused rights, and nothing flies", run(s) { cast(s);
@@ -155,7 +156,7 @@ const cases: Case[] = [
     good: (o) => o.r === "ok" && o.punted === 0 && /no physics/.test(o.notes) && o.me === 1 && o.launches === 0 && o.added === 1 },
   { id: "F9", what: "who was shoved never reaches the log: the act holds the request, not the bodies", run(s) { cast(s, { physics: false });
       s.call("vic", "move", { to: [1, 0, 0] }); const n0 = s.entries().length; s.call("bob", "force", { at: [0, 0, 0] });
-      const added = s.entries().slice(n0); return { n: added.length, at: added[0]?.body?.request?.at, refused: added[0]?.body?.refused, text: JSON.stringify(added) }; },
+      const added = s.entries().slice(n0); return { n: added.length, at: added[0]?.body?.args?.at, refused: added[0]?.body?.refused, text: JSON.stringify(added) }; },
     good: (o) => o.n === 1 && !o.refused && JSON.stringify(o.at) === "[0,0,0]" && !/vic/.test(o.text) && /"force"/.test(o.text) },
   { id: "F10", what: "a refused body hears body-refused {from, class shove, gate move} once per asker per TRIED_NOTE_MS, however many blasts land meanwhile", run(s) { cast(s, { physics: false });
       s.call("ida", "move", { to: [1, 0, 0] }); s.call("ida", "consent", { move: false }); s.call("bob", "move", { to: [0, 0, 6] });

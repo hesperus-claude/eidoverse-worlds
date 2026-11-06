@@ -35,7 +35,7 @@ In the editor (desktop), the same loop is **Inspector › Scripts › new script
 starts it (someone using it, or every N seconds), what it may change, whether it may speak, and the source (a template
 that runs as it stands). Create sends `upload`, then ONE batch: `script:<name>` and, for a use script, its reaction
 (`use`, or the script's own name when the thing's `use` already does something else). One act, so Ctrl+Z takes it off.
-Refusals show on the card in these same words. (shared/protocol/newscript.js plans it; client/lib/scriptnew.js is the card.)
+Refusals show on the card in these same words. (client/lib/newscript.js plans it; client/lib/scriptnew.js is the card.)
 
 ## Developer kit
 
@@ -124,7 +124,7 @@ always the right one to keep.)
 | `world.say(text)` | a say entry (needs `scope.say`) |
 | `world.use(id, action, args?)` | set off another thing's reaction (the id must be in `scope.ids`; ≤ 4): after the batch lands it meets that thing's own gate as a visitor's use would, with the sponsor's rights; its script hears `use` with `by: "script:<thing>"`. The act records the call, the use is its own act, and the cascade depth bounds a loop |
 | `world.shove(who)`, `world.pose(who, spec)` | effects on a person (needs `scope.bodies`, then their consent) |
-| `console.log(...parts)` | its console (`scripts {id}` shows the last lines; never logged). `world.log` is the old spelling, kept for one version |
+| `console.log(...parts)` | its console (`scripts {id}` shows the last lines; never logged). |
 
 Events (`e`): every event has `on`.
 - `use`: `by` (who), `seq` (their act), `action`, `args` (what they sent); used while held (a `grabbable`'s use
@@ -184,16 +184,16 @@ long as it rides; that field is reserved today (a write is refused), so no held 
 ## What an activation is, in the log
 
 ```text
-812 act    actor=vic        verb=use     body={request: {id: "bell1", action: "ring"}, runs: "script:bell"}
-813 act    actor=script:bell1  verb=script  cause=812  body={script, src, sponsor, sponsorAt, on, trigger, event,
+812 request actor=vic        verb=use     body={args: {id: "bell1", action: "ring"}, runs: "script:bell"}
+813 request actor=script:bell1  verb=script  cause=812  body={script, src, sponsor, sponsorAt, on, trigger, event,
                                                          head, seed, depth, engine, api, reads?, bodies?}
 814 change actor=script:bell1  cause=813    the batch: every write, all or nothing
 815 say    actor=script:bell1  cause=813
-816 act    actor=script:bell1  verb=use  cause=813  body={request: {id, action, args?}, sponsor, …}   a world.use: then the
-                                                         target's change or script act, caused by 816
+816 request actor=script:bell1  verb=use  cause=813  body={args: {id, action, args?}, sponsor, …}   a world.use: then the
+                                                         target's change or script request, caused by 816
 ```
 A timer's or a presence event's act has `cause` = the entry that made its sponsor. Replay never runs code: the fold
-reads 814. An auditor may: `shared/protocol/scriptaudit.js` folds to `head`, re-runs the source with the recorded event,
+reads 814. An auditor may: `shared/protocol/scriptaudit.js` folds to the body's `seq`, re-runs the source with the recorded event,
 clock (the act's `ts`), `seed` and presence `reads`, and compares the writes. An act's `reads` say what was asked and
 how much came back (`{near: [{r, n}], count: [n], names: k}`; `nearby` is recorded under `near`), never who: so a re-run
 answers `world.near` and `world.nearby` with stand-ins (each `r` away) and `world.name` with `null`. When the writes and says still match, the act is verified; when they differ and the script
@@ -216,7 +216,7 @@ Moved from PROTOCOL §8 (one optional tool's procedure; the protocol keeps that 
   (within its declared scope). That is the script's own act, signed with its sponsor's rights, and readable in its source.
   A re-run gets stand-ins. Body effects (`world.shove`, `world.pose`) are recorded as
   `{kind, to}`, never which consent let them through. A `say`'s text and a `use`'s `args` are not copied into the act: it points at them (`trigger`),
-  so purging that say or request purges them everywhere.
+  so redacting that say or request redacts them everywhere.
 - Each activation runs in a **fresh** sandbox: nothing survives between activations. Keep state in a component in your
   scope (it is world state: forkable, readable, undoable). There is no private kv.
 - No timers (`setTimeout`), network, files or other clocks exist. Motion is a function of time (`motion`), never a

@@ -33,7 +33,7 @@ export const LIMITS = Object.freeze({
   bodies: 4,            // body effects per activation
   uses: 4,              // world.use calls per activation (each another thing's reaction)
   ids: 1000,            // ids one read returns at most
-  logLines: 20,         // world.log lines kept per activation in the console ring
+  logLines: 20,         // console.log lines kept per activation in the console ring
   cpu: 2000,            // authority practice: ms of sandbox time per sponsor per minute (runs that write nothing cost the authority too)
   runs: 60,             // authority practice: activations per script per minute, whatever they write
   uploads: 20,          // uploads per person per minute (a blob costs storage and a parse, and logs nothing)
@@ -65,8 +65,8 @@ export const seedOf = (worldId, actSeq, key) => sha256(`${worldId}|${actSeq}|${k
 export function elide(st, ops) {
   const s = cowState(st); const out = [];
   for (const o of ops) { const e = s.entities[o.id];
-    if (o.verb === "set" && "value" in o && e && o.comp in e.c && jcs(e.c[o.comp]) === jcs(o.value)) continue;   // a set without value is the fold's no-op, judged by the gate, never compared
-    if (o.verb === "delete" && (!e || (o.comp !== undefined && !(o.comp in e.c)))) continue;
+    if (o.op === "set" && "value" in o && e && o.comp in e.c && jcs(e.c[o.comp]) === jcs(o.value)) continue;   // a set without value is the fold's no-op, judged by the gate, never compared
+    if (o.op === "delete" && (!e || (o.comp !== undefined && !(o.comp in e.c)))) continue;
     out.push(o); try { applyCow(s, [o]); } catch { /* the gate names the shape problem */ } }
   return out;
 }
@@ -80,7 +80,7 @@ const plain = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 export function stampMotions(st, ops, now) {
   const s = cowState(st); const out = [];
   for (const o of ops) { let op = o;
-    if (o.verb === "set" && isMotion(o.comp) && plain(o.value) && o.value.t0 === undefined) {
+    if (o.op === "set" && isMotion(o.comp) && plain(o.value) && o.value.t0 === undefined) {
       const cur = s.entities[o.id]?.c[o.comp]; let t0 = now;
       if (plain(cur) && typeof cur.t0 === "number") { const { t0: was, ...rest } = cur; if (jcs(rest) === jcs(o.value)) t0 = was; }
       op = { ...o, value: { ...o.value, t0 } }; }

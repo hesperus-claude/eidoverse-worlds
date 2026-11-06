@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { foundWorlds } from "./harness.ts";
+import { helloOf } from "../shared/protocol/hello.js";
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -80,7 +81,7 @@ function joinBody(port: number, world: string, id: string, extra: Record<string,
   return new Promise((res, rej) => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
     const t = setTimeout(() => rej(new Error(`join ${id}@${world} timed out`)), 8000);
-    ws.onopen = () => ws.send(JSON.stringify({ type: "join", world, id, avatar: "", replica: true, ...extra }));
+    ws.onopen = () => ws.send(JSON.stringify({ type: "join", hello: helloOf(), world, id, avatar: "", replica: true, ...extra }));
     ws.onmessage = (ev) => {
       const m = JSON.parse(String(ev.data));
       if (m.type === "snapshot") { clearTimeout(t); res(ws); }
@@ -128,7 +129,7 @@ console.log("\n— C. a join never founds; D. the map never founds —");
   const refused = await joinBody(port, "fresh", "founder").then(() => null, (e) => String(e.message));
   await new Promise((r) => setTimeout(r, 200));
   const m = byName((await fetchWorlds(port)).rows);
-  check("a join to a world that doesn't exist is refused, and says so", /no world called "fresh"/.test(refused ?? ""), String(refused));
+  check("a join to a world that doesn't exist is refused, and says so", /No accessible world named fresh\./.test(refused ?? ""), String(refused));
   check("…and founds nothing: not listed, nothing on disk", !m.fresh && JSON.stringify(readdirSync(worldsDir).sort()) === JSON.stringify(before), Object.keys(m).join(","));
   await fetch(`http://127.0.0.1:${port}/worlds?world=never-made`);
   await fetch(`http://127.0.0.1:${port}/worlds`);

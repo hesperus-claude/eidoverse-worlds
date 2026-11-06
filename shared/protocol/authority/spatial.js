@@ -4,7 +4,7 @@
 import { offChain, solidOff } from "../simlayer.js";
 import { CTX } from "./ctx.js";
 import { refuse } from "./refuse.js";
-import { LAB_CATALOGUE, geomE } from "./catalogue.js";
+import { NO_CATALOGUE, geomE } from "./catalogue.js";
 import { aabb, boxToObb, inRect, obbs, overlap, rectMeets, satCost, satDepth, surfacesOf } from "./math.js";
 import { VOLATILE } from "./storage.js";
 import { terrainParams, makeHeightField } from "../../terrainmath.js";
@@ -123,7 +123,7 @@ const kidsMap = (st) => kidsOfIx(spatial(st), st.entities);
 /** For tests: does the index this state's queries use (built or derived) file exactly what a fresh build files? A list
  *  of differences, empty when it does. */
 export function indexAudit(w) {
-  const prevCat = CTX.cat; CTX.cat = w.catalogue ?? LAB_CATALOGUE;
+  const prevCat = CTX.cat; CTX.cat = w.catalogue ?? NO_CATALOGUE;
   try { const st = w.state(); const ix = spatial(st); const fresh = buildIx(st, ix.ver); const out = [];
     const norm = (x) => ({ ids: [...x.rec.keys()].sort().join(), grid: [...x.grid.entries()].map(([k, a]) => `${k}:${[...a].sort().join()}`).sort().join(";"), big: [...x.big].sort().join(),
       order: Object.keys(st.entities).filter((id) => x.order.has(id)).sort((a, b) => x.order.get(a) - x.order.get(b)).join(), boxes: [...x.rec.entries()].map(([id, g]) => `${id}:${JSON.stringify(g.q)}`).sort().join() });
@@ -185,7 +185,7 @@ const GROUND = new WeakMap();
 const FLAT = Object.freeze({ terrain: false, ready: true, height: () => 0, level: null });
 const loading = () => refuse("ground-loading", "this world's ground is still loading: its heightmap's grid isn't on this server yet, and the authority won't stand anything (or judge a step) on a guessed height",
   "try again in a moment; if it stays missing, an owner can upload the heightmap image again");
-// the water level is @world.water's (shape audit 10-16: its own component; an older terrain.water until the maintenance command moves it),
+// the water level is @world.water's (shape audit 10-16: its own component),
 // so a cached ground is rebuilt when either the terrain or the water changes
 function groundOf(st) {
   const wc = st.entities["@world"]?.c; const t = wc?.terrain; const w = worldWater(wc);

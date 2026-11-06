@@ -84,8 +84,8 @@ const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.();
   const piv = stub.entities.get('pivot');
   check('an Empty realizes at once as an invisible Group at its folded transform', !!piv && piv.isGroup && piv.userData.empty === true
     && jeq(piv.position.toArray().map((x: number) => +x.toFixed(9)), [1, 2, 3]) && Math.abs(piv.rotation.y - 0.5) < 1e-9, `${piv?.type} ${JSON.stringify(piv?.position)}`);
-  check('…loads nothing (no asset request names it) and is listed with kind "light" (one kindOf: an Empty carrying a light IS a light)',
-    !stub.loads.some((l: any) => l.lib == null || l.lib === 'undefined') && stub.metaOf('pivot')?.kind === 'light', JSON.stringify([stub.loads.map((l: any) => l.lib), stub.metaOf('pivot')]));   // loads: the loader's own record (its lib path, as userData.lib), not a view record
+  check('…loads nothing (no asset request names it); its panel meta carries no model and no kind (read its components)',
+    !stub.loads.some((l: any) => l.lib == null || l.lib === 'undefined') && stub.metaOf('pivot')?.model === undefined && !('kind' in (stub.metaOf('pivot') ?? { kind: 1 })), JSON.stringify([stub.loads.map((l: any) => l.lib), stub.metaOf('pivot')]));   // loads: the loader's own record (its lib path, as userData.lib), not a view record
   check('…and owns no collider', !stub.colliderLog.some((e: any) => e[1] === 'pivot'), JSON.stringify(stub.colliderLog));
   const cup = stub.entities.get('cup');
   check('a model parented to an Empty rides it (parented into the Empty\'s Group at its offset)', !!cup && cup.parent === piv && jeq(cup.position.toArray().map((x: number) => +x.toFixed(9)), [0, 0.5, 0]), `${cup?.parent?.type} ${JSON.stringify(cup?.position)}`);
@@ -94,8 +94,7 @@ const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.();
   check('the light component on the Empty becomes a rig request that follows the Empty\'s object, with its fields and the defaults',
     rq('pivot')?.obj === piv && rq('pivot').keep === true && rq('pivot').intensity === 30 && rq('pivot').range === 10 && rq('pivot').color === 0xffd9a0 && rq('pivot').dayAware === true && rq('pivot').authored === true, JSON.stringify({ ...rq('pivot'), obj: !!rq('pivot')?.obj }));
   check('…and its gizmo is a child of the Empty (a bare bulb is seen, and selectable)', piv?.children.some((c: any) => c.userData.gizmo), JSON.stringify(piv?.children.map((c: any) => c.type)));
-  // one place per thing (R 10-11): a light never shares an entity with a model natively — a lamp is a model with a light
-  // on its own child. An imported world's lamp (model + light on one record, kept by the fold) is hydrated here by hand.
+  // a lamp here is a model with a light on its own child (a light may also sit on the model itself: components compose)
   const lamp = stub.entities.get('lamp'); const lampLight = stub.entities.get('lamp-light');
   check('a lamp (Model + child light): the child Empty rides the REALIZED model and its request follows the child, day:false → not day-aware',
     !!lamp && !!lamp.userData.lib && lampLight?.parent === lamp && rq('lamp-light')?.obj === lampLight && rq('lamp-light').color === 0xff8800 && rq('lamp-light').range === 7 && rq('lamp-light').dayAware === false, JSON.stringify({ ...rq('lamp-light'), obj: rq('lamp-light')?.obj?.userData, parent: lampLight?.parent?.userData }));
@@ -135,8 +134,10 @@ const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.();
   live('set', { id: 'lamp', component: 'collider', value: { shape: 'exact' } });
   check('live: a changed collider component re-decides the standing collider under the new shape',
     stub.colliders.get('lamp')?.pref === 'exact' && stub.colliderLog.slice(marks).some((e: any) => e[0] === 'refit' && e[1] === 'lamp'), JSON.stringify(stub.colliderLog.slice(marks)));
-  const onePlace = W.call('set', { id: 'plain', component: 'light', value: { intensity: 9 } });
-  check('live: a Light component on a STANDING model is refused at the door (one-place)', !onePlace.ok && onePlace.refused?.code === 'one-place', JSON.stringify(onePlace.refused));
+  const onModel = W.call('set', { id: 'plain', component: 'light', value: { intensity: 9 } }); S.applyView(structuredClone(W.view()));
+  check('live: a Light component on a STANDING model is taken (components compose): the light rides the model, no gizmo, no lamp inferred',
+    onModel.ok && rq('plain')?.obj === stub.entities.get('plain') && rq('plain').intensity === 9 && lamps('plain') === 0 && !stub.entities.get('plain')?.children.some((c: any) => c.userData?.gizmo), JSON.stringify(onModel.refused ?? rq('plain')?.intensity));
+  if (onModel.ok) live('delete', { id: 'plain', component: 'light' });
   live('create', { id: 'plain-light', components: { transform: { pos: [0, 1, 0] }, parent: { to: 'plain' }, light: { intensity: 9 } } });
   check('live: a light child added under a STANDING model casts its own light, and the model still infers none',
     rq('plain-light')?.intensity === 9 && rq('plain-light').obj === stub.entities.get('plain-light') && lamps('plain') === 0, JSON.stringify([stub.lampLog.slice(-3), rq('plain-light')?.intensity, lamps('plain')]));
@@ -153,13 +154,12 @@ const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.();
   live('delete', { id: 'e2' });
   check('live: removing an Empty retires its Group and releases its light', !stub.entities.has('e2') && !e2.parent && !rq('e2'));
   const spy: any = await import('./unknown-comp-report-spy.mjs');
-  const { planReconcile, kindOf } = await import('../client/lib/realize/models_field.js');
+  const { planReconcile } = await import('../client/lib/realize/models_field.js');
   const plan = planReconcile({ a: { pos: [0, 0, 0] }, b: { model: LAMP, pos: [0, 0, 0] }, c: { pos: [0, 1, 0], light: {} } },
-    new Map([['a', { kind: 'empty' }], ['b', { kind: 'model', model: LAMP }], ['c', { kind: 'light' }]]));
+    new Map([['a', {}], ['b', { model: LAMP }], ['c', {}]]));
   check('reconcile (rejoin) leaves a standing Empty alone — no retire-and-rebuild churn', plan.create.length === 0 && plan.retire.length === 0, JSON.stringify(plan));
-  const plan2 = planReconcile({ a: { model: LAMP, pos: [0, 0, 0] } }, new Map([['a', { kind: 'empty' }]]));
+  const plan2 = planReconcile({ a: { model: LAMP, pos: [0, 0, 0] } }, new Map([['a', {}]]));
   check('…but an Empty whose id now folds as a model is rebuilt', plan2.retire[0] === 'a' && plan2.create[0]?.id === 'a', JSON.stringify(plan2));
-  check('kindOf: light / empty / model / mesh', kindOf({ pos: [0, 1, 0], light: {} }) === 'light' && kindOf({ pos: [0, 0, 0] }) === 'empty' && kindOf({ model: LAMP }) === 'model' && kindOf({ mesh: { shape: 'box', size: [1, 1, 1] } }) === 'mesh' && kindOf({ mesh: {} }) === 'empty');
   const { bus } = await import('../client/lib/base.js');
   const marker = (g: any) => !!g?.children.some((c: any) => c.userData?.emptyMarker);
   check('outside build mode an Empty carries no marker (nothing to hit that nobody can see)', !marker(piv));
@@ -259,7 +259,7 @@ console.log('\n5. the inspector (shared/editschema.js: reads either spelling, wr
     return bad; };
   const card = (ent: any, type: string, key: string | null = null) => inspectSchema(ent, 'x').sections.list.find((c: any) => c.type === type && c.key === key);
 
-  // a lamp is a thing with a light component — an Empty (one place per thing: the door refuses a light on a model)
+  // a lamp is a thing with a light component — here an Empty
   const lamp = { pos: [0, 0, 0], yaw: 0, light: { color: 0xff8800, intensity: 20, important: true }, actor: 'a', ts: 1 };
   const lsch = inspectSchema(lamp, 'x');
   check('a light component shows in the light group (light.* addresses), valued from its bag',

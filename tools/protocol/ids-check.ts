@@ -69,11 +69,11 @@ await C("W2", "a chosen id is refused on create {from} (duplicate and blueprint)
   const dup = W.call("create", { from: src, id: "twin" });
   const pub = W.call("publish", { from: src, name: "p" }); const h = hashOf(pub);
   const bp = W.call("create", { from: h, id: "copy" });
-  const b = W.call("batch", { ops: [{ verb: "create", args: { model: "crate" } }, { verb: "create", args: { id: "chair", model: "crate" } }] });
-  return [!dup.ok && dup.refused.code === "shape" && !bp.ok && bp.refused.code === "shape" && !b.ok && b.refused.code === "shape" && /op 1/.test(b.refused.reason) && /\$chair/.test(b.refused.fix), [why(dup), why(bp), why(b)]]; });
+  const b = W.call("batch", { requests: [{ verb: "create", args: { model: "crate" } }, { verb: "create", args: { id: "chair", model: "crate" } }] });
+  return [!dup.ok && dup.refused.code === "shape" && !bp.ok && bp.refused.code === "shape" && !b.ok && b.refused.code === "shape" && /request 1/.test(b.refused.reason) && /\$chair/.test(b.refused.fix), [why(dup), why(bp), why(b)]]; });
 await C("W3", "the identity-shaped id refusal still holds through the system door (a fork's copy can't wear u-…)", () => {
   const W = world(); const w = SD.worldObject(W);
-  const r = D.forkCopy(w, W.owner, { ops: [{ verb: "create", args: { id: "u-abcdefghijklmnopqrst", model: "crate" } }] });
+  const r = D.forkCopy(w, W.owner, { requests: [{ verb: "create", args: { id: "u-abcdefghijklmnopqrst", model: "crate" } }] });
   return [!r.ok && r.refused.code === "shape" && /person/.test(r.refused.reason), why(r)]; });
 
 // ---- P: placeholders ----
@@ -83,7 +83,7 @@ await C("P1", "create {id: '$potion'} mints an opaque id; the reply's ids map na
   return [r.ok && OPAQUE.test(id ?? "") && W.state().entities[id] && made(r).includes(id) && !logText(W).includes("$potion"), [why(r), r.ids]]; });
 await C("P2", "one batch: refs to placeholders resolve (parent.to, place on, a set's id, a look-at target), in any op order", () => {
   const W = world();
-  const r = W.call("batch", { ops: [
+  const r = W.call("batch", { requests: [
     { verb: "create", args: { id: "$table", model: "table" } },
     { verb: "create", args: { id: "$lamp", model: "crate", components: { parent: { to: "$table" } } } },
     { verb: "set", args: { id: "$lamp", component: "label", value: "the lamp" } },
@@ -94,7 +94,7 @@ await C("P2", "one batch: refs to placeholders resolve (parent.to, place on, a s
     && st[m.$cup]?.c["look-at"]?.target === m.$lamp && !/\$table|\$lamp|\$cup/.test(logText(W)), [why(r), m]]; });
 await C("P3", "a placeholder defined twice in one request is refused; one used but never defined is refused by name", () => {
   const W = world();
-  const twice = W.call("batch", { ops: [{ verb: "create", args: { id: "$a", model: "crate" } }, { verb: "create", args: { id: "$a", model: "crate" } }] });
+  const twice = W.call("batch", { requests: [{ verb: "create", args: { id: "$a", model: "crate" } }, { verb: "create", args: { id: "$a", model: "crate" } }] });
   const undef = W.call("set", { id: "$nope", component: "label", value: "x" });
   return [!twice.ok && twice.refused.code === "shape" && /\$a/.test(twice.refused.reason) && !undef.ok && /\$nope/.test(undef.refused.reason) && /isn't defined|not defined/.test(undef.refused.reason), [why(twice), why(undef)]]; });
 await C("P4", "a placeholder is request-local: '$potion' from one request means nothing in the next", () => {
@@ -112,15 +112,15 @@ await C("P7", "a refused request with a placeholder leaves no '$name' in the log
   return [!r.ok && !logText(W).includes("$x"), why(r)]; });
 
 await C("P8", "a chosen id refused beside a placeholder in one batch: the attempt isn't recorded with its '$name' in it", () => {
-  const W = world(); const r = W.call("batch", { ops: [{ verb: "create", args: { id: "$keep", model: "crate" } }, { verb: "create", args: { id: "chair", model: "crate" } }] });
+  const W = world(); const r = W.call("batch", { requests: [{ verb: "create", args: { id: "$keep", model: "crate" } }, { verb: "create", args: { id: "chair", model: "crate" } }] });
   const plain = W.call("create", { id: "table", model: "crate" });   // a chosen id alone is an attempt like any other: recorded, as names and a code (engine-scars 6a, R 10-17 02:45: never its values)
-  const att = W.entries().findLast((e: any) => e.kind === "act" && e.verb === "create");
-  return [!r.ok && /op 1/.test(r.refused.reason) && !logText(W).includes("$keep") && !plain.ok && JSON.stringify(att?.body?.args) === '["id","model"]' && att?.body?.refused?.code === "shape" && !logText(W).includes('"table"'), [why(r), att?.body]]; });
+  const att = W.entries().findLast((e: any) => e.kind === "request" && e.verb === "create");
+  return [!r.ok && /request 1/.test(r.refused.reason) && !logText(W).includes("$keep") && !plain.ok && JSON.stringify(att?.body?.argNames) === '["id","model"]' && att?.body?.refused?.code === "shape" && !logText(W).includes('"table"'), [why(r), att?.body]]; });
 
 // ---- Y: system acts keep ids ----
 await C("Y1", "a fork's copy (the system door) writes the ids it is given, verbatim", () => {
   const W = world(); const w = SD.worldObject(W);
-  const r = D.forkCopy(w, W.owner, { ops: [{ verb: "create", args: { id: "old-world-table-1", model: "crate" } }] });
+  const r = D.forkCopy(w, W.owner, { requests: [{ verb: "create", args: { id: "old-world-table-1", model: "crate" } }] });
   return [r.ok && !!W.state().entities["old-world-table-1"], why(r)]; });
 
 // ---- D: delete nulls incoming references ----
@@ -158,7 +158,7 @@ await C("D4", "an undo that takes a thing away (the undo of its create) clears r
   const u = W.call("undo", { act: mk.act });
   const c = made(W.call("create", { model: "crate" }))[0];
   const d = made(W.call("create", { model: "crate", components: { story: { title: "t", text: "x", marks: [c] } } }))[0];
-  const bt = W.call("batch", { ops: [{ verb: "delete", args: { id: c } }] });
+  const bt = W.call("batch", { requests: [{ verb: "delete", args: { id: c } }] });
   const st = W.state().entities;
   return [u.ok && !st[b] && !st[a].c["look-at"] && bt.ok && JSON.stringify(st[d].c.story.marks) === "[]", [why(u), st[a]?.c["look-at"], why(bt), st[d]?.c.story]]; });
 
@@ -167,7 +167,7 @@ await C("L1", "lint reports a stored reference that names nothing (kind dangling
   const W = world(); const w = SD.worldObject(W);
   // a dangling reference can't be written any more (every write checks its refs; a delete clears them), so the state an old
   // log or an import could leave is made by hand: the thing a watcher looks at is taken out of the folded state
-  const r0 = D.forkCopy(w, W.owner, { ops: [{ verb: "create", args: { id: "gone-thing-9", model: "crate" } }, { verb: "create", args: { id: "watcher-1", model: "crate", components: { "look-at": { target: "gone-thing-9" } } } }] });
+  const r0 = D.forkCopy(w, W.owner, { requests: [{ verb: "create", args: { id: "gone-thing-9", model: "crate" } }, { verb: "create", args: { id: "watcher-1", model: "crate", components: { "look-at": { target: "gone-thing-9" } } } }] });
   delete W.state().entities["gone-thing-9"];
   const l = W.call("lint", {}); const d = (l.warnings ?? []).find((x) => x.kind === "dangling");
   return [r0.ok && l.ok && d && d.id === "watcher-1" && d.names === "gone-thing-9" && /look-at/.test(d.at), [why(r0), l.warnings]]; });
@@ -183,14 +183,14 @@ await C("S1", "the script API is 2: world.create mints an opaque id from the act
   const text = "world.on('use', () => { world.create({ model: 'crate', label: 'health potion' }); });";
   const seed = "ab".repeat(32); const base = { text, self: "bell", key: "script:s", event: { on: "use", who: "u-abcdefghijklmnopqrst" }, knobs: {}, now: 1, seed, st, reads: { near: [], count: [], names: [] }, limits: { wallMs: 10000 } };
   const r2 = await SB.runScript({ ...base, api: SR.API }); const r1 = await SB.runScript({ ...base, api: 1 });
-  const id2 = r2.ops?.find((o) => o.verb === "create")?.id, id1 = r1.ops?.find((o) => o.verb === "create")?.id;
+  const id2 = r2.ops?.find((o) => o.op === "create")?.id, id1 = r1.ops?.find((o) => o.op === "create")?.id;
   return [SR.API === 2 && /^[a-z0-9-]+$/.test(id2 ?? "") && !/potion|crate/.test(id2) && /^crate-/.test(id1 ?? ""), [SR.API, id2, id1, r2.why, r1.why]]; });
 await C("S2", "world.create(components, id) is refused at api 2: a script never chooses an id (it gets the minted one back)", async () => {
   const SR = await imp("shared/protocol/scriptrules.js"); const SB = await imp("shared/protocol/sandbox.js");
   const st = { entities: { "@world": { born: 0, c: {} }, bell: { born: 1, c: {} } } };
   const text = "world.on('use', () => { world.create({ model: 'crate' }, 'my-id'); });";
   const r = await SB.runScript({ text, self: "bell", key: "script:s", event: { on: "use" }, knobs: {}, now: 1, seed: "cd".repeat(32), st, reads: { near: [], count: [], names: [] }, limits: { wallMs: 10000 }, api: SR.API });
-  return [SR.API === 2 && !(r.ops ?? []).some((o) => o.verb === "create") && /never chooses|mints/.test(JSON.stringify(r)), JSON.stringify(r).slice(0, 400)]; });
+  return [SR.API === 2 && !(r.ops ?? []).some((o) => o.op === "create") && /never chooses|mints/.test(JSON.stringify(r)), JSON.stringify(r).slice(0, 400)]; });
 
 // ---- H: handles and names (R 10-17 (5); duplicate labels stay allowed, ambiguity is surfaced) ----
 await C("H1", "resolveThing: an exact id, else a label (case and outer spaces ignored), else a unique id prefix of 4+", async () => {
@@ -239,11 +239,11 @@ await C("G2", "at runtime, loading the server's and the agent door's own code ne
   const src = `
     await import(${JSON.stringify(path.join(T, "server/worldlog.ts"))}); await import(${JSON.stringify(path.join(T, "server/messages.ts"))});
     await import(${JSON.stringify(path.join(T, "mcpl/tools.ts"))}); await import(${JSON.stringify(path.join(T, "mcpl/agent.ts"))});
-    const { request, liftWorld, LAB_CATALOGUE } = await import(${JSON.stringify(path.join(T, "shared/protocol/authority.js"))});
+    const { request } = await import(${JSON.stringify(path.join(T, "shared/protocol/authority.js"))}); const { LAB_CATALOGUE } = await import(${JSON.stringify(path.join(T, "tools/protocol/labmodels.js"))});
     const { openWorld } = await import(${JSON.stringify(path.join(T, "server/filehost.ts"))});
     const { scratch } = await import(${JSON.stringify(path.join(T, "tools/protocol/common.ts"))});
     const { pin } = await import(${JSON.stringify(path.join(T, "tools/protocol/clock.ts"))});
-    pin(1800000000000); const w = openWorld(scratch("g2"), "g2"); w.catalogue = LAB_CATALOGUE; liftWorld(w);
+    pin(1800000000000); const w = openWorld(scratch("g2"), "g2"); w.catalogue = LAB_CATALOGUE;
     request(w, "olive", "create-world", { title: "g2" }); pin(1800000001000);
     const r = request(w, "olive", "create", { id: "table", model: "table" });
     console.log("G2:" + JSON.stringify({ ok: r.ok, code: r.refused?.code, minted: /mint/.test(r.refused?.reason ?? "") }));`;

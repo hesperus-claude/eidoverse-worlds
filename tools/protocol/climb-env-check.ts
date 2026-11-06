@@ -12,6 +12,7 @@ import { ENGINE, scratch, copyTree } from "./common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -76,7 +77,7 @@ const root = scratch("climbenv");
 function openWorld(name: string) {
   const logPath = path.join(root, "worlds", `${name}.jsonl`), storeDir = path.join(root, "store");
   const blobPath = (h: string) => path.join(storeDir, `${String(h).replace(/[^a-z0-9]/g, "-")}.json`);
-  return D.worldOf({ name, entries: F.readLog(readLogBytes(logPath)).map(D.posAt), getBlob: (h: string) => JSON.parse(fs.readFileSync(blobPath(h), "utf8")),
+  return D.worldOf({ catalogue: LAB_CATALOGUE, simModels: LAB_MODELS, name, entries: F.readLog(readLogBytes(logPath)).map(D.posAt), getBlob: (h: string) => JSON.parse(fs.readFileSync(blobPath(h), "utf8")),
     putBlob: (v: unknown) => { const s = F.jcs(v); const h = `sha256:${F.sha256(s)}`; putBlobFile(blobPath(h), s, h); return h; },
     now: () => pinned(), writeLine: (line: string) => appendDurable(logPath, line), presence: { bodies: {}, holds: {} }, savePresence: () => {}, scripts: null,
     custody: custodyAt(path.join(root, "keys", "custody.json")), ...modLogAt(path.join(root, "worlds", `${name}.mod.jsonl`)) });
@@ -195,9 +196,9 @@ await C("K9", "KillZ: below the kill line, KILL_MARGIN under @world.bounds.min.y
   const away = s.call("move", { to: [30, 0, 30], teleport: true, reason: "below-bounds" }, "vic");
   const before = s.log().length;
   const back = s.call("move", { to: [0, 0, 8], teleport: true, reason: "below-bounds" }, "vic");
-  const acts = s.log().slice(before).filter((e: any) => e.kind === "act" && e.verb === "move");
+  const acts = s.log().slice(before).filter((e: any) => e.kind === "request" && e.verb === "move");
   const bare = s.call("move", { to: [0, 0, 8], reason: "below-bounds" }, "vic");
-  return [fell && !riding && !above && back.ok && acts.length === 1 && acts[0].body?.request?.reason === "below-bounds" && acts[0].body?.request?.teleport === true
+  return [fell && !riding && !above && back.ok && acts.length === 1 && acts[0].body?.args?.reason === "below-bounds" && acts[0].body?.args?.teleport === true
     && early?.refused?.code === "doesnt-apply" && noBounds.refused?.code === "out-of-bounds" && away.refused?.code === "spawn" && bare.refused?.code === "shape",
     { fell, riding, above, early: show(early), back: show(back), acts: acts.map((e: any) => e.body), noBounds: show(noBounds), away: show(away), bare: show(bare) }]; });
 
@@ -231,7 +232,7 @@ await C("K9p", "KillZ while holding, in a world running physics (review of #260)
   const back = s.call("move", { to: [0, 0, 8], teleport: true, reason: "below-bounds" }, "vic");
   const put = s.call("put", { id: "ball" }, "vic");
   const at1 = s.st().entities.ball?.c.transform?.pos;
-  const acts = s.log().filter((e: any) => e.kind === "act" && e.actor === "system" && e.verb === "return-held").map((e: any) => e.body);
+  const acts = s.log().filter((e: any) => e.kind === "request" && e.actor === "system" && e.verb === "return-held").map((e: any) => e.body);
   return [grab.ok && steps.every((x) => x === "ok") && back.ok && put.refused?.code === "not-holding" && near(at1, at0) && acts.length === 1 && acts[0].why === "below-bounds" && acts[0].holder === "vic",
     { eng, grab: show(grab), steps, back: show(back), put: show(put), at0, at1, acts }]; });
 

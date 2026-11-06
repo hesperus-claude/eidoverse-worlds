@@ -1,23 +1,22 @@
 {
  "status": "trial-kernel",
- "translator": "eidoverse/translate-v1@43",
+ "translator": "eidoverse/translate-v1@49",
  "companions": {
-  "changelog": "2026-10-22: kernel: C11b, the house's plan (#260 2026-10-20: 'trim the kernel pin to what the fold reads; roles/access keep at most their component shape'): transform, parent and model leave the kernel (the fold never reads them); roles and access keep their field shape only, their ranges, enums and meanings held by the registry pin",
-  "trim": {
-   "held": {},
-   "heldPaths": [
-    "transform",
-    "parent",
-    "model",
-    "roles.absentMeans",
-    "roles.keyed",
-    "roles.on",
-    "access.enums",
-    "access.ranges",
-    "access.absentMeans",
-    "access.on"
-   ],
-   "dropped": {}
+  "changelog": "2026-11-05: kernel: the kernel the first deploy ships (Mica 11-05: first-deploy pin ceremony). No kernel before it was deployed: the predeploy history above (minor 1, its features and provenance, no minor) was collapsed into this one pin, and its old-reader vectors (kernel-vectors/minor-1, features, no-minor) are gone. Its fixtures are synthetic: hand-written logs and the verdict this reader gives each; a change after it carries a translator and vectors red on this reader",
+  "firstDeploy": {
+   "vectors": {
+    "dir": "first-deploy",
+    "names": [
+     "control",
+     "stray-minor",
+     "envelope-field",
+     "version-3",
+     "version-5",
+     "other-dialect",
+     "old-kind-act",
+     "unknown-feature"
+    ]
+   }
   },
   "translator": null,
   "vectors": null
@@ -28,25 +27,23 @@
    "fields": [
     "actor",
     "body",
-    "by",
     "cause",
-    "for",
-    "grant",
     "head",
     "kind",
+    "op",
     "sig",
     "ts",
     "verb",
     "world"
    ],
    "kinds": [
-    "act",
     "change",
     "genesis",
-    "purge",
-    "say",
-    "sequencer",
-    "sim"
+    "governance",
+    "physics",
+    "redaction",
+    "request",
+    "say"
    ]
   },
   "fold": {
@@ -64,12 +61,12 @@
      "comp",
      "value",
      "salt",
-     "commit"
+     "commitment"
     ]
    },
    "batch": [
     "ops",
-    "followUps"
+    "cascade"
    ]
   },
   "identity": {
@@ -82,17 +79,15 @@
    "status": "trial-kernel",
    "dialect": "eidoverse-log",
    "v": 4,
-   "minors": [
-    0
-   ],
    "genesis": [
     "dialect",
-    "minor",
     "nonce",
     "owners",
     "parent",
+    "provenance",
     "quorum",
-    "rewind_window",
+    "requires",
+    "rewindWindow",
     "sequencer",
     "v"
    ]

@@ -5,9 +5,10 @@ import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writer
 import fs from "node:fs";
 import { request } from "../../shared/protocol/authority.js";
 import { openWorld } from "../../server/filehost.ts";
-import { openLive } from "../../server/livehost.ts";
+import { openLive } from "./labhost.ts";
 import { fold, readLog } from "../../shared/protocol/fold.js";
-import { simFold, restsOf, worldPose, ENGINES } from "../../shared/protocol/simlayer.js";
+import { restsOf, worldPose, ENGINES } from "../../shared/protocol/simlayer.js";
+import { simFold } from "./labmodels.js";   // the sim over the lab table (its logs name lab models)
 import { scratch } from "./common.ts";
 import { labClock } from "./clock.ts";
 const ENG = { engine: Object.keys(ENGINES).find((k) => k.startsWith("eidosim@")) };
@@ -101,12 +102,13 @@ function shoot(W, who = "vic", v = [0, -1, 6]) {   // a visitor throws crate-1 a
   const w = openLive(dir, "w", { now: () => now, custodyFile: root4 + "custody.json", nameOf: () => null, kindOf: () => "human" });
   const c = (a, v, args = {}, step = 1000) => { now += step; return request(w, a, v, args); };
   c("rowan", "create-world", { title: "r6" });
-  c("rowan", "create", { id: "rack", model: "crate", components: { sockets: { hook: { pos: [0, 0.8, 0], q: [0, Math.SQRT1_2, 0, Math.SQRT1_2], accepts: ["key"], radius: 0.3 } } }, place: { at: [0, 0] } });
+  c("rowan", "create", { id: "rack", model: "crate", place: { at: [0, 0] } });
+  c("rowan", "create", { id: "rack-hook", components: { parent: { to: "rack" }, transform: { pos: [0, 0.8, 0], q: [0, Math.SQRT1_2, 0, Math.SQRT1_2], scale: [1, 1, 1] }, socket: { name: "hook", accepts: ["key"], radius: 0.3 } } });
   c("rowan", "create", { id: "key", model: "book", components: { grabbable: { who: "member", fits: ["key"] } }, place: { at: [1, 0] } });
   c("rowan", "move", { to: [0.8, 0, 0.6] }); c("rowan", "grab", { id: "key" }); const d = c("rowan", "drop", { id: "key", pos: [0.1, 0.75, 0.05] });
   const kq = w.state().entities.key?.c.transform?.q; const kp = w.state().entities.key?.c.parent?.to;
   // sockets are child entities (10-14): a snapped thing's parent is the SOCKET, whose parent is the host
-  const onRack = kp === "rack" || w.state().entities[kp]?.c.parent?.to === "rack";
+  const onRack = kp === "rack-hook" && w.state().entities[kp]?.c.parent?.to === "rack";
   ok(d.ok && onRack && Array.isArray(kq) && Math.abs(Math.hypot(...kq) - 1) < 1e-12, "K8 a thing snapped into a turned socket is written with a unit rotation", { ok: d.ok ?? d.refused, parent: kp, q: kq, n: kq && Math.hypot(...kq) });
   c("rowan", "move", { to: [0, 0, 12] });
   // the shelf on clear ground (review r7: K8's crate was under it, and the default passed by a float tie-break)

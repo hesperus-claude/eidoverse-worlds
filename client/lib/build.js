@@ -17,7 +17,7 @@
 // across that seam and never re-implements them.
 
 import { svg as iconSvg } from './icons.js';
-import * as OP from '../../shared/protocol/requests.js';
+import * as OP from '../../shared/requests.js';
 import { LIGHT_DEFAULTS } from '../../shared/components.js';
 import { THREE, scene, camera, canvas } from './core.js';
 import { bus, report } from './base.js';
@@ -528,7 +528,7 @@ bus.on('drag', ({ id, pos, yaw, q, scale, by, end }) => {
   if (end) { endClaim(id); return; }
   if (typeof by === 'string' && by) { let c = claims.get(id); if (!c) { c = { by, at: 0, box: claimBox() }; claims.set(id, c); c.at = performance.now(); bus.emit('claims', claimsNow()); } c.at = performance.now(); c.by = by; c.box.box.setFromObject(obj); }
 });
-bus.on('cut-adopted', () => { for (const id of [...claims.keys()]) endClaim(id); });
+bus.on('snapshot-adopted', () => { for (const id of [...claims.keys()]) endClaim(id); });
 
 // ============================================================ commits + undo
 

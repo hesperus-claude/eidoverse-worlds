@@ -388,3 +388,53 @@ docs/COMPONENT-LADDER.md). Written by `bun tools/protocol/pretrans-check.ts --pi
 - 2026-11-03: light.important's doc says what lightrig does (first claim on a slot; more important lights than slots: the nearest cast); collider.layer's absentMeans names who scans it; sky help: a tz overrides rate: 0; header comments; prose only (bot #260 #265 #282 #281 #280 #622 #623)
   - collider.layer: its meaning of absence "[1] (Godot's default): every mover meets it" → "[1] (Godot's default): every mover that scans the default layer (bodies and things always; a hull by its own mask)"
   - light.important: its meaning "always casts: first claim on a light slot, never governor-shed" → "first claim on a light slot, never governor-shed (more important lights than slots: the nearest cast)"
+- 2026-11-04: kernel: minor 1, the log vocabulary (docs/DESIGN-log-vocabulary.md D1-D5): kinds request/physics/redaction/governance; op on a change, verb on a request or physics entry, neither elsewhere; cascade, commitment, rewindWindow; for/grant/by leave the envelope; MINORS = {1}
+  - envelope.fields: ["actor","body","by","cause","for","grant","head","kind","sig","ts","verb","world"] → ["actor","body","cause","head","kind","op","sig","ts","verb","world"]
+  - envelope.kinds: ["act","change","genesis","purge","say","sequencer","sim"] → ["change","genesis","governance","physics","redaction","request","say"]
+  - fold.ops.set: ["id","comp","value","salt","commit"] → ["id","comp","value","salt","commitment"]
+  - fold.batch: ["ops","followUps"] → ["ops","cascade"]
+  - version.minors: [0] → [1]
+  - version.genesis: ["dialect","minor","nonce","owners","parent","quorum","rewind_window","sequencer","v"] → ["dialect","minor","nonce","owners","parent","quorum","rewindWindow","sequencer","v"]
+- 2026-11-04: normative: readback rows re-keyed for minor 1: act:*→request:*, sim:*→physics:*, the admitted body's request.*→args.* (docs/DESIGN-log-vocabulary.md D2, D3)
+  - readback act:undo: gone (old logs may hold it)
+  - readback act:use: gone (old logs may hold it)
+  - readback act:script: gone (old logs may hold it)
+  - readback act:sculpt: gone (old logs may hold it)
+  - readback act:*: gone (old logs may hold it)
+  - readback act:system: gone (old logs may hold it)
+  - readback act:create-world: gone (old logs may hold it)
+  - readback act:translated: gone (old logs may hold it)
+  - readback sim:launch: gone (old logs may hold it)
+  - readback sim:lift: gone (old logs may hold it)
+  - readback sim:catch: gone (old logs may hold it)
+- 2026-11-05: kernel: minor 1 genesis admits requires (sorted unique feature ids, §F F-1) and provenance (the writer object, §F F-2); governance requiresAdd declares later features; a feature the reader doesn't implement is unsupported-feature, no world
+  - version.genesis: ["dialect","minor","nonce","owners","parent","quorum","rewindWindow","sequencer","v"] → ["dialect","minor","nonce","owners","parent","provenance","quorum","requires","rewindWindow","sequencer","v"]
+- 2026-11-05: normative: refusal unreadable: also given while the fold says unsupported-feature; new code unsupported-feature (docs/DESIGN-log-vocabulary.md §F F-1)
+  - refusal unreadable: {"meaning":"the log folds to a status the authority won't write to","when":"a write while the fold says no-world/unknown-version"} → {"meaning":"the log folds to a status the authority won't write to","when":"a write while the fold says no-world/unknown-version/unsupported-feature"}
+- 2026-11-05: normative: components compose (Mica 11-04): one-place refused a light, model or mesh beside another, and anything but a socket's own fields on a socket; nothing refuses with it now
+  - refusal one-place: gone (old logs may hold it)
+- 2026-11-05: normative: no shape repair (the dialect was never deployed; Mica 11-04): repair-needed gated writes on a world awaiting the maintenance command, and create-world.shapes / translated.from.translator were read back only as the repair's markers; the command, the gate and the markers are gone
+  - refusal repair-needed: gone (old logs may hold it)
+  - readback request:create-world: gone (old logs may hold it)
+  - readback request:translated: gone (old logs may hold it)
+- 2026-11-05: light.decay's meaning of absence is unchanged (1.7); its words named the deleted maintenance command and now say a translation writes it
+  - light.decay: its meaning of absence "1.7: the falloff exponent the light rig used before it was written (three.js decay); a value stored before 10-16 is repaired to 1.7 by the maintenance command (repair-shapes; docs/MAINTENANCE.md), never at load" → "1.7: the falloff exponent the light rig used before it was written (three.js decay); an older light is written 1.7 when its world is translated"
+- 2026-11-05: normative: no sculpt (Mica 11-04: it could only refuse, since terrain-grid is reserved): its two refusal codes and its undo's readback go with it; terrain-grid and terrain-tile stay reserved
+  - refusal grid-fixed: gone (old logs may hold it)
+  - refusal no-grid: gone (old logs may hold it)
+  - readback request:sculpt: gone (old logs may hold it)
+- 2026-11-05: kernel: no minor (Mica 11-04): genesis is {dialect, v, …}; dialect names the family, v is the hard break, requires the additive gate. minor leaves the genesis fields and the version pin; a stray minor is malformed
+  - version.minors: [1] → absent
+  - version.genesis: ["dialect","minor","nonce","owners","parent","provenance","quorum","requires","rewindWindow","sequencer","v"] → ["dialect","nonce","owners","parent","provenance","quorum","requires","rewindWindow","sequencer","v"]
+- 2026-11-05: normative: no revert-war brake (Kudzu 6, Mica 11-04): undo counted cross-person reverts and refused the third within the hour below owner; a direct set bypassed it, so it held nothing
+  - refusal revert-war: gone (old logs may hold it)
+- 2026-11-05: normative: no renamed refusal codes (S6 read-side cut, 11-05): canonicalCode read four old words as their new codes; a reader reads the code as sent
+  - renamed code hands-full: gone (old logs may hold it)
+  - renamed code underfoot: gone (old logs may hold it)
+  - renamed code no-body: gone (old logs may hold it)
+  - renamed code no-such: gone (old logs may hold it)
+- 2026-11-05: normative: new refusal code undo-unavailable (Mica 11-05, #23 ruling 1): an undo or rollback of an imported act the translation's lift-sockets rewrote refuses whole (cause migration-transformed, naming the act and its ops) instead of undoing the rest
+- 2026-11-05: the reserved sockets name goes before deploy (Mica 11-05): the old map spelling was held only so the door could refuse it as legacy; a write of it is now refused as any unknown name (schema, did you mean socket), and only the v1 translator knows the word, lifting a v1 map to socket children
+  - sockets: the name is gone (stored values need a repair or a translation; a stable name never goes)
+- 2026-11-05: kernel: the kernel the first deploy ships (Mica 11-05: first-deploy pin ceremony). No kernel before it was deployed: the predeploy history above (minor 1, its features and provenance, no minor) was collapsed into this one pin, and its old-reader vectors (kernel-vectors/minor-1, features, no-minor) are gone. Its fixtures are synthetic: hand-written logs and the verdict this reader gives each; a change after it carries a translator and vectors red on this reader
+- 2026-11-05: translator: translate-v1@49 (Mica 11-05, S4): one provenance carrier. The import tool writes its writer object (eidoverse-translate-v1, 49.0.0, its source revision and tree) into genesis.body.provenance, and the `translated` request and the rollback manifest repeat it; `translated.body.from` keeps the parent (the old genesis and the v1 fold build) and no longer names the translator. Every translated log's bytes differ; a pure translation (no provenance given) keeps its world id

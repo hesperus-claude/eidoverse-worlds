@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import { PNG } from 'pngjs';
 import { ownedWorld } from './probe-harness.mjs';
 import { qFromYaw } from '../shared/rot.js';
+import { helloOf } from '../shared/protocol/hello.js';
 
 // founded and owned by the driver's id (TRUST_NAMES), so its creates are admitted (#260 house I419)
 const world = await ownedWorld({ worlds: ['draw-probe'], owner: 'draw-driver', env: { ACT_RATE: '250', TRUST_NAMES: '1' } });
@@ -13,7 +14,7 @@ const errors = [];
 try {
   ws = new WebSocket(world.origin.replace('http:', 'ws:')+'/ws');
   await new Promise((resolve, reject) => {
-    ws.onopen = () => ws.send(JSON.stringify({ type:'join', id:'draw-driver', world:'draw-probe', token:world.key, replica:true }));
+    ws.onopen = () => ws.send(JSON.stringify({ type:'join', hello: helloOf(), id:'draw-driver', world:'draw-probe', token:world.key, replica:true }));
     ws.onmessage = (e) => { const m=JSON.parse(e.data); if(m.type==='snapshot') resolve(m); if(m.type==='error') reject(Error(m.error)); };
     ws.onerror = reject;
   });
@@ -94,7 +95,7 @@ try {
     || !after.parity.ok) throw Error('real-world draw/pixel/fold check failed');
   // Fold-driven transform, mount, remove and replay still address ORIGINALS.
   await request('set',{id:crate[0],component:'transform',value:{pos:[4,1,4],q:qFromYaw(1.2),scale:[1,1,1]}});
-  await request('batch',{ops:[{verb:'set',args:{id:crate[1],component:'parent',value:{to:crate[0]}}},
+  await request('batch',{requests:[{verb:'set',args:{id:crate[1],component:'parent',value:{to:crate[0]}}},
     {verb:'set',args:{id:crate[1],component:'transform',value:{pos:[0,1,0],q:[0,0,0,1],scale:[1,1,1]}}}]});
   await request('delete',{id:crate[2]});
   await page.waitForFunction(([c0,c1,c2]) => !EW.entities.has(c2) && EW.entities.get(c1)?.userData.mountedTo===c0, [crate[0],crate[1],crate[2]]);

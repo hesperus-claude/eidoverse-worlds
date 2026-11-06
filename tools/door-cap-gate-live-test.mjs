@@ -40,6 +40,7 @@ import { join } from "node:path";
 import { foundWorlds } from "./harness.ts";
 import { createServer } from "node:net";
 import { createServer as createHttpServer } from "node:http";
+import { helloOf } from "../shared/protocol/hello.js";
 
 /** A port nothing is listening on RIGHT NOW: bind :0, read what the kernel
  *  gave us, release it. Racy in principle — which is why readiness below
@@ -243,12 +244,12 @@ try {
   const typings = [];
   obs = new WebSocket(`ws://127.0.0.1:${SEQ_PORT}/ws`);
   const obsJoined = new Promise((resolve) => {
-    obs.onopen = () => obs.send(JSON.stringify({ type: "join", world: "commons", id: "observer", token: JOIN, replica: true }));
+    obs.onopen = () => obs.send(JSON.stringify({ type: "join", hello: helloOf(), world: "commons", id: "observer", token: JOIN, replica: true }));
     obs.onmessage = (ev) => {
       const m = JSON.parse(String(ev.data));
       if (m.type === "snapshot") resolve(true);
       // chat is the log stream's say entries; their actors are opaque ids, named by the stream
-      if (m.type === "snapshot") Object.assign(names, m.cut?.names ?? {});
+      if (m.type === "snapshot") Object.assign(names, m.names ?? {});
       if (m.type === "log") { Object.assign(names, m.names ?? {});
         for (const e of m.entries ?? []) if (e?.kind === "say") seen.push({ who: names[e.actor] ?? e.actor, text: e.body?.text }); }
       if (m.type === "typing" && m.id === "claude") typings.push(Date.now());

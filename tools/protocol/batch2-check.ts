@@ -25,6 +25,7 @@ import { ENGINE, scratch, copyTree, archiveTo } from "./common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -69,7 +70,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["evalLookAt: no heading straight above", "shared/lookat.js", "if (h < 1e-6) {", "if (false) {", ["L6"]],
   ["the editor writes look-at", "shared/editschema.js", "LookAt: ['look-at', { target: '@viewer' }]", "LookAt: ['look', {}]", ["L5"]],
   ["look says what it says", "shared/protocol/authority/blueprints.js", "    ...sayOf(st, e.c) };", " };", ["A1", "P5", "W4"]],
-  ["credits count change entries, not acts (a refused act changed nothing)", "shared/credits.js", "const ops = caused.get(e.seq); if (!ops) continue;", "const ops = caused.get(e.seq) ?? (e.body?.request?.id === id ? [{ verb: e.verb, id, comp: e.body.request.component }] : null); if (!ops) continue;", ["C2"]],
+  ["credits count change entries, not acts (a refused act changed nothing)", "shared/credits.js", "const ops = caused.get(e.seq); if (!ops) continue;", "const ops = caused.get(e.seq) ?? (e.body?.args?.id === id ? [{ verb: e.verb, id, comp: e.body.args.component }] : null); if (!ops) continue;", ["C2"]],
   ["credits: play isn't authorship", "shared/credits.js", "if (!BUILDING.has(verb)) continue;", "", ["C3"]],
   ["credits: moves group into sessions", "shared/credits.js", "if (last && last.by === by && last.what === what && ts - last.at < SESSION_MS) { last.at = ts; continue; }", "", ["C1"]],
   ["CONTROL (no-op: must stay green)", "shared/says.js", "// says — what", "//  says — what", []],
@@ -139,7 +140,7 @@ function openWorld(name: string) {
   const logPath = path.join(root, "worlds", `${name}.jsonl`), storeDir = path.join(root, "store");
   const entries = F.readLog(readLogBytes(logPath)).map(D.posAt);
   const blobPath = (h: string) => path.join(storeDir, `${String(h).replace(/[^a-z0-9]/g, "-")}.json`);
-  return D.worldOf({ name, entries,
+  return D.worldOf({ catalogue: LAB_CATALOGUE, simModels: LAB_MODELS, name, entries,
     getBlob: (h: string) => { const s = fs.readFileSync(blobPath(h), "utf8"); if (`sha256:${F.sha256(s)}` !== h) throw new Error("blob mismatch"); return JSON.parse(s); },
     putBlob: (v: unknown) => { const s = F.jcs(v); const h = `sha256:${F.sha256(s)}`; putBlobFile(blobPath(h), s, h); return h; },
     now: () => pinned(), writeLine: (line: string) => appendDurable(logPath, line),
@@ -436,10 +437,10 @@ const cases: Case[] = [
       const f = HR.historyView; if (!f) return { none: true };
       const nameOf = (id: string) => ({ "u-a": "Ann", "u-b": "Bob" } as any)[id] ?? id;
       const E = [
-        { seq: 1, kind: "act", actor: "u-b", verb: "create", ts: 1000, body: { request: { id: "lamp" } } }, { seq: 2, kind: "change", actor: "u-b", verb: "batch", ts: 1000, cause: 1, body: {} },
-        { seq: 3, kind: "act", actor: "u-a", verb: "set", ts: 2000, body: { request: { id: "lamp", component: "light" } } }, { seq: 4, kind: "change", actor: "u-a", verb: "set", ts: 2000, cause: 3, body: {} },
-        { seq: 5, kind: "act", actor: "u-a", verb: "set", ts: 3000, body: { request: { id: "chair", component: "label" } } }, { seq: 6, kind: "change", actor: "u-a", verb: "set", ts: 3000, cause: 5, body: {} },
-        { seq: 7, kind: "act", actor: "u-b", verb: "delete", ts: 4000, body: { request: { id: "lamp" }, refused: { code: "rights" } } },
+        { seq: 1, kind: "request", actor: "u-b", verb: "create", ts: 1000, body: { args: { id: "lamp" } } }, { seq: 2, kind: "change", actor: "u-b", verb: "batch", ts: 1000, cause: 1, body: {} },
+        { seq: 3, kind: "request", actor: "u-a", verb: "set", ts: 2000, body: { args: { id: "lamp", component: "light" } } }, { seq: 4, kind: "change", actor: "u-a", verb: "set", ts: 2000, cause: 3, body: {} },
+        { seq: 5, kind: "request", actor: "u-a", verb: "set", ts: 3000, body: { args: { id: "chair", component: "label" } } }, { seq: 6, kind: "change", actor: "u-a", verb: "set", ts: 3000, cause: 5, body: {} },
+        { seq: 7, kind: "request", actor: "u-b", verb: "delete", ts: 4000, body: { args: { id: "lamp" }, refused: { code: "rights" } } },
       ];
       const ann = f(E, nameOf, { mode: "person", who: "u-a" });
       const top = f(E, nameOf, { mode: "top" });
@@ -461,7 +462,7 @@ const cases: Case[] = [
       const names = ["story", "text", "picture", "sound", "look-at"].filter((c) => sch(c)?.help);
       const rx = s.call("olive", "schema", { component: "reactions" }).components?.reactions?.handlers ?? {};
       s.call("olive", "create", { id: "kiosk", components: { transform: { pos: [0, 0, 0] } } }); s.call("olive", "create", { id: "lamp", components: { transform: { pos: [2, 0, 0] } } });
-      s.call("olive", "batch", { ops: [
+      s.call("olive", "batch", { requests: [
         { verb: "set", args: { id: "kiosk", component: "story", value: { title: "Kiosk", text: "Where the map was." } } },
         { verb: "set", args: { id: "kiosk", component: "text", value: { text: "MAP" } } },
         { verb: "set", args: { id: "kiosk", component: "picture", value: { src: IMG, description: "a map" } } },
@@ -478,11 +479,11 @@ const cases: Case[] = [
   // review of #260: whether a request fits is judged on the lines as append writes them, chain fields included, so a write
   // within a head and signature of the 1 MiB cap is refused whole: never an act written and its change then thrown
   { id: "A10", what: "the largest entry fits() accepts in a signed log is one append writes: fits judges the line with its chain fields", run(s) { cast(s);
-      const w = s.w(); const e = (n: number) => ({ kind: "act", actor: "system", verb: "probe", body: { blob: "x".repeat(n) } });
+      const w = s.w(); const e = (n: number) => ({ kind: "request", actor: "system", verb: "probe", body: { blob: "x".repeat(n) } });
       const fits = (n: number) => { try { w.fits(e(n)); return true; } catch { return false; } };
       let lo = 1000000, hi = 1048576; while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (fits(mid)) lo = mid; else hi = mid; }   // lo: the largest that fits
       let wrote: string; try { w.append(e(lo)); wrote = "ok"; } catch (x: any) { wrote = String(x?.message).slice(0, 120); }
-      return { signed: !!s.entries().findLast((x: any) => x.kind === "act")?.sig, lo, wrote }; },
+      return { signed: !!s.entries().findLast((x: any) => x.kind === "request")?.sig, lo, wrote }; },
     good: (o) => o.signed && o.wrote === "ok" }
 ];
 

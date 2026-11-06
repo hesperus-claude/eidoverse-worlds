@@ -14,7 +14,6 @@ import { addressOf } from "./peer.ts";   // the client's address, from a trusted
 import { sfuDiag } from "./sfuadapter.ts";
 import { join, normalize, dirname, basename, sep } from "node:path";
 import { hexOfLibRel } from "../shared/eido.js";
-import { kindOf } from "../shared/protocol/kind.js";
 import { isReservedAnimName } from "../shared/animdefs.js";
 import { eidoFile, eidoRel } from "./eidoindex.ts";
 import { randomBytes } from "node:crypto";
@@ -72,7 +71,8 @@ try { clientLogStore = new ClientLogStore(CLIENTLOG_DIR); } catch (e) { console.
 registerSystem({ name: "clientlog-retire", everyMs: 3_600_000, fn: (now) => clientLogStore?.retire(now) });
 import { seatStore, announceProfileUpdate, MAX_PROPOSAL_BYTES } from "./seats.ts";
 import { agentTokens, aid1JoinIdentity } from "./auth.ts";
-import { httpCaller, httpVisitor, hashedAddress, visibleTo, doorFor, youAt, bearerOf } from "./access.ts";
+import { httpCaller, httpVisitor, hashedAddress, visibleTo, unavailable, doorFor, youAt, bearerOf, toldOf, httpProven } from "./access.ts";
+import { interruptedVisitorText } from "./oldworlds.ts";
 import { setupPage, setupClaim } from "./setup.ts";
 import { setupOpen } from "./operators.ts";
 import { ClientLogRate, ClientLogStore, LIMITS as CLIENTLOG_LIMITS, scrub, holdsPrivateKey, boundLines } from "./clientlog.ts";
@@ -616,11 +616,8 @@ const ROUTES: Route[] = [
       // read-only: answer for LOADED or on-disk worlds, never create one —
       // and only for worlds this caller may see. A world closed to them reads
       // exactly like one that does not exist (access.ts).
-      if (!/^[a-z0-9_-]{1,64}$/i.test(wname)
-        || (!worlds.has(wname) && !hasWorldLog(wname))) {
-        return j({ error: "no such world" }, 404);
-      }
-      if (!visibleTo(doorFor(wname), httpVisitor(req, srv))) return j({ error: "no such world" }, 404);
+      // (one question, the access index's, for every name: a missing world and a hidden one take the same path)
+      if (!/^[a-z0-9_-]{1,64}$/i.test(wname) || !visibleTo(doorFor(wname), httpVisitor(req, srv))) return j({ error: "no such world" }, 404);
       const w = getWorld(wname);
       // the view record (shared/protocol/view.js viewOf) verbatim — scale3, q, every component — never a projection of it
       const record = (eid: string, e: Record<string, unknown>) => ({ id: eid, ...e, model: e.model ?? null, parent: e.parent ?? null });
@@ -639,7 +636,7 @@ const ROUTES: Route[] = [
       for (const [eid, e] of Object.entries(w.state.entities)) {
         const file = withBoxes && e.model ? resolveLibFile(e.model) : null;
         const sum = file ? await summarizeGlb(file) : null;
-        out.push({ ...record(eid, e), kind: kindOf(e), ...(sum ? { bbox: sum.bbox, tris: sum.tris } : {}) });
+        out.push({ ...record(eid, e), ...(sum ? { bbox: sum.bbox, tris: sum.tris } : {}) });
       }
       return j({ world: wname, entities: out });
     },
@@ -726,7 +723,7 @@ const ROUTES: Route[] = [
       if (!mayRead(req)) return unauthorized();
       const name = url.searchParams.get("world") ?? "commons";
       if (!/^[a-z0-9_-]{1,64}$/i.test(name)) return new Response("bad world name", { status: 400 });
-      if (!worlds.has(name) && !hasWorldLog(name)) return new Response("no such world", { status: 404 });
+      // the access index's answer for every name: missing and hidden alike
       { const door = doorFor(name); if (!door || !visibleTo(door, httpVisitor(req, srv))) return new Response("no such world", { status: 404 }); }
       const t = getWorld(name).state.terrain;
       if (!t) return new Response("this world has no terrain (it is flat)", { status: 404 });
@@ -791,22 +788,24 @@ const ROUTES: Route[] = [
     // "May I go there?" — asked BEFORE moving, so a refused trip never strands
     // a body (the MCPL door's travel gate asks this as the agent). Answers for
     // the CALLER only, and only for a signed-in caller (cookie session or
-    // Authorization bearer): an anonymous probe is 401. For a world the caller
-    // may not see it says `you: "none"` and `exists: true` — that a name is
-    // taken cannot be hidden (founding it would fail), and a join attempt
-    // reveals exactly as much; nothing about who is inside or why.
-    //   { world, exists, you: "enter"|"watch"|"none", why?, found?: {ok, why?} }
+    // Authorization bearer): an anonymous probe is 401. A world the caller may
+    // not discover answers exactly as a missing one: 404 world-unavailable.
+    //   { world, exists: true, you: "enter"|"watch"|"none", why? } | 404 {code: "world-unavailable", message}
     match: (u) => u.pathname === "/access",
-    handler: ({ req, url }) => {
+    // An interrupted conversion or an old-format world is said only to the operator or its recognised owner (access.ts toldOf):
+    //   { world, exists: true, you: "none", state: "interrupted" | "old-format", why }
+    handler: async ({ req, url }) => {
       const j = (o: unknown, status = 200) => new Response(JSON.stringify(o),
         { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
       const caller = httpCaller(req);
       if (!caller) return j({ error: "sign in (cookie) or send Authorization: Bearer <your credential>" }, 401);
       const name = url.searchParams.get("world") ?? "";
       if (!/^[a-z0-9_-]{1,64}$/i.test(name)) return j({ error: `"${name}" is not a world name` }, 400);
-      const door = doorFor(name);
-      // joining never founds a world here: `found` says so (a person founds with world-found; an operator for an agent)
-      if (!door) return j({ world: name, exists: false, you: "none", found: { ok: false, why: `there's no world called "${name}" — joining never founds one here (any signed-in account founds a world with world-found)` } });
+      const told = await toldOf(name, caller, httpProven(req));
+      if (told.kind === "unavailable") return j(unavailable(name), 404);
+      if (told.kind === "interrupted") return j({ world: name, exists: true, you: "none", state: "interrupted", why: interruptedVisitorText(name) });
+      if (told.kind === "old") return j({ world: name, exists: true, you: "none", state: "old-format", why: told.old.visitor });
+      const door = told.door;
       const y = youAt(door, caller);
       return j({ world: name, exists: true, you: y.you, ...(y.why && y.you !== "enter" ? { why: y.why } : {}) });
     },

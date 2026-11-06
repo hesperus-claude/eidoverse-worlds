@@ -84,17 +84,6 @@ export function motionNode(key, m) {
   return m && typeof m.node === "string" && m.node ? m.node : key.slice(7);
 }
 
-// A motion's type (R 10-17 21:40: the back-and-forth along an axis is `oscillate`; it was bob before release). The old
-// spelling is READ for one release (a value an older log stored, a replica that folded it before the rename); the door
-// takes it and stores today's, and the maintenance command renames a stored one (shaperepair.js renameFields, rename-components).
-// The one reading every reader shares (renderer, seat signals, editor, agent): the old word is spelled here and nowhere
-// else in a reader (tools/protocol/vocab-check.ts).
-export const OLD_MOTION_TYPES = Object.freeze({ bob: "oscillate" });
-/** @param {any} m a motion value @returns {any} its type in today's spelling (anything else as it is) */
-export function motionType(m) {
-  const t = m?.type;
-  return typeof t === "string" && Object.hasOwn(OLD_MOTION_TYPES, t) ? OLD_MOTION_TYPES[t] : t;
-}
 
 /** @param {string} s @returns {string | null} the original name, or null when it was hashed (h--) */
 export function dec(s) {
@@ -112,7 +101,7 @@ export function dec(s) {
 // directory, outside the log (§2.3), and reaches clients beside the entries ({names: {id: name}}). Every client in a
 // process feeds this one registry (ids are random, so worlds and doors can't collide), and every place that shows a
 // person reads it: actorName(id) is the name, else an old escaped identity read back, else the id itself.
-export const ACTOR_ID = /\bu-[a-z2-7]{20}\b/g;
+export const ACTOR_ID = /\bu-[a-z2-7]{20}(?:[a-z2-7]{4})?\b/g;
 const NAMES = Object.create(null);
 export function learnNames(o) { if (o && typeof o === "object") for (const [k, n] of Object.entries(o)) if (typeof n === "string" && n) NAMES[k] = n; }
 export const actorName = (id) => NAMES[String(id)] ?? dec(String(id)) ?? String(id);

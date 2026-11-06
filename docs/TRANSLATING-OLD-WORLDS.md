@@ -34,8 +34,8 @@ given only when the operator says `--operator-only-no-owner`, knowingly. The
 writer checks it itself (`approvalProblem`) before the log is written: a
 countersignature missing, not verifying, or over another hash or world, an
 approval carrying an owner's signature, or a founder key is refused by name.
-The approval rides in the new log as the system's `translation-approved` act
-right after `repair-shapes` (`body {report, approval: {over, owner: null,
+The approval rides in the new log as the system's `translation-approved` request
+right after `translated` (`body {report, approval: {over, owner: null,
 operator: {key, sig}, noOwner}}`, `noOwner` saying in words that no owner was
 attested): provenance a reader checks against `log.original.jsonl`. The fold
 never reads it (§1).
@@ -136,16 +136,18 @@ renamed since), the manifest removed — the world directory byte-identical to
 before, and the shared directory rewritten without those identities (a
 directory file the translation itself created stays, holding none of them). A made file the server has written to
 since refuses the rollback unless `--discard-changes`, so no history is lost
-unknowingly. Each old entry appears in the new log as an `act` with verb
+unknowingly. Each old entry appears in the new log as a `request` with verb
 `imported` (`body {verb, args, from}`) or as a `say`, followed by the change it
 produced; fields with no component in this protocol ride along as `imported:<name>`. A
 translated world is an ordinary world from then on.
 
 ## Upgrading from the browser
 
-Opening an old-format world shows a splash: "This world was saved by an
-older Eidoverse. It needs a one-time upgrade before anyone can enter.", the
-server's own sentence, and a link to this page. The join is still refused
+Opening an old-format world as its server's operator or its owner (below)
+shows a splash: "This world was saved by an older Eidoverse. It needs a
+one-time upgrade before anyone can enter.", the server's own sentence, and a
+link to this page. Anyone else is told what a missing world tells them
+(`world-unavailable`: a world never says it exists to someone it isn't open to). The join is still refused
 (close 4005); its `error` carries `refused {code: "old-format", doc,
 upgrade: "operator-or-owner", operator, may, owner?}`, so agents read the same thing in words.
 
@@ -192,6 +194,15 @@ page's CLI itself (`world.ts translate <world> --no-founder-key --approved
 line are one path. A report that changed since it was reviewed is refused.
 The result screen says where the backup is and how to roll back. The world
 opens on the next join; nobody needs to restart the server.
+
+The server reads the CLI's answer only when it is complete (server/oneshot.ts):
+the CLI frames it, says it holds nothing open, and leaves no process behind.
+If the CLI has answered but doesn't finish exiting (Bun 1.3.14 on Windows
+sometimes doesn't), the server ends it after 5 s, takes the answer, and logs
+`[oneshot] upgrade apply <world>: semantic result complete / forced process cleanup {…}`.
+An answer it can't trust (no frame, something left open or running) is
+reported `interrupted`: the upgrade may or may not have happened; check the
+world before upgrading again.
 
 ## Becoming the operator: the setup link
 

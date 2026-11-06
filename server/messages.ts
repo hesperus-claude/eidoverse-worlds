@@ -37,7 +37,7 @@ import { isOwner } from "../shared/protocol/roles.js";
  *  beside it is NOT a fallback: that would hand the message to whoever wears the name). A sender with no actor id (an
  *  agent, an older client) still reaches by name — names are unique among the people here and, for accounts, across
  *  the directory (server.ts join). A display name can't be shaped like an actor id (refused at join). */
-const ACTOR_ID = /^u-[a-z2-7]{20}$/;
+const ACTOR_ID = /^u-[a-z2-7]{20}(?:[a-z2-7]{4})?$/;
 /** The world's body-default as it stands now ({} when unset): the relay never reads the authority's synced copy (review full-260 #1). */
 const liveBodyDefault = (live: any) => live.state?.()?.entities?.["@world"]?.c?.["body-default"] ?? {};
 
@@ -524,7 +524,3 @@ MESSAGES["server-ban"] = MESSAGES["server-mod"];
 MESSAGES["server-unban"] = MESSAGES["server-mod"];
 MESSAGES["server-bans"] = MESSAGES["server-mod"];
 delete (MESSAGES as Record<string, unknown>)["server-mod"];
-// the old names run nothing: each is refused naming the new one until the date, then its entry goes (mcpl/tools.ts TOOL_RENAMED)
-export const MESSAGE_RENAMED_UNTIL = "2026-12-01";
-export const MESSAGE_RENAMED: Record<string, { to: string; until: string }> = Object.fromEntries(["ban", "unban", "bans"].map((k) => [`global-${k}`, { to: `server-${k}`, until: MESSAGE_RENAMED_UNTIL }]));
-for (const [old, { to }] of Object.entries(MESSAGE_RENAMED)) MESSAGES[old] = ({ ws }) => { ws.send(JSON.stringify({ type: "error", error: `"${old}" is now "${to}" — nothing ran` })); };

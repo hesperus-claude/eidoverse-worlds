@@ -53,6 +53,7 @@
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { normalizeCaptionArgs, mintSession } from '../../shared/captions.js';
 import { makeReplica } from '../../shared/protocol/replica.js';
+import { helloOf, refusalWords } from '../../shared/protocol/hello.js';
 import type { Caption } from './captioner.ts';
 
 export interface WorldOptions {
@@ -111,7 +112,7 @@ export class WorldClient {
   session: string;
   n = 0;
   sent = 0; acked = 0; refused = 0; overflow = 0;
-  /** this connection's identity (the snapshot's cut.you): what the screen's captioners must list */
+  /** this connection's identity (the snapshot's actor): what the screen's captioners must list */
   you: string | null = null;
   /** Lines refused because the spool could not take their `queued` row. */
   spoolRefused = 0;
@@ -141,7 +142,7 @@ export class WorldClient {
     const ws = new WebSocket(this.opts.url);
     this.ws = ws;
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'join', world: this.opts.world, id: this.opts.actor, avatar: '', replica: true, ...(this.opts.agent === false ? {} : { declares: 'agent' }), token: this.opts.token, ...(this.opts.agentToken ? { agentToken: this.opts.agentToken } : {}) }));
+      ws.send(JSON.stringify({ type: 'join', world: this.opts.world, id: this.opts.actor, avatar: '', replica: true, hello: helloOf(), ...(this.opts.agent === false ? {} : { declares: 'agent' }), token: this.opts.token, ...(this.opts.agentToken ? { agentToken: this.opts.agentToken } : {}) }));
     };
     ws.onclose = () => {
       this.open = false;
@@ -155,14 +156,16 @@ export class WorldClient {
       const msg = JSON.parse(String(ev.data));
       if (msg.type === 'snapshot') {
         this.open = true;
-        if (msg.cut?.state) this.replica.adopt(msg.cut);
+        if (msg.state) this.replica.adopt(msg);
         const ent = this.screen();
         this.stageSpeaker = ent?.stage?.speaker;
-        const me = msg.cut?.you; this.you = me ?? null; const listed = Array.isArray(ent?.captioners?.ids) && ent.captioners.ids.includes(me);
+        const me = msg.actor; this.you = me ?? null; const listed = Array.isArray(ent?.captioners?.ids) && ent.captioners.ids.includes(me);
         this.log(`joined "${this.opts.world}" as ${this.opts.actor} (${me ?? '?'}, ${msg.yourRights?.role ?? '?'}${listed ? `, a captioner of ${this.opts.screenId}` : `, NOT one of ${this.opts.screenId}'s captioners — ask whoever may edit it: set {id: "${this.opts.screenId}", component: "captioners", value: {ids: [${[...(ent?.captioners?.ids ?? []), me].map((x: any) => JSON.stringify(x)).join(', ')}]}}`}); screen ${this.opts.screenId} ${ent ? 'present' : 'NOT PRESENT — place it first'}`);
         this.schedule();
       } else if (msg.type === 'error') {
         this.onError(String(msg.error ?? ''));
+      } else if (msg.type === 'refused') {
+        this.onError(refusalWords(msg));
       } else if (msg.type === 'log') {
         const r = this.replica.ingest(msg.entries ?? [], msg.from ?? -1, msg.names);
         if (r.resync) { this.ws?.close(); return; }   // a gap: rejoin for a fresh cut (onclose reconnects)

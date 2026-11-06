@@ -4,7 +4,7 @@
 //   bun tools/protocol/gov-reserved-check.ts
 import fs from "node:fs"; import path from "node:path"; import os from "node:os"; import { spawnSync } from "node:child_process";
 import { jcs, readLog } from "../../shared/protocol/fold.js"; import { sha256, sha256Bytes, hexBytes } from "../../shared/protocol/hash.js";
-import { openLive } from "../../server/livehost.ts";
+import { openLive } from "./labhost.ts";
 const ENGINE = path.resolve(import.meta.dir, "../.."); let pass = 0, fail = 0;
 const check = (name: string, ok: unknown, info?: unknown) => { if (ok) { pass++; console.log(`ok   ${name}`); } else { fail++; console.log(`FAIL ${name}${info === undefined ? "" : " — " + JSON.stringify(info).slice(0, 300)}`); } };
 const W = fs.mkdtempSync(path.join(process.env.PROTOCOL_SCRATCH ?? os.tmpdir(), "gov-"));
@@ -17,7 +17,7 @@ try {
 
   const gov = found("gov"); const log = path.join(gov, "world.jsonl");
   const entries = readLog(fs.readFileSync(log)); const last = entries.at(-1) as any;
-  const e: Record<string, unknown> = { world: last.world, kind: "sequencer", actor: "system", verb: "sequencer", body: { key: "ed25519:" + "A".repeat(43), sigs: [{ key: "ed25519:" + "B".repeat(43), v: "C".repeat(86) }] }, ts: last.ts + 1 };
+  const e: Record<string, unknown> = { world: last.world, kind: "governance", actor: "system", body: { key: "ed25519:" + "A".repeat(43), sigs: [{ key: "ed25519:" + "B".repeat(43), v: "C".repeat(86) }] }, ts: last.ts + 1 };
   e.head = step(last.head, e); fs.appendFileSync(log, JSON.stringify(e) + "\n");
   const before = { log: fs.readFileSync(log), files: fs.readdirSync(gov).sort().join(",") };   // the bytes and the listing openLive must leave alone
   let err = ""; try { openLive(gov, "gov"); } catch (x) { err = String((x as Error)?.message ?? x); }

@@ -10,6 +10,7 @@ import { avatarMounts } from './mounts.js';   // not world.js: that pulls core.j
 import { hydrate as shadowHydrate, reset as shadowReset, state as shadowState, applyView } from './state.js';
 import { hear } from '../../shared/chatwindow.js';
 import { refusalText } from '../../shared/protocol/refusal.js';
+import { helloOf, refusalWords } from '../../shared/protocol/hello.js';
 import { pending, P } from './scheduler.js';
 // The realizers (TEL0S_NOTES §11.4) own the scene: state verbs realize
 // FROM the fold, and fold-inert causes (use/punt/force, moderation
@@ -317,6 +318,7 @@ export function sendJoin() {
     replica: true,
     session: PAGE_SESSION,
     clock: true,   // the server's time just before the snapshot ('clock' below)
+    hello: helloOf(),   // the protocol this client reads (docs/DESIGN-log-vocabulary.md §F F-3)
   }));
 }
 
@@ -701,6 +703,7 @@ export async function connect() {
       for (const raw of early.buffered) {
         let msg; try { msg = JSON.parse(raw); } catch { continue; }
         if (msg?.type === 'error') noteRefusal(msg.error, msg.refused);
+        if (msg?.type === 'refused') noteRefusal(refusalWords(msg), { code: msg.code });
       }
       onSocketClosed(early.closeInfo);
       return;
@@ -785,7 +788,7 @@ function onSocketClosed(ev) {
     showRefusal(joinRefusal ?? `you're not in "${CONFIG.world}" — ${reloadHint('reload if your access changes')}`);
     return;
   }
-  // 4011 = there's nothing to watch here YET (a spectator of a world nobody has founded): not a refusal — try again,
+  // 4011 = nothing to watch here (a spectator of a world that is unavailable to it, perhaps not founded yet): try again,
   // backing off, so an observer started early joins once the world exists.
   if (ev.code === 4011) {
     net.status = 'retrying';
@@ -793,9 +796,9 @@ function onSocketClosed(ev) {
     setTimeout(connect, redial.next(REDIAL.full));
     return;
   }
-  // 4005 = a refused join: a malformed name, no such world, an old-format world, a client that doesn't fold the log.
+  // 4005 = a refused join: a malformed name, world-unavailable (missing or not yours to see), an old-format world, a client that doesn't fold the log.
   // No retry — the answer won't change, so reconnecting is just hammering the authority. The server says why in an `error` just before this close; that sentence is shown. Without one, the close
-  // reason picks the words (the server's reasons: "old-format world", "no such world", "bad world name", …).
+  // reason picks the words (the server's reasons: "old-format world", "world-unavailable", "bad world name", …).
   // 4005 "full" = the world is at its access max: TRANSIENT — someone leaving makes room. Say the server's words (on
   // the splash if it is still up, else a toast) and try again, backing off; never pinned as the answer (review r3 F6).
   if (ev.code === 4005 && String(ev.reason ?? '') === 'full') {
@@ -815,7 +818,7 @@ function onSocketClosed(ev) {
     const why = String(ev.reason ?? '');
     showRefusal(joinRefusal ?? (
       /old-format/i.test(why) ? `"${CONFIG.world}" was saved by an older version of Eidoverse and needs a one-time conversion by whoever runs this server. Nothing is lost.`
-      : /no such world/i.test(why) ? `there's no world called "${CONFIG.world}" here — check the link that brought you here`
+      : /world-unavailable/i.test(why) ? `No accessible world named ${CONFIG.world}.`
       : /world name/i.test(why) ? `"${CONFIG.world}" is not a valid world name — check the link that brought you here`
       : `"${CONFIG.world}" refused this visit${why ? ` (${why})` : ''} — reload to try again`));
     return;
@@ -1157,6 +1160,12 @@ async function handle(msg, at) {
       logChat('*', String(msg.text ?? ''));
       break;
 
+    case 'refused':
+      // the hello refused (update-required, unsupported-feature): the join's answer, in words; its close shows them
+      noteRefusal(refusalWords(msg), { code: msg.code });
+      toast(refusalWords(msg), 'warn');
+      break;
+
     case 'error':
       // the world tells us it has no voice relay only when we try to use one —
       // remember it, so the mic glyph can say WHY it stays off (R, 09-04)
@@ -1174,9 +1183,9 @@ async function handle(msg, at) {
 }
 
 async function onSnapshot(msg) {
-  // no cut, no join: refused before any joined state is published (the voice bridge arms on it)
-  if (!msg.cut?.state) {
-    replica.reset(); report('snapshot', new Error('the server sent no world cut (an old server?)'));
+  // no fold, no join: refused before any joined state is published (the voice bridge arms on it)
+  if (!msg.state) {
+    replica.reset(); report('snapshot', new Error('the server sent no world snapshot (an old server?)'));
     // an older server: not "live" with nothing loaded — say so, fail the queued says, hang up without a redial (#470)
     net.joined = false; net.status = 'rejected'; bus.emit('net', net); failSays();
     toast('this server is older than the page: nothing will load — reload once it is updated', 'warn', 60000);
@@ -1259,7 +1268,7 @@ async function onSnapshot(msg) {
 
   // remote avatars build in parallel and never block log replay — the
   // roster is an AUTHORITY: a same-id record here is a fresh generation
-  identities.clear(); guests.clear(); if (msg.cut?.you) net.you = msg.cut.you;
+  identities.clear(); guests.clear(); if (msg.actor) net.you = msg.actor;
   for (const p of msg.present) {
     if (p.actorId) identities.set(p.id, p.actorId);
     if (p.guest) guests.add(p.id);
@@ -1268,10 +1277,17 @@ async function onSnapshot(msg) {
       .catch((e) => report(`present ${p.id}`, e));
   }
 
-  // State adopts the snapshot FIRST, synchronously: the authority's own cut, drawn as the view of THIS client's fold of it
-  // (the snapshot's `state` is the chat window: chat isn't world state).
-  replica.adopt(msg.cut); bus.emit('my-acts', msg.cut.mine ?? []); bus.emit('cut-adopted'); bus.emit('holds', msg.cut.holds ?? {});
-  shadowHydrate(replica.view(msg.state), typeof msg.throughSeq === 'number' ? msg.throughSeq : -1);
+  // State adopts the snapshot FIRST, synchronously: the authority's own fold, drawn as the view of THIS client's fold of it
+  // (the snapshot's `chat` is the chat window: chat isn't world state). A {dialect, v} this page doesn't read is refused
+  // whole (D5): nothing is folded, and the page says so instead of half-reading the world.
+  if (!replica.adopt(msg)) {
+    report('snapshot', new Error(`unknown-version: the world speaks ${msg.dialect} v${msg.v}; this page reads another`));
+    net.joined = false; net.status = 'rejected'; bus.emit('net', net); failSays();
+    toast(`this world's log is a version this page doesn't read (${msg.dialect} v${msg.v}): nothing will load — reload once the page is updated`, 'warn', 60000);
+    return;
+  }
+  bus.emit('my-acts', msg.mine ?? []); bus.emit('snapshot-adopted'); bus.emit('holds', msg.holds ?? {});
+  shadowHydrate(replica.view(msg.chat), typeof msg.throughSeq === 'number' ? msg.throughSeq : -1);
   rememberWorld();   // the door said yes, and the shadow now holds what is here
   forgetEmptyWorld();   // …or holds nothing, and a bare link should stop leading here
 
@@ -1285,9 +1301,9 @@ async function onSnapshot(msg) {
     bus.emit('live-entry', e);
   }
 
-  const rc = msg.state?.recentChat ?? [];
+  const rc = msg.chat?.recentChat ?? [];
   noteHistoryContext({
-    total: msg.state?.chatTotal ?? null,
+    total: msg.chat?.chatTotal ?? null,
     // what was ACTUALLY rendered: the window is exactly state.recentChat
     // (tail says beyond its 40-line cap are not re-played — they are
     // fetchable by paging, and this count is what makes the "showing N of

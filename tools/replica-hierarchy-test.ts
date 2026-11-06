@@ -9,9 +9,8 @@
 // every id present (and for a carrier that is gone while something still names it: the scan's answer, the dangling
 // edge). Mutation: skip the index update on the ingest path and the first move goes red.
 import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
-import { scratchWorld } from "./protocol/scratchworld.ts";
+import { scratchWorld, socketChild } from "./protocol/scratchworld.ts";
 import { makeReplica, wireState } from "../shared/protocol/replica.js";
-import { socketId } from "../shared/protocol/authority/sockets.js";
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -20,15 +19,15 @@ const check = (name: string, ok: boolean, detail = "") => {
 };
 
 const W = scratchWorld("hier").seed({
-  truck: { model: "truck.glb", pos: [0, 0, 0], yaw: 0, sockets: { bed: { pos: [0, 1, 0] } } },
+  truck: { model: "truck.glb", pos: [0, 0, 0], yaw: 0 },
+  "truck-bed": { parent: { to: "truck", offset: [0, 1, 0] }, socket: { name: "bed" } },
   crate: { model: "crate.glb", pos: [0, 0, 0], yaw: 0, parent: { to: "truck", socket: "bed" } },
   lantern: { model: "lantern.glb", pos: [0, 0, 0], yaw: 0, parent: { to: "crate" } },
   rock: { model: "rock.glb", pos: [5, 0, 5], yaw: 0 },
 });
-// the truck's bed is a socket child (PLAN-sockets-entities: the seed's old `sockets` map is lifted at load), so the crate
-// rides it: truck › bed › crate › lantern
-const bed = socketId("truck", "bed");
-const cutAt = () => JSON.parse(JSON.stringify({ state: wireState(W.state()), head: W.entries().length - 1 }));
+// the truck's bed is a socket child (PLAN-sockets-entities), so the crate rides it: truck › bed › crate › lantern
+const bed = socketChild(W.state(), "truck", "bed");
+const cutAt = () => JSON.parse(JSON.stringify({ dialect: "eidoverse-log", v: 4, state: wireState(W.state()), seq: W.entries().length - 1 }));
 const r = makeReplica(); r.adopt(cutAt());
 let head = W.entries().length;
 const write = (tool: string, args: any) => {
@@ -58,7 +57,7 @@ agree("adopt: the cut's folded parents are indexed");
 check("the seed's tree reads as seeded", r.childrenOf("truck").join() === bed && r.childrenOf(bed).join() === "crate" && r.childrenOf("crate").join() === "lantern" && r.ancestors("lantern").join() === `crate,${bed},truck` && r.parentOf("rock") === null && r.childrenOf("rock").length === 0);
 write("set", { id: "rock", component: "parent", value: { to: "truck" } });
 agree("a root moves under a carrier");
-check("…and the carrier lists it, in id order", r.childrenOf("truck").join() === `${bed},rock`);
+check("…and the carrier lists it, in id order", r.childrenOf("truck").join() === [bed, "rock"].sort().join());
 write("set", { id: "rock", component: "parent", value: { to: "crate" } });
 agree("a child moves to another carrier");
 check("…the old carrier forgets it, the new one lists it, its ancestors grow", r.childrenOf("truck").join() === bed && r.childrenOf("crate").join() === "lantern,rock" && r.ancestors("rock").join() === `crate,${bed},truck`);
@@ -75,7 +74,7 @@ write("create", { id: "box", model: "box.glb", components: { transform: { pos: [
 write("set", { id: "box", component: "parent", value: { to: "truck" } });
 write("set", { id: "rock", component: "parent", value: { to: "box" } });
 agree("a fresh chain built in three entries");
-check("…reads whole", r.ancestors("rock").join() === "box,truck" && r.childrenOf("truck").join() === `${bed},box`);
+check("…reads whole", r.ancestors("rock").join() === "box,truck" && r.childrenOf("truck").join() === [bed, "box"].sort().join());
 check("an id the world never had answers empty", r.childrenOf("nothing").length === 0 && r.parentOf("nothing") === null && r.ancestors("nothing").length === 0);
 
 console.log("\nthe index is the fold's, not a view's:");
@@ -88,7 +87,7 @@ console.log("\nthe index is the fold's, not a view's:");
 
 console.log("\na carrier that is gone while something still names it:");
 // the authority cascades a delete (the log never holds a bare one), so the entry is fed to the replica by hand
-{ const ing = r.ingest([{ kind: "change", verb: "delete", body: { id: "truck" }, ts: 0, actor: "u-hier" }], head); head++;
+{ const ing = r.ingest([{ kind: "change", op: "delete", body: { id: "truck" }, ts: 0, actor: "u-hier" }], head); head++;
   if (ing.resync) throw new Error(`resync: ${ing.why}`); }
 agree("the index answers the dangling edge exactly as the scan does");
 check("…the gone carrier still lists its child, the child still names it, and the grandchild's ancestors stop at the gap",

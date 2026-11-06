@@ -4,7 +4,7 @@
 // agent's text-tier perception must agree on where a moving thing IS, and
 // the only way two runtimes agree forever is to evaluate the same file.
 // This module is deliberately dependency-free — no THREE, no DOM, no scene,
-// no clock (its imports are pure: names.js motionType, and shared/rot.js, the one set of quaternion functions): callers pass {base, motion, nowMs} in and get a transform out.
+// no clock (its imports are pure: shared/rot.js, the one set of quaternion functions): callers pass {base, motion, nowMs} in and get a transform out.
 // motion.js consumes it per frame; mcpl/agent.ts consumes it at read time.
 //
 // Contract: evalWholeMotion returns a FINITE transform or an explicit
@@ -16,7 +16,7 @@
 // Part-frame motion (`motion:<slot> {node}` keys, or an old `motion` carrying `part`: shared/protocol/names.js motionNode)
 // does not displace the entity's ROOT transform at all — those stay in
 // motion.js, THREE-side, and this module reports the root as unmoved.
-import { motionType } from '../../shared/protocol/names.js';
+import { AXES } from '../../shared/axes.js';
 import { qMul, qRotate as qApply, qAxisAngle as qAxisAngleUnit } from '../../shared/rot.js';
 
 // ---- quaternions: shared/rot.js's -----------------------------------------
@@ -47,8 +47,7 @@ const baseQuat = (base) => (Array.isArray(base?.q) && base.q.length === 4 ? base
 // [1,0,0], no t0 at all. Parsing is where generosity lives; the closed form
 // stays exact.
 
-export const AXES = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1],
-  '-x': [-1, 0, 0], '-y': [0, -1, 0], '-z': [0, 0, -1] };
+export { AXES };
 
 export const axisOf = (m, def) => {
   const a = m.axis;
@@ -169,7 +168,7 @@ export function evalWholeMotion(base, m, nowMs) {
   }
   const t = since(m, nowMs);
   let r;
-  switch (motionType(m)) {
+  switch (m?.type) {
     case 'pendulum':
       r = { ok: true, rot: true, yaw: null,
         ...rotateAtPivot(base, axisOf(m, [1, 0, 0]), m.pivot ?? base.pivot ?? [0, 0, 0], pendulumTheta(m, t)) };   // base.pivot: the entity's pivot component (research 52); absent, its origin (shape audit 10-16: was [0, 2, 0], which a stored world's first load writes as its pivot)

@@ -14,28 +14,29 @@
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import { scratch } from "./common.ts";
-import { request, isBanned, worldOf, creatorOf, liftWorld, maintain, LAB_CATALOGUE, actIndexOf, actIndexFresh, entityBefore, fixtureIds } from "../../shared/protocol/authority.js";
+import { request, isBanned, worldOf, creatorOf, actIndexOf, actIndexFresh, entityBefore, fixtureIds } from "../../shared/protocol/authority.js";
 fixtureIds(true);   // the fixtures below seed the ids they read (R 10-17: a writer never chooses one; ids-check covers the refusal)
-import { fold, readLog, digest, opsOf, PURGED } from "../../shared/protocol/fold.js";
+import { fold, readLog, digest, opsOf, REDACTED } from "../../shared/protocol/fold.js";
 import * as AUTH from "../../shared/protocol/authority.js";
 // the operator's repair path; before it existed an operator had only the ordinary request (OP rows are red there, not a crash)
 const operatorRepair = AUTH.operatorRepair ?? ((w, a, v, x) => request(w, a, v, x));
 import { makeReplica, wireState, stateFromWire } from "../../shared/protocol/replica.js";
 import { simFold, digestOf, restsOf } from "../../shared/protocol/simlayer.js";
-import { MODELS } from "../../shared/protocol/labmodels.js";
+import { MODELS, LAB_CATALOGUE } from "./labmodels.js";
 import { enc, encName, dec } from "../../shared/protocol/names.js";
 import { refusalText, lockVerb, lockQuestion, lockChoices } from "../../shared/protocol/refusal.js";
 import { VERBSPEC } from "../../shared/protocol/verbspec.js";
 import { custodyAt } from "../../server/custody.ts";
 import { translate, TRANSLATOR } from "./import-v1/translate-v1.js";
 import { openWorld } from "../../server/filehost.ts";
-import { openLive } from "../../server/livehost.ts";
+import { openLive } from "./labhost.ts";
 import { v1FoldBuild, v1FoldFiles } from "./import-v1/build.ts";
 import { emptyState as v1Empty, foldEntry as v1fold } from "./import-v1/fold.js";
 import { worldPose } from "../../shared/hierarchy.js";
 import { viewState } from "../../shared/protocol/view.js";
 import { worldPose as worldT } from "../../shared/protocol/simlayer.js";
 import { labClock } from "./clock.ts";
+import { addSocket } from "../../shared/requests.js";
 
 const root = scratch("door");
 // lab worlds name people by bare test names; the directory a real server has would know them (roles:<key> checks it)
@@ -73,7 +74,12 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
     { seq: 2, ts: 3, actor: "Marigold", verb: "comp", args: { id: "lamp_1", type: "0abc", data: 1 } },
     { seq: 3, ts: 4, actor: "Marigold", verb: "comp", args: { id: "lamp_1", type: "n0abc", data: 2 } }];
   const r = translate(old, { foldBuild: v1FoldBuild() });
-  ok(r.out[1].verb === "translated" && r.out[1].body.from.translator === TRANSLATOR && r.out[1].body.from.fold === v1FoldBuild() && r.out[0].body.minor === 0, "T2 the act after genesis names the translator and the v1 fold build", r.out[1].body);
+  ok(r.out[1].verb === "translated" && !("translator" in r.out[1].body.from) && r.out[1].body.from.fold === v1FoldBuild() && r.out[1].body.from.roles?.Marigold?.role === "owner" && !("minor" in r.out[0].body) && !("provenance" in r.out[0].body) && !("provenance" in r.out[1].body),
+    "T2 the act after genesis names its parent (the old genesis) and the v1 fold build, never the translator; a pure translation (no provenance given) writes none (S4: provenance is genesis's alone)", r.out[1].body);
+  { const P = { registry: { id: "registry-pin", sha256: "a".repeat(64) }, writer: { name: "eidoverse-translate-v1", version: "49.0.0", sourceRevision: "git:sha1:" + "b".repeat(40), sourceTreeSha256: "c".repeat(64), dirty: false } };
+    const rp = translate(old, { foldBuild: v1FoldBuild(), provenance: P }); let bad: any = null; try { translate(old, { provenance: { ...P, writer: { ...P.writer, sourceTreeSha256: undefined } } }); } catch (e) { bad = String(e); }
+    ok(JSON.stringify(rp.out[0].body.provenance) === JSON.stringify(P) && JSON.stringify(rp.out[1].body.provenance) === JSON.stringify(P) && !!rp.out[1].world && rp.out[1].world !== r.out[1].world && /provenance-writer/.test(bad ?? ""),
+      "T2b given provenance, genesis carries it (a new world id) and `translated` repeats it; a malformed one refuses the translation", { g: rp.out[0].body.provenance, bad }); }
   const c = r.final.translated[enc("lamp_1")];
   ok(c && c["imported/n0abc"] === 2 && c[`imported/${encName("0abc")}`] === 1 && !r.stats.divergences, "T3 a translated world keeps comps '0abc' and 'n0abc' apart (each under the imported namespace: bare names are the registry's, PROTOCOL §4)", c);
   ok(JSON.stringify(r.out[0].body.owners) === JSON.stringify([[], [r.out[0].body.sequencer]]) && r.out[1].body.from.roles?.Marigold?.role === "owner" && !r.final.translated["@world"]?.[`roles:${enc("Marigold")}`], "T4 genesis is custodial (tier 0 empty, the authority's key in tier 1); v1 genesis roles, which v1 never folds, are kept verbatim in the translated act and grant nothing", [r.out[0].body.owners, r.out[1].body.from])
@@ -116,18 +122,18 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
   ok(call("bob", "set", { id: "tbl", component: "reactions", value: { knock: { kind: "set", component: "label", value: "knocked" } }, throughLock: true }).ok && call("vic", "use", { id: "tbl", action: "knock" }).ok, "P14 through the lock a builder sets reactions, and a visitor may still `use` it (use stays open, its label write too)");
   ok(call("olive", "set", { id: "tbl", component: "label", value: "the long table", throughLock: true }).ok, "P14b the owner edits through it with throughLock");
   { const r = call("bob", "create", { id: "cup2", model: "ball", place: { on: "tbl" } }); ok(r.ok, "P15 a NEW thing may be put on a locked table (a lock guards what is attached, not the surface)", r); }
-  // one place per thing (R 10-11): a light never shares an entity with a model; it goes on a child
+  // components compose (Mica 11-04): a light may share a thing with a model, or go on a child of its own
   { call("bob", "create", { id: "pole", model: "crate", place: { at: [-9, 9] } });   // its own thing, under no lock, away from P32's spot
     const r1 = call("bob", "set", { id: "pole", component: "light", value: { color: 0xffd9a0, intensity: 16, range: 10 } });
     const r2 = call("bob", "create", { id: "pole-light", components: { light: { color: 0xffd9a0, intensity: 16, range: 10 }, parent: { to: "pole" }, transform: { pos: [0, 1, 0] } } });
     const r3 = call("bob", "set", { id: "pole-light", component: "model", value: "crate" });
-    ok(code(r1) === "one-place" && r2.ok && code(r3) === "one-place", "P15b a light on a model is refused (one place per thing), a child light is fine, and a model on a light is refused too", { r1: r1.refused ?? null, r2: r2.refused ?? null, r3: r3.refused ?? null }); }
+    ok(r1.ok && r2.ok && r3.ok && !!W().state().entities.pole?.c.light && W().state().entities["pole-light"]?.c.model === "crate", "P15b a light on a model is taken (components compose), a child light is fine, and a model on a light is taken too", { r1: r1.refused ?? null, r2: r2.refused ?? null, r3: r3.refused ?? null }); }
   // throughLock
   { const n = W().entries.length; const r = call("bob", "set", { id: "cup", component: "transform", value: { pos: [0.1, 0.75, 0] }, throughLock: true });
     const E = W().entries.slice(n); const st = E.filter((e) => e.kind === "change"); const ops = st.flatMap((e) => e.body.ops ?? [e.body]);
     ok(r.ok, "P16 throughLock: true lets a builder (who may remove the lock) act through it", r.refused);
     ok(E.length === 2 && ops.length && ops.every((o) => o.comp !== "lock") && W().state().entities.tbl.c.lock === true, "P17 …and the log records only the edit: one act, one change entry, no unlock or relock; the lock is still on (stored true: recut B2)", E.map((e) => [e.kind, e.verb, e.body?.comp]));
-    ok(E[0].kind === "act" && E[0].body.request.throughLock === true, "P18 …the act carries the request as sent, flag and all (history shows who went through)", E[0].body); }
+    ok(E[0].kind === "request" && E[0].body.args.throughLock === true, "P18 …the act carries the request as sent, flag and all (history shows who went through)", E[0].body); }
   ok(call("olive", "set", { id: "tbl", component: "transform", value: { pos: [0, 0, 3.1] }, throughLock: true }).ok, "P19 the owner acts through it the same way");
   ok(code(call("bob", "set", { id: "cup", component: "transform", value: { pos: [0, 0.75, 0] }, throughLock: "yes" })) === "shape", "P20 throughLock is a boolean");
   ok(call("bob", "set", { id: "cup2", component: "label", value: "x", throughLock: true }).ok, "P21 throughLock on an edit no lock guards is harmless");
@@ -327,10 +333,51 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
   ok(refusalText("x", { refused: { code: "c", reason: "h--abc and plain-id and x--zz stay" } }) === "x refused by the authority (c): h--abc and plain-id and x--zz stay", "NR7 …a hashed name (h--) or a non-hex x-- is left as it is (it can't be read back)");
   { const V = (req) => lockVerb(req); const set = (component) => ({ verb: "set", args: { id: "a", component, value: 1 } });
     const got = [V(set("transform")), V(set("parent")), V({ verb: "place", args: { id: "a", at: [0, 0] } }), V({ verb: "delete", args: { id: "a" } }), V(set("model")),
-      V({ verb: "batch", args: { ops: [set("transform"), { verb: "delete", args: { id: "b" } }] } }), V({ verb: "undo", args: { act: 3 } }), V(set("label")), V({ verb: "delete", args: { id: "a", component: "parent" } })];
+      V({ verb: "batch", args: { requests: [set("transform"), { verb: "delete", args: { id: "b" } }] } }), V({ verb: "undo", args: { act: 3 } }), V(set("label")), V({ verb: "delete", args: { id: "a", component: "parent" } })];
     ok(JSON.stringify(got) === JSON.stringify(["Move", "Move", "Move", "Delete", "Replace", "Delete", "Undo", "Change", "Move"]) && lockQuestion("Delete") === "This is locked. Delete anyway?"
       && lockChoices("Move").map((c) => c.v).join() === "through,cancel,unlock", "NR8 the lock question names what the request would do: Move / Delete / Replace anyway? (R's three answers)", got); }
 }
+
+// ---- UM: undo of an imported act the translation's lift-sockets rewrote (Mica 11-05, #23 ruling 1) ----
+// the whole request refuses (undo-unavailable, cause migration-transformed, naming the act and its ops) and writes no change;
+// a mixed batch never undoes its untouched ops alone; an imported act the lift left alone undoes as before
+{ const old = [{ seq: 0, ts: 1, actor: "world", verb: "genesis", args: { v: 2, dialect: "eidoverse-log" } },
+    { seq: 1, ts: 2, actor: "ann", verb: "grant", args: { id: "ann", role: "owner" } },
+    { seq: 2, ts: 3, actor: "ann", verb: "spawn", args: { id: "tbl", lib: "table", pos: [2, 0, 3] } },
+    { seq: 3, ts: 4, actor: "ann", verb: "comp", args: { id: "tbl", type: "sockets", data: { perch: { pos: [0.45, 0.75, 0.25], yaw: 1.2 }, other: { pos: [-0.4, 0.75, 0] } } } },
+    { seq: 4, ts: 5, actor: "ann", verb: "spawn", args: { id: "bell", lib: "bell", pos: [-5, 0, -5] } },
+    { seq: 5, ts: 6, actor: "ann", verb: "mount", args: { id: "bell", to: "tbl", slot: "other" } },
+    { seq: 6, ts: 7, actor: "ann", verb: "spawn", args: { id: "box", lib: "crate", pos: [9, 0, 9] } },
+    // drops the bell's slot: one change sets tbl.sockets (the lift deletes it) and bell.transform (the lift leaves it)
+    { seq: 7, ts: 8, actor: "ann", verb: "comp", args: { id: "tbl", type: "sockets", data: { perch: { pos: [0.45, 0.75, 0.25], yaw: 1.2 } } } }];
+  const tr = translate(old, DOORKEYS()); const name = "tr-undolift";
+  fs.writeFileSync(root + `worlds/${name}.jsonl`, tr.out.map((e) => JSON.stringify(e)).join("\n") + "\n");
+  const actOf = (verb, id) => tr.out.findIndex((e) => e?.verb === "imported" && e.body?.verb === verb && e.body.args?.id === id);
+  const comps = tr.out.flatMap((e, i) => (e?.verb === "imported" && e.body?.verb === "comp" ? [i] : []));
+  const single = comps[0], mixed = comps[1], mount = actOf("mount", "bell"), box = actOf("spawn", "box");
+  const resOf = (q) => tr.out.find((e) => e?.kind === "change" && e.cause === q);
+  ok(opsOf(resOf(single)).length === 1 && opsOf(resOf(mixed)).map((o) => `${o.id} ${o.comp}`).join() === "tbl sockets,bell transform",
+    "UM0 the fixture: one imported change of one op the lift rewrote, and one batch the lift rewrote half of", [opsOf(resOf(single)), opsOf(resOf(mixed))]);
+  const tryUndo = (args) => { clock.advance(100); const w = openWorld(root, name); const n = w.entries.length, d = digest(w.state());
+    const r = request(w, "ann", "undo", args); const w2 = openWorld(root, name); const added = w2.entries.slice(n);
+    return { r, added, same: digest(w2.state()) === d, st: w2.state() }; };
+  const whole = (u, act, ops) => !u.r.ok && u.r.refused?.code === "undo-unavailable" && u.r.refused.cause === "migration-transformed" && u.r.refused.act === act
+    && JSON.stringify(u.r.refused.ops.map((o) => [o.index, o.id, o.component])) === JSON.stringify(ops)
+    && u.added.length === 1 && u.added[0].kind === "request" && u.added[0].body?.refused?.code === "undo-unavailable" && !u.added.some((e) => e.kind === "change") && u.same;
+  const a = tryUndo({ act: single });
+  ok(whole(a, single, [[0, "tbl", "sockets"]]), "UM1 undo of an imported act whose one op the lift rewrote refuses whole: undo-unavailable, migration-transformed, the act and op 0; no change entry, the state unchanged", [a.r, a.added.map((e) => e.kind)]);
+  const bx = tryUndo({ act: mixed });
+  ok(whole(bx, mixed, [[0, "tbl", "sockets"]]) && JSON.stringify(bx.st.entities.bell.c.transform.pos) === "[0,0,0]",
+    "UM2 a mixed batch refuses whole too: the untouched sibling (bell transform) is not put back, no ok, no partial receipt, no change entry", [bx.r, bx.added.map((e) => e.kind), bx.st.entities.bell?.c.transform]);
+  const m = tryUndo({ act: mount });
+  ok(whole(m, mount, [[1, "bell", "parent"]]), "UM3 …an imported mount whose parent the lift rewrote (its transform it left) refuses whole, naming op 1", m.r);
+  const from = actOf("spawn", "tbl"); const rb = tryUndo({ actor: "ann", since: { seq: from, head: openWorld(root, name).headAt(from) }, confirm: true });
+  ok(!rb.r.ok && rb.r.refused?.code === "undo-unavailable" && !rb.added.some((e) => e.kind === "change") && rb.same, "UM4 an owner's rollback over imported acts the lift rewrote refuses whole (nothing rolled back)", [rb.r, rb.added.map((e) => e.kind)]);
+  const c = tryUndo({ act: box });
+  ok(c.r.ok && c.r.undid?.act === box && !c.st.entities.box && c.added.some((e) => e.kind === "change"), "UM5 control: an imported act the lift never touched (box's spawn) undoes as before", c.r.refused ?? c.r);
+  clock.advance(100); const mk = request(openWorld(root, name), "ann", "set", { id: "tbl", component: "label", value: "after" });
+  const u = tryUndo({});
+  ok(mk.ok && u.r.ok && u.r.undid?.act === mk.act && u.st.entities.tbl.c.label === undefined, "UM6 control: a live act in the translated world undoes as before", [mk.refused, u.r.refused ?? u.r.undid]); }
 
 // ---- M: translated mounts in the authority's shape (research 37, slice 3 #3) ----
 // translate-v1@1 carried v1's parent record and v1's own pos; the authority reads transform as LOCAL to parent, so it saw a
@@ -349,12 +396,13 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
     { seq: 8, ts: 9, actor: "ann", verb: "spawn", args: { id: "stray", lib: "ball", pos: [6, 0, 6] } },
     { seq: 9, ts: 10, actor: "ann", verb: "mount", args: { id: "stray", to: "nowhere", offset: [0, 5, 0] } }];      // its carrier doesn't exist
   const r = translate(old, DOORKEYS()); fs.writeFileSync(root + "worlds/tr-mounts.jsonl", r.out.map((e) => JSON.stringify(e)).join("\n") + "\n");
-  maintain(openWorld(root, "tr-mounts"));   // lead 10-18: the load writes nothing; the command lifts the pre-cut spelling before anyone writes
   const v1 = v1Empty(); for (const e of old) v1fold(v1, e);
   const tc = (verb, args) => { clock.advance(100); return request(openWorld(root, "tr-mounts"), "ann", verb, args); };
   ok(!r.stats.divergences && r.final.translated.box.parent?.to !== undefined && !("order" in r.final.translated.box.parent) && !("offset" in r.final.translated.box.parent), "M1 a translated mount is door-shaped: parent {to} (no order since the shape audit, 10-16), no offset copy (L2)", r.final.translated.box.parent);
   ok(JSON.stringify(r.final.translated.box.transform.pos) === "[0,0.75,0]" && JSON.stringify(r.final.translated.bell.transform.pos) === "[0.45,0.75,0.25]" && r.final.translated.bell.parent.socket === "perch",
-    "M2 its transform is local: the offset, or (no offset) its socket's pos, and the socket is kept (v1's slot)", [r.final.translated.box.transform, r.final.translated.bell.transform, r.final.translated.bell.parent]);
+    "M2 its transform is local: the offset, or (no offset) its socket's pos, and the socket is kept in the projection (v1's slot; the log's tail lifts it, translate-v1@46)", [r.final.translated.box.transform, r.final.translated.bell.transform, r.final.translated.bell.parent]);
+  { const E = openWorld(root, "tr-mounts").state().entities, perch = E[E.bell?.c.parent?.to]?.c;
+    ok(perch?.socket?.name === "perch" && perch.parent?.to === "tbl" && !("socket" in E.bell.c.parent) && !E.tbl.c.sockets, "M2b …and the written world rides the lifted socket child (no maintenance command: the translation's own lift-sockets)", [E.bell?.c.parent, perch]); }
   const near = (a, b) => a && b && a.every((x, i) => Math.abs(x - b[i]) < 1e-6);
   // v1's mount names its socket `slot`; shared/hierarchy.js (the renderer's reading) speaks the protocol's `socket`
   const drawn = viewState(openWorld(root, "tr-mounts").state()).entities;   // what the renderer draws: the door's fold, as the view says it (10-14: one vocabulary)
@@ -404,7 +452,7 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
   const same = (what) => { steps++; const inc = flat(actIndexOf(w)), fresh = flat(actIndexFresh(readLog(fs.readFileSync(dir + "world.jsonl"))));
     if (inc !== fresh && !firstBad) firstBad = [what, inc.slice(0, 300), fresh.slice(0, 300)]; };
   const step = (actor, verb, args = {}) => { const r = call(actor, verb, args); same(`${actor} ${verb}`); return r; };
-  const purge = (values) => { now += 100; w.append({ kind: "purge", actor: "system", verb: "purge", body: { values } }); same("purge"); };
+  const purge = (values) => { now += 100; w.append({ kind: "redaction", actor: "system", body: { values } }); same("purge"); };
   const label = () => w.state().entities.crate?.c.label;
   step("rowan", "create-world", { title: "undo" }); step("rowan", "set", { id: "@world", component: "roles:bob", value: { role: "builder" } });
   step("bob", "create", { id: "crate", model: "crate", place: { at: [0, 0] } });
@@ -429,7 +477,7 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
   const u5 = step("bob", "undo", {});
   ok(code(u5) === "conflict" && /purged/.test(u5.refused.skipped?.[0]?.why) && w.state().entities.crate.c.label === "public", "U5 undoing the later label won't restore the purged one", [u5.refused, w.state().entities.crate.c.label]);
   // purge an act's whole body: its label can't be read, so undo {label} can't find it
-  const b1 = step("bob", "batch", { label: "tidy", ops: [{ verb: "set", args: { id: "crate", component: "description", value: "a tidy crate" } }] });   // (a light on a model is refused since 10-11: one place per thing)
+  const b1 = step("bob", "batch", { label: "tidy", requests: [{ verb: "set", args: { id: "crate", component: "description", value: "a tidy crate" } }] });   // (a light on a model is refused since 10-11: one place per thing)
   purge([{ seq: b1.act }]);
   ok(code(step("bob", "undo", { label: "tidy" })) === "nothing", "U6 a purged act's label can't be matched any more", b1.refused);
   // entityBefore = the fold at every seq, for every thing (purged values included)
@@ -453,26 +501,26 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
   const t0 = w.state().entities.tbl.c.transform;
   const moved = { ...t0, pos: [1, t0.pos[1], 3] };
   const e1 = call("ann", "set", { id: "tbl", component: "transform", value: moved, expect: [{ id: "tbl", component: "transform", value: t0 }] });
-  ok(e1.ok && w.entries[e1.act].body.request.expect?.length === 1, "E1 expect equal to what's there: written, and the act records it as sent", e1.refused);
+  ok(e1.ok && w.entries[e1.act].body.args.expect?.length === 1, "E1 expect equal to what's there: written, and the act records it as sent", e1.refused);
   call("bob", "set", { id: "tbl", component: "transform", value: { ...moved, pos: [2, t0.pos[1], 3] } });
   const before = n();
   const e2 = call("ann", "set", { id: "tbl", component: "transform", value: { ...moved, pos: [5, t0.pos[1], 5] }, expect: [{ id: "tbl", component: "transform", value: moved }] });
   const rec = w.entries.slice(before);
-  ok(code(e2) === "changed" && e2.refused.by === "bob" && rec.length === 1 && rec[0].kind === "act" && rec[0].body?.refused?.code === "changed" && w.state().entities.tbl.c.transform.pos[0] === 2,
+  ok(code(e2) === "changed" && e2.refused.by === "bob" && rec.length === 1 && rec[0].kind === "request" && rec[0].body?.refused?.code === "changed" && w.state().entities.tbl.c.transform.pos[0] === 2,
     "E2 someone changed it since: refused `changed`, naming them; no change is written, only the attempt (an act carrying its refusal, round-2 R7)", [e2.refused, rec.map((e) => [e.kind, e.body?.refused])]);
   ok(code(call("ann", "set", { id: "tbl", component: "label", value: "x", expect: [{ id: "tbl", component: "label", value: "y" }] })) === "changed", "E3 expecting a value that isn't there");
   ok(call("ann", "set", { id: "tbl", component: "label", value: "x", expect: [{ id: "tbl", component: "label" }] }).ok, "E4 value left out = expect it absent");
   ok(code(call("ann", "set", { id: "tbl", component: "label", value: "z", expect: [{ id: "tbl", component: "label" }] })) === "changed", "E4b …and refused once it's there");
   ok(code(call("ann", "set", { id: "tbl", component: "label", value: "z", expect: { id: "tbl" } })) === "shape", "E5 a malformed expect is a shape refusal");
-  ok(code(call("ann", "batch", { ops: [{ verb: "delete", args: { id: "tbl" } }], expect: [{ id: "gone", component: "transform", value: {} }] })) === "changed", "E6 expect guards a batch too (a thing that's gone)");
+  ok(code(call("ann", "batch", { requests: [{ verb: "delete", args: { id: "tbl" } }], expect: [{ id: "gone", component: "transform", value: {} }] })) === "changed", "E6 expect guards a batch too (a thing that's gone)");
   // duplicate: create {from: <a thing>}
   call("ann", "set", { id: "tbl", component: "lock", value: true });
   const d1 = call("bob", "create", { from: "tbl" });
   const st = w.state(); const copy = d1.after && Object.keys(d1.after).find((k) => st.entities[k]?.c.model === "table" && k !== "tbl");
   const kid = copy && Object.keys(st.entities).find((k) => st.entities[k].c.parent?.to === copy);
   ok(d1.ok && copy && kid && !("lock" in st.entities[copy].c) && st.entities[kid].c.model === "crate", "D1 duplicate copies the thing and what's attached to it, as one act (the lock isn't copied)", [d1.refused, copy, kid]);
-  ok(d1.ok && Math.abs(st.entities[copy].c.transform.pos[0] - (st.entities.tbl.c.transform.pos[0] + 0.5)) < 1e-9 && opsOf(w.entries[d1.seq]).filter((o) => o.verb === "create").length === 2, "D2 …0.5 m along x, in ONE change entry (two creates)", st.entities[copy]?.c.transform);
-  ok(d1.ok && w.entries[d1.seq].actor === "bob" && w.entries[d1.act].body.request.from === "tbl", "D3 the copy is bob's (the act says what it copied)");
+  ok(d1.ok && Math.abs(st.entities[copy].c.transform.pos[0] - (st.entities.tbl.c.transform.pos[0] + 0.5)) < 1e-9 && opsOf(w.entries[d1.seq]).filter((o) => o.op === "create").length === 2, "D2 …0.5 m along x, in ONE change entry (two creates)", st.entities[copy]?.c.transform);
+  ok(d1.ok && w.entries[d1.seq].actor === "bob" && w.entries[d1.act].body.args.from === "tbl", "D3 the copy is bob's (the act says what it copied)");
   const d4 = call("bob", "undo", { act: d1.act });
   ok(d4.ok && !w.state().entities[copy] && !w.state().entities[kid], "D4 undoing the duplicate removes both parts", d4.refused);
   ok(code(call("bob", "create", { from: "nope" })) === "not-found", "D5 duplicating nothing is not-found");
@@ -504,16 +552,16 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
 // ---- K: the client's own fold (shared/protocol/replica.js): adopt a cut, ingest the authority's entries; the state equals the
 // server's after every request, and the VIEW the renderer draws is recomputed from it (slice 3c: no v1 verbs) ----
 // review of #260: the view diff compares a timestamp exactly, and tells an absent world key from an empty one
-{ const { diffView } = await import("../../shared/protocol/viewdiff.js");
+{ const { diffView } = await import("../../shared/viewdiff.js");
   const t0 = 1800000000000, thing = (ts) => ({ entities: { s1: { model: "crate", pos: [0, 0, 0], sound: { clip: "bell", at: ts } } } });
   const restart = diffView(thing(t0), thing(t0 + 500)), grass = diffView({ entities: {} }, { entities: {}, grass: {} });
   ok(restart.things.some((x) => x.id === "s1" && x.comp === "sound") && grass.world.includes("grass"), "VD1 a sound restamped 500 ms later is a change, and grass going from absent to {} (the default lawn) is one", { restart, grass }); }
-{ const { viewState } = await import("../../shared/protocol/view.js"); const { diffView } = await import("../../shared/protocol/viewdiff.js");
+{ const { viewState } = await import("../../shared/protocol/view.js"); const { diffView } = await import("../../shared/viewdiff.js");
   let now = clock.t + 12000; const w = openLive(root + "client/", "client", { kindOf: LABKIND, now: () => now });
   const call = (actor, verb, args = {}) => { now += 100; return request(w, actor, verb, args); };
   call("ann", "create-world", { title: "client" }); call("ann", "create", { id: "tbl", model: "table", place: { at: [0, 3] } });
   const c = makeReplica();
-  c.adopt(JSON.parse(JSON.stringify({ state: wireState(w.state()), head: w.entries.length - 1, worldId: w.worldId })));
+  c.adopt(JSON.parse(JSON.stringify({ dialect: "eidoverse-log", v: 4, state: wireState(w.state()), seq: w.entries.length - 1, world: w.worldId })));
   let steps = 0, bad = null; const same = (a, b) => { const d = diffView(a, b); return !d.things.length && !d.world.length; };
   const step = (what, actor, verb, args) => { const from = w.entries.length; const r = call(actor, verb, args);
     const fresh = JSON.parse(JSON.stringify(w.entries.slice(from))); // over the wire: plain JSON
@@ -540,11 +588,11 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
   call("ann", "create", { id: "gap-1", model: "crate", place: { at: [3, 3] } }); c.ingest(JSON.parse(JSON.stringify(w.entries.slice(c.head + 1))), c.head + 1);
   call("ann", "set", { id: "gap-1", component: "label", value: "x" }); const from = w.entries.length; ok(call("ann", "set", { id: "gap-1", component: "label", value: "y" }).ok, "K4 (precondition) the edit after the missed one is written");
   ok(c.ingest(JSON.parse(JSON.stringify(w.entries.slice(from))), from).resync, "K4 a gap (a missed entry) asks for a fresh snapshot, never folds past it");
-  const c2 = makeReplica(); c2.adopt(JSON.parse(JSON.stringify({ state: wireState(w.state()), head: w.entries.length - 1 })));
-  now += 100; w.append({ kind: "purge", actor: "system", verb: "purge", body: { values: [{ seq: from + 1 }] } });
+  const c2 = makeReplica(); c2.adopt(JSON.parse(JSON.stringify({ dialect: "eidoverse-log", v: 4, state: wireState(w.state()), seq: w.entries.length - 1 })));
+  now += 100; w.append({ kind: "redaction", actor: "system", body: { values: [{ seq: from + 1 }] } });
   ok(c2.ingest(JSON.parse(JSON.stringify(w.entries.slice(-1))), w.entries.length - 1).resync, "K5 a purge (retroactive, L1) asks for a fresh snapshot");
   const sv = stateFromWire(JSON.parse(JSON.stringify(wireState(w.state()))));
-  ok(digest(sv) === digest(w.state()) && sv.entities["gap-1"]?.c.label === PURGED, "K6 wireState survives the wire both ways, a purged value still purged (not a value)", sv.entities["gap-1"]?.c); }
+  ok(digest(sv) === digest(w.state()) && sv.entities["gap-1"]?.c.label === REDACTED, "K6 wireState survives the wire both ways, a purged value still purged (not a value)", sv.entities["gap-1"]?.c); }
 
 // ---- E: a handler whose author a purge erased acts for nobody (house 6340433633 Q2) ----
 { let now = clock.t + 7000; const w = openLive(root + "erased/", "erased", { kindOf: LABKIND, now: () => now });
@@ -553,12 +601,24 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
   call("bob", "create", { id: "box", model: "crate", place: { at: [3, 3] } });
   call("bob", "set", { id: "box", component: "reactions", value: { evolve: { kind: "set", component: "reactions", value: { tag: { kind: "set", component: "label", value: "tagged" } } } } });
   ok(call("vic", "use", { id: "box", action: "evolve" }).ok, "E1 (setup) vic's use of bob's evolve installs bob's tag handler");
-  const useSeq = [...w.entries].reverse().find((e) => e?.kind === "act" && e.verb === "use" && e.actor === "vic")?.seq;
-  now += 100; w.append({ kind: "purge", actor: "system", verb: "purge", body: { values: [{ seq: useSeq }] } });
+  const useSeq = [...w.entries].reverse().find((e) => e?.kind === "request" && e.verb === "use" && e.actor === "vic")?.seq;
+  now += 100; w.append({ kind: "redaction", actor: "system", body: { values: [{ seq: useSeq }] } });
   ok(call("ann", "set", { id: "@world", component: "roles:bob", value: { role: "member" } }).ok, "E1 (setup) bob is made a member");
   const r = call("vic", "use", { id: "box", action: "tag" });
   ok(!r.ok && r.refused?.code === "rights" && /erased/.test(r.refused?.reason ?? "") && w.state().entities.box.c.label !== "tagged",
     "E1 the purge erased whose rights installed tag: it acts for nobody (not as a newcomer, which here builds), and says why", r); }
+
+// ---- R: a per-op redaction reaches undo (review 11-05 B1: undo read the pre-rename `op` key and wrote the value back) ----
+{ let now = clock.t + 7500; const w = openLive(root + "redact-undo/", "redact-undo", { kindOf: LABKIND, now: () => now, catalogue: LAB_CATALOGUE });
+  const call = (actor, verb, args = {}) => { now += 100; return request(w, actor, verb, args); };
+  call("ann", "create-world", { title: "redact-undo" });
+  const c = call("ann", "create", { model: "crate", place: { at: [3, 3] }, components: { label: "my phone number" } });
+  const seq = c.seq, i = opsOf(w.entries[seq]).findIndex((o) => o.comp === "label"), id = c.refs[0].id;
+  now += 100; w.append({ kind: "redaction", actor: "system", body: { values: [{ seq, index: i }] } });
+  call("ann", "set", { id, component: "label", value: "safe" }); const after = w.entries.length;
+  call("ann", "undo", {});
+  ok(!w.entries.slice(after).some((e) => JSON.stringify(e).includes("my phone number")) && w.state().entities[id].c.label !== "my phone number",
+    "R1 undoing the edit after a redacted value never writes that value back", w.state().entities[id]?.c.label); }
 
 // ---- C: an off-centre catalogue box and measured surfaces ----
 { const cat = { get: (n) => ({ "lib/desk.glb": { label: "desk", box: [[-0.5, -0.4, -0.3], [0.7, 0.35, 0.5]], size: [1.2, 0.75, 0.8], surfaces: [{ y: 0.35, x: [-0.4, 0.6], z: [-0.2, 0.4] }] },
@@ -617,7 +677,7 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
     "SKY1 a merged sky hour holds from the merge (9 then, 15 a quarter hour on at 24×), and a merged rate keeps the hour it shows (15, standing still at rate 0)", { half, afterHours, later, afterRate, stood, sky: sky() }); }
 
 // ---- V: what changed, said in the protocol's terms (slice 3c: the renderer reacts to these, not to v1 verbs) ----
-{ const { viewState } = await import("../../shared/protocol/view.js"); const { diffView } = await import("../../shared/protocol/viewdiff.js");
+{ const { viewState } = await import("../../shared/protocol/view.js"); const { diffView } = await import("../../shared/viewdiff.js");
   let now = clock.t + 9500; const w = openLive(root + "vdiff/", "vdiff", { kindOf: LABKIND, now: () => now });
   let held = viewState(w.state());
   const step = (actor, verb, args) => { now += 100; const r = request(w, actor, verb, args); const next = viewState(w.state()); const d = diffView(held, next); held = next; return { r, d,
@@ -706,13 +766,13 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
     ok(add.ok && undoAdd.ok && !("light" in cb) && cb["imported:light"]?.flicker === 2,
       "S3h undoing the addition of a light leaves the thing as it was, its lone leftover kept", { add: res(add), undo: res(undoAdd), keys: Object.keys(cb) });
     const c = made({ light }); leave(c, "imported:light", { flicker: 3 });
-    const re = ih("ann", "batch", { ops: [{ verb: "delete", args: { id: c, component: "light" } }, { verb: "set", args: { id: c, component: "light", value: light } }] });
+    const re = ih("ann", "batch", { requests: [{ verb: "delete", args: { id: c, component: "light" } }, { verb: "set", args: { id: c, component: "light", value: light } }] });
     ok(re.ok && C(c)?.["imported:light"]?.flicker === 3, "S3h a request that deletes the light and sets it again keeps its leftover, as a set does", { re: res(re), keys: Object.keys(C(c) ?? {}) });
     const d = made({ light }); leave(d, "imported:light", { flicker: 4 });
-    const gone = ih("ann", "batch", { ops: [{ verb: "delete", args: { id: d, component: "light" } }, { verb: "delete", args: { id: d } }] });
+    const gone = ih("ann", "batch", { requests: [{ verb: "delete", args: { id: d, component: "light" } }, { verb: "delete", args: { id: d } }] });
     ok(gone.ok && C(d) === undefined, "S3h a batch that deletes the light and then the thing is taken", { gone: res(gone) });
     const d2 = made({ light }); leave(d2, "imported:light", { flicker: 5 });
-    const bobGone = ih("bob", "batch", { ops: [{ verb: "delete", args: { id: d2, component: "light" } }, { verb: "delete", args: { id: d2 } }] }); const cd2 = C(d2) ?? {};
+    const bobGone = ih("bob", "batch", { requests: [{ verb: "delete", args: { id: d2, component: "light" } }, { verb: "delete", args: { id: d2 } }] }); const cd2 = C(d2) ?? {};
     ok(res(bobGone) === "rights" && "light" in cd2 && cd2["imported:light"]?.flicker === 5,
       "S3h …but a builder's batch that deletes the light and then the thing is judged on the thing as it stands: the translation's leftover isn't theirs to delete", { bobGone: res(bobGone), keys: Object.keys(cd2) });
     const e = made({}); const f = ih("ann", "create", { components: { label: "child", parent: { to: e } } }).refs?.find((r: any) => r.id !== e)?.id; leave(f, "imported:parent", { slot: "x" });
@@ -724,7 +784,7 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
     const late = ih("bob", "undo", {}); const cg = C(g) ?? {};
     ok(steps.every((x) => x === "ok") && res(late) === "conflict" && /"component":"light"[^}]*changed it since/.test(JSON.stringify(late)) && !("light" in cg) && !("imported:light" in cg), "S3h a leftover's undo goes with its light's: where someone else has changed the light since, the undo leaves both as they are, and the view shows no light they deleted", { steps, late: res(late), keys: Object.keys(cg) });
     const h = made({}); leave(h, "imported:light", { flicker: 7 });
-    const setDel = ih("bob", "batch", { ops: [{ verb: "set", args: { id: h, component: "light", value: light } }, { verb: "delete", args: { id: h, component: "light" } }] }); const ch2 = C(h) ?? {};
+    const setDel = ih("bob", "batch", { requests: [{ verb: "set", args: { id: h, component: "light", value: light } }, { verb: "delete", args: { id: h, component: "light" } }] }); const ch2 = C(h) ?? {};
     ok(setDel.ok && !("light" in ch2) && ch2["imported:light"]?.flicker === 7,
       "S3h a batch that sets a light where there was none and then deletes it keeps the lone leftover", { setDel: res(setDel), keys: Object.keys(ch2) });
     const m = made({ light }); leave(m, "imported:light", { flicker: 8 });
@@ -733,7 +793,7 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
     ok(delM.ok && undoM.ok && "light" in cm && cm["imported:light"]?.flicker === 9 && /imported:light/.test(JSON.stringify(undoM.notes ?? [])),
       "S3h where the owner has rewritten the leftover since, the undo puts back the light and leaves the owner's leftover, naming it skipped", { del: res(delM), undo: res(undoM), keys: Object.keys(cm), flicker: cm["imported:light"]?.flicker, notes: undoM.notes });
     const p = made({ light }); leave(p, "imported:light", { flicker: 10 });
-    const mixed = [ih("bob", "batch", { ops: [{ verb: "delete", args: { id: p, component: "light" } }, { verb: "set", args: { id: p, component: "label", value: "new" } }] }),
+    const mixed = [ih("bob", "batch", { requests: [{ verb: "delete", args: { id: p, component: "light" } }, { verb: "set", args: { id: p, component: "label", value: "new" } }] }),
       ih("carol", "set", { id: p, component: "light", value: light }), ih("carol", "delete", { id: p, component: "light" })].map(res);
     const undoP = ih("bob", "undo", {}); const cp = C(p) ?? {};
     ok(mixed.every((x) => x === "ok") && undoP.ok && cp.label === "lamp" && !("light" in cp) && !("imported:light" in cp),
@@ -832,7 +892,7 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
 // UR6 (review 2.20): an act whose ops changed nothing isn't undoable: a bare undo steps over it to the act before, undo {act} of it says so
 { const nw = callAt("noopundo"); nw("ann", "create-world", { title: "noopundo" });
   const mk = nw("ann", "create", { id: "box", model: "crate", components: { transform: { pos: [0, 0, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] } } });
-  const nop = nw("ann", "batch", { ops: [{ verb: "set", args: { id: "box", component: "label", value: "x" } }, { verb: "delete", args: { id: "box", component: "label" } }] });
+  const nop = nw("ann", "batch", { requests: [{ verb: "set", args: { id: "box", component: "label", value: "x" } }, { verb: "delete", args: { id: "box", component: "label" } }] });
   const u = nw("ann", "undo", {}), direct = nw("ann", "undo", { act: nop.act });
   ok(mk.ok && nop.ok && u.ok && u.undid?.act === mk.act && openWorld(root, "noopundo").state().entities.box === undefined && direct.refused?.code === "nothing" && /changed nothing/.test(direct.refused.reason),
     "UR6 a request whose ops changed nothing (set + delete of a component the thing lacked) is stepped over by a bare undo, which undoes the act before; undo {act} of it says it changed nothing", { nop: nop.act, u: u.undid ?? u.refused, direct: direct.refused }); }
@@ -960,62 +1020,78 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
   ok(L({ kind: "point", range: 0 }).refused?.code === "bounds", "LT2 a range of 0 is refused");
   ok(L({ kind: "spot", angle: 2 }).refused?.code === "bounds", "LT2 a cone wider than a hemisphere (half-angle > π/2) is refused");
   ok(L({ kind: "point", color: 0x1000000 }).refused?.code === "bounds", "LT2 a color past 0xffffff is refused"); }
-// SK: sockets — a named attachment point; with body, a person attaches by using it (chair, swing, saddle, car seat)
+// SK: sockets — a named attachment point; with a station, a person attaches by using it (chair, swing, saddle, car seat).
+// Sockets are child entities (seats: one batch of creates, [name, pos, station?] each); `sockets` names nothing (schema)
 { clock.advance(100); const R = (actor, verb, args) => request(openWorld(root, "sockets"), actor, verb, args);
+  const S = () => openWorld(root, "sockets").state();
+  const seats = (actor, host, list) => R(actor, "batch", { requests: list.map(([name, pos, station]) => addSocket(host, { name }, { pos, station })) });
+  const kidOf = (host, name) => Object.keys(S().entities).find((k) => S().entities[k].c.parent?.to === host && S().entities[k].c.socket?.name === name);
   R("ann", "create-world", { title: "sockets" });
   R("ann", "set", { id: "@world", component: "roles:bob", value: { role: "builder" } });
   R("ann", "create", { id: "chair1", model: "chair" });
+  ok(!Object.values(S().entities).some((e) => e.c.parent?.to === "chair1"), "SK1a a catalogue chair makes no seat of its own: a model's sockets are never lifted into children (the seat is a socket child someone creates)", Object.keys(S().entities));
+  seats("ann", "chair1", [["seat", [0, 0.45, 0], { anim: "sitchair" }]]);
   // review of #260: a dry use is a preview: it seats no one and presses nothing
   { const before = JSON.stringify(openWorld(root, "sockets").presence.occupants ?? {});
     const dry = R("bob", "use", { id: "chair1", action: "sit", dry: true }), after = JSON.stringify(openWorld(root, "sockets").presence.occupants ?? {});
     ok(dry.ok && after === before, "SK0 a dry sit seats no one: the occupants are as they were", { dry: dry.ok ?? dry.refused, before, after }); }
   const sit = R("bob", "use", { id: "chair1", action: "sit" });
-  ok(sit.ok && sit.recorded === false && sit.attach?.host === "chair1" && openWorld(root, "sockets").state().entities[sit.attach.to]?.c.socket?.name === "seat" && sit.attach.socket === "seat" && sit.attach.pose === "sitchair", "SK1 a chair's model socket: use {sit} attaches you (presence), at its seat child (made when the chair was), in its pose", sit);
-  ok(R("ann", "create", { id: "horse", model: "crate", components: { sockets: { saddle: { pos: [0, 1.2, 0], body: { action: "ride", pose: "sit", exit: [0.8, 0, 0] } }, pannier: { pos: [0.4, 0.8, 0] } } } }).ok, "SK2 sockets with and without a body are taken");
+  ok(sit.ok && sit.recorded === false && sit.attach?.host === "chair1" && S().entities[sit.attach.to]?.c.socket?.name === "seat" && sit.attach.socket === "seat" && sit.attach.pose === "sitchair", "SK1 a chair's seat child: use {sit} attaches you (presence), at its seat child, in its station's anim", sit);
+  // SK2a: `sockets` is no name (Mica 11-05: the reservation went before deploy): a create, a set and a batch carrying it are
+  // refused as any unknown name (schema, did you mean socket), and no state or log entry ever holds it
+  { const map = { saddle: { pos: [0, 1.2, 0], body: { action: "ride" } } }; const n0 = openWorld(root, "sockets").entries.length;
+    const tries = [R("ann", "create", { id: "horse0", model: "crate", components: { sockets: map } }), R("ann", "set", { id: "chair1", component: "sockets", value: map }),
+      R("ann", "batch", { requests: [{ verb: "create", args: { id: "horse1", model: "crate" } }, { verb: "set", args: { id: "horse1", component: "sockets", value: map } }] })];
+    const held = Object.values(S().entities).some((e) => "sockets" in e.c) || openWorld(root, "sockets").entries.slice(n0).some((e) => e.kind === "change");
+    ok(tries.every((t) => code(t) === "schema" && (t.refused?.didYouMean ?? []).includes("socket")) && !held && !S().entities.horse0 && !S().entities.horse1, "SK2a sockets is no name: a create, a set and a batch carrying the old map are refused (schema, did you mean socket); no thing holds it and no change was logged", { codes: tries.map(code), held }); }
+  ok(R("ann", "create", { id: "horse", model: "crate" }).ok && seats("ann", "horse", [["saddle", [0, 1.2, 0], { action: "ride", anim: "sit", exit: [0.8, 0, 0] }], ["pannier", [0.4, 0.8, 0]]]).ok, "SK2 socket children with and without a station are taken");
   const look = R("bob", "inspect", { id: "horse" });
-  const offers = JSON.stringify(look);
   ok(JSON.stringify(look.actions) === '["ride"]', "SK2 …it offers 'ride' (its body socket's action), and the bare attach point offers nothing", look.actions);
   const ride = R("bob", "use", { id: "horse", action: "ride" });
   ok(ride.ok && ride.attach?.socket === "saddle" && ride.attach.pose === "sit", "SK2 use {ride} attaches you at the saddle", ride);
-  R("ann", "create", { id: "throne", model: "crate", components: { sockets: { seat: { pos: [0, 0.5, 0], body: { who: "owner" } } } } });
-  ok(R("bob", "use", { id: "throne", action: "sit" }).refused?.code === "rights" && R("ann", "use", { id: "throne", action: "sit" }).ok, "SK3 body.who: a builder may not sit on the owner's throne; the owner may");
+  R("ann", "create", { id: "throne", model: "crate" }); seats("ann", "throne", [["seat", [0, 0.5, 0], { who: "owner" }]]);
+  ok(R("bob", "use", { id: "throne", action: "sit" }).refused?.code === "rights" && R("ann", "use", { id: "throne", action: "sit" }).ok, "SK3 station.who: a builder may not sit on the owner's throne; the owner may");
   { const seen = R("bob", "inspect", { id: "throne" }); ok(!(seen.canDo ?? []).includes("sit") && (seen.notForYou ?? []).some((x) => x.action === "sit"), "SK3b …and inspect doesn't offer the builder that seat: it's under notForYou (review of #260)", { canDo: seen.canDo, notForYou: seen.notForYou }); }
-  R("ann", "create", { id: "bench", model: "crate", components: { sockets: { a: { pos: [-0.3, 0.5, 0], body: { who: "owner" } }, b: { pos: [0.3, 0.5, 0], body: {} } } } });
+  R("ann", "create", { id: "bench", model: "crate" }); seats("ann", "bench", [["a", [-0.3, 0.5, 0], { who: "owner" }], ["b", [0.3, 0.5, 0], {}]]);
   { const seen = R("bob", "inspect", { id: "bench" }); ok((seen.canDo ?? []).includes("sit") && !(seen.notForYou ?? []).some((x) => x.action === "sit"), "SK3c …but a bench with an owner's seat and an open one offers the builder 'sit', as use would seat them on the open one", { canDo: seen.canDo, notForYou: seen.notForYou }); }
-  // review of #260: a host whose sockets are all switched off still has them, to delete
+  // review of #260: a host whose sockets are all switched off still has them, to delete, each by its own id. `delete
+  // {component: 'sockets'}` names nothing it has (not-found)
   { R("ann", "create", { id: "stool", model: "crate" }); const mk = R("ann", "create", { id: "stool-seat", components: { parent: { to: "stool" }, transform: { pos: [0, 0.5, 0] }, socket: { name: "top" } } });
-    const off = R("ann", "set", { id: "stool-seat", component: "disabled", value: true }); const del = R("ann", "delete", { id: "stool", component: "sockets" });
-    ok(mk.ok && off.ok && del.ok && !openWorld(root, "sockets").state().entities["stool-seat"], "SK5 delete sockets on a host whose only socket is switched off deletes it, not 'has no sockets'", { mk: mk.ok ?? mk.refused, off: off.ok, del: del.ok ?? del.refused }); }
+    const off = R("ann", "set", { id: "stool-seat", component: "disabled", value: true }); const old = R("ann", "delete", { id: "stool", component: "sockets" }); const kept = !!S().entities["stool-seat"];
+    const mapDel = R("ann", "delete", { id: "stool-seat" });
+    ok(mk.ok && off.ok && code(old) === "not-found" && kept && mapDel.ok && !S().entities["stool-seat"], "SK5 delete sockets names nothing the host has (not-found) and takes nothing; a delete of the switched-off socket child takes it", { mk: mk.ok ?? mk.refused, off: off.ok, old: old.refused, mapDel: mapDel.ok ?? mapDel.refused }); }
   { R("ann", "create", { id: "cab", model: "crate", components: { openable: { open: false } } });
     const st = R("ann", "create", { id: "cab-seat", components: { parent: { to: "cab" }, transform: { pos: [0, 0.5, 0] }, socket: { name: "in" }, station: { action: "open" } } });
     ok(st.refused?.code === "action-taken", "SK6 a station named 'open' on an openable host is refused: 'open' is the host's own (review of #260)", st.refused ?? st.ok);
     R("ann", "create", { id: "gate", model: "crate", components: { openable: { open: false }, reactions: { swing: { kind: "toggle", component: "openable", field: "open" } } } });
     const st2 = R("ann", "create", { id: "gate-seat", components: { parent: { to: "gate" }, transform: { pos: [0, 0.5, 0] }, socket: { name: "in" }, station: { action: "open" } } });
     ok(st2.ok, "SK6b …but where the host's opening is named something else (swing), 'open' is free for the station", st2.refused ?? st2.ok); }
-  { R("ann", "create", { id: "chair2", model: "chair" }); const seat = Object.keys(openWorld(root, "sockets").state().entities).find((k) => openWorld(root, "sockets").state().entities[k].c.parent?.to === "chair2");
+  { R("ann", "create", { id: "chair2", model: "chair" }); seats("ann", "chair2", [["seat", [0, 0.45, 0], {}]]); const seat = kidOf("chair2", "seat");
     const del = R("ann", "delete", { id: seat }); const again = R("ann", "set", { id: "chair2", component: "model", value: "chair" });
-    const back = Object.values(openWorld(root, "sockets").state().entities).some((e) => e.c.parent?.to === "chair2" && e.c.socket);
+    const back = Object.values(S().entities).some((e) => e.c.parent?.to === "chair2" && e.c.socket);
     ok(!!seat && del.ok && again.ok && !back, "SK7 a chair's seat someone deleted isn't made again by the next write of its model (review of #260)", { seat, del: del.ok ?? del.refused, again: again.ok ?? again.refused, back }); }
-  // review of #260: a socket the old spelling's write takes away has the references to it cleared, as a delete's are
-  { const S = () => openWorld(root, "sockets").state(); const pannier = Object.keys(S().entities).find((k) => S().entities[k].c.parent?.to === "horse" && S().entities[k].c.socket?.name === "pannier");
+  // review of #260: a socket child deleted has the references to it cleared; a sockets-map write is refused (schema) and
+  // takes nothing away
+  { const pannier = kidOf("horse", "pannier");
     const eye = R("ann", "create", { id: "eye", model: "crate", components: { "look-at": { target: pannier } } });
-    const drop = R("ann", "set", { id: "horse", component: "sockets", value: { saddle: { pos: [0, 1.2, 0], body: { action: "ride", pose: "sit", exit: [0.8, 0, 0] } } } });
+    const map = { saddle: { pos: [0, 1.2, 0], body: { action: "ride", pose: "sit", exit: [0.8, 0, 0] } } };
+    const old = R("ann", "set", { id: "horse", component: "sockets", value: map }); const kept = !!S().entities[pannier];
+    const drop = R("ann", "delete", { id: pannier });
     const la = S().entities.eye?.c["look-at"];
-    ok(!!pannier && eye.ok && drop.ok && !S().entities[pannier] && !(la && la.target === pannier), "SK8 a socket an old-spelling sockets write takes away leaves no reference to it behind (look-at cleared)", { pannier, eye: eye.ok ?? eye.refused, drop: drop.ok ?? drop.refused, gone: !S().entities[pannier], la }); }
-  const bad = (v) => R("ann", "set", { id: "horse", component: "sockets", value: v }).refused?.code;
-  ok(bad({ s: { pos: [0, 1, 0], pose: "sit" } }) === "schema", "SK4 a socket's pose lives in body (an unknown socket key is refused, with a did-you-mean)");
-  ok(bad({ s: { pos: [0, 1, 0], body: { action: "Ride Now" } } }) === "shape", "SK4 body.action is a lower-case verb");
-  ok(bad({ s: { body: {} } }) === "shape", "SK4 a socket needs its pos");
-  ok(bad({ s: { pos: [0, 1, 0], body: { who: "king" } } }) === "shape", "SK4 body.who is visitor, builder or owner");
-  // SK5-8: the body block (shared/sockbody.js), through the authority's own request path: its core is the station (shape
-  // audit 10-16); the rest of the research shape (reach, look, input, fromSeat…) is reserved, refused as such
-  ok(R("ann", "set", { id: "horse", component: "sockets", value: { saddle: { pos: [0, 1.2, 0], body: { action: "ride", anchor: "hips", pose: { by: "speed", clips: [[0, "idle"], [2, "walk"], [6, "run"]] }, leaveBy: "jump" } } } }).ok
-    && bad({ saddle: { pos: [0, 1.2, 0], body: { action: "ride", reach: { leftHand: { at: [-0.2, 1.4, 0.5], vr: "near" } }, look: { yaw: [-90, 90] }, input: { move: "drive", look: "aim" }, fromSeat: true } } }) === "reserved", "SK5 a saddle with a blend by speed and leaveBy is taken; reins, look limits, a driver's input are reserved");
-  ok(bad({ s: { pos: [0, 1, 0], body: { anchr: "hips" } } }) === "schema" && bad({ s: { pos: [0, 1, 0], body: { reach: { leftHand: { at: [0, 1, 0], grip: 1 } } } } }) === "schema"
-    && bad({ s: { pos: [0, 1, 0], body: { reach: { tail: { at: [0, 1, 0] } } } } }) === "schema", "SK6 closed keys: the body, a reach, the reach limbs (the reach chains)");
-  ok(bad({ s: { pos: [0, 1, 0], body: { leaveBy: "teleport" } } }) === "shape" && bad({ s: { pos: [0, 1, 0], body: { look: { pitch: [10, -10] } } } }) === "shape"
-    && bad({ s: { pos: [0, 1, 0], body: { pose: { by: "mood", clips: [[0, "idle"], [1, "walk"]] } } } }) === "shape" && bad({ s: { pos: [0, 1, 0], body: { enter: 42 } } }) === "shape", "SK7 enums, ranges, signals and clip names");
-  ok(bad({ a: { pos: [0, 1, 0], body: { input: { move: "drive" } } }, b: { pos: [1, 1, 0], body: { input: { move: "drive" } } } }) === "shape", "SK8 at most one drive per thing");
+    ok(!!pannier && eye.ok && code(old) === "schema" && kept && drop.ok && !S().entities[pannier] && !(la && la.target === pannier), "SK8 a sockets-map write is refused (schema) and leaves the pannier; a delete of it takes it away and leaves no reference to it behind (look-at cleared)", { pannier, eye: eye.ok ?? eye.refused, old: old.refused, kept, drop: drop.ok ?? drop.refused, gone: !S().entities[pannier], la }); }
+  // SK4-8: what a person's body does at a socket is its child's station, checked whole at the door; the rest of the
+  // research shape (reach, look, enter…) is reserved
+  const bad = (st, st2 = null) => seats("ann", "horse", [["s", [0, 1, 0], st], ...(st2 ? [["s2", [1, 1, 0], st2]] : [])]).refused?.code;
+  const badSock = (sock) => R("ann", "create", { components: { parent: { to: "horse" }, transform: { pos: [0, 1, 0] }, socket: { name: "s", ...sock } } }).refused?.code;
+  ok(badSock({ pose: "sit" }) === "schema" && badSock({ body: { action: "sit" } }) === "schema", "SK4 a socket's pose is its station's anim: socket.pose is an unknown key, and socket.body is refused for the station (schema)");
+  ok(bad({ action: "Ride Now" }) === "shape", "SK4 station.action is a lower-case verb");
+  ok(bad({ who: "king" }) === "shape", "SK4 station.who is visitor, builder or owner");
+  ok(R("ann", "set", { id: kidOf("horse", "saddle"), component: "station", value: { action: "ride", anchor: "hips", anim: { by: "speed", clips: [[0, "idle"], [2, "walk"], [6, "run"]] }, leaveBy: "jump" } }).ok
+    && bad({ action: "ride", reach: { leftHand: { at: [-0.2, 1.4, 0.5], vr: "near" } }, look: { yaw: [-90, 90] }, input: { move: "drive", look: "aim" }, fromSeat: true }) === "reserved", "SK5 a saddle with a blend by speed and leaveBy is taken; reins, look limits, a driver's input are reserved");
+  ok(bad({ anchr: "hips" }) === "schema" && bad({ reach: { leftHand: { at: [0, 1, 0], grip: 1 } } }) === "reserved", "SK6 closed keys: an unknown station key is refused (schema), and a reach is reserved whole");
+  ok(bad({ leaveBy: "teleport" }) === "shape" && bad({ look: { pitch: [10, -10] } }) === "reserved"
+    && bad({ anim: { by: "mood", clips: [[0, "idle"], [1, "walk"]] } }) === "shape" && bad({ enter: 42 }) === "reserved", "SK7 enums and signals are checked; look and enter are reserved");
+  ok(bad({ input: { move: "drive" } }, { input: { move: "drive" } }) === "shape", "SK8 a driver's input is a helm's alone (one drive per thing, on a drive station)");
   const att = R("bob", "use", { id: "horse", action: "ride" }).attach;
   // SK9: a part's motion runs on the authority's clock too (a seat locked to its phase needs every client to agree on it)
   const pm = R("ann", "create", { id: "swingset", model: "crate", components: { "motion:plank": { type: "pendulum", amp: 0.4, period: 3 }, motion: { type: "pendulum", amp: 0.1, period: 2 } } });
@@ -1121,7 +1197,7 @@ const w0 = () => openWorld(root, "tier0");
   ok(b(s2).t0 >= now + 100 - 300_000 && b(s2).utt === 4, "CP8 …t0 is clamped into the 5-minute utterance window", b(s2));
   ok(b(s5).t0 <= now + 600 && b(s5).t0 >= now, "CP8 …a t0 in the future is clamped to now", b(s5));
   ok(!("spoken" in b(s3)) && !("utt" in b(s3)) && !("t0" in b(s3)) && !("utt" in b(s4)), "CP8 …a malformed trio (utt -1, or no spoken) leaves a plain say", [b(s3), b(s4)]);
-  const k = makeReplica(); k.adopt({ state: wireState(fold(E.slice(0, s1.seq))), head: s1.seq - 1 });
+  const k = makeReplica(); k.adopt({ dialect: "eidoverse-log", v: 4, state: wireState(fold(E.slice(0, s1.seq))), seq: s1.seq - 1 });
   const got = k.ingest([E[s1.seq]], s1.seq).says[0];
   ok(got?.spoken === true && got.utt === 3 && got.t0 === now - 1000, "CP8 …and a client's fold hands it on with the chat line", got); }
 // ---- CA: captions (one line of what a screen said). The rights live on the SCREEN (captioners {ids}); the tool writes
@@ -1175,8 +1251,8 @@ ok(code(call("olive", "set", { id: "@world", component: "bounds", value: { min: 
 ok(code(call("olive", "set", { id: "@world", component: "bounds", value: { min: [-5, 0, -5], max: [5, 0, 5] } })) === "shape", "BZ2 a box flat on one axis (min = max) is refused");
 ok(call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50, -10, -50], max: [50, 40, 50] } }).ok, "BZ3 a real box is accepted"); }
 
-// ---- MS: mesh (R 10-12, primitives): a registered parametric body on a model-less thing. One place per thing with a model
-// and a light; it has a size to place and stack on; its physics shape is stamped from the component and re-stamped on resize
+// ---- MS: mesh (R 10-12, primitives): a registered parametric body; it composes with a model and a light (Mica 11-04); on a
+// model-less thing it has a size to place and stack on; its physics shape is stamped from the component and re-stamped on resize
 { const name = "mesh"; clock.t += 1000;
   const call = callAt(name);
   const W = () => openWorld(root, name); const E = (id) => W().state().entities[id]?.c;
@@ -1186,11 +1262,8 @@ ok(call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50,
   { const r1 = call("bob", "set", { id: "mb", component: "model", value: "crate" }); const r2 = call("bob", "set", { id: "mb", component: "light", value: { color: 0xffd9a0, intensity: 16, range: 10 } });
     call("bob", "create", { id: "cr", model: "crate", place: { at: [5, 5] } }); const r3 = call("bob", "set", { id: "cr", component: "mesh", value: { shape: "sphere", size: [1, 1, 1] } });
     call("bob", "create", { id: "lt", components: { light: { color: 0xffd9a0, intensity: 16, range: 10 }, transform: { pos: [7, 1, 7] } } }); const r4 = call("bob", "set", { id: "lt", component: "mesh", value: { shape: "box", size: [1, 1, 1] } });
-    ok([r1, r2, r3, r4].every((r) => code(r) === "one-place"), "MS2 one place per thing: a model or a light on a mesh, a mesh on a model or a light, are all refused", [r1, r2, r3, r4].map((r) => r.refused?.code ?? "ok"));
-    // the refusal's fix, submitted as written (its {…} a real mesh), is a create the door takes, ids not seeded
-    const fx = String(r3.refused?.fix ?? ""), lit = fx.match(/^create (\{.*\}), or /)?.[1]?.replace("{…}", "{shape: 'box', size: [1, 1, 1]}");
-    fixtureIds(false); let r5: any; try { r5 = lit ? call("bob", "create", new Function(`return (${lit})`)()) : null; } finally { fixtureIds(true); }
-    ok(!!lit && r5?.ok === true, "MS2b the one-place fix for a mesh on a model, sent as written, is accepted (no writer-chosen id)", { fx, r5: r5?.refused ?? r5?.ok }); }
+    ok([r1, r2, r3, r4].every((r) => r.ok) && !!E("cr")?.mesh && !!E("lt")?.mesh, "MS2 components compose: a model or a light on a mesh, a mesh on a model or a light, are all taken", [r1, r2, r3, r4].map((r) => r.refused?.code ?? "ok"));
+    call("bob", "delete", { id: "mb", component: "model" }); call("bob", "delete", { id: "mb", component: "light" }); }   // MS3 on: the mesh alone
   { const r1 = call("bob", "set", { id: "mb", component: "mesh", value: { shape: "box", size: [0.01, 1, 1] } }); const r2 = call("bob", "set", { id: "mb", component: "mesh", value: { shape: "cone", size: [1, 1, 1] } });
     ok(code(r1) === "bounds" && code(r2) === "shape" && /each must be/.test(r1.refused?.reason ?? ""), "MS3 a size outside 0.05..200 (the definition's ranges, per element) and an unknown shape are refused", [r1.refused, r2.refused]); }
   { const r = call("bob", "create", { id: "cup", model: "ball", place: { on: "mb" } }); const y = E("cup")?.transform?.pos?.[1];
@@ -1218,9 +1291,10 @@ ok(call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50,
   const call = callAt(name);
   const W = () => openWorld(root, name); const E = (id) => W().state().entities[id]?.c; const wy = (id) => call("bob", "measure", { id }).bounds?.min?.[1];
   call("rowan", "create-world", { title: name }); call("rowan", "set", { id: "@world", component: "roles:bob", value: { role: "builder" } });
-  call("bob", "create", { id: "plinth", components: { mesh: { shape: "box", size: [1.5, 0.8, 1.5] }, sockets: { perch: { pos: [0.5, 0.8, 0.5] } }, transform: { pos: [0, 0, 0] } } });
+  call("bob", "create", { id: "plinth", components: { mesh: { shape: "box", size: [1.5, 0.8, 1.5] }, transform: { pos: [0, 0, 0] } } });
+  call("bob", "create", { id: "plinth-perch", components: { parent: { to: "plinth" }, transform: { pos: [0.5, 0.8, 0.5] }, socket: { name: "perch" } } });
   const c = call("bob", "create", { id: "crate", model: "crate", components: { physics: { kind: "dynamic" } }, place: { on: "plinth" } });
-  call("bob", "create", { id: "cup", model: "ball", components: { physics: { kind: "dynamic" }, parent: { to: "plinth", socket: "perch" }, transform: { pos: [0, 0, 0] } } });
+  call("bob", "create", { id: "cup", model: "ball", components: { physics: { kind: "dynamic" }, parent: { to: "plinth-perch" }, transform: { pos: [0, 0, 0] } } });
   const perch = Object.keys(W().state().entities).find((k) => E(k)?.parent?.to === "plinth" && E(k)?.socket?.name === "perch"); const cup0 = JSON.stringify(E("cup")?.transform);
   ok(c.ok && E("crate")?.parent?.to === "plinth" && Math.abs(wy("crate") - 0.8) < 1e-3, "MS10 a crate placed on the plinth rides it at 0.8", { c: c.refused ?? null, y: wy("crate"), parent: E("crate")?.parent });
   const s1 = call("bob", "set", { id: "plinth", component: "mesh", value: { shape: "box", size: [1.5, 0.3, 1.5] } });
@@ -1239,10 +1313,10 @@ ok(call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50,
   const E = (id) => openWorld(root, "socketents").state().entities[id]?.c;
   R("ann", "create-world", { title: "socketents" });
   R("ann", "create", { id: "bench", model: "crate" });
-  const sock = (id, extra = {}, socket = {}) => R("ann", "create", { id, components: { parent: { to: "bench" }, transform: { pos: [0, 0.5, 0] }, socket: { name: "seat", body: { action: "sit" }, ...socket }, ...extra } });
+  const sock = (id, extra = {}, socket = {}) => R("ann", "create", { id, components: { parent: { to: "bench" }, transform: { pos: [0, 0.5, 0] }, socket: { name: "seat", ...socket }, station: { action: "sit" }, ...extra } });
   const s1 = sock("bench-seat");
   ok(s1.ok && E("bench-seat")?.socket?.name === "seat" && E("bench-seat")?.parent?.to === "bench", "SKE1 a socket child of a thing is taken", s1.refused ?? E("bench-seat"));
-  ok(code(sock("bench-lamp", { light: { kind: "point" } }, { name: "lamp" })) === "one-place" && code(sock("bench-crate", { model: "crate" }, { name: "c2" })) === "one-place" && code(sock("bench-phys", { physics: { kind: "dynamic" } }, { name: "p2" })) === "one-place", "SKE2 a socket carries no model, light or physics: one-place");
+  ok(sock("bench-lamp", { light: { kind: "point" } }, { name: "lamp" }).ok && sock("bench-crate", { model: "crate" }, { name: "c2" }).ok && !!E("bench-lamp")?.light && E("bench-crate")?.model === "crate", "SKE2 a socket may carry a light or a model of its own (components compose, Mica 11-04)");
   ok(sock("bench-swing", { motion: { type: "oscillate", amp: 0.1, period: 2 } }, { name: "swing" }).ok, "SKE2 …but a motion of its own is allowed (R 10-12 20:44)");
   const dup = sock("bench-seat2");
   ok(code(dup) === "name-taken" && dup.refused?.taken === "bench-seat", "SKE3 a second socket called 'seat' on the same host is refused: name-taken, naming the first", dup);
@@ -1252,13 +1326,13 @@ ok(call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50,
   ok(code(R("ann", "delete", { id: "bench-seat", component: "parent" })) === "shape" && E("bench-seat")?.parent?.to === "bench", "SKE4 …and a socket can't be unparented to the root");
   ok(code(R("ann", "create", { id: "nested", components: { parent: { to: "bench-seat" }, socket: { name: "inner" } } })) === "shape", "SKE4 …nor hang under another socket");
   ok(code(R("ann", "set", { id: "bench-seat", component: "transform", value: { pos: [0, 0.5, 0], q: [0, 0, 0, 1], scale: [2, 2, 2] } })) === "shape", "SKE5 a socket's scale is [1, 1, 1]: scale 2 is refused");
-  const drive = (id, name) => R("ann", "create", { id, components: { parent: { to: "stool" }, socket: { name, body: { input: { move: "drive" } } } } });
+  const drive = (id, name) => R("ann", "create", { id, components: { parent: { to: "stool" }, socket: { name }, station: { input: { move: "drive" } } } });
   ok(code(drive("stool-d1", "d1")) === "shape" && !E("stool-d1"), "SKE6 a driver's input belongs to a drive station on a host with drive: on a plain seat it is refused (station.input opened for the helm: drive-check D1)");
   ok(code(R("ann", "create", { id: "badsock", components: { parent: { to: "stool" }, socket: { name: "x", pos: [0, 1, 0] } } })) === "schema", "SKE6 a socket's pose is its transform: socket.pos is an unknown key (did you mean)");
-  ok(code(R("ann", "create", { id: "badbody", components: { parent: { to: "stool" }, socket: { name: "z", body: { anchr: "hips" } } } })) === "schema" && code(R("ann", "create", { id: "badname", components: { parent: { to: "stool" }, socket: { name: "two words" } } })) === "shape", "SKE6 the body block is checked whole (an unknown body key; a name that isn't one)");
+  ok(code(R("ann", "create", { id: "badbody", components: { parent: { to: "stool" }, socket: { name: "z" }, station: { anchr: "hips" } } })) === "schema" && code(R("ann", "create", { id: "badname", components: { parent: { to: "stool" }, socket: { name: "two words" } } })) === "shape", "SKE6 the station is checked whole (an unknown station key; a socket name that isn't one)");
   R("ann", "create", { id: "bench-arm", components: { parent: { to: "bench" } } }); R("ann", "create", { id: "bench-arm-rest", components: { parent: { to: "bench-arm" }, socket: { name: "rest" } } });
   ok(code(R("ann", "set", { id: "bench-arm", component: "socket", value: { name: "arm" } })) === "shape" && !E("bench-arm")?.socket, "SKE4 …nor may a thing holding a socket become a socket itself");
-  ok(code(R("ann", "create", { id: "badwho", components: { parent: { to: "stool" }, socket: { name: "y", body: { who: "king" } } } })) === "shape", "SKE6 body.who is a role here");
+  ok(code(R("ann", "create", { id: "badwho", components: { parent: { to: "stool" }, socket: { name: "y" }, station: { who: "king" } } })) === "shape", "SKE6 station.who is a role here");
   // R 10-15 22:48: ONE entity budget, sockets included ("aren't sockets child entities anyway?")
   const have = Object.keys(openWorld(root, "socketents").state().entities).length - 1;
   R("ann", "set", { id: "@world", component: "capacity", value: { entities: have + 2 } });
@@ -1273,8 +1347,8 @@ ok(call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50,
 { clock.advance(100); const R = (actor, verb, args) => request(openWorld(root, "socketuse"), actor, verb, args);
   R("ann", "create-world", { title: "socketuse" }); R("ann", "set", { id: "@world", component: "roles:bob", value: { role: "builder" } });
   R("ann", "create", { id: "sofa", model: "crate" });
-  R("ann", "create", { id: "sofa-l", components: { parent: { to: "sofa" }, transform: { pos: [-0.4, 0.5, 0] }, socket: { name: "left", body: { action: "sit", anchor: "hips" } } } });
-  R("ann", "create", { id: "sofa-r", components: { parent: { to: "sofa" }, transform: { pos: [0.4, 0.5, 0] }, socket: { name: "right", body: { action: "sit" } } } });
+  R("ann", "create", { id: "sofa-l", components: { parent: { to: "sofa" }, transform: { pos: [-0.4, 0.5, 0] }, socket: { name: "left" }, station: { action: "sit", anchor: "hips" } } });
+  R("ann", "create", { id: "sofa-r", components: { parent: { to: "sofa" }, transform: { pos: [0.4, 0.5, 0] }, socket: { name: "right" }, station: { action: "sit" } } });
   R("ann", "create", { id: "sofa-hook", components: { parent: { to: "sofa" }, transform: { pos: [0, 1, 0] }, socket: { name: "hook", accepts: ["coat"] } } });
   const u = R("bob", "use", { id: "sofa", action: "sit" });
   ok(u.ok && u.attach?.to === "sofa-l" && u.attach.host === "sofa" && u.attach.socket === "left" && u.attach.anchor === "hips", "SKE8 use {id: host} sits on its first seat child: attach {to: <the socket>, host, socket: its name}", u);
@@ -1292,48 +1366,6 @@ ok(call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50,
   R("bob", "move", { to: [0, 0, 0.8] }); const g = R("bob", "grab", { id: "sofa-r" });
   ok(code(g) === "not-a-thing" && /sofa/.test(g.refused?.reason), "SKE10 grab of a socket is not-a-thing, naming its host", g); }
 
-// LS2: a world written before the cut (translate-v1 still writes the old spelling): undoing its last sockets edit lands
-// on socket children. The door lifts the host first (its stored map to children, the bell on its perch into the perch's
-// child, where it was), then the old value is a diff against them.
-{ const old = [{ seq: 0, ts: 1, actor: "world", verb: "genesis", args: { v: 2, dialect: "eidoverse-log" } },
-    { seq: 1, ts: 2, actor: "ann", verb: "grant", args: { id: "ann", role: "owner" } },
-    { seq: 1, ts: 2, actor: "ann", verb: "spawn", args: { id: "tbl", lib: "table", pos: [2, 0, 3], yaw: 0.7 } },
-    { seq: 2, ts: 3, actor: "ann", verb: "comp", args: { id: "tbl", type: "sockets", data: { perch: { pos: [0.45, 0.75, 0.25], yaw: 1.2 } } } },
-    { seq: 3, ts: 4, actor: "ann", verb: "spawn", args: { id: "bell", lib: "bell", pos: [-5, 0, -5] } },
-    { seq: 4, ts: 5, actor: "ann", verb: "mount", args: { id: "bell", to: "tbl", slot: "perch" } },
-    { seq: 5, ts: 6, actor: "ann", verb: "spawn", args: { id: "rack", lib: "crate", pos: [-2, 0, 1] } },
-    { seq: 6, ts: 7, actor: "ann", verb: "comp", args: { id: "rack", type: "sockets", data: { hook: { pos: [0, 0.8, 0.1] } } } },
-    { seq: 7, ts: 8, actor: "ann", verb: "spawn", args: { id: "coin", lib: "ball", pos: [3, 0, 3] } },
-    { seq: 8, ts: 9, actor: "ann", verb: "comp", args: { id: "tbl", type: "sockets", data: { perch: { pos: [0.45, 0.75, 0.25], yaw: 1.2 }, seat: { pos: [0, 0.5, 0], sit: true } } } }];
-  const r = translate(old, DOORKEYS());
-  // a home naming a socket, as a pre-cut door stored it (v1 had no homes: written as that door wrote it, an act and its change)
-  // (before the last sockets edit, which stays the latest act: the one the undo below takes back)
-  const home = { pos: [0.1, 0, 0], q: [0, 0, 0, 1], parent: { to: "tbl", socket: "perch" } }; const wid = r.out[1].world; const n = r.out.length - 2;
-  const last = r.out.splice(n, 2); last[1] = { ...last[1], cause: last[1].cause + 2 };
-  r.out.push({ world: wid, kind: "act", actor: "ann", verb: "set", body: { request: { id: "coin", component: "home", value: home } }, ts: last[0].ts }, { world: wid, kind: "change", actor: "ann", cause: n, verb: "batch", body: { ops: [{ verb: "set", id: "coin", comp: "home", value: home }, { verb: "set", id: "coin", comp: "grabbable", value: { who: "member", home } }] }, ts: last[0].ts }, ...last);
-  fs.writeFileSync(root + "worlds/tr-lift.jsonl", r.out.map((e) => JSON.stringify(e)).join("\n") + "\n");
-  const tc = (verb, args) => { clock.advance(100); return request(openWorld(root, "tr-lift"), "ann", verb, args); };
-  const homeAt = (st, h) => worldT({ entities: { ...st.entities, x: { c: { parent: { to: h.parent.to }, transform: { pos: h.pos, q: h.q } } } } }, "x").pos;
-  const home0 = homeAt(openWorld(root, "tr-lift").state(), home);
-  const S = () => openWorld(root, "tr-lift").state();
-  const was = worldT(S(), "bell");
-  ok(S().entities.tbl.c.sockets?.seat && S().entities.bell.c.parent?.socket === "perch", "LS2 (the fixture) the translated world stores the old spelling: tbl.sockets {perch, seat}, bell on parent {to: tbl, socket: perch}", [S().entities.tbl.c.sockets, S().entities.bell.c.parent]);
-  maintain(openWorld(root, "tr-lift"));   // lead 10-18: the lift is the command's (the load refuses writes until it has run: repair-needed)
-  const u = tc("undo", {});
-  const st = S(); const socks = Object.entries(st.entities).filter(([, e]) => e.c.parent?.to === "tbl" && e.c.socket).map(([k, e]) => [k, e.c.socket.name]);
-  const now = worldT(st, "bell"); const near = (a, b, e = 1e-8) => a.every((v, i) => Math.abs(v - b[i]) < e);
-  ok(u.ok && st.entities.tbl.c.sockets === undefined && JSON.stringify(socks.map((x) => x[1])) === '["perch"]', "LS2 undo of the pre-cut sockets edit lands on the children: tbl stores no map and has one socket child, perch (the seat it added is gone)", [u.refused, st.entities.tbl.c.sockets, socks]);
-  ok(st.entities.bell.c.parent?.to === socks[0]?.[0] && !("socket" in st.entities.bell.c.parent) && near(now.pos, was.pos) && near(now.q, was.q), "LS2 …and the bell rides the perch's child, where it was in the world (within 1e-8)", [st.entities.bell.c.parent, was, now]);
-  const ch = st.entities.coin.c.home;
-  const gh = st.entities.coin.c.grabbable?.home;
-  // (a stored grabbable.home is no longer read — home is the one home since the shape audit, 10-16 — so the lift leaves it as stored)
-  ok(ch?.parent?.to === socks[0]?.[0] && !("socket" in ch.parent) && near(homeAt(st, ch), home0) && gh?.parent?.socket === "perch", "LS2 …a stored home naming the perch now names its child, the same place in the world", [ch, gh, home0]);
-  const coin0 = worldT(S(), "coin"); const pc = tc("set", { id: "coin", component: "parent", value: { to: "rack", socket: "hook" } }); const s2 = S();
-  const hook = Object.keys(s2.entities).find((k) => s2.entities[k].c.parent?.to === "rack" && s2.entities[k].c.socket?.name === "hook");
-  ok(pc.ok && s2.entities.rack.c.sockets === undefined && !!hook && s2.entities.coin.c.parent?.to === hook && near(worldT(s2, "coin").pos, coin0.pos), "LS2 a parent {to, socket} on a host still holding its map lifts that host first: rack's hook is a child, and the coin rides it where it was", [pc.refused, s2.entities.rack.c.sockets, s2.entities.coin.c.parent]);
-  ok(!openWorld(root, "tr-lift").entries.slice(r.out.length).some((e) => e.kind === "change" && opsOf(e).some((o) => o.comp === "sockets" && o.verb === "set" || (o.comp === "parent" && o.value?.socket !== undefined))), "LS2 …and nothing written after the cut holds the old spelling");
-}
-
 // LK122: a lock refusal says whether the asker may lift it (the padlock's buttons ride on mayLift: true): a
 // builder without editOthers, at the locker's rank, may not delete another's lock; the owner may
 { clock.advance(100); const W = () => openWorld(root, "lk122");
@@ -1349,7 +1381,7 @@ ok(call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50,
 
 // SR1 (review 10-12 S1-1): a socket child is part of its host. Creating one, re-parenting one, or setting its socket or
 // transform is an edit of the host's seats: the host's rights (a builder without editOthers can't seat ann's car) and the
-// locks over the host's chain, in either spelling (the legacy map lifts to creates, and those are judged the same).
+// locks over the host's chain, whether sent alone or in a batch.
 { clock.advance(100); const W = () => openWorld(root, "seatrights");
   const R = (actor, verb, args) => { clock.advance(2000); return request(W(), actor, verb, args); };
   const E = (id) => W().state().entities[id]?.c;
@@ -1357,27 +1389,28 @@ ok(call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50,
   R("ann", "set", { id: "@world", component: "role-defs", value: { builder: { can: { editOthers: false } }, crew: { name: "Crew", rank: 150, can: { build: true, editOthers: true } } } });
   R("ann", "set", { id: "@world", component: "roles:dee", value: { role: "crew" } });
   R("ann", "set", { id: "@world", component: "roles:bob", value: { role: "builder" } }); R("ann", "set", { id: "@world", component: "roles:cy", value: { role: "owner" } });
-  R("ann", "create", { id: "car", model: "crate", components: { sockets: { seat: { pos: [0, 0.5, 0], body: { action: "sit" } } } } });
+  R("ann", "create", { id: "car", model: "crate" }); R("ann", "create", { id: "car-seat", components: { parent: { to: "car" }, transform: { pos: [0, 0.5, 0] }, socket: { name: "seat" }, station: { action: "sit" } } });
+  const seats = (actor, host, list) => R(actor, "batch", { requests: list.map(([name, pos, station]) => addSocket(host, { name }, { pos, station })) });
   const kids = (h) => Object.keys(W().state().entities).filter((k) => E(k)?.parent?.to === h && E(k)?.socket).map((k) => E(k).socket.name).sort();
-  const drv = { name: "drv", body: { action: "drive" } };
+  const drv = { socket: { name: "drv" }, station: { action: "drive" } };
   // 1. a foreign drive seat: neither spelling, and bob can't drive ann's car
-  const nat = R("bob", "create", { id: "bobdrv", components: { parent: { to: "car" }, transform: { pos: [0, 0.6, 0.3] }, socket: drv } });
-  const leg = R("bob", "set", { id: "car", component: "sockets", value: { seat: { pos: [0, 0.5, 0], body: { action: "sit" } }, drv: { pos: [0, 0.6, 0.3], body: { action: "drive" } } } });
+  const nat = R("bob", "create", { id: "bobdrv", components: { parent: { to: "car" }, transform: { pos: [0, 0.6, 0.3] }, ...drv } });
+  const leg = seats("bob", "car", [["drv", [0, 0.6, 0.3], { action: "drive" }]]);
   R("bob", "move", { to: [0, 0, 0.8] }); const dr = R("bob", "use", { id: "car", action: "drive" });
-  ok(code(nat) === "rights" && code(leg) === "rights" && code(dr) !== undefined && JSON.stringify(kids("car")) === '["seat"]', "SR1a a builder without editOthers can't add a drive seat to the owner's car (native and legacy map), so can't drive it", [nat.refused, leg.refused, dr.attach ?? dr.refused, kids("car")]);
+  ok(code(nat) === "rights" && code(leg) === "rights" && code(dr) !== undefined && JSON.stringify(kids("car")) === '["seat"]', "SR1a a builder without editOthers can't add a drive seat to the owner's car (alone and in a batch), so can't drive it", [nat.refused, leg.refused, dr.attach ?? dr.refused, kids("car")]);
   // 2. under an owner-level lock: a builder and another owner are both refused a new socket
-  R("ann", "create", { id: "chair", model: "crate", components: { sockets: { seat: { pos: [0, 0.5, 0], body: { action: "sit" } } } } });
+  R("ann", "create", { id: "chair", model: "crate" }); R("ann", "create", { id: "chair-seat", components: { parent: { to: "chair" }, transform: { pos: [0, 0.5, 0] }, socket: { name: "seat" }, station: { action: "sit" } } });
   R("ann", "set", { id: "chair", component: "lock", value: true });
   R("ann", "create", { id: "cyshelf", model: "crate" }); R("ann", "set", { id: "cyshelf", component: "lock", value: true });
-  const lb = R("dee", "create", { id: "deeseat", components: { parent: { to: "chair" }, socket: { name: "s2", body: { action: "sit" } } } });
-  const lc = R("cy", "create", { id: "cyseat", components: { parent: { to: "chair" }, socket: { name: "s3", body: { action: "sit" } } } });
-  const lm = R("cy", "set", { id: "chair", component: "sockets", value: { seat: { pos: [0, 0.5, 0], body: { action: "sit" } }, s5: { pos: [0, 1, 0] } } });
-  ok(code(lb) === "locked" && code(lc) === "locked" && code(lm) === "locked" && JSON.stringify(kids("chair")) === '["seat"]', "SR1b an owner-locked host refuses a new socket: a builder with editOthers, another owner, and the legacy map alike", [lb.refused, lc.refused, lm.refused, kids("chair")]);
+  const lb = R("dee", "create", { id: "deeseat", components: { parent: { to: "chair" }, socket: { name: "s2" }, station: { action: "sit" } } });
+  const lc = R("cy", "create", { id: "cyseat", components: { parent: { to: "chair" }, socket: { name: "s3" }, station: { action: "sit" } } });
+  const lm = seats("cy", "chair", [["s5", [0, 1, 0]]]);
+  ok(code(lb) === "locked" && code(lc) === "locked" && code(lm) === "locked" && JSON.stringify(kids("chair")) === '["seat"]', "SR1b an owner-locked host refuses a new socket: a builder with editOthers, another owner, and a batch alike", [lb.refused, lc.refused, lm.refused, kids("chair")]);
   // 3. squatting a name or the one driver on someone else's host: refused, so the owner's own later seat is taken
   R("bob", "create", { id: "bobcrate", model: "crate", components: { transform: { pos: [4, 0, 0] } } });
-  const mine = R("bob", "create", { id: "bobhook", components: { parent: { to: "bobcrate" }, socket: { name: "drv", body: { action: "drive" } } } });
+  const mine = R("bob", "create", { id: "bobhook", components: { parent: { to: "bobcrate" }, socket: { name: "drv" }, station: { action: "drive" } } });
   const re = R("bob", "set", { id: "bobhook", component: "parent", value: { to: "car" } });
-  const own = R("ann", "create", { id: "anndrv", components: { parent: { to: "car" }, socket: drv } });
+  const own = R("ann", "create", { id: "anndrv", components: { parent: { to: "car" }, ...drv } });
   ok(mine.ok && code(re) === "rights" && own.ok && E("anndrv")?.socket?.name === "drv", "SR1c re-parenting your own socket onto someone else's host is refused (rights), so it can't squat a name or the driver: the owner's own drv is taken", [mine.refused, re.refused, own.refused]);
   const mk = R("bob", "create", { id: "bobmark", components: { parent: { to: "car" }, transform: { pos: [0, 1, 0] } } });
   const be = R("bob", "set", { id: "bobmark", component: "socket", value: { name: "mark", accepts: ["key"] } });
@@ -1392,11 +1425,11 @@ ok(call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50,
   const as = R("bob", "set", { id: "rack-hook", component: "socket", value: { name: "hook", accepts: ["key"] } });
   const at = R("bob", "set", { id: "rack-hook", component: "transform", value: { pos: [0, 2, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] } });
   ok(code(ac) === "rights" && code(as) === "rights" && code(at) === "rights" && JSON.stringify(E("rack-hook")?.socket?.accepts) === '["coat"]', "SR1d a builder without editOthers can't hang a snap point (accepts) on the owner's thing, nor rewrite or move the owner's socket", [ac.refused, as.refused, at.refused]);
-  // the host's owner still may: bob seats his own crate, in either spelling; ann (owner) seats hers
-  const ob = R("bob", "create", { id: "bobseat2", components: { parent: { to: "bobcrate" }, socket: { name: "back", body: { action: "sit" } } } });
-  const om = R("bob", "set", { id: "bobcrate", component: "sockets", value: { drv: { pos: [0, 0.6, 0], body: { action: "drive" } }, back: { pos: [0, 0.5, 0], body: { action: "sit" } }, side: { pos: [0.5, 0.5, 0] } } });
-  const hm = R("bob", "create", { id: "bobnew", model: "crate", components: { transform: { pos: [6, 0, 0] } } }) && R("bob", "batch", { ops: [{ verb: "create", args: { id: "bobnew2", model: "crate" } }, { verb: "create", args: { id: "bobnew2-s", components: { parent: { to: "bobnew2" }, socket: { name: "s" } } } }] });
-  ok(ob.ok && om.ok && hm.ok && JSON.stringify(kids("bobcrate")) === '["back","drv","side"]', "SR1e the host's own builder still adds seats (natively, by the legacy map, and on a host made in the same batch)", [ob.refused, om.refused, hm.refused, kids("bobcrate")]);
+  // the host's owner still may: bob seats his own crate, alone and in a batch; ann (owner) seats hers
+  const ob = R("bob", "create", { id: "bobseat2", components: { parent: { to: "bobcrate" }, socket: { name: "back" }, station: { action: "sit" } } });
+  const om = seats("bob", "bobcrate", [["side", [0.5, 0.5, 0]]]);
+  const hm = R("bob", "create", { id: "bobnew", model: "crate", components: { transform: { pos: [6, 0, 0] } } }) && R("bob", "batch", { requests: [{ verb: "create", args: { id: "bobnew2", model: "crate" } }, { verb: "create", args: { id: "bobnew2-s", components: { parent: { to: "bobnew2" }, socket: { name: "s" } } } }] });
+  ok(ob.ok && om.ok && hm.ok && JSON.stringify(kids("bobcrate")) === '["back","drv","side"]', "SR1e the host's own builder still adds seats (alone, in a batch, and on a host made in the same batch)", [ob.refused, om.refused, hm.refused, kids("bobcrate")]);
 }
 
 // SR2 (review 10-12 S1-2, re-cut by R 10-15 22:48): a socket is an entity, so it meets the one entity budget like any
@@ -1434,15 +1467,15 @@ ok(call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50,
   R("ann", "set", { id: "@world", component: "capacity", value: { guestEntities: 1000, entities: 2000 } });
   // the review's C1: fresh guest identities, one batch of 20 described sockets each, onto one guest's crate
   R("g1", "create", { id: "gbox", model: "crate" }); let n = 0, last = null;
-  for (let i = 0; i < 40; i++) { const x = R(`g${i + 2}`, "batch", { ops: Array.from({ length: 20 }, (_, j) => ({ verb: "create", args: { id: `gs-${i}-${j}`, components: { parent: { to: "gbox" }, socket: { name: `n${i}x${j}` }, description: "x".repeat(500) } } })) }); if (x.ok) n += 20; else { last = x; break; } }
+  for (let i = 0; i < 40; i++) { const x = R(`g${i + 2}`, "batch", { requests: Array.from({ length: 20 }, (_, j) => ({ verb: "create", args: { id: `gs-${i}-${j}`, components: { parent: { to: "gbox" }, socket: { name: `n${i}x${j}` }, description: "x".repeat(500) } } })) }); if (x.ok) n += 20; else { last = x; break; } }
   ok(code(last) === "full" && n <= 64 && nSock() === n, "SR2a the review's C1 (a pool of guests, 20 described sockets a batch onto one crate) is refused full, at the host's ceiling", { n, last: last?.refused, sockets: nSock() });
   // the guests' pool, across hosts: their sockets and their things are one pool
   const guests0 = 1 + n; R("ann", "set", { id: "@world", component: "capacity", value: { guestEntities: guests0 + 30 } });
   let gn = 0, glast = null;
   for (let i = 0; i < 10; i++) { const host = `gh${i}`; R("ann", "create", { id: host, model: "crate", components: { transform: { pos: [i * 2, 0, 5] } } });
-    const x = R(`g${100 + i}`, "batch", { ops: Array.from({ length: 8 }, (_, j) => ({ verb: "create", args: { id: `gp-${i}-${j}`, components: { parent: { to: host }, socket: { name: `p${j}` } } } })) }); if (x.ok) gn += 8; else { glast = x; break; } }
+    const x = R(`g${100 + i}`, "batch", { requests: Array.from({ length: 8 }, (_, j) => ({ verb: "create", args: { id: `gp-${i}-${j}`, components: { parent: { to: host }, socket: { name: `p${j}` } } } })) }); if (x.ok) gn += 8; else { glast = x; break; } }
   const room = guests0 + 30 - (guests0 + gn);   // what the pool still holds: things fill it, and then a thing is refused like a socket
-  const gFill = R("g200", "batch", { ops: Array.from({ length: room }, (_, j) => ({ verb: "create", args: { id: `gt-${j}`, model: "crate", components: { transform: { pos: [j * 2, 0, 9] } } } })) });
+  const gFill = R("g200", "batch", { requests: Array.from({ length: room }, (_, j) => ({ verb: "create", args: { id: `gt-${j}`, model: "crate", components: { transform: { pos: [j * 2, 0, 9] } } } })) });
   const gThing = R("g201", "create", { id: "gthing", model: "crate", components: { transform: { pos: [0, 0, 12] } } });
   ok(code(glast) === "full" && /@world\.capacity\.guestEntities/.test(glast?.refused?.reason ?? "") && gn === 24 && room === 6 && gFill.ok && code(gThing) === "full", "SR2b account-less people together have at most capacity.guestEntities entities standing, sockets and things in one pool, across hosts (each a fresh identity)", { gn, room, glast: glast?.refused, gFill: gFill.refused, gThing: gThing.refused });
   const acct = R("ann", "create", { id: "acct-s", components: { parent: { to: "gh0" }, socket: { name: "a" } } });
@@ -1465,11 +1498,11 @@ ok(call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50,
     Rn("ann", "create-world", { title: "guestnet" }); Rn("ann", "set", { id: "@world", component: "default-role", value: { role: "builder", guests: "builder" } });
     Rn("ann", "set", { id: "@world", component: "capacity", value: { guestEntities: 2 } });
     const made = ["gn-0", "gn-1"].map((id, i) => Rn("g1", "create", { id, model: "crate", components: { transform: { pos: [i * 2, 0, 0] } } }));
-    const swap = Rn("g1", "batch", { ops: [{ verb: "delete", args: { id: "gn-0" } }, { verb: "create", args: { id: "gn-2", model: "crate", components: { transform: { pos: [4, 0, 0] } } } }] });
-    const grow = Rn("g1", "batch", { ops: [{ verb: "delete", args: { id: "gn-1" } }, ...["gn-3", "gn-4"].map((id, i) => ({ verb: "create", args: { id, model: "crate", components: { transform: { pos: [6 + i * 2, 0, 0] } } } }))] });
+    const swap = Rn("g1", "batch", { requests: [{ verb: "delete", args: { id: "gn-0" } }, { verb: "create", args: { id: "gn-2", model: "crate", components: { transform: { pos: [4, 0, 0] } } } }] });
+    const grow = Rn("g1", "batch", { requests: [{ verb: "delete", args: { id: "gn-1" } }, ...["gn-3", "gn-4"].map((id, i) => ({ verb: "create", args: { id, model: "crate", components: { transform: { pos: [6 + i * 2, 0, 0] } } } }))] });
     // a pool already past a lowered cap still takes a delete-and-make; a make is refused against the lowered cap
     Rn("ann", "set", { id: "@world", component: "capacity", value: { guestEntities: 1 } });
-    const swap2 = Rn("g1", "batch", { ops: [{ verb: "delete", args: { id: "gn-1" } }, { verb: "create", args: { id: "gn-5", model: "crate", components: { transform: { pos: [10, 0, 0] } } } }] });
+    const swap2 = Rn("g1", "batch", { requests: [{ verb: "delete", args: { id: "gn-1" } }, { verb: "create", args: { id: "gn-5", model: "crate", components: { transform: { pos: [10, 0, 0] } } } }] });
     const over = Rn("g1", "create", { id: "gn-6", model: "crate", components: { transform: { pos: [12, 0, 0] } } });
     ok(made.every((x) => x.ok) && swap.ok && code(grow) === "full" && /1 more won't fit/.test(grow.refused?.reason ?? "") && /delete/.test(grow.refused?.fix ?? "")
       && swap2.ok && code(over) === "full" && /lets them have 1 \(/.test(over.refused?.reason ?? "") && /1 more won't fit/.test(over.refused?.reason ?? ""),
@@ -1486,113 +1519,30 @@ ok(call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50,
   // one host's ceiling: an owner too
   R("ann", "set", { id: "@world", component: "capacity", value: { entities: 5000 } });
   R("ann", "create", { id: "big", model: "crate", components: { transform: { pos: [0, 0, -9] } } });
-  const fill = R("ann", "batch", { ops: Array.from({ length: 64 }, (_, j) => ({ verb: "create", args: { id: `big-${j}`, components: { parent: { to: "big" }, socket: { name: `s${j}` } } } })) });
+  const fill = R("ann", "batch", { requests: Array.from({ length: 64 }, (_, j) => ({ verb: "create", args: { id: `big-${j}`, components: { parent: { to: "big" }, socket: { name: `s${j}` } } } })) });
   const over = R("ann", "create", { id: "big-64", components: { parent: { to: "big" }, socket: { name: "s64" } } });
-  const map = R("ann", "set", { id: "w-host", component: "sockets", value: Object.fromEntries(Array.from({ length: 70 }, (_, j) => [`m${j}`, { pos: [0, 1, 0] }])) });
-  ok(fill.ok && code(over) === "full" && over.refused?.limit === 64 && code(map) === "full", "SR2d one host holds at most 64 sockets (SOCKETS_PER_HOST), whoever asks and in either spelling", [fill.refused, over.refused, map.refused]);
+  const map = R("ann", "batch", { requests: Array.from({ length: 70 }, (_, j) => addSocket("w-host", { name: `m${j}` }, { pos: [0, 1, 0] })) });
+  ok(fill.ok && code(over) === "full" && over.refused?.limit === 64 && code(map) === "full", "SR2d one host holds at most 64 sockets (SOCKETS_PER_HOST), whoever asks, alone or in a batch", [fill.refused, over.refused, map.refused]);
 }
-// SR2e: the maintenance lift carries what the log already holds: a pre-cut host with 70 slots keeps all 70 (a carry, not a request)
-{ const slots = Object.fromEntries(Array.from({ length: 70 }, (_, j) => [`m${j}`, { pos: [0, 1, j * 0.01] }]));
-  const old = [{ seq: 0, ts: 1, actor: "world", verb: "genesis", args: { v: 2, dialect: "eidoverse-log" } }, { seq: 1, ts: 2, actor: "ann", verb: "grant", args: { id: "ann", role: "owner" } },
-    { seq: 2, ts: 3, actor: "ann", verb: "spawn", args: { id: "wall", lib: "crate", pos: [0, 0, 0] } }, { seq: 3, ts: 4, actor: "ann", verb: "comp", args: { id: "wall", type: "sockets", data: slots } }];
-  const out = translate(old, DOORKEYS()).out; const n0 = out.length;   // and the world's entity budget is already spent: 1 (the wall)
-  const capv = { entities: 1, guestEntities: 0, avatar: 2000 }, ts = out[n0 - 1].ts + 1;   // an act and its change, as the precut helper below writes them
-  out.push({ world: out[1].world, kind: "act", actor: "ann", verb: "set", body: { request: { id: "@world", component: "capacity", value: capv } }, ts },
-    { world: out[1].world, kind: "change", actor: "ann", cause: n0, verb: "batch", body: { ops: [{ verb: "set", id: "@world", comp: "capacity", value: capv }] }, ts });
-  fs.writeFileSync(root + "worlds/sockcap-lift.jsonl", out.map((e) => JSON.stringify(e)).join("\n") + "\n");
-  const lw = openWorld(root, "sockcap-lift"); const cap0 = lw.state().entities["@world"]?.c.capacity?.entities; let threw = null; try { maintain(lw); } catch (x) { threw = String(x?.message ?? x); }
-  const st = openWorld(root, "sockcap-lift").state(); const n = Object.values(st.entities).filter((e) => e.c.parent?.to === "wall" && e.c.socket).length;
-  ok(!threw && cap0 === 1 && n === 70 && st.entities.wall.c.sockets === undefined, "SR2e the maintenance lift is a carry: a pre-cut host of 70 slots lifts whole, past the per-host ceiling and past a spent capacity.entities (1)", { threw, n, cap0 }); }
-
-// SRU (review 10-12 S2): undo across the maintenance lift. A pre-cut world: tbl has sockets {perch}, the bell is mounted on the
-// perch. Its writer is the door's own (translate-v1, then acts appended as a pre-cut door stored them); maintenance at open (AU.maintain) lifts it.
-const precut = (name, extra = [], acts = []) => {
-  const old = [{ seq: 0, ts: 1, actor: "world", verb: "genesis", args: { v: 2, dialect: "eidoverse-log" } },
-    { seq: 1, ts: 2, actor: "ann", verb: "grant", args: { id: "ann", role: "owner" } }, { seq: 1, ts: 2, actor: "ann", verb: "grant", args: { id: "bob", role: "owner" } },
-    { seq: 2, ts: 2, actor: "ann", verb: "spawn", args: { id: "tbl", lib: "table", pos: [2, 0, 3], yaw: 0.7 } },
-    { seq: 3, ts: 3, actor: "ann", verb: "comp", args: { id: "tbl", type: "sockets", data: { perch: { pos: [0.45, 0.75, 0.25], yaw: 1.2 } } } },
-    { seq: 4, ts: 4, actor: "ann", verb: "spawn", args: { id: "bell", lib: "bell", pos: [-5, 0, -5] } },
-    { seq: 5, ts: 5, actor: "ann", verb: "mount", args: { id: "bell", to: "tbl", slot: "perch" } }, ...extra];
-  const out = translate(old, DOORKEYS()).out; const wid = out[1].world;
-  for (const [actor, ops] of acts) { const n = out.length; const ts = out[n - 1].ts + 1;   // an act and its change, as a pre-cut door wrote them
-    out.push({ world: wid, kind: "act", actor, verb: ops.length > 1 ? "batch" : "set", body: { request: ops.length > 1 ? { ops } : { id: ops[0].id, component: ops[0].comp, value: ops[0].value } }, ts },
-      { world: wid, kind: "change", actor, cause: n, verb: "batch", body: { ops: ops.map((o) => ({ verb: "set", ...o })) }, ts }); }
-  fs.writeFileSync(root + `worlds/${name}.jsonl`, out.map((e) => JSON.stringify(e)).join("\n") + "\n"); return out; };
-const nearly = (a, b, e = 1e-8) => !!a && !!b && a.every((v, i) => Math.abs(v - b[i]) < e);
-// SRU1 (S2-1): a pre-cut act moved the bell up 0.2 m on its perch (the transform in the HOST's frame, as stored then)
-{ const W = () => openWorld(root, "sru1"); precut("sru1");
-  const b0 = fold(readLog(fs.readFileSync(root + "worlds/sru1.jsonl"))).entities.bell.c;
-  const moved = { pos: [b0.transform.pos[0], b0.transform.pos[1] + 0.2, b0.transform.pos[2]], q: b0.transform.q, scale: b0.transform.scale };
-  precut("sru1", [], [["ann", [{ id: "bell", comp: "transform", value: moved }]]]);
-  const before = worldT(fold(readLog(fs.readFileSync(root + "worlds/sru1.jsonl")).slice(0, -2)), "bell");
-  maintain(W()); clock.advance(100); const u = request(W(), "ann", "undo", {});
-  const st = W().state(); const after = worldT(st, "bell"); const on = st.entities[st.entities.bell.c.parent?.to]?.c.socket?.name;
-  ok(u.ok && !(u.skipped?.length) && nearly(after.pos, before.pos) && nearly(after.q, before.q) && on === "perch", "SRU1 undo of a pre-cut move of cargo on a socket puts the bell back exactly (within 1e-8), still on the perch", { u: u.refused ?? u.skipped, before: before.pos, after: after.pos, on }); }
-
-// SRU2 (S2-2): ann's pre-cut `set tbl.sockets {perch, seat}`; after the cut nobody writes that key, so other people's work on
-// tbl's seats is creates and sets on its socket children. Undoing ann's edit must skip, as base did, not retire bob's work.
-for (const [name, work] of [["sru2a", "hook"], ["sru2b", "perch"], ["sru2c", "delete"]]) {
-  const W = () => openWorld(root, name);
-  precut(name, [{ seq: 6, ts: 6, actor: "ann", verb: "comp", args: { id: "tbl", type: "sockets", data: { perch: { pos: [0.45, 0.75, 0.25], yaw: 1.2 }, seat: { pos: [0, 0.5, 0], sit: true } } } }]);
-  maintain(W()); const R = (actor, verb, args) => { clock.advance(2000); return request(W(), actor, verb, args); };
-  const kidOf = (n) => { const st = W().state(); return Object.keys(st.entities).find((k) => st.entities[k].c.parent?.to === "tbl" && st.entities[k].c.socket?.name === n); };
-  const perch = kidOf("perch"), seat = kidOf("seat");
-  const b = work === "hook" ? R("bob", "create", { id: "bobhook", components: { parent: { to: "tbl" }, transform: { pos: [0, 1, 0] }, socket: { name: "hook" } } })
-    : work === "perch" ? R("bob", "set", { id: perch, component: "transform", value: { pos: [0.45, 0.95, 0.25], q: W().state().entities[perch].c.transform.q, scale: [1, 1, 1] } })
-    : R("bob", "delete", { id: seat });
-  const snap = JSON.stringify(Object.keys(W().state().entities).filter((k) => W().state().entities[k].c.parent?.to === "tbl").sort().map((k) => [k, W().state().entities[k].c]));
-  const u = R("ann", "undo", {}); const st = W().state();
-  const kept = JSON.stringify(Object.keys(st.entities).filter((k) => st.entities[k].c.parent?.to === "tbl").sort().map((k) => [k, st.entities[k].c])) === snap;
-  ok(b.ok && kept && (code(u) === "conflict" || (u.notes ?? []).some((n) => n.skipped?.some((x) => x.id === "tbl" && x.component === "sockets" && x.by === "bob"))), `SRU2 ${work === "hook" ? "bob adds a socket" : work === "perch" ? "bob moves the perch" : "bob deletes the seat"} after the cut; ann's undo of her pre-cut sockets edit skips (bob changed it since), and every child of tbl is as bob left it`, { b: b.refused, u: u.ok ? { ok: true, skipped: u.skipped, notes: u.notes } : u.refused, kept }); }
-
-// SRW (S2-3): the maintenance lift of a host the door would refuse today. Pre-cut: role-defs crew; a-chair's seat has body.who
-// 'crew'; b-chair has a plain seat; crew is deleted. The lift re-spells what the log holds (a carry: no re-judging
-// historical values), and one host that fails anyway doesn't stop the hosts after it: it's said, per host, to the caller.
-{ const old = [{ seq: 0, ts: 1, actor: "world", verb: "genesis", args: { v: 2, dialect: "eidoverse-log" } }, { seq: 1, ts: 2, actor: "ann", verb: "grant", args: { id: "ann", role: "owner" } },
-    { seq: 2, ts: 3, actor: "ann", verb: "spawn", args: { id: "a-chair", lib: "crate", pos: [0, 0, 0] } }, { seq: 3, ts: 4, actor: "ann", verb: "spawn", args: { id: "b-chair", lib: "crate", pos: [3, 0, 0] } },
-    { seq: 4, ts: 5, actor: "ann", verb: "spawn", args: { id: "c-chair", lib: "crate", pos: [6, 0, 0] } }];
-  const write = (name, ops) => { const out = translate(old, DOORKEYS()).out; const wid = out[1].world;
-    for (const o of ops) { const n = out.length; const ts = out[n - 1].ts + 1; const req = o.verb === "delete" ? { id: o.id, component: o.comp } : { id: o.id, component: o.comp, value: o.value };
-      out.push({ world: wid, kind: "act", actor: "ann", verb: o.verb, body: { request: req }, ts }, { world: wid, kind: "change", actor: "ann", cause: n, verb: o.verb, body: { id: o.id, comp: o.comp, ...(o.verb === "set" ? { value: o.value } : {}) }, ts }); }
-    fs.writeFileSync(root + `worlds/${name}.jsonl`, out.map((e) => JSON.stringify(e)).join("\n") + "\n"); };
-  const seat = (extra = {}) => ({ seat: { pos: [0, 0.5, 0], body: { action: "sit", ...extra } } });
-  write("srw1", [{ verb: "set", id: "@world", comp: "role-defs", value: { crew: { name: "Crew", rank: 150, can: { build: true } } } },
-    { verb: "set", id: "a-chair", comp: "sockets", value: seat({ who: "crew" }) }, { verb: "set", id: "b-chair", comp: "sockets", value: seat() }, { verb: "delete", id: "@world", comp: "role-defs" }]);
-  let threw = null, out = null; try { out = maintain(openWorld(root, "srw1")).steps.lift; } catch (x) { threw = String(x?.message ?? x).slice(0, 200); }
-  const st = openWorld(root, "srw1").state(); const kids = (h) => Object.values(st.entities).filter((e) => e.c.parent?.to === h && e.c.socket).length;
-  clock.advance(100); const sit = request(openWorld(root, "srw1"), "ann", "use", { id: "b-chair", action: "sit" });
-  ok(!threw && kids("a-chair") === 1 && kids("b-chair") === 1 && !st.entities["a-chair"].c.sockets && !st.entities["b-chair"].c.sockets && sit.ok, "SRW1 a seat whose who names a role since deleted lifts anyway (the lift is a carry), and so does the healthy host after it", { threw, out, a: kids("a-chair"), b: kids("b-chair"), sit: sit.refused });
-  // a host the lift can't WRITE (here: the first append for it throws, as a full disk would) is not a refused host: the line's
-  // disk state is unknown, so the throw PROPAGATES out of maintain (review r14 H1, 10-18; the caller reports ambiguous) and
-  // nothing is lifted in that run. A refusal (the door's) is still per host: SRW1 above.
-  write("srw2", [{ verb: "set", id: "a-chair", comp: "sockets", value: seat() }, { verb: "set", id: "b-chair", comp: "sockets", value: seat() }, { verb: "set", id: "c-chair", comp: "sockets", value: seat() }]);
-  const w2 = openWorld(root, "srw2"); const real = w2.append.bind(w2); let n = 0; w2.append = (e, ...more) => { if (e.kind === "act" && e.verb === "lift-sockets" && e.body?.id === "a-chair" && !n++) throw new Error("disk full"); return real(e, ...more); };
-  let t2 = null, o2 = null; try { const m2 = maintain(w2).steps.lift; o2 = [...m2.made, ...m2.failed]; } catch (x) { t2 = String(x?.message ?? x); }
-  const s2 = openWorld(root, "srw2").state(); const k2 = (h) => Object.values(s2.entities).filter((e) => e.c.parent?.to === h && e.c.socket).length;
-  ok(/disk full/.test(t2 ?? "") && o2 === null && k2("a-chair") === 0 && k2("b-chair") === 0 && k2("c-chair") === 0 && !!s2.entities["a-chair"].c.sockets, "SRW2 a host whose lift's WRITE throws (disk full) is not reported as a refused host: the throw propagates out of maintain (ambiguous to the caller, r14 H1), and nothing was written in that run", { t2, o2, a: k2("a-chair"), b: k2("b-chair"), c: k2("c-chair") });
-  const again = maintain(openWorld(root, "srw2")).steps.lift.made; const s3 = openWorld(root, "srw2").state();
-  ok(["a-chair", "b-chair", "c-chair"].every((h) => again.some((x) => x.host === h && x.made) && Object.values(s3.entities).filter((e) => e.c.parent?.to === h && e.c.socket).length === 1), "SRW2 …and the next maintenance run (the disk back) lifts all three", again); }
-
 // LG1 (a grep-pin, as nonumber-check is): past the door nothing reads the old spelling. The authority's state readers name
-// socket children; only authority/sockets.js (the translator and the maintenance lift) reads a stored `sockets` map, a
-// parent {to, socket} or a home's socket
+// socket children; only authority/sockets.js reads socket children, and the door's legacy refusal (refuse("legacy", …)) names
+// the old spelling only to turn it away
 { const dir = fileURLToPath(new URL("../../shared/protocol/", import.meta.url));
   const files = ["authority.js", ...fs.readdirSync(dir + "authority").filter((f) => f.endsWith(".js") && f !== "sockets.js").map((f) => `authority/${f}`)];
   const OLD = /\bc\??\.sockets\b|\bparent\??\.socket\b|\bhome\??\.parent\??\.socket\b|\.sockets\?\.\[|modelOf\([^)]*\)\??\.sockets\b|\bm\??\.sockets\b/;
-  const hits = files.flatMap((f) => fs.readFileSync(dir + f, "utf8").split("\n").map((l, i) => [f, i + 1, l.replace(/^\s*\/\/.*$/, "").replace(/\s\/\/ .*$/, "")]).filter(([, , l]) => OLD.test(l)));
+  const hits = files.flatMap((f) => fs.readFileSync(dir + f, "utf8").split("\n").map((l, i) => [f, i + 1, l.replace(/^\s*\/\/.*$/, "").replace(/\s\/\/ .*$/, "")]).filter(([, , l]) => OLD.test(l) && !/refuse\("legacy"/.test(l)));
   ok(!hits.length, `LG1 no reader of the old spelling outside authority/sockets.js (${files.length} files)`, hits.map(([f, n, l]) => `${f}:${n}: ${String(l).trim().slice(0, 100)}`)); }
 // LG1b (review 10-12 S3-4): …nor anywhere a client, an agent or a shared reader looks: shared/, client/lib, mcpl. The few
-// that read a map on purpose are named, each with why: the Inspector's Sockets card reads (and writes) the map that
-// socketMapIn builds FROM the children until the Parts UI (12b); a blueprint's own records keep their spelling (11/12);
+// that read a map on purpose are named, each with why: a blueprint's own records keep their spelling (11/12);
 // hierarchy.js socketOf/localOf read a record in the old spelling (a v1 fold's: the M checks draw v1 by it; a blueprint's
-// parts); grab.js's home shape check accepts the old field (the door lifts it first)
+// parts); the door's legacy refusal names the old spelling only to turn it away
 { const root = fileURLToPath(new URL("../../", import.meta.url));
   const walk = (d) => fs.readdirSync(root + d, { withFileTypes: true }).flatMap((x) => x.isDirectory() ? (x.name === "node_modules" || x.name === "vendor" ? [] : walk(`${d}/${x.name}`)) : /\.(js|mjs|ts)$/.test(x.name) ? [`${d}/${x.name}`] : []);
   const files = [...walk("shared"), ...walk("client/lib"), ...walk("mcpl")].filter((f) => f !== "shared/protocol/authority/sockets.js");
   const OLD = /\b(c|comp|m)\??\.sockets\b|\.sockets\?\.\[|modelOf\([^)]*\)\??\.sockets\b|\b(parent|rel)\??\.socket\b|\bhome\??\.parent\??\.socket\b/;
-  const ON_PURPOSE = [["shared/editschema.js", /withSocketMap|ent\.comp\?\.sockets\)|c\.sockets\b/], ["shared/blueprint.js", /rel\.socket/], ["shared/hierarchy.js", /rel\??\.socket/], ["shared/grab.js", /h\.parent\.socket/]];
+  const ON_PURPOSE = [["shared/blueprint.js", /rel\.socket/], ["shared/hierarchy.js", /rel\??\.socket/]];
   const hits = files.flatMap((f) => fs.readFileSync(root + f, "utf8").split(/\r?\n/).map((l, i) => [f, i + 1, l.replace(/^\s*(\/\/|\*|\/\*\*).*$/, "").replace(/\s\/\/ .*$/, "")])
-    .filter(([, , l]) => OLD.test(l) && !ON_PURPOSE.some(([pf, re]) => pf === f && re.test(l))));
+    .filter(([, , l]) => OLD.test(l) && !/refuse\("legacy"/.test(l) && !ON_PURPOSE.some(([pf, re]) => pf === f && re.test(l))));
   ok(files.length > 100 && !hits.length, `LG1b no reader of the old spelling in shared/, client/lib or mcpl but the named ones (${files.length} files)`, hits.map(([f, n, l]) => `${f}:${n}: ${String(l).trim().slice(0, 100)}`)); }
 
 // ---- TC: training-consent is gone (R 10-16 14:16: what a server may do with a world's log is that server's terms, not a
@@ -1624,30 +1574,30 @@ for (const [name, work] of [["sru2a", "hook"], ["sru2b", "perch"], ["sru2c", "de
   call("olive", "create", { id: "lamp", model: "crate", components: { description: "a lamp" } });
   call("olive", "create", { id: "shade", model: "crate", components: { parent: { to: "lamp" } } });
   const n0 = openWorld(root, name).entries.length;
-  const r = call("olive", "batch", { ops: [{ verb: "delete", args: { id: "lamp", componnent: "description" } }] });
-  ok(!r.ok && code(r) === "unknown-arg" && r.refused?.op === 0 && ents().lamp && ents().shade, "BT1 batch delete {id, componnent} is refused unknown-arg (op 0), as it is outside a batch; the entity and its child stay", [r.refused ?? r, !!ents().lamp, !!ents().shade]);
-  const r2 = call("olive", "batch", { ops: [{ verb: "set", args: { id: "lamp", component: "description", value: "ok" } }, { verb: "create", args: { model: "crate", place: { on: "lamp", oops: 1 } } }] });
-  ok(!r2.ok && code(r2) === "unknown-arg" && r2.refused?.op === 1 && ents().lamp?.c?.description === "a lamp", "BT2 a nested create.place is checked too, and an earlier valid op isn't written", [r2.refused ?? r2, ents().lamp?.c?.description]);
+  const r = call("olive", "batch", { requests: [{ verb: "delete", args: { id: "lamp", componnent: "description" } }] });
+  ok(!r.ok && code(r) === "unknown-arg" && r.refused?.index === 0 && ents().lamp && ents().shade, "BT1 batch delete {id, componnent} is refused unknown-arg (op 0), as it is outside a batch; the entity and its child stay", [r.refused ?? r, !!ents().lamp, !!ents().shade]);
+  const r2 = call("olive", "batch", { requests: [{ verb: "set", args: { id: "lamp", component: "description", value: "ok" } }, { verb: "create", args: { model: "crate", place: { on: "lamp", oops: 1 } } }] });
+  ok(!r2.ok && code(r2) === "unknown-arg" && r2.refused?.index === 1 && ents().lamp?.c?.description === "a lamp", "BT2 a nested create.place is checked too, and an earlier valid op isn't written", [r2.refused ?? r2, ents().lamp?.c?.description]);
   const changes = openWorld(root, name).entries.slice(n0).filter((e) => e.kind === "change").length;
   ok(changes === 0, "BT3 neither refused batch wrote a change", changes);
   // the verbs batch's help names are the verbs it takes (review of #260): help listed turn, which the batch refused
   const q = () => ents().lamp?.c?.transform?.q;
   const q0 = JSON.stringify(q()), n1 = openWorld(root, name).entries.length;
-  const tr = call("olive", "batch", { ops: [{ verb: "turn", args: { id: "lamp", axis: "y", deg: 90 } }, { verb: "set", args: { id: "lamp", component: "description", value: "turned" } }], label: "spin" });
+  const tr = call("olive", "batch", { requests: [{ verb: "turn", args: { id: "lamp", axis: "y", deg: 90 } }, { verb: "set", args: { id: "lamp", component: "description", value: "turned" } }], label: "spin" });
   const acts = openWorld(root, name).entries.slice(n1).filter((e) => e.kind === "change").length;
   const turned = JSON.stringify(q()) !== q0 && Math.abs(Math.abs(q()?.[1] ?? 0) - Math.SQRT1_2) < 1e-6;
   const un = call("olive", "undo", { label: "spin" });
   ok(tr.ok && turned && acts === 1 && un.ok && JSON.stringify(q()) === q0 && ents().lamp?.c?.description === "a lamp",
     "BT4 a batch takes turn: the turn and a set are one act, and one undo takes both back", { tr: tr.refused ?? tr.ok, q: q(), acts, un: un.refused ?? un.ok });
   // a turn reads the batch's working copy: a thing made earlier in the same batch is found and turned
-  const ct = call("olive", "batch", { ops: [{ verb: "create", args: { id: "crate-bt", model: "crate", components: { transform: { pos: [3, 0, 3] } } } }, { verb: "turn", args: { id: "crate-bt", axis: "y", deg: 90 } }] });
+  const ct = call("olive", "batch", { requests: [{ verb: "create", args: { id: "crate-bt", model: "crate", components: { transform: { pos: [3, 0, 3] } } } }, { verb: "turn", args: { id: "crate-bt", axis: "y", deg: 90 } }] });
   const cq = ents()["crate-bt"]?.c?.transform?.q;
   ok(ct.ok && Math.abs(Math.abs(cq?.[1] ?? 0) - Math.SQRT1_2) < 1e-6, "BT4b a batch's turn finds a thing made earlier in the same batch and turns it", { ct: ct.refused ?? ct.ok, q: cq });
   // an inherited name is no argument (review of #260, #522/#538): `toString` is `in` every object; the attempt act doesn't list it as known
   const n2 = openWorld(root, name).entries.length;
   const ih = call("olive", "delete", { id: "lamp", toString: 1 });
   const att = openWorld(root, name).entries.slice(n2).map((e) => e.body).find((b) => b?.refused);
-  ok(!ih.ok && code(ih) === "unknown-arg" && !!ents().lamp && att && !att.args.includes("toString") && att.unknownArgs === 1, "BT6 delete {id, toString} is refused unknown-arg; its attempt act counts toString as unknown, never as a known name", [ih.refused ?? ih, att]);
+  ok(!ih.ok && code(ih) === "unknown-arg" && !!ents().lamp && att && !att.argNames.includes("toString") && att.unknownArgs === 1, "BT6 delete {id, toString} is refused unknown-arg; its attempt act counts toString as unknown, never as a known name", [ih.refused ?? ih, att]);
   // each verb the help names, with args it accepts alone, dry: a verb named here without args below fails the row too
   const ARGS = { create: { model: "crate" }, set: { id: "lamp", component: "description", value: "x" }, delete: { id: "shade" }, place: { id: "shade", on: "lamp" },
     turn: { id: "lamp", axis: "y", deg: 10 }, sky: { hours: 7 }, weather: { hours: 7 } };
@@ -1655,11 +1605,11 @@ for (const [name, work] of [["sru2a", "hook"], ["sru2b", "perch"], ["sru2c", "de
   const WANT = ["create", "set", "delete", "place", "turn", "sky", "weather"];
   const named = (VERBSPEC.batch.doc.match(/ of ([a-z-]+(?:, [a-z-]+)*)$/)?.[1] ?? "").split(", ").filter(Boolean);
   const alone = Object.fromEntries(WANT.map((v) => [v, ARGS[v] ? call("olive", v, { ...ARGS[v], dry: true }) : null]));
-  const inBatch = Object.fromEntries(WANT.map((v) => [v, ARGS[v] ? call("olive", "batch", { ops: [{ verb: v, args: ARGS[v] }], dry: true }) : null]));
+  const inBatch = Object.fromEntries(WANT.map((v) => [v, ARGS[v] ? call("olive", "batch", { requests: [{ verb: v, args: ARGS[v] }], dry: true }) : null]));
   const turnedAway = WANT.filter((v) => !alone[v]?.ok || !inBatch[v]?.ok);
   ok(JSON.stringify(named) === JSON.stringify(WANT) && !turnedAway.length, "BT5 batch's help names exactly create, set, delete, place, turn, sky, weather, and each goes in a batch, dry, as it goes alone (a builder for each)", { named, turnedAway: turnedAway.map((v) => [v, alone[v]?.refused ?? alone[v]?.ok, inBatch[v]?.refused ?? inBatch[v]?.ok]) }); }
 
-// ---- RA (review of #260): a log changed outside the purge rule reads as unknown and the fold names the line (commit-unpurged); writes, reads and the operator's repair go on ----
+// ---- RA (review of #260): a log changed outside the purge rule reads as unknown and the fold names the line (commitment-unredacted); writes, reads and the operator's repair go on ----
 { const name = "altered"; const file = `${root}worlds/${name}.jsonl`;
   const call = callAt(name);
   const opr = (actor, verb, args = {}) => { clock.advance(100); return operatorRepair(openWorld(root, name), actor, verb, args); };
@@ -1667,15 +1617,15 @@ for (const [name, work] of [["sru2a", "hook"], ["sru2b", "perch"], ["sru2c", "de
   call("olive", "set", { id: "@world", component: "roles:bob", value: { role: "member" } });
   // strip the roles: value to a commit, with no purge: as a copy of the log changed by hand would hold it
   const lines = fs.readFileSync(file, "utf8").split("\n"); const k = lines.findLastIndex((l) => l.includes('"roles:bob"') && l.includes('"kind":"change"'));
-  const e = JSON.parse(lines[k]); const { value, salt, ...rest } = e.body; e.body = { ...rest, commit: "0".repeat(64) }; lines[k] = JSON.stringify(e); fs.writeFileSync(file, lines.join("\n"));
+  const e = JSON.parse(lines[k]); const { value, salt, ...rest } = e.body; e.body = { ...rest, commitment: "0".repeat(64) }; lines[k] = JSON.stringify(e); fs.writeFileSync(file, lines.join("\n"));
   const w = openWorld(root, name); const role = w.state().entities["@world"].c["roles:bob"];
   const before = entityBefore(w, "@world", w.entries.length)?.c["roles:bob"];   // undo's reading of the past agrees with the fold
   const write = call("olive", "create", { model: "crate" }), read = call("olive", "look", {});
   const op = opr("opal", "set", { id: "@world", component: "access", value: { join: "anyone" } });
   // the house's markup (#260 10-20), accepted: detecting the stripped value is §12's bone; refusing everyone's writes on that
   // record until it's restored was a policy no world asked for, so it came out with the recut
-  ok(role === PURGED && before === PURGED && write.ok && read.ok && op.ok && w.state().diagnostics.some(([q, c]) => q === k && c === "commit-unpurged"),
-    "RA1 a value stripped to its commit with no purge reads as unknown and the fold names the line (commit-unpurged); writes and reads go on, and so does the operator's repair", { role, before, write: write.refused, read: read.ok, op: op.ok ?? op.refused, k }); }
+  ok(role === REDACTED && before === REDACTED && write.ok && read.ok && op.ok && w.state().diagnostics.some(([q, c]) => q === k && c === "commitment-unredacted"),
+    "RA1 a value stripped to its commit with no purge reads as unknown and the fold names the line (commitment-unredacted); writes and reads go on, and so does the operator's repair", { role, before, write: write.refused, read: read.ok, op: op.ok ?? op.refused, k }); }
 // ---- RA2 (review of #260): a state view that already folded the log meets a new line holding a value stripped to its
 // commit: it reads the whole log again, as the fold reads such a line, rather than throwing out of the state getter ----
 { const name = "altered-live";
@@ -1684,12 +1634,12 @@ for (const [name, work] of [["sru2a", "hook"], ["sru2b", "perch"], ["sru2c", "de
   const w = openWorld(root, name); w.state();   // folded once: the next new plain lines are applied incrementally
   const L = w.entries, last = L[L.length - 1], at = L.length;
   const line = (e) => { const x = readLog(JSON.stringify(e) + "\n")[0]; Object.defineProperty(x, "seq", { value: L.length, enumerable: false, configurable: true }); L.push(x); };
-  line({ world: last.world, kind: "change", ts: last.ts + 1, actor: "olive", cause: at - 1, verb: "set", body: { id: "sign", comp: "label", commit: "0".repeat(64) } });
+  line({ world: last.world, kind: "change", ts: last.ts + 1, actor: "olive", cause: at - 1, op: "set", body: { id: "sign", comp: "label", commitment: "0".repeat(64) } });
   let st1 = null, err = null; try { st1 = w.state(); } catch (x) { err = `${x?.constructor?.name}: ${x?.message}`.slice(0, 120); }
-  line({ world: last.world, kind: "purge", ts: last.ts + 2, actor: "system", verb: "purge", body: { values: [{ seq: at }] } });
+  line({ world: last.world, kind: "redaction", ts: last.ts + 2, actor: "system", body: { values: [{ seq: at }] } });
   const st2 = err ? null : w.state();
-  ok(!err && st1?.entities.sign.c.label === PURGED && st1.diagnostics.some(([q, c]) => q === at && c === "commit-unpurged") && st2?.entities.sign.c.label === PURGED && !st2.diagnostics.some(([, c]) => c === "commit-unpurged"),
-    "RA2 a new line with a value stripped to its commit, after the state was folded, reads as unknown (commit-unpurged until a purge names it), not a throw from the state view", { err, label: st1?.entities?.sign?.c?.label, d1: st1?.diagnostics?.slice(-2), d2: st2?.diagnostics?.slice(-2) }); }
+  ok(!err && st1?.entities.sign.c.label === REDACTED && st1.diagnostics.some(([q, c]) => q === at && c === "commitment-unredacted") && st2?.entities.sign.c.label === REDACTED && !st2.diagnostics.some(([, c]) => c === "commitment-unredacted"),
+    "RA2 a new line with a value stripped to its commit, after the state was folded, reads as unknown (commitment-unredacted until a purge names it), not a throw from the state view", { err, label: st1?.entities?.sign?.c?.label, d1: st1?.diagnostics?.slice(-2), d2: st2?.diagnostics?.slice(-2) }); }
 // ---- OP: a server operator's recorded repair (review of PR #260, server.ts:742: a server operator entered but could mend nothing).
 // operatorRepair is NARROW (@world's roles/access/default-role/role-defs, unban) and RECORDED (the operator's act, body
 // operator: true; the moderator-log record likewise); the operator's ordinary requests stay what their role here allows.
@@ -1708,7 +1658,7 @@ for (const [name, work] of [["sru2a", "hook"], ["sru2b", "perch"], ["sru2c", "de
   const grant = opr("opal", "set", { id: "@world", component: "roles:bob", value: { role: "owner" } });
   const lift = opr("opal", "unban", { who: "opal" });
   const door = opr("opal", "set", { id: "@world", component: "access", value: { join: "anyone" } });
-  const w2 = openWorld(root, name); const acts = w2.entries.filter((e) => e.kind === "act" && e.actor === "opal" && e.body?.operator === true);
+  const w2 = openWorld(root, name); const acts = w2.entries.filter((e) => e.kind === "request" && e.actor === "opal" && e.body?.operator === true);
   const modRec = w2.mod.find((m) => m.verb === "unban" && m.who === "opal");
   ok(grant.ok && lift.ok && door.ok && wc()["roles:bob"]?.role === "owner" && wc().access?.join === "anyone" && !isBanned(w2, "opal"),
     "OP2 operatorRepair mends roles (grants an owner), lifts a ban (their own, too) and repairs access", [grant.refused, lift.refused, door.refused, wc()["roles:bob"], wc().access]);
@@ -1789,14 +1739,13 @@ for (const [name, work] of [["sru2a", "hook"], ["sru2b", "perch"], ["sru2c", "de
   const kin = call("olive", "set", { id: "ball", component: "physics", value: { kind: "kinematic" } }); const look2 = call("olive", "set", { id: "ball", component: "look-at", value: { target: "@viewer" } });
   ok(look?.refused?.code === "conflict" && !/on a part/.test(look.refused.fix) && /kinematic/.test(look.refused.fix) && kin.ok && look2.ok,
     "RX1 the dynamic look-at refusal names static or kinematic, and a kinematic one may look", { look: look?.refused, kin: kin.ok, look2: look2.ok ? "ok" : look2.refused }); }
-// RX2: sculpt on a thing with no grid says there's nothing to sculpt, and doesn't send the reader to write terrain-grid,
-// a reserved name the gate refuses
+// RX2: there is no sculpt (it could only refuse: terrain-grid is reserved); terrain-grid stays reserved
 { const name = "rx2";
   const call = callAt(name);
   call("olive", "create-world", { title: "rx2" }); call("olive", "create", { id: "hill", model: "crate", place: { at: [1, 1] } });
-  const sc = call("olive", "sculpt", { on: "hill", brush: { kind: "raise" }, path: [[1, 1]] });
+  const sc = call("olive", "sculpt", { on: "hill", brush: "raise", path: [[1, 1]], radius: 1, strength: 10 });
   const grid = call("olive", "set", { id: "hill", component: "terrain-grid", value: { spacing: 0.5, tile: 32, origin: [0, 0], extent: [1, 1], limits: { raise: 100, lower: 100 } } });
-  ok(sc?.refused?.code === "no-grid" && !/set \{id, component: 'terrain-grid'/.test(sc.refused.fix ?? "") && grid?.refused?.code === "reserved", "RX2 the no-grid refusal names no write of terrain-grid, which is refused as reserved", { sc: sc?.refused, grid: grid?.refused?.code }); }
+  ok(sc?.refused?.code === "unknown-verb" && grid?.refused?.code === "reserved", "RX2 sculpt is no verb (unknown-verb), and terrain-grid stays reserved", { sc: sc?.refused, grid: grid?.refused }); }
 // CAR: a captioner's lines are its own requests, charged to it like any write: past the entries cap in the window, refused rate
 { const name = "car";
   const cw = callAt(name);
@@ -1834,7 +1783,7 @@ for (const [name, steps] of [
   ["sru3c", [["create", { id: "post", model: "crate", place: { at: [5, 5] } }], ["create", { id: "bobhook", components: { parent: { to: "post" }, transform: { pos: [0, 1, 0] }, socket: { name: "hook" } } }],
     ["set", { id: "bobhook", component: "parent", value: { to: "shelf" } }]]],
   // SRU3d: one batch makes the socket on another thing and then hangs it on the shelf
-  ["sru3d", [["create", { id: "post", model: "crate", place: { at: [5, 5] } }], ["batch", { ops: [
+  ["sru3d", [["create", { id: "post", model: "crate", place: { at: [5, 5] } }], ["batch", { requests: [
     { verb: "create", args: { id: "bobhook", components: { parent: { to: "post" }, transform: { pos: [0, 1, 0] }, socket: { name: "hook" } } } },
     { verb: "set", args: { id: "bobhook", component: "parent", value: { to: "shelf" } } }] }]]],
 ] as const) {
@@ -1854,7 +1803,7 @@ for (const [name, steps] of [
   call("olive", "create-world", { title: name });
   for (const who of ["ann", "bob"]) call("olive", "set", { id: "@world", component: `roles:${who}`, value: { role: "builder" } });
   const mk = call("ann", "create", { id: "shelf", model: "crate", place: { at: [2, 2] } });
-  const made = [call("bob", "create", { id: "post", model: "crate", place: { at: [5, 5] } }), call("bob", "batch", { ops: [
+  const made = [call("bob", "create", { id: "post", model: "crate", place: { at: [5, 5] } }), call("bob", "batch", { requests: [
     { verb: "create", args: { id: "bobhook", components: { parent: { to: "shelf" }, transform: { pos: [0, 1, 0] }, socket: { name: "hook" } } } },
     { verb: "set", args: { id: "bobhook", component: "parent", value: { to: "post" } } }] })];
   const u = call("ann", "undo", {}); const st = openWorld(root, name).state();

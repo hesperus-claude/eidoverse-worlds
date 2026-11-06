@@ -49,6 +49,7 @@ import { join } from "node:path";
 import { createServer } from "node:net";
 import { launchBrowser } from "./probe-harness.mjs";
 import { foundWorlds } from "./harness.ts";
+import { helloOf } from "../shared/protocol/hello.js";
 
 const ROOT = join(import.meta.dir, "..");
 
@@ -188,14 +189,14 @@ try {
       if (m.type === "snapshot") { clearTimeout(t); res(); }
       if (m.type === "typing" && m.id === "claude") frames.push({ t: at, seq });
       // a say is a log entry of kind "say" by an opaque actor, whose name the snapshot's cut and each log message carry
-      if (m.type === "snapshot" && m.cut?.names) Object.assign(names, m.cut.names);
+      if (m.type === "snapshot" && m.names) Object.assign(names, m.names);
       if (m.type === "log") {
         if (m.names) Object.assign(names, m.names);
         if ((m.entries ?? []).some((e: any) => e?.kind === "say" && /^claude$/i.test(String(names[e.actor] ?? e.actor)))) sayEntry ??= { t: at, seq };
       }
     };
     // replica: a world speaks only to clients that fold its log
-    watcher.onopen = () => watcher.send(JSON.stringify({ type: "join", world: "commons", id: "watcher", avatar: "a.vrm", replica: true }));
+    watcher.onopen = () => watcher.send(JSON.stringify({ type: "join", hello: helloOf(), world: "commons", id: "watcher", avatar: "a.vrm", replica: true }));
   });
 
   // The host: an MCPL client on the door, as the agent `claude`.

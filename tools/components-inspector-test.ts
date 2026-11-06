@@ -95,14 +95,14 @@ for (const [id, e] of ents) {
   }
 }
 // C8: every engine card the corpus may lack (openable, pivot, description, story, text, particles…) on one synthetic thing —
-// every value row of a typed card is claimed by its card (shared/protocol/descriptors.js claims it, or the card's own
+// every value row of a typed card is claimed by its card (shared/descriptors.js claims it, or the card's own
 // extra), and nothing a typed card shows is doubled on the raw-JSON floor. Mutation (2026-10-12): drop `intensity` from
 // the Light descriptor's show → "light.intensity is in no card" on every lamp here and in the corpus.
 {
   const M = (k: string, x: any = {}) => materialize(k, x).value;
   const every: any = { model: 'store/x.glb', pos: [0, 0, 0], yaw: 0, light: { ...M('light'), day: false, important: true }, collider: { shape: 'box' }, pivot: { pos: [0, 1, 0] },
     motion: { type: 'pendulum', amp: 0.2 }, 'motion:a': { type: 'spin' }, 'motion:b': { type: 'orbit' }, 'motion:c': { type: 'oscillate' }, 'motion:d': { type: 'path', points: [[0, 0, 0], [1, 1, 1]], duration: 2 },
-    openable: { open: true, angle: 1 }, grabbable: { fits: ['key'] }, sockets: { seat: { pos: [0, 0.5, 0], body: {} } },
+    openable: { open: true, angle: 1 }, grabbable: { fits: ['key'] },
     particles: { effect: 'fire', params: { count: 10 } }, picture: { src: 'store/a.png' }, sound: { src: 'store/a.mp3' }, story: { title: 't', text: 'x' },
     text: { text: 'hi', background: 0x202020 }, 'look-at': { target: '@viewer' }, 'look-at:head': { target: 'c1' },
     lock: true, hidden: true, disabled: true, label: 'nm', description: 'd', 'hesperus/material': { color: 1 }, physics: { kind: 'dynamic' }, home: { pos: [0, 0, 0] }, reactions: { push: { kind: 'push' } }, 'script:s': { paused: true }, 'local/recipe': { a: 1 } };
@@ -134,7 +134,7 @@ for (const [id, e] of ents) {
   check(`no part-scoped card is titled with a generator's node name (${titled} part cards in the corpus)`, rawTitles.length === 0, rawTitles.slice(0, 6).join(' | '));
 }
 {
-  const sw = { model: 'store/swing.glb', pos: [0, 0, 0], 'motion:tripo_part_fused_0': { type: 'pendulum', amp: 0.2 }, 'motion:tripo_part_fused_3': { type: 'spin' }, 'motion:seat_plank': { type: 'bob' } /* stored before the rename: reads as Oscillate */, 'motion:mesh7': { type: 'bob' } };
+  const sw = { model: 'store/swing.glb', pos: [0, 0, 0], 'motion:tripo_part_fused_0': { type: 'pendulum', amp: 0.2 }, 'motion:tripo_part_fused_3': { type: 'spin' }, 'motion:seat_plank': { type: 'oscillate' }, 'motion:mesh7': { type: 'oscillate' } };
   const titles = (live: any = {}) => inspectSchema(sw, 's', live).sections.list.filter((c: any) => c.part).map((c: any) => c.title);
   check('part cards: "Pendulum · part 1" for tripo_part_fused_0 (its number + 1), the modeller\'s own word kept ("seat plank"), mesh7 → part 8',
     JSON.stringify(titles()) === JSON.stringify(['Pendulum · part 1', 'Spin · part 4', 'Oscillate · seat plank', 'Oscillate · part 8']), JSON.stringify(titles()));

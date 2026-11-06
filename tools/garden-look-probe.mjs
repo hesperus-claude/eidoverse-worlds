@@ -13,10 +13,10 @@ try {
   await pg.waitForFunction(() => { const sp = document.getElementById('splash'); return !sp || sp.hidden || getComputedStyle(sp).display === 'none' || getComputedStyle(sp).opacity === '0'; }, null, { timeout: 150000 }).catch(() => console.log('   (splash still up after 150 s)'));
   await pg.waitForTimeout(4000);
   const r = await pg.evaluate(async () => {
-    const [n, s, rec, vd, w] = await Promise.all([import('/lib/net.js'), import('/lib/state.js'), import('/shared/protocol/view.js'), import('/shared/protocol/viewdiff.js'), import('/lib/world.js')]);
+    const [n, s, rec, vd, w] = await Promise.all([import('/lib/net.js'), import('/lib/state.js'), import('/shared/protocol/view.js'), import('/shared/viewdiff.js'), import('/lib/world.js')]);
     const d = vd.diffView(s.state.st, rec.viewState(n.replica.st));
     const ids = Object.keys(s.state.st.entities);
-    return { head: n.replica.head, things: ids.length, inScene: ids.filter((id) => w.entities.has(id)).length, diff: d.things.length + d.world.length, logs: n.replica.stats };
+    return { head: n.replica.seq, things: ids.length, inScene: ids.filter((id) => w.entities.has(id)).length, diff: d.things.length + d.world.length, logs: n.replica.stats };
   });
   console.log('  ', JSON.stringify(r));
   check('the page holds exactly the view of its own fold', r.things > 0 && r.diff === 0, JSON.stringify(r));
