@@ -12,6 +12,7 @@ import { ENGINE, scratch, copyTree } from "./common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -90,7 +91,7 @@ const diskFails = { on: false };   // D14: the log's writes fail while on
 function openWorld(name: string) {
   const logPath = path.join(root, "worlds", `${name}.jsonl`), storeDir = path.join(root, "store");
   const blobPath = (h: string) => path.join(storeDir, `${String(h).replace(/[^a-z0-9]/g, "-")}.json`);
-  return D.worldOf({ name, entries: F.readLog(readLogBytes(logPath)).map(D.posAt), getBlob: (h: string) => JSON.parse(fs.readFileSync(blobPath(h), "utf8")),
+  return D.worldOf({ catalogue: LAB_CATALOGUE, simModels: LAB_MODELS, name, entries: F.readLog(readLogBytes(logPath)).map(D.posAt), getBlob: (h: string) => JSON.parse(fs.readFileSync(blobPath(h), "utf8")),
     putBlob: (v: unknown) => { const s = F.jcs(v); const h = `sha256:${F.sha256(s)}`; putBlobFile(blobPath(h), s, h); return h; },
     now: () => pinned(), writeLine: (line: string) => { if (diskFails.on) throw new Error("EIO: injected (the log's disk)"); appendDurable(logPath, line); }, presence: { bodies: {}, holds: {} }, savePresence: () => {}, scripts: null,
     custody: custodyAt(path.join(root, "keys", "custody.json")), ...modLogAt(path.join(root, "worlds", `${name}.mod.jsonl`)) });
@@ -115,7 +116,7 @@ function session({ hull = HULL, seats = true }: any = {}) {
   return { call, board, sweep, w: Wd, st: () => Wd().state(), log: () => Wd().entries };
 }
 const show = (r: any) => (r?.crashed ? `CRASH ${r.crashed}` : r?.ok ? "ok" : `${r?.refused?.code}: ${String(r?.refused?.reason).slice(0, 160)}`);
-const commits = (s: any) => s.log().filter((e: any) => e.kind === "act" && e.verb === "drive-commit");
+const commits = (s: any) => s.log().filter((e: any) => e.kind === "request" && e.verb === "drive-commit");
 const posOf = (s: any, id = "hull") => s.st().entities[id]?.c.transform?.pos;
 
 let pass = 0, fail = 0;
@@ -265,7 +266,7 @@ await C("D23", "a builder's move of a driven hull stands: it lets the driver go,
   const s = session(); s.board("vic"); s.call("drive", { id: "hull", pos: [0, 1, 3], q: [0, 0, 0, 1] }, "vic");
   const moved = s.call("set", { id: "hull", component: "transform", value: tf([8, 1, 0]) }, "olive"), at = s.log().length;
   s.sweep(3100); s.sweep(3100);
-  const later = s.log().slice(at).filter((e: any) => e.kind === "act" && e.verb === "drive-commit");
+  const later = s.log().slice(at).filter((e: any) => e.kind === "request" && e.verb === "drive-commit");
   return [moved.ok && JSON.stringify(posOf(s)) === "[8,1,0]" && later.length === 0 && !s.w().presence.drives?.hull, { moved: show(moved), pos: posOf(s), later: later.map((e: any) => e.body), lease: s.w().presence.drives?.hull }]; });
 
 await C("D24", "a move that leaves the driver at the helm (their own edit) stands too: the lease goes on from the edited pose, so their next step is judged from there and the periodic commit writes the stream that went on from it", () => {

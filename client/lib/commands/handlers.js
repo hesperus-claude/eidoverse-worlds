@@ -41,7 +41,7 @@ import { getMe } from '../mybody.js';
 import { setMyReach, clearMyReach } from '../reachnet.js';
 import { SIM_ID } from '../../../shared/sim.js';
 import { send } from '../editwrites.js';   // roles, the door and moderation send record: false: they are not build edits, and Ctrl+Z must never revoke a grant or lift a ban
-import * as OP from '../../../shared/protocol/requests.js';
+import * as OP from '../../../shared/requests.js';
 import { canonicalPoint, CONTACT_POINTS } from '../../../shared/contact.js';
 import { TOUCH_GAP } from '../../../shared/reachwire.js';
 import { panelAlpha, setPanelAlpha } from '../stylepanel.js';
@@ -180,7 +180,7 @@ register('access', (arg) => {
   if (!door) return logChat('*', notADoor(a, worldComponents()));
   const ws = doorWrites(door, worldComponents());
   const ops = ws.map((w) => ({ verb: 'set', args: { id: '@world', component: w.component, value: w.value } }));
-  send(ops.length === 1 ? ops[0] : { verb: 'batch', args: { ops } }, { what: `make this world ${door === 'invite-only' ? 'invite-only' : door === 'watch' ? 'watch only' : door}`, record: false });
+  send(ops.length === 1 ? ops[0] : { verb: 'batch', args: { requests: ops } }, { what: `make this world ${door === 'invite-only' ? 'invite-only' : door === 'watch' ? 'watch only' : door}`, record: false });
 });
 register('members', () => showMembers());
 /** Who may come into this world, and until when: the door (shared/protocol/access.js) and everyone listed, from this

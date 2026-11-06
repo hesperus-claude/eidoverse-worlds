@@ -61,9 +61,9 @@ const MUTANTS: [string, string, string | [string, string, string?][], string, st
   ["motion: a path's points", "shared/protocol/authority/checks.js", "if (v.type === \"path\" && !(Array.isArray(v.points)", "if (false && !(Array.isArray(v.points)", ["M2"]],
   ["motion: a part's enums", "shared/protocol/authority/checks.js", "for (const [f, allowed] of Object.entries(COMPONENTS[comp.split(\":\")[0]]?.enums ?? {})) if (obj", "for (const [f, allowed] of Object.entries(COMPONENTS[comp]?.enums ?? {})) if (obj", ["M2"]],
   ["the orbit's period", "client/lib/motioneval.js", "if (Number.isFinite(m.period) && m.period > 0) return 360 / m.period;", "", ["M3"]],
-  ["the editor reads the rate as the evaluator does", "shared/protocol/descriptors.js", "Number.isFinite(m?.period) && m.period > 0 ? 360 / m.period : ", "", ["M3"]],
+  ["the editor reads the rate as the evaluator does", "shared/descriptors.js", "Number.isFinite(m?.period) && m.period > 0 ? 360 / m.period : ", "", ["M3"]],
   ["the importer: rpm → degPerSec", "tools/protocol/import-v1/translate-v1.js", "k === \"motion\" ? newMotion(v) : k === \"particles\"", "k === \"motion\" ? v : k === \"particles\"", ["M4"]],
-  ["the editor's rate drops the period", "shared/protocol/descriptors.js", "clears: ['rpm', 'period']", "clears: ['rpm']", ["M5"]],
+  ["the editor's rate drops the period", "shared/descriptors.js", "clears: ['rpm', 'period']", "clears: ['rpm']", ["M5"]],
   ["Add Path starts where it stands", "shared/editschema.js", "Path: { type: 'path', points: [p0, [p0[0], p0[1], round(p0[2] + 2, 4)]], speed: 1 } };", "Path: { type: 'path', points: [[0, 0, 0], [0, 0, 2]], speed: 1 } };", ["M5"]],
   ["help: physics.who's default", "shared/protocol/componentspec.js", "when it has no grabbable; default member)", "when it has no grabbable; default builder)", ["H1"]],
   ["help: punt's default", "shared/protocol/verbspec.js", "who may is physics.who (default member)", "who may is physics.who (default builder)", ["H1"]],
@@ -122,7 +122,7 @@ if (argv.includes("--control")) {
 const T = opt("tree") ?? ENGINE;
 const only = opt("only")?.split(",") ?? null;
 const imp = async (p: string) => { try { return await import(path.join(T, p)); } catch (e) { return { __err: String(e?.message ?? e) }; } };
-const D = await imp("shared/protocol/authority.js"), CAT = await imp("shared/protocol/componentspec.js"), LAB = await imp("shared/protocol/labmodels.js"), TS = await imp("shared/protocol/verbspec.js");
+const D = await imp("shared/protocol/authority.js"), CAT = await imp("shared/protocol/componentspec.js"), LAB = await import(ENGINE + "tools/protocol/labmodels.js"), TS = await imp("shared/protocol/verbspec.js");
 const SD = await imp("tools/protocol/scratchworld.ts"), TV1 = await imp("tools/protocol/import-v1/translate-v1.js"), FOLD = await imp("shared/protocol/fold.js");
 const ME = await imp("client/lib/motioneval.js"), ES = await imp("shared/editschema.js"), RF = await imp("shared/protocol/refusal.js");
 const S = suite("shiplist", { cap: 500 });

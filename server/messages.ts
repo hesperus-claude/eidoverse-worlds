@@ -20,10 +20,14 @@ import { REMOVED_VERBS } from "../shared/protocol/verbspec.js";
 import { serverBans, saveServerBans, banKey, ADDR_BAN_MS, bansLiftedBy, serverBansText, takePending, notPersisted } from "./moderation.ts";
 import { isOwner } from "../shared/protocol/roles.js";
 
-/** Who a presence message (puppet, bodydrag, typing) is FOR (H2): by actor id when the sender names one (`targetActor` /
- *  `toActor`) — an absent actor is absent, the name beside it is NOT a fallback — else by name (unique here). */
-const ACTOR_ID = /^u-[a-z2-7]{20}$/;
-/** The world's body-default as it stands now ({} when unset): the relay never reads the authority's synced copy. */
+/** Who a presence message (puppet, bodydrag, typing) is FOR (security pass 3, H2). A sender that knows the
+ *  identity names it by its opaque actor id (`targetActor` / `toActor` — every arrive carries one); then that identity's
+ *  embodied leg is the target, whatever name anyone wears, and an actor who isn't here is simply not here (the name
+ *  beside it is NOT a fallback: that would hand the message to whoever wears the name). A sender with no actor id (an
+ *  agent, an older client) still reaches by name — names are unique among the people here and, for accounts, across
+ *  the directory (server.ts join). A display name can't be shaped like an actor id (refused at join). */
+const ACTOR_ID = /^u-[a-z2-7]{20}(?:[a-z2-7]{4})?$/;
+/** The world's body-default as it stands now ({} when unset): the relay never reads the authority's synced copy (review full-260 #1). */
 const liveBodyDefault = (live: any) => live.state?.()?.entities?.["@world"]?.c?.["body-default"] ?? {};
 
 /** Body consent at the server (PROTOCOL §5): a presence act on someone else's body is checked against THEIR consent
@@ -427,7 +431,3 @@ MESSAGES["server-ban"] = MESSAGES["server-mod"];
 MESSAGES["server-unban"] = MESSAGES["server-mod"];
 MESSAGES["server-bans"] = MESSAGES["server-mod"];
 delete (MESSAGES as Record<string, unknown>)["server-mod"];
-// the old names run nothing: each is refused naming the new one until the date, then its entry goes (mcpl/tools.ts TOOL_RENAMED)
-export const MESSAGE_RENAMED_UNTIL = "2026-12-01";
-export const MESSAGE_RENAMED: Record<string, { to: string; until: string }> = Object.fromEntries(["ban", "unban", "bans"].map((k) => [`global-${k}`, { to: `server-${k}`, until: MESSAGE_RENAMED_UNTIL }]));
-for (const [old, { to }] of Object.entries(MESSAGE_RENAMED)) MESSAGES[old] = ({ ws }) => { ws.send(JSON.stringify({ type: "error", error: `"${old}" is now "${to}" — nothing ran` })); };

@@ -18,6 +18,7 @@ import path from "node:path";
 import { ENGINE, scratch } from "./common.ts";
 import { tryUntil, pause } from "./wait.ts";
 import { suite } from "./suite.ts";
+import { helloOf } from "../../shared/protocol/hello.js";
 
 const root = scratch("presence");
 const { ok, done } = suite("presence-check", { quiet: true, cap: 500 });
@@ -38,11 +39,11 @@ async function sock(name) {
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`); const msgs = [];
   ws.onmessage = (ev) => msgs.push(JSON.parse(String(ev.data)));
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
-  ws.send(JSON.stringify({ type: "join", world: "glade", id: name, avatar: "", replica: true }));
+  ws.send(JSON.stringify({ type: "join", hello: helloOf(), world: "glade", id: name, avatar: "", replica: true }));
   await tryUntil(`${name}'s join is answered`, () => msgs.some((m) => m.type === "snapshot" || m.type === "error"), { ms: 4000, step: 50 });
   const snap = msgs.find((m) => m.type === "snapshot");
   let rn = 0;
-  return { ws, msgs, snap, actor: snap?.cut?.you ?? null, send: (m) => ws.send(JSON.stringify(m)), close: () => ws.close(),
+  return { ws, msgs, snap, actor: snap?.actor ?? null, send: (m) => ws.send(JSON.stringify(m)), close: () => ws.close(),
     since: (k) => msgs.slice(k),
     at: (x, z) => ws.send(JSON.stringify({ type: "pose", pose: { p: [x, 0, z], yaw: 0, speed: 0, clip: "idle" } })),
     req: async (verb, args = {}) => { const id = `q${++rn}`; ws.send(JSON.stringify({ type: "request", id, verb, args }));

@@ -23,8 +23,10 @@ import { sha256, sha256Portable, utf8Hex } from "../../shared/protocol/hash.js";
 import { partSlot } from "../../shared/protocol/names.js";   // the node-motion slot: a naming function, as encName is
 import { readLog, fold as replica, opsOf, applyInPlace, emptyState } from "../../shared/protocol/fold.js";
 import { translate as translateV1, DROPPED, hasEpoch, puntedLives, lifeTracker } from "./import-v1/translate-v1.js";
+import { liftProjection } from "./import-v1/shapes.js";
 import { translate as translateD3 } from "./import-v1/translate-d3.js";
-import { simFold, DEFAULT_ENGINE } from "../../shared/protocol/simlayer.js";
+import { DEFAULT_ENGINE } from "../../shared/protocol/simlayer.js";
+import { simFold } from "./labmodels.js";   // the sim over the lab table (its logs name lab models)
 import { emptyState as v1Empty, foldEntry } from "./import-v1/fold.js";
 import * as eidosim from "./import-v1/eidosim-v1.js";   // HER engine (the first eidosim): what v1 logs mean
 import { localOf } from "../../shared/hierarchy.js";
@@ -71,7 +73,7 @@ for (const name of Object.keys(golden)) {
   // @11: nothing asks a reader to fly her engine (no launch, no digest), the world runs today's eidosim, and the live
   // host's sim layer (server/livehost.ts: no catalogue of its own) reads the whole history without a disagreement
   const sf = simFold(readLog(text(r.out)), Math.max(...r.out.map((e: any) => e.ts ?? 0)), { models: {} });
-  const flown = r.out.filter((e: any) => e.kind === "sim");
+  const flown = r.out.filter((e: any) => e.kind === "physics");
   check(`${name}: no launch or digest; the world runs ${DEFAULT_ENGINE}; its sim layer reads the history clean`,
     !flown.length && back.entities?.["@world"]?.c["physics-engine"]?.engine === DEFAULT_ENGINE && !sf.checks.disagree.length && !!sf.sim,
     JSON.stringify({ flown: flown.length, engine: back.entities?.["@world"]?.c["physics-engine"], checks: sf.checks }).slice(0, 240));
@@ -131,7 +133,7 @@ function oldNorm(st: any, phys: any = null) {
     // declared (translate-v1@5 DROPPED motion.rpm): a spin's rpm is degPerSec = rpm × 6 (degPerSec wins when both were written)
     if (n.comp) for (const [k, m] of Object.entries<any>(n.comp)) if ((k === "motion" || k.startsWith("motion:")) && m && typeof m === "object" && "rpm" in m) {
       const { rpm, ...r } = m; n.comp[k] = r.degPerSec !== undefined || typeof rpm !== "number" ? r : { ...r, degPerSec: rpm * 6 }; }
-    // declared (translate-v1@12, the shape audit's physics-motion family), written independently of shared/protocol/shaperepair.js:
+    // declared (translate-v1@12, the shape audit's physics-motion family), written independently of tools/protocol/import-v1/shapes.js:
     // a bare motion naming a part is motion:<part> (a keyed one already there wins); amplitude is amp; a letter axis its
     // vector; a pendulum with no period, damp or maxAmp read 3.5 s, 0 and 1.1 (R 10-27: the old push cap); a whole motion's pivot is the thing's pivot; a whole
     // pendulum with no pivot swung about [0, 2, 0]; collider exact is mesh
@@ -195,7 +197,7 @@ function oldNorm(st: any, phys: any = null) {
   if (world.sky && typeof world.sky === "object") { const { seq, by, ...sky } = world.sky;
     if (sky.forecast && typeof sky.forecast === "object") { const { seq: _s, by: _b, ...fc } = sky.forecast; sky.forecast = fc; }
     world.sky = sky; }
-  // declared (translate-v1@12, the shape audit's render-media-env family), written independently of shared/protocol/shaperepair.js:
+  // declared (translate-v1@12, the shape audit's render-media-env family), written independently of tools/protocol/import-v1/shapes.js:
   // the sky's clock is a tz (clock 'real' + its parked clock as hours/rate/ts; no clock, no tz), azimuth radians, transition
   // and the forecast's dwell/transition, sun/fill/world gone, the registry's defaults written; the terrain's layer colours
   // ints, the sim's defaults (terrainmath.js) written, its water the water component; grass through the reader's mapping,
@@ -318,7 +320,10 @@ for (const p of logs.sort()) {
   const back = replica(readLog(text(r.out)));
   const m = back.diagnostics.filter(([, k]: any) => k.startsWith("malformed")); malformed += m.length;
   check(`${name}: strict read-back ok, 0 malformed`, back.status === "ok" && !m.length, JSON.stringify(m.slice(0, 3)));
-  check(`${name}: the read-back fold equals the translator's final projection`, back.status === "ok" && c(Object.fromEntries(Object.keys(back.entities).map((id) => [id, back.entities[id].c]))) === c(r.final.v1));
+  // …with v1's socket maps lifted as the translation's tail lifts them (translate-v1@46), from the ids made before them
+  { const lift = r.out.findIndex((e: any) => e.kind === "request" && e.verb === "lift-sockets" && e.actor === "system"); const ever = new Set<string>();
+    for (const e of lift < 0 ? r.out : r.out.slice(0, lift)) if (e.kind === "change") for (const o of opsOf(e)) if (o.op === "create") ever.add(o.id);
+    check(`${name}: the read-back fold equals the translator's final projection, lifted`, back.status === "ok" && c(Object.fromEntries(Object.keys(back.entities).map((id) => [id, back.entities[id].c]))) === c(liftProjection(r.final.v1, ever).lifted)); }
   // the inverse, aligned by act: the k-th act/say in the log is the k-th non-genesis old entry
   const body = L.filter((e: any) => e.verb !== "genesis"); const every = body.length > 2000 ? 250 : 1;
   const v1 = v1Empty(); const now = emptyState(); let k = -1, loss: any = null;
@@ -331,7 +336,8 @@ for (const p of logs.sort()) {
     for (const id of Object.keys(phys.restAt)) if (!phys.sim.bodies[id]) delete phys.restAt[id]; };
   const compareAt = (i: number) => { if (loss || i < 0) return; if (i % every && i !== body.length - 1) return; const x = lossAt(v1, now, phys); if (x) loss = { oldSeq: body[i].seq, ...x }; };
   for (let s = 1; s < r.out.length && !loss; s++) { const e = r.out[s];
-    if ((e.kind === "act" && e.verb !== "translated" && !(e.verb === "repair-shapes" && e.actor === "system")) || e.kind === "say") { // `translated` (genesis's companion, translate-v1@3) and the repair marker beside it have no old entry
+    if (e.kind === "request" && e.verb === "lift-sockets" && e.actor === "system") break;   // @46: the socket lifts at the tail answer no old entry, and the inverse reads v1's maps
+    if ((e.kind === "request" && e.verb !== "translated") || e.kind === "say") { // `translated` (genesis's companion, translate-v1@3) has no old entry
       if (phys && Number.isInteger(body[k + 1]?.ts)) settle(eidosim.tickOf(phys.sim, body[k + 1].ts));   // her rests up to the next act are logged before it
       compareAt(k); k++; alive.step(body[k]); foldEntry(v1, body[k]);
       if (phys) { eidosim.simEntry(phys.sim, body[k], v1); settle(phys.sim.tick); } }
@@ -343,8 +349,10 @@ for (const p of logs.sort()) {
   if (!loss && k !== body.length - 1) loss = { truncated: { consumed: k + 1, of: body.length } };
   if (loss) lossy++;
   // the authority takes the translated world as it is: every component of every thing passes the catalogue (a v1 key a
-  // closed component doesn't define rides beside it as imported:<component>, so nothing is refused at the first edit)
-  { const bad: string[] = []; for (const [id, comps] of Object.entries<any>(r.final.translated)) for (const [k, v] of Object.entries<any>(comps)) {
+  // closed component doesn't define rides beside it as imported:<component>, so nothing is refused at the first edit). The
+  // world as written, after the tail lift: the pre-lift projection still holds v1's sockets maps, a word only the translator knows
+  { const bad: string[] = []; const written = replica(readLog(r.out.map((e: any) => JSON.stringify(e)).join("\n") + "\n")).entities ?? {};
+    for (const [id, { c: comps }] of Object.entries<any>(written)) for (const [k, v] of Object.entries<any>(comps)) {
       const why = schemaRefusal(k, v); if (why) bad.push(`${id}.${k}: ${why}`); }
     check(`${name}: the authority's catalogue takes every translated component as it is`, !bad.length, bad.slice(0, 4)); }
   check(`${name}: the projection loses nothing (independent inverse vs the engine fold${every > 1 ? `, every ${every}` : ", every entry"})`, !loss, JSON.stringify(loss).slice(0, 400));

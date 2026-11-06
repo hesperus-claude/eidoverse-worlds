@@ -16,6 +16,7 @@ import { WorldScripts, type ScriptHost } from "./scripts.ts";
 import type { HnSession } from "./auth.ts";
 import { gateReach } from "./reachgate.ts";
 import { WORLD_NAME_RE } from "./limits.ts";
+import { accessTrace } from "./worldindex.ts";
 
 // The settle rule (what a pose looks like TO SOMEONE ELSE) lives in server.ts, where source-text gates pin it (§15.1);
 // the log needs it for rememberPose, so it arrives by injection at boot.
@@ -164,7 +165,7 @@ export class World {
     // server-side.
     this.scripts = new WorldScripts(this.log);
     this.scripts.sync();
-    console.log(`[world:${name}] loaded — ${Object.keys(this.state.entities).length} things, head ${this.log.head}, `
+    console.log(`[world:${name}] loaded — ${Object.keys(this.state.entities).length} things, seq ${this.log.seq}, `
       + `${Object.keys(this.poses).length} remembered poses`);
   }
   private openLog(): WorldLog {
@@ -234,7 +235,7 @@ let dirs = new Set<string>(), dirsAt = 0;
 export function getWorld(name: string): World {
   if (!WORLD_NAME_RE.test(name)) throw new Error(`bad world name: ${name}`);
   let w = worlds.get(name);
-  if (!w) { w = new World(name); worlds.set(name, w); }
+  if (!w) { accessTrace("load", name); w = new World(name); worlds.set(name, w); }
   return w;
 }
 

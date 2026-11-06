@@ -74,15 +74,15 @@ await C("J4", "a set of 2^65 is refused by the authority as a shape, with a fix 
   return [!r.ok && r.refused.code === "shape" && /I-JSON/.test(r.refused.reason) && !!r.refused.fix, r]; });
 
 // ---- S: the spec says what the readers do (L3) ----
-await C("S1", "`by` is in the envelope table as a legacy field readers ignore", () => {
+await C("S1", "`by` is no envelope field (D4, minor 1): the envelope table has no row for it, and the spec says the stranger rule applies", () => {
   const table = SPEC.slice(SPEC.indexOf("**The envelope.**"), SPEC.indexOf("**The kinds.**"));
-  return [/^\| `by` \|.*ignore/im.test(table), table.split("\n").filter((l) => l.startsWith("|")).map((l) => l.slice(0, 30))]; });
+  return [!/^\| `(by|for|grant)` \|/im.test(table) && /`for`.*`grant`.*`by`|`by`.*unknown/is.test(table), table.split("\n").filter((l) => l.startsWith("|")).map((l) => l.slice(0, 30))]; });
 
-await C("S2", "the spec carries the alpha note (no guarantee, we try not to break, repair paths) and §9.2's component conventions", () => {
+await C("S2", "the spec carries the alpha note (no guarantee, we try not to break, a translator for a break) and §9.2's component conventions", () => {
   const alpha = SPEC.slice(SPEC.indexOf("**Alpha.**"), SPEC.indexOf("## 0."));
   const conv = SPEC.slice(SPEC.indexOf("### 9.2 Component conventions"), SPEC.indexOf("## 10."));
   const need = ["metres, kilograms, seconds", "epoch milliseconds", "radians", "[x, y, z, w]", "3-vectors", "names its frame", "sRGB", "content addresses", "drops that field", "current default", "never written whole", "No person data", "refPaths", "role id", "falloff", "required"];
-  return [/about a year/.test(alpha) && /no guarantee/i.test(alpha) && /repair/.test(alpha) && need.every((n) => conv.includes(n)), need.filter((n) => !conv.includes(n))]; });
+  return [/about a year/.test(alpha) && /no guarantee/i.test(alpha) && /log translator/.test(alpha) && need.every((n) => conv.includes(n)), need.filter((n) => !conv.includes(n))]; });
 
 // ---- C: citations (M5) ----
 // every "§N" or "§N.M" inside a string literal of the files whose words reach people and agents names a heading of
@@ -185,7 +185,7 @@ await C("K6", "the import README documents the Commons translation (no founder k
 
 await C("K7", "no account subject is written (PROTOCOL §9.2): without a mapper the translation's roles:janus has no sub and the imported grant act's args don't either; the door refuses roles {sub}", () => {
   const r = TV1.translate(v1commons()); const w = r.final.translated["@world"];
-  const acts = r.out.filter((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === "grant");
+  const acts = r.out.filter((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === "grant");
   const W = world(); const sub = W.call("set", { id: "@world", component: "roles:vic", value: { role: "member", sub: "human:discord:9" } });
   return [w[`roles:${TV1.enc("janus")}`]?.role === "owner" && !("sub" in w[`roles:${TV1.enc("janus")}`]) && acts.length >= 4 && !JSON.stringify(acts).includes("human:discord") && !sub.ok && sub.refused.code === "schema"
     && translatorVersion(TV1.TRANSLATOR) >= 14 && translatorVersion(TV1.TRANSLATOR_SIM) >= 14, [w[`roles:${TV1.enc("janus")}`], acts.map((a: any) => a.body.args), sub.refused, TV1.TRANSLATOR]]; });
@@ -208,7 +208,7 @@ await C("K8", "no account subject is written wherever it sits (PROTOCOL §9.2): 
   const sign = (r: any) => [act(r, "comp", "rock_1")?.data, Object.values(r.final.translated[TV1.enc("rock_1")] ?? {}).find((v: any) => v?.title === SIGN.title)];
   const signKept = (r: any) => sign(r).every((v: any) => JSON.stringify(v) === JSON.stringify(SIGN));
   const leaked = (r: any) => JSON.stringify(r.out).includes("human:discord");
-  const act = (r: any, verb: string, id: string) => r.out.find((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === verb && e.body.args?.id === id)?.body.args;
+  const act = (r: any, verb: string, id: string) => r.out.find((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === verb && e.body.args?.id === id)?.body.args;
   const binding = (r: any) => Object.values(r.final.translated["@world"] ?? {}).find((v: any) => v?.src === SRC) as any;
   const janus = idOf("human:discord:1");
   const mp = act(mapped, "spawn", "lamp_2")?.placer, pp = act(plain, "spawn", "lamp_2")?.placer, mb = binding(mapped), pb = binding(plain);
@@ -216,7 +216,7 @@ await C("K8", "no account subject is written wherever it sits (PROTOCOL §9.2): 
     && pp?.id === "janus" && !("sub" in pp) && !("bySub" in (act(plain, "behavior", "bell") ?? { bySub: 1 })) && pb && !("authorSub" in pb)
     && act(mapped, "grant", "janus")?.sub === janus && mp?.sub === janus && act(mapped, "behavior", "bell")?.bySub === janus
     && mb?.author === janus && !("authorSub" in mb) && mapped.final.translated["@world"][`roles:${janus}`]?.role === "owner"
-    && TV1.accountIn(plain.out) === null && TV1.accountIn(mapped.out) === null && TV1.accountIn(log.map((e) => ({ kind: "act", verb: "imported", body: { verb: e.verb, args: e.args } })))?.path === "body.args.sub"
+    && TV1.accountIn(plain.out) === null && TV1.accountIn(mapped.out) === null && TV1.accountIn(log.map((e) => ({ kind: "request", verb: "imported", body: { verb: e.verb, args: e.args } })))?.path === "body.args.sub"
     && signKept(plain) && signKept(mapped) && !asked.some((s) => [SIGN.sub, SIGN.menuSub].includes(s)),
     { plain: { leaked: leaked(plain), placer: pp, binding: pb, sign: sign(plain) }, mapped: { leaked: leaked(mapped), placer: mp, binding: mb, grant: act(mapped, "grant", "janus"), janus, sign: sign(mapped) }, asked, accountIn: typeof TV1.accountIn }]; });
 await C("K9", "K8 through the writer with the real identity mapper (translateV1World): the written log carries no account, the one person the log knows by an account is one identity holding it (their grant's role, their placer, their binding's author), the sign's sub is kept, and no identity is minted from it", async () => {
@@ -232,7 +232,7 @@ await C("K9", "K8 through the writer with the real identity mapper (translateV1W
   const text = fs.readFileSync(path.join(W, "new", "world.jsonl"), "utf8"); const lines = text.split("\n").filter(Boolean).map((l: string) => JSON.parse(l));
   const ann = Object.entries<any>(r.planned).filter(([, e]) => (e.subs ?? []).includes("human:discord:42")).map(([id]) => id);
   const minted = Object.values<any>(r.planned).filter((e) => (e.subs ?? []).some((s: string) => [SIGN.sub, SIGN.menuSub].includes(s)));
-  const args = (verb: string) => lines.find((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === verb)?.body?.args;
+  const args = (verb: string) => lines.find((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === verb)?.body?.args;
   const st = FOLD.fold(FOLD.readLog(text)); const w = st.entities?.["@world"]?.c ?? {};
   const binding: any = Object.values(w).find((v: any) => v?.src === SRC);
   const signed = Object.values<any>(st.entities?.[TV1.enc("lamp_1")]?.c ?? {}).find((v: any) => v?.title === SIGN.title);
@@ -253,7 +253,7 @@ await C("K10", "an account in a value that nothing beside it names is resolved b
   const text = fs.readFileSync(path.join(W, "new", "world.jsonl"), "utf8"); const lines = text.split("\n").filter(Boolean).map((l: string) => JSON.parse(l));
   const idHolding = (s: string) => Object.entries<any>(r.planned).filter(([, e]) => (e.subs ?? []).includes(s)).map(([id]) => id);
   const antra = Object.entries<any>(r.planned).filter(([, e]) => e.name === "antra").map(([id]) => id), other = idHolding("human:discord:9");
-  const after = lines.find((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === "spawn" && e.body.args?.id === "lamp_1");
+  const after = lines.find((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === "spawn" && e.body.args?.id === "lamp_1");
   const w = FOLD.fold(FOLD.readLog(text)).entities?.["@world"]?.c ?? {};
   return [antra.length === 1 && other.length === 1 && antra[0] !== other[0] && after?.actor === antra[0] && w[`roles:${antra[0]}`]?.role === "owner" && !w[`roles:${other[0]}`]
     && !/human:discord/.test(text),
@@ -279,10 +279,10 @@ await C("K11", "a name is joined to an account only where v1's server wrote the 
   const text = fs.readFileSync(path.join(W, "new", "world.jsonl"), "utf8"); const lines = text.split("\n").filter(Boolean).map((l: string) => JSON.parse(l));
   const ann = Object.entries<any>(r.planned).filter(([, e]) => e.name === "Ann").map(([id]) => id);
   const bob = Object.entries<any>(r.planned).filter(([, e]) => (e.subs ?? []).includes(BOB)).map(([id]) => id);
-  const spawn = (id: string) => lines.find((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === "spawn" && e.body.args?.id === id);
+  const spawn = (id: string) => lines.find((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === "spawn" && e.body.args?.id === id);
   const w = FOLD.fold(FOLD.readLog(text)).entities?.["@world"]?.c ?? {};
   // every change, a batch or a single op (fold.js opsOf)
-  const roleDeletes = lines.filter((e: any) => e.kind === "change").flatMap((e: any) => FOLD.opsOf(e)).filter((o: any) => o.verb === "delete" && String(o.comp ?? o.component ?? "").startsWith("roles:"));
+  const roleDeletes = lines.filter((e: any) => e.kind === "change").flatMap((e: any) => FOLD.opsOf(e)).filter((o: any) => o.op === "delete" && String(o.comp ?? o.component ?? "").startsWith("roles:"));
   const authors = Object.values<any>(w).filter((v) => v?.src === SRC).map((v) => v.author);
   return [ann.length === 1 && bob.length === 1 && ann[0] !== bob[0] && r.planned[bob[0]].name === "bob"
     && spawn("lamp_1")?.actor === ann[0] && spawn("board_1")?.actor === bob[0] && spawn("board_1")?.body?.args?.placer?.sub === bob[0]
@@ -301,8 +301,8 @@ await C("K12", "an old genesis whose roles carry an account translates (translat
   if (threw) return [false, { threw }];
   const text = fs.readFileSync(path.join(W, "new", "world.jsonl"), "utf8"); const lines = text.split("\n").filter(Boolean).map((l: string) => JSON.parse(l));
   const ann = Object.entries<any>(r.planned).filter(([, e]) => (e.subs ?? []).includes(ANN)).map(([id]) => id);
-  const from = lines.find((e: any) => e.kind === "act" && e.verb === "translated")?.body?.from;
-  const spawn = lines.find((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === "spawn");
+  const from = lines.find((e: any) => e.kind === "request" && e.verb === "translated")?.body?.from;
+  const spawn = lines.find((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === "spawn");
   // (v1's fold never granted a genesis role: only the identity is read from it, before the translation, world.ts)
   return [ann.length === 1 && from?.roles?.Ann?.sub === ann[0] && from?.roles?.Ann?.role === "owner" && spawn?.actor === ann[0] && !/human:discord/.test(text),
     { ann, from: from?.roles, spawn: spawn?.actor, planned: r.planned, leaked: /human:discord/.test(text) }]; });
@@ -321,13 +321,13 @@ await C("K13", "a component named as an account is (ownerSub) whose whole value 
   let r: any; try { r = translateV1World(src, path.join(W, "new")); } catch (e: any) { return [false, { threw: String(e?.message ?? e).slice(0, 300) }]; }
   const text = fs.readFileSync(path.join(W, "new", "world.jsonl"), "utf8"); const lines = text.split("\n").filter(Boolean).map((l: string) => JSON.parse(l));
   const ann = Object.entries<any>(r.planned).filter(([, e]) => (e.subs ?? []).includes(ANN)).map(([id]) => id);
-  const comps = lines.filter((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === "comp").map((e: any) => e.body.args);
+  const comps = lines.filter((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === "comp").map((e: any) => e.body.args);
   const lamp = FOLD.fold(FOLD.readLog(text)).entities?.[TV1.enc("lamp_1")]?.c ?? {};
   const hex = (n: string) => "x--" + Buffer.from(n, "utf8").toString("hex");
-  const seen = [TV1.accountIn([{ seq: 7, kind: "change", ops: [{ verb: "set", id: "x", comp: "ownerSub", value: ANN }] }]), TV1.accountIn([{ seq: 8, body: { verb: "comp", args: { id: "x", type: "ownerSub", data: ANN } } }]),
-    TV1.accountIn([{ seq: 9, ops: [{ verb: "set", id: "x", comp: "menuSub", value: "soup today" }] }]),
+  const seen = [TV1.accountIn([{ seq: 7, kind: "change", ops: [{ op: "set", id: "x", comp: "ownerSub", value: ANN }] }]), TV1.accountIn([{ seq: 8, body: { verb: "comp", args: { id: "x", type: "ownerSub", data: ANN } } }]),
+    TV1.accountIn([{ seq: 9, ops: [{ op: "set", id: "x", comp: "menuSub", value: "soup today" }] }]),
     // the name as the log writes it: under a namespace, escaped, or as `component`
-    TV1.accountIn([{ seq: 10, ops: [{ verb: "set", id: "x", comp: `new/${hex("ownerSub")}`, value: ANN }] }]), TV1.accountIn([{ seq: 11, ops: [{ verb: "set", id: "x", component: "imported/ownerSub", value: ANN }] }])];
+    TV1.accountIn([{ seq: 10, ops: [{ op: "set", id: "x", comp: `new/${hex("ownerSub")}`, value: ANN }] }]), TV1.accountIn([{ seq: 11, ops: [{ op: "set", id: "x", component: "imported/ownerSub", value: ANN }] }])];
   // the component itself is gone, not only its value: no name of the lamp's reads as ownerSub
   const names = Object.keys(lamp).map((k) => TV1.dec?.(k.slice(k.lastIndexOf("/") + 1)) ?? k);
   return [ann.length === 1 && !/human:discord/.test(text) && comps[0]?.data === ann[0] && comps[1]?.data === "soup today" && comps[2]?.data === ann[0]
@@ -344,7 +344,7 @@ await C("K14", "a private server's local: account is an account (translateV1Worl
   const r = translateV1World(src, path.join(W, "new"));
   const text = fs.readFileSync(path.join(W, "new", "world.jsonl"), "utf8"); const lines = text.split("\n").filter(Boolean).map((l: string) => JSON.parse(l));
   const ann = Object.entries<any>(r.planned).filter(([, e]) => (e.subs ?? []).includes("local:ann")).map(([id]) => id);
-  const spawn = lines.find((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === "spawn");
+  const spawn = lines.find((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === "spawn");
   return [ann.length === 1 && spawn?.body?.args?.placer?.sub === ann[0] && !/local:ann/.test(text) && TV1.accountIn([{ seq: 3, args: { placer: { id: "x", sub: "local:x" } } }])?.seq === 3,
     { ann, placer: spawn?.body?.args?.placer, planned: r.planned, leaked: /local:ann/.test(text) }]; });
 
@@ -358,8 +358,8 @@ await C("K15", "a person v1 knew by an aid1 account is one identity (translateV1
   const r = translateV1World(src, path.join(W, "new"));
   const text = fs.readFileSync(path.join(W, "new", "world.jsonl"), "utf8"); const lines = text.split("\n").filter(Boolean).map((l: string) => JSON.parse(l));
   const zeds = Object.entries<any>(r.planned).filter(([, e]) => e.name === "zed" || (e.subs ?? []).includes(ZED)).map(([id]) => id);
-  const spawns = lines.filter((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === "spawn").map((e: any) => e.actor);
-  const from = lines.find((e: any) => e.kind === "act" && e.verb === "translated")?.body?.from;
+  const spawns = lines.filter((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === "spawn").map((e: any) => e.actor);
+  const from = lines.find((e: any) => e.kind === "request" && e.verb === "translated")?.body?.from;
   return [zeds.length === 1 && r.planned[zeds[0]].subs?.includes(ZED) && spawns.every((a: string) => a === zeds[0])
     && from?.roles?.[zeds[0]]?.role === "builder" && !text.includes(ZED) && TV1.accountIn([{ seq: 4, body: { roles: { [ZED]: { role: "builder" } } } }])?.seq === 4,
     { zeds, planned: r.planned, spawns, from: from?.roles, leaked: text.includes(ZED) }]; });
@@ -379,7 +379,7 @@ await C("K16", "a ban keyed by an account that the old fold lowercased is that a
   const holding = (s: string) => Object.entries<any>(r.planned).filter(([, e]) => (e.subs ?? []).includes(s)).map(([id]) => id);
   const alice = holding(ALICE), carol = holding(CAROL), lower = holding(ALICE.toLowerCase());
   const w = FOLD.fold(FOLD.readLog(text)).entities?.["@world"]?.c ?? {};
-  const spawn = lines.find((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === "spawn");
+  const spawn = lines.find((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === "spawn");
   return [alice.length === 1 && !lower.length && w[`roles:${alice[0]}`]?.role === "builder" && w[`imported-bans:${alice[0]}`] !== undefined
     && carol.length === 1 && spawn?.actor === carol[0] && w[`imported-bans:${carol[0]}`] !== undefined && Object.keys(r.planned).length === 2,
     { alice, lower, carol, planned: r.planned, spawn: spawn?.actor, keys: Object.keys(w).filter((k) => /roles:|bans:/.test(k)) }]; });
@@ -401,7 +401,7 @@ await C("K17", "an old request names a person by their account (translateV1World
   const text = fs.readFileSync(path.join(W, "new", "world.jsonl"), "utf8"); const lines = text.split("\n").filter(Boolean).map((l: string) => JSON.parse(l));
   const holding = (a: string) => Object.entries<any>(r.planned).filter(([, e]) => (e.subs ?? []).includes(a)).map(([id]) => id);
   const zoe = holding(ZOE), bob = holding(BOB), ann = Object.entries<any>(r.planned).filter(([, e]) => e.name === "Ann").map(([id]) => id);
-  const acts = (verb: string) => lines.filter((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === verb);
+  const acts = (verb: string) => lines.filter((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === verb);
   const lamp = acts("spawn").find((e: any) => e.body.args?.id === "lamp_1");
   return [zoe.length === 1 && ["grant", "ban", "unban"].every((v) => acts(v).some((e: any) => e.body.args?.id === zoe[0]))
     && ann.length === 1 && !(r.planned[ann[0]].subs ?? []).length && lamp?.actor === ann[0] && acts("comp")[0]?.body?.args?.sub === bob[0]
@@ -417,8 +417,8 @@ await C("K18", "the pairs v1's server stamped join a name to its account before 
   const r = translateV1World(src, path.join(W, "new"));
   const text = fs.readFileSync(path.join(W, "new", "world.jsonl"), "utf8"); const lines = text.split("\n").filter(Boolean).map((l: string) => JSON.parse(l));
   const dee = Object.entries<any>(r.planned).filter(([, e]) => e.name === "dee" || (e.subs ?? []).includes(DEE)).map(([id]) => id);
-  const actors = lines.filter((e: any) => e.kind === "act" && e.verb === "imported").map((e: any) => e.actor);
-  const light = lines.find((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === "light");
+  const actors = lines.filter((e: any) => e.kind === "request" && e.verb === "imported").map((e: any) => e.actor);
+  const light = lines.find((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === "light");
   return [dee.length === 1 && r.planned[dee[0]].subs?.includes(DEE) && actors.length === 2 && actors.every((a: string) => a === dee[0]) && light?.body?.args?.placer?.sub === dee[0] && !text.includes(DEE),
     { dee, actors, planned: r.planned, placer: light?.body?.args?.placer }]; });
 await C("K19", "with no identity mapper (the pure translation), every account is dropped where it sits: a genesis role's sub, a component an account names and fills (under a name read as written where it isn't a real escape), an entry keyed by an account, an old grant's, ban's and unban's id; and with a mapper an entry keyed by an account whose id is already a key keeps that one", () => {
@@ -434,7 +434,7 @@ await C("K19", "with no identity mapper (the pure translation), every account is
     { seq: 6, ts: 7, actor: "world", verb: "ban", args: { id: ANN, reason: "spam" } },
     { seq: 7, ts: 8, actor: "world", verb: "unban", args: { id: ANN } }];
   const pure = TV1.translate(log); const ptext = pure.out.map((e: any) => JSON.stringify(e)).join("\n");
-  const personArgs = pure.out.filter((e: any) => e.kind === "act" && ["grant", "ban", "unban"].includes(e.body?.verb)).map((e: any) => e.body.args);
+  const personArgs = pure.out.filter((e: any) => e.kind === "request" && ["grant", "ban", "unban"].includes(e.body?.verb)).map((e: any) => e.body.args);
   const st = FOLD.fold(FOLD.readLog(ptext + "\n")); const lamp = st.entities?.[TV1.enc("lamp_1")]?.c ?? {};
   const ledger: any = Object.values(lamp).find((v: any) => v && typeof v === "object" && v.note === "kept");
   // a mapper whose id for ANN is fixed, so a map can already hold it as a key beside the account
@@ -456,7 +456,7 @@ await C("K20", "a person whose name begins local: is a name, not an account (tra
   const text = fs.readFileSync(path.join(W, "new", "world.jsonl"), "utf8"); const lines = text.split("\n").filter(Boolean).map((l: string) => JSON.parse(l));
   const ann = Object.entries<any>(r.planned).filter(([, e]) => e.name === "local:ann").map(([id]) => id);
   const w = FOLD.fold(FOLD.readLog(text)).entities?.["@world"]?.c ?? {};
-  const spawn = lines.find((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === "spawn");
+  const spawn = lines.find((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === "spawn");
   return [ann.length === 1 && Object.keys(r.planned).length === 1 && !(r.planned[ann[0]].subs ?? []).length && spawn?.actor === ann[0] && w[`roles:${ann[0]}`]?.role === "builder",
     { ann, planned: r.planned, spawn: spawn?.actor, roles: Object.keys(w).filter((k) => k.startsWith("roles:")) }]; });
 await C("K21", "the sweep's independent reading agrees with the translator on accounts (tools/protocol/sweep.ts over a world with a local: placer, an entry keyed by an account, a component an account names and fills, its only one, the same under an escaped name, a role and a ban kept by their account, a ban by someone named by their account, and a local: account in a kept value): no loss, and the snapshot oracle's reading of the directory finds a local: sub's person", async () => {
@@ -508,7 +508,7 @@ await C("K22", "a ban's key, which the old fold lowercased, is the person it nam
   const named = (n: string) => Object.entries<any>(r.planned).filter(([, e]) => e.name === n).map(([id]) => id);
   const holding = (a: string) => Object.entries<any>(r.planned).filter(([, e]) => (e.subs ?? []).includes(a)).map(([id]) => id);
   const ann = named("Ann"), alice = holding(ALICE), zed = named("Zed");
-  const ids = (verb: string) => lines.filter((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === verb).map((e: any) => e.body.args?.id);
+  const ids = (verb: string) => lines.filter((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === verb).map((e: any) => e.body.args?.id);
   const w = FOLD.fold(FOLD.readLog(text)).entities?.["@world"]?.c ?? {};
   return [ann.length === 1 && !named("ann").length && w[`imported-bans:${ann[0]}`] !== undefined
     && alice.length === 1 && !holding(ALICE.toLowerCase()).length && ids("ban").includes(alice[0]) && ids("unban")[0] === alice[0]
@@ -533,7 +533,7 @@ await C("K23", "the snapshot oracle reads the translated world's people as the i
   const text = fs.readFileSync(path.join(W, "worlds", "new", "world.jsonl"), "utf8"); const lines = text.split("\n").filter(Boolean).map((l: string) => JSON.parse(l));
   const holding = (a: string) => Object.entries<any>(r.planned).filter(([, e]) => (e.subs ?? []).includes(a)).map(([id]) => id);
   const alice = holding(ALICE), acct = holding("local:ann"), named = Object.entries<any>(r.planned).filter(([, e]) => e.name === "local:ann").map(([id]) => id);
-  const lamp2 = lines.find((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === "spawn" && e.body.args?.id === "lamp_2");
+  const lamp2 = lines.find((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === "spawn" && e.body.args?.id === "lamp_2");
   const o = OR.whoFrom(path.join(W, "worlds"));
   const got = { ban: o.who(ALICE.toLowerCase(), { lowered: true }), name: o.who("local:ann", {}), sub: o.who("someone", { sub: "local:ann" }) };
   return [alice.length === 1 && acct.length === 1 && named.length === 1 && acct[0] !== named[0] && !(r.planned[named[0]].subs ?? []).length && lamp2?.actor === named[0]
@@ -553,11 +553,11 @@ await C("K24", "an account's place in a request is read as the scrub reads it (t
   let r: any; try { r = translateV1World(src, path.join(W, "new")); } catch (e: any) { return [false, { threw: String(e?.message ?? e).slice(0, 300) }]; }
   const text = fs.readFileSync(path.join(W, "new", "world.jsonl"), "utf8"); const lines = text.split("\n").filter(Boolean).map((l: string) => JSON.parse(l));
   const a = Object.entries<any>(r.planned).filter(([, e]) => (e.subs ?? []).includes(A)).map(([id]) => id);
-  const act = (verb: string, id: string) => lines.find((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === verb && e.body.args?.id === id);
-  const comps = lines.filter((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === "comp").map((e: any) => e.body.args?.data);
+  const act = (verb: string, id: string) => lines.find((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === verb && e.body.args?.id === id);
+  const comps = lines.filter((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === "comp").map((e: any) => e.body.args?.data);
   const board = FOLD.fold(FOLD.readLog(text)).entities?.[TV1.enc("board_1")]?.c ?? {};
   const ledger: any = Object.values(board).find((v: any) => v && typeof v === "object" && v.note === "kept");
-  const pureOut = TV1.translate(log).out, pureAct = (verb: string, id: string) => pureOut.find((e: any) => e.kind === "act" && e.body?.verb === verb && e.body.args?.id === id);
+  const pureOut = TV1.translate(log).out, pureAct = (verb: string, id: string) => pureOut.find((e: any) => e.kind === "request" && e.body?.verb === verb && e.body.args?.id === id);
   const pure = pureAct("spawn", "board_1");
   // with no mapper, a placer named by their account loses both, its name and its account
   const purePlacers = [pureAct("spawn", "lamp_1"), pureAct("light", "glow_1")].map((e: any) => e?.body?.args?.placer);
@@ -590,7 +590,7 @@ await C("K26", "a grant and a ban keyed by an account beside the sub the server 
   const text = fs.readFileSync(path.join(W, "new", "world.jsonl"), "utf8"); const lines = text.split("\n").filter(Boolean).map((l: string) => JSON.parse(l));
   const holding = (s: string) => Object.entries<any>(r.planned).filter(([, e]) => (e.subs ?? []).includes(s)).map(([id]) => id);
   const a = holding(A), b = holding(B);
-  const args = (verb: string) => lines.find((e: any) => e.kind === "act" && e.verb === "imported" && e.body?.verb === verb)?.body?.args;
+  const args = (verb: string) => lines.find((e: any) => e.kind === "request" && e.verb === "imported" && e.body?.verb === verb)?.body?.args;
   const w = FOLD.fold(FOLD.readLog(text)).entities?.["@world"]?.c ?? {};
   return [a.length === 1 && b.length === 1 && args("grant")?.id === a[0] && args("grant")?.sub === a[0] && args("ban")?.id === b[0] && args("ban")?.sub === b[0]
     && w[`imported-bans:${b[0]}`]?.by === a[0] && !text.includes(A) && !text.includes(B),
@@ -690,9 +690,9 @@ await C("D7", "no default lives only in help text: every 'default …' a help st
     for (const m of h.matchAll(/(\b[a-zA-Z]+)\??:? ?\(([^()]*\bdefault\b[^()]*)\)/g)) { const f = m[1]; if (DYN.has(`${name}.${f}`) || DYN.has(`${def.on === "world" ? name : name}.${f}`)) continue;
       if (!(f in all) && Object.keys(def.fields ?? {}).includes(f)) bad.push(`${name}.${f}: "${m[0].slice(0, 60)}"`); } }
   return [!bad.length && typeof CAT.defaultsOf === "function", bad]; });
-await C("D8s", "the old spelling of sockets is marked, not changed: sockets is lifted to socket children, parent.socket a legacy field; the pin holds (a mark is not a meaning)", () => {
+await C("D8s", "the old map spelling of sockets is no name (Mica 11-05: its reservation went before deploy, acknowledged in the changelog; only the v1 translator knows the word); parent.socket is a legacy field; the pin holds", () => {
   const pin = JSON.parse(read("spec/registry-pin.json")); const breaks = CAT.pinBreaks?.(pin, CAT.pinOf()) ?? ["no pinBreaks"];
-  return [typeof CAT.COMPONENTS.sockets?.lifted === "string" && /socket children/.test(CAT.COMPONENTS.sockets.lifted) && (CAT.COMPONENTS.parent?.legacy ?? []).includes("socket") && CAT.COMPONENTS.parent.fields.socket === "string" && !breaks.length && !!CAT.COMPONENTS.socket, { lifted: CAT.COMPONENTS.sockets?.lifted, legacy: CAT.COMPONENTS.parent?.legacy, breaks }]; });
+  return [!Object.hasOwn(CAT.COMPONENTS, "sockets") && !Object.hasOwn(pin, "sockets") && /  - sockets: the name is gone/.test(read("spec/REGISTRY-CHANGELOG.md")) && (CAT.COMPONENTS.parent?.legacy ?? []).includes("socket") && CAT.COMPONENTS.parent.fields.socket === "string" && !breaks.length && !!CAT.COMPONENTS.socket, { sockets: CAT.COMPONENTS.sockets ?? null, legacy: CAT.COMPONENTS.parent?.legacy, breaks }]; });
 await C("D8", "a definition's meaning is pinned: a changed default, type or enum is caught (spec/registry-pin.json); additions are fine", () => {
   const pin = JSON.parse(read("spec/registry-pin.json")); const now = CAT.pinOf?.(); const g = CAT.pinBreaks?.(pin, now) ?? ["no pinBreaks"];
   const was = CAT.COMPONENTS.light.defaults.intensity; CAT.COMPONENTS.light.defaults.intensity = 17;
@@ -865,14 +865,14 @@ await C("R7", "the spec scopes ids to their world and says fork-copy; merging a 
   const need = ["(world id, entity id)", "fork-copy", "Merging a fork back into its\n  parent is RESERVED"]; return [need.every((n) => SPEC.includes(n)), need.filter((n) => !SPEC.includes(n))]; });
 
 // ---- P: privacy (M3) ----
-const actsBy = (W: any, who: string, verb?: string) => W.entries().filter((e: any) => e.actor === who && e.kind === "act" && (!verb || e.verb === verb));
+const actsBy = (W: any, who: string, verb?: string) => W.entries().filter((e: any) => e.actor === who && e.kind === "request" && (!verb || e.verb === verb));
 const POSKEYS = /"(at|hand|held|trackTs|from|to|client|presence)":/;
 await C("P1", "arriving in a world writes nothing to its log (presence, never history)", () => {
   const W = world(); const n0 = W.entries().length; const r = W.call("move", { to: [0, 0, 0.5] }, "vic");
   return [r.ok && W.entries().length === n0 && !r.recorded, [why(r), W.entries().length - n0]]; });
 await C("P2", "a teleport while present is an act on the record, without where from, where to, or what kind of client", () => {
   const W = world(); W.call("move", { to: [0, 0, 0.5] }, "olive"); const r = W.call("move", { to: [3, 0, 3], teleport: true }, "olive");
-  const a = actsBy(W, "olive", "move").at(-1); return [r.ok && !!a && !POSKEYS.test(JSON.stringify(a.body)) && a.body.request?.teleport === true, a?.body]; });
+  const a = actsBy(W, "olive", "move").at(-1); return [r.ok && !!a && !POSKEYS.test(JSON.stringify(a.body)) && a.body.args?.teleport === true, a?.body]; });
 await C("P3", "grab, put, throw and punt acts record the request about the thing, never the body's position or hand", () => {
   const W = world(); W.call("set", { id: "@world", component: "physics-engine", value: { engine: "eidosim@1.0.0" } });
   W.call("create", { id: "ball", model: "ball", components: { physics: { kind: "dynamic" } }, place: { at: [0, 0] } });

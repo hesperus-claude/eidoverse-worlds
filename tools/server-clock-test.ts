@@ -48,6 +48,7 @@ import { join } from "node:path";
 import { foundWorlds, freePort } from "./harness.ts";
 import { until, tryUntil } from "./protocol/wait.ts";
 import { suite } from "./protocol/suite.ts";
+import { helloOf } from "../shared/protocol/hello.js";
 
 const PORT = Number(process.env.PORT ?? freePort(20000));   // a free port unless PORT names one
 const HTTP = `http://localhost:${PORT}`;
@@ -73,7 +74,7 @@ function connect(): Promise<Sock> {
 async function joinWorld(s: Sock, msg: Record<string, unknown>) {
   const from = s.msgs.length;
   const sentAt = Date.now();
-  s.ws.send(JSON.stringify({ type: "join", replica: true, ...msg }));   // a world talks only to clients that fold its log
+  s.ws.send(JSON.stringify({ type: "join", hello: helloOf(), replica: true, ...msg }));   // a world talks only to clients that fold its log
   const got = await until(`a snapshot for ${JSON.stringify(msg)}`, () => { const g = s.msgs.slice(from); return g.some((m) => m.type === "snapshot" || m.type === "error") ? g : null; }, { ms: 4000, step: 50 });
   return { got, sentAt, snapAt: Date.now() };
 }

@@ -8,7 +8,7 @@
 //   W   walls (N2): a `structure` building's walls are solid to the authority (a body's track, an arrival, a teleport), its
 //       doorways stay walkable, its floor holds things up, and its placeholder model is no longer an invisible crate
 //   N   nested blueprints (N1): a blueprint holding two copies of another places, every time, with fresh ids
-//   K   scripts from the editor (item 3): the requests the editor's "new script" sends (shared/protocol/newscript.js: upload,
+//   K   scripts from the editor (item 3): the requests the editor's "new script" sends (client/lib/newscript.js: upload,
 //       then one batch) run, and the script panel's read (scripts {id}) lists it active
 //   (founding a world, item 5, needs a real server: tools/protocol/fork-reset-check.ts FD; the editor's gestures:
 //    tools/protocol/build-probe.ts, a real browser)
@@ -23,6 +23,7 @@ import path from "node:path";
 import { ENGINE, scratch, archiveTo } from "./common.ts";
 import { labClock, pinned } from "./clock.ts";
 import { suite } from "./suite.ts";
+import { LAB_CATALOGUE } from "./labmodels.js";   // the suites' model table (a base or mutant tree reads it from here)
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -38,8 +39,8 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["a doorway is the absence of a box (every wall edge solid)", "shared/structure.js", "    const ap = level.apertures.get(k);\n    if (!ap) continue;\n    boxes.push(...wallBoxes(edge, ap, g, floorY));", "    const ap = level.apertures.get(k);\n    if (!ap) continue;\n    boxes.push(edgeSpan(edge.axis, (edge.axis === 0 ? edge.z : edge.x) * g.tile, (edge.axis === 0 ? edge.x : edge.z) * g.tile, (edge.axis === 0 ? edge.x + 1 : edge.z + 1) * g.tile, -g.wallT / 2, g.wallT / 2, floorY, floorY + g.wallH, edge.mat, 'wall'));", ["W1", "W2"]],
   ["floors are surfaces", "shared/protocol/authority/catalogue.js", "      surfaces.push({ y, x: [x0, x1], z: [z0, z1] }); floors.push", "      floors.push", ["W3"]],
   ["a key already taken falls back (no twins)", "shared/protocol/authority/blueprints.js", "const k = taken.has(want) ? null : want;", "const k = want;", ["N4"]],
-  ["a new script never takes over the thing's own use", "shared/protocol/newscript.js", "  if (free(\"use\")) return \"use\";", "  return \"use\";", ["K2"]],
-  ["a use script gets its reaction", "shared/protocol/newscript.js", "...(action ? [set(form.id, \"reactions\"", "...(false ? [set(form.id, \"reactions\"", ["K1", "K2"]],
+  ["a new script never takes over the thing's own use", "client/lib/newscript.js", "  if (free(\"use\")) return \"use\";", "  return \"use\";", ["K2"]],
+  ["a use script gets its reaction", "client/lib/newscript.js", "...(action ? [set(form.id, \"reactions\"", "...(false ? [set(form.id, \"reactions\"", ["K1", "K2"]],
   ["update merges a part's parent", "shared/protocol/authority/blueprints.js", "const unmerged = new Set([\"copy-of\"]);", "const unmerged = new Set([\"copy-of\", \"parent\"]);", ["U1"]],
   ["a lineage's parts advance with the root", "shared/protocol/authority/blueprints.js", "if (id !== a.copy && T[key] && c?.from === was)", "if (false)", ["U2"]],
   ["a resolve key that names no conflict is refused", "shared/protocol/authority/blueprints.js", "filter(([k, v]) => !keys.has(k) || (v !== \"yours\"", "filter(([k, v]) => (v !== \"yours\"", ["U4"]],
@@ -87,13 +88,13 @@ const D = await import(TREE + "shared/protocol/authority.js");
 D.fixtureIds?.(true);
 const L = await import(TREE + "server/livehost.ts");
 const SB = await import(TREE + "shared/protocol/sandbox.js");
-const NS = await import(TREE + "shared/protocol/newscript.js").catch(() => null);   // absent at the base commit: the editor had no planner
+const NS = await import(TREE + "client/lib/newscript.js").catch(() => null);   // absent at the base commit: the editor had no planner
 const SE = await import(ENGINE + "shared/structure_edit.js");   // the editor's own planner makes the buildings (pure; this checkout's)
 const root = scratch("build");
 const clock = labClock(); let N = 0;
 function open(name: string, o: any = {}) {
   const dir = path.join(root, "worlds", name); fs.mkdirSync(dir, { recursive: true });
-  return L.openLive(dir, name, { now: () => pinned(clock.t), scripts: o.scripts ?? null, custodyFile: path.join(root, "custody.json"), nameOf: () => null, kindOf: o.kindOf ?? (() => "human"), catalogue: o.catalogue });
+  return L.openLive(dir, name, { now: () => pinned(clock.t), scripts: o.scripts ?? null, custodyFile: path.join(root, "custody.json"), nameOf: () => null, kindOf: o.kindOf ?? (() => "human"), catalogue: o.catalogue ?? LAB_CATALOGUE });
 }
 function session(o: any = {}) {
   const name = `w${++N}`; const w = open(name, { scripts: SB.SANDBOX, ...o });
@@ -212,7 +213,7 @@ const cases: { id: string; what: string; run: (s: any) => any; good: (o: any) =>
     good: (o) => Array.isArray(o.keys) && o.keys.length === 3 && new Set(o.keys).size === 3 && o.placed === "ok" && o.n === 3 && o.occupants === 2 },
 
   // ---------------- K: a script from the editor ----------------
-  // the card's requests (shared/protocol/newscript.js), as client/lib/scriptnew.js sends them: upload, then ONE batch
+  // the card's requests (client/lib/newscript.js), as client/lib/scriptnew.js sends them: upload, then ONE batch
   { id: "K1", what: "the editor's new use-script: upload → one batch (script:<name> + its reaction) → a visitor's use runs it → scripts {id} lists it active", run(s) { cast(s);
       if (!NS) return { planner: "absent" };
       s.call("olive", "create", { id: "bell", model: "crate", components: { transform: T0([0, 0, 0]), label: "a bell" } });
@@ -220,8 +221,8 @@ const cases: { id: string; what: string; run: (s: any) => any; good: (o: any) =>
       const plan = NS.planNewScript({ id: "bell", name: "Ring Me!", text: NS.TEMPLATES.use, trigger: "use", comps: NS.TEMPLATE_SCOPE.use.comps, say: NS.TEMPLATE_SCOPE.use.say }, thing);
       if (plan.errors.length) return { errors: plan.errors };
       const up = s.call("olive", plan.upload.verb, plan.upload.args);
-      const ops = plan.install(up.src); const inst = s.call("olive", "batch", { ops });
-      const acts = s.w().entries.filter((e: any) => e.kind === "act" && e.verb === "batch").length;
+      const ops = plan.install(up.src); const inst = s.call("olive", "batch", { requests: ops });
+      const acts = s.w().entries.filter((e: any) => e.kind === "request" && e.verb === "batch").length;
       const use = s.call("vic", "use", { id: "bell" });
       const st = s.w().state().entities.bell.c;
       const view = s.call("vic", "scripts", { id: "bell" });
@@ -234,7 +235,7 @@ const cases: { id: string; what: string; run: (s: any) => any; good: (o: any) =>
       s.call("olive", "create", { id: "gate", model: "crate", components: { transform: T0([0, 0, 0]), openable: { open: false }, reactions: { use: { kind: "toggle", component: "openable" } } } });
       const thing = s.w().state().entities.gate.c;
       const plan = NS.planNewScript({ id: "gate", name: "chime", text: NS.TEMPLATES.use, trigger: "use", ...NS.TEMPLATE_SCOPE.use }, thing);
-      const up = s.call("olive", "upload", plan.upload.args); const inst = s.call("olive", "batch", { ops: plan.install(up.src) });
+      const up = s.call("olive", "upload", plan.upload.args); const inst = s.call("olive", "batch", { requests: plan.install(up.src) });
       const r = s.w().state().entities.gate.c.reactions;
       const chime = s.call("vic", "use", { id: "gate", action: "chime" }); const counter = s.w().state().entities.gate.c["local/counter"] ?? null;
       const bad = NS.planNewScript({ id: "gate", name: "tick", text: NS.TEMPLATES.timer, trigger: "timer", every: 2 }, thing);
@@ -245,7 +246,7 @@ const cases: { id: string; what: string; run: (s: any) => any; good: (o: any) =>
       if (!NS) return { planner: "absent" };
       s.call("olive", "create", { id: "gate2", model: "crate", components: { transform: T0([2, 0, 0]), openable: { open: false }, reactions: { use: { kind: "toggle", component: "openable" }, chime: { kind: "toggle", component: "openable" } } } });
       const plan = NS.planNewScript({ id: "gate2", name: "chime", text: NS.TEMPLATES.use, trigger: "use", ...NS.TEMPLATE_SCOPE.use }, s.w().state().entities.gate2.c);
-      const up = s.call("olive", "upload", plan.upload.args); const inst = s.call("olive", "batch", { ops: plan.install(up.src) });
+      const up = s.call("olive", "upload", plan.upload.args); const inst = s.call("olive", "batch", { requests: plan.install(up.src) });
       const r = s.w().state().entities.gate2.c.reactions;
       return { action: plan.action, inst: show(inst), use: r?.use?.kind ?? null, chime: r?.chime?.kind ?? null, mine: r?.[plan.action] ?? null }; },
     good: (o) => o.action === "chime-2" && o.inst === "ok" && o.use === "toggle" && o.chime === "toggle" && o.mine?.kind === "script" && o.mine?.script === "chime" },
@@ -259,7 +260,7 @@ const cases: { id: string; what: string; run: (s: any) => any; good: (o: any) =>
       const ops = plan.install(up.src);
       // editwrites.js expectOf over what the batch sets, read from base: a component the thing lacked is expected absent
       const expect = [...new Set(ops.map((o: any) => o.args.component))].map((k) => (k in thing ? { id: "bell", component: k, value: thing[k] } : { id: "bell", component: k }));
-      const inst = s.call("olive", "batch", { ops, expect });
+      const inst = s.call("olive", "batch", { requests: ops, expect });
       return { action: plan.action, theirs: show(theirs), inst: inst.refused?.code ?? show(inst), use: s.w().state().entities.bell.c.reactions?.use?.kind ?? null }; },
     good: (o) => o.action === "use" && o.theirs === "ok" && o.inst === "changed" && o.use === "toggle" },
   { id: "U1", what: "update {copy, to} carries a reparent: a part moved under another part upstream lands under it here (not 3 m off, under its old parent)", run(s) { cast(s);

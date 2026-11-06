@@ -6,7 +6,7 @@
 
 import { bodyOf } from "../shared/components.js";
 import { CLASSES, REACH_NOTE_MS, namedPointClass, pointClass } from "../shared/protocol/consent.js";
-import { kindOf } from "../shared/protocol/kind.js";
+import { helloOf, refusalWords } from "../shared/protocol/hello.js";
 import { describeBody, mayLeave, resolveSeat, socketsUnder, vacatedFromMine, vacatedAt } from "../shared/sockbody.js";
 import { grabOf, describeGrab } from "../shared/grab.js";
 import { r3 } from "../shared/protocol/round.js";
@@ -94,11 +94,11 @@ import { isFiniteVec3 } from "./shape.ts";
 import { foldSkyEntry, describeSky, effectiveSky, effectiveClock, dayPhase, hoursAt } from "../shared/forecast.js";
 // the world: this process folds the authority's own stream and reads the VIEW of that fold, like the browser
 import { makeReplica } from "../shared/protocol/replica.js";
-import { PURGED } from "../shared/protocol/fold.js";
-import { diffView } from "../shared/protocol/viewdiff.js";
+import { REDACTED } from "../shared/protocol/fold.js";
+import { diffView } from "../shared/viewdiff.js";
 import { emptyView, idOut } from "../shared/protocol/view.js";
 import { hear } from "../shared/chatwindow.js";
-import * as OP from "../shared/protocol/requests.js";
+import * as OP from "../shared/requests.js";
 // The `particles` component's meaning, shared verbatim with the browser host:
 // a renderer client and a resident who perceives by reading must agree about
 // what is burning (#25's shared-facts boundary).
@@ -231,8 +231,9 @@ function trimMeshCache(key: string, m: CollisionMesh) {
   }
 }
 type Pose = PublicPose;
-type Kind = ReturnType<typeof kindOf>;
-type Entity = { id: string; model: string; kind: Kind; pos: number[]; yaw: number; actor: string; scale?: number;
+/** A record carrying a socket component (an attachment point, listed under its host); it may carry anything else too. */
+const isSocketRec = (e: any) => !!e?.socket && typeof e.socket === "object" && !Array.isArray(e.socket);
+type Entity = { id: string; model: string; pos: number[]; yaw: number; actor: string; scale?: number;
   /** a stretched thing's per-axis scale, and a tilted one's whole rotation (the fold keeps both beside scale and yaw) */
   scale3?: number[]; q?: number[];
   /** the spawn's collider override ("exact" | "box"); the browser's decide() reads it, and so does ours */
@@ -503,7 +504,7 @@ export class WorldAgent {
   /** How a thing reads in a list of candidates: its label, what it is, where it is, its handle. */
   thingLine(id: string): string {
     const e: any = this.entities.get(id); if (!e) return `[${this.handle(id)}]`;
-    const what = e.model ? modelWord(e.model).split("_").slice(0, 5).join(" ") : e.kind === "socket" ? "a socket" : "(empty)";
+    const what = e.model ? modelWord(e.model).split("_").slice(0, 5).join(" ") : isSocketRec(e) ? "a socket" : "(empty)";
     const up = this.mounts.get(id)?.to; const f = this.eff(id, Date.now());
     const where = up && this.entities.has(up) ? `on ${(this.entities.get(up) as any)?.label ?? `[${this.handle(up)}]`}` : f.ok ? `at (${f.pos[0].toFixed(1)}, ${f.pos[1].toFixed(1)}, ${f.pos[2].toFixed(1)})` : "where unknown";
     return `${typeof e.label === "string" && e.label ? `"${e.label}" ` : ""}${what} ${where} [${this.handle(id)}]`;
@@ -514,7 +515,7 @@ export class WorldAgent {
    *  {id} | {refusal} | {none} (nothing here is called that: a caller may try a place or a person next). */
   thingRef(raw: string): { id: string } | { refusal: string } | { none: true } {
     const q = String(raw ?? "").trim();
-    if (!q || q.startsWith("$") || q.startsWith("@") || q.startsWith("sha256:") || /^u-[a-z2-7]{20}$/.test(q)) return q ? { id: q } : { none: true };
+    if (!q || q.startsWith("$") || q.startsWith("@") || q.startsWith("sha256:") || /^u-[a-z2-7]{20}(?:[a-z2-7]{4})?$/.test(q)) return q ? { id: q } : { none: true };
     const r = resolveThing(q, [...this.entities.values()] as any[]);
     if ("id" in r) return { id: r.id };
     if ("ambiguous" in r) {
@@ -726,7 +727,8 @@ export class WorldAgent {
   private pendingHistory = new Map<string, (m: any) => void>();
   /** The world's protocol facts, from the snapshot ({dialect, v} from genesis, its head and world id). Building tools route through
    *  request()/sendOps() and WAIT for the authority's reply, so a refusal reaches the agent (PARITY (d)1). null until joined. */
-  cut: { dialect: string; v: number; head: number; worldId: string } | null = null;
+  /** the join snapshot's protocol line (D5): {dialect, v, world: the id, name: the directory, seq} */
+  snapshot: { dialect: string; v: number; world: string; name: string; seq: number } | null = null;
   /** The world's own fold, from the join cut and the authority's `log` stream (shared/protocol/replica.js). */
   private replica: any = null;
   /** The last building verb's turn: each is spelled after the one before it is answered. */
@@ -735,7 +737,7 @@ export class WorldAgent {
   private joinMsg() {
     // clock: the server's time just before the snapshot (the `clock` case below), so serverNow() is set from the join on
     return { type: "join", world: this.world, id: this.name, avatar: this.avatar, ...(this.declares ? { declares: this.declares } : {}), replica: true,
-      token: process.env.WORLD_TOKEN ?? "", agentToken: this.agentToken, clock: true };
+      token: process.env.WORLD_TOKEN ?? "", agentToken: this.agentToken, clock: true, hello: helloOf() };
   }
   private pendingRequests = new Map<string, (m: any) => void>();
   private pendingDebug = new Map<string, (m: any) => void>();
@@ -972,6 +974,10 @@ export class WorldAgent {
               this.inbox.push({ ts: Date.now(), kind: "act", who: "world", text: `refused: ${msg.error}` });
             }
             break;
+          case "refused":
+            // the hello refused (update-required, unsupported-feature): final, said in words when the close comes (onclose 4005)
+            this.joinRefused = `the world refused the join: ${refusalWords(msg)}`;
+            break;
           case "mod":
             // Moderation replies (ban lists, server-ban confirmations).
             this.lastMod = { ts: Date.now(), text: String(msg.text ?? "") };
@@ -1019,7 +1025,7 @@ export class WorldAgent {
             if (msg.rights) this.acceptEffectiveRights(msg.rights, "world");
             break;
           case "snapshot":
-            this.cut = msg.cut ?? null;
+            this.snapshot = msg.state ? { dialect: msg.dialect, v: msg.v, world: msg.world, name: msg.name, seq: msg.seq } : null;
             // Our surface generation, issued by the server on acceptance —
             // every attest must echo it or the receipt is refused.
             if (typeof msg.gen === "number") this.surfaceGen = msg.gen;
@@ -1029,7 +1035,7 @@ export class WorldAgent {
             // a seat rides a body's pose (notePose), so the bodies' seats come back with their next poses
             this.entities.clear(); this.people.clear(); this.mounts.clear(); this.bodySeats.clear();
             // who holds what as of this cut: the holds broadcast comes only when they change, so a join reads them here
-            { const h = (msg as any).cut?.holds; this.holdsNow = h && typeof h === "object" ? h : {}; }
+            { const h = (msg as any).holds; this.holdsNow = h && typeof h === "object" ? h : {}; }
             this.bodyReader?.forget();
             this.selfBodyGeneration = ++this.bodyGenerationCounter;
             this.selfObservedAt = Date.now();
@@ -1060,10 +1066,11 @@ export class WorldAgent {
             for (const p of msg.present) { this.rememberBody(p.id, p.avatar, p.pose, p.declares); if (typeof p.actorId === "string") this.actorIds.set(p.id, p.actorId); }
             // adopt the authority's cut and read the view of this body's own fold of it; the snapshot's `state` is the
             // chat window (chat isn't world state): its lines land in the inbox once, as history
-            if (!(msg as any).cut?.state) { this.closed = true; clearTimeout(timeout); reject(new Error("the server sent no world cut (an old server?)")); break; }
-            this.replica = makeReplica(); this.replica.adopt((msg as any).cut);
-            this.st.recentChat = structuredClone(msg.state?.recentChat ?? []);
-            this.st.chatTotal = msg.state?.chatTotal ?? 0;
+            if (!(msg as any).state) { this.closed = true; clearTimeout(timeout); reject(new Error("the server sent no world snapshot (an old server?)")); break; }
+            this.replica = makeReplica();
+            if (!this.replica.adopt(msg)) { this.closed = true; clearTimeout(timeout); reject(new Error(`unknown-version: the world speaks ${msg.dialect} v${msg.v}; this agent reads another (D5)`)); break; }
+            this.st.recentChat = structuredClone(msg.chat?.recentChat ?? []);
+            this.st.chatTotal = msg.chat?.chatTotal ?? 0;
             for (const m of this.st.recentChat) this.hearSay({ seq: m.seq ?? -1, ts: m.ts, actor: m.actor, verb: "say", args: { text: m.text } }, false);
             // the feet hold their height until the floors this join is about to learn about have been fitted —
             // before that, the only ground a body could find is the terrain under the building it is in
@@ -1463,7 +1470,7 @@ export class WorldAgent {
    *  stint shorter than SHORT_STINT_MS earns no "gets up". */
   private noteActs(id: string, prev: Pose | null, pose: Pose & { anim?: string; pose?: Record<string, unknown> | null }, dist = Infinity) {
     const acts: { key: string; text: string }[] = [];
-    const once = onceAnimOf(pose);   // pose.anim (its pre-release key still read for one release)
+    const once = onceAnimOf(pose);   // pose.anim
     if (once) acts.push({ key: `anim:${once}`, text: `plays ${once} (once)` });
     const prevHeld = Boolean((prev as { pose?: unknown } | null)?.pose);
     const nowHeld = Boolean(pose.pose);
@@ -1550,21 +1557,11 @@ export class WorldAgent {
     return m ? { ...e, parent: m } : { ...e };
   }
   /** A thing's components as this body's replica folds them now (a copy), or null: what a write planned from them pins
-   *  with expect (client/lib/editwrites.js compsOf). A purged component is the fold's PURGED itself, not a copy: the
+   *  with expect (client/lib/editwrites.js compsOf). A purged component is the fold's REDACTED itself, not a copy: the
    *  authority's expect counts a purged value equal to nothing, so a pin has to tell one apart and leave it out. */
   componentsOf(id: string): Record<string, unknown> | null {
     const c = this.replica?.st?.entities?.[id]?.c;
-    return c ? Object.fromEntries(Object.entries(c).map(([k, v]) => [k, v === PURGED ? PURGED : structuredClone(v)])) : null;
-  }
-  /** A host's socket children as the replica folds them now: each one's id, as the authority has it, and its components
-   *  (componentsOf). A write of the host's sockets map changes the children it names and retires the rest
-   *  (shared/protocol/authority/sockets.js liftOps), so it pins these. */
-  socketChildrenOf(id: string): Record<string, Record<string, unknown>> {
-    const out: Record<string, Record<string, unknown>> = {};
-    for (const [k, e] of Object.entries((this.replica?.st?.entities ?? {}) as Record<string, any>))
-      if (e?.c?.parent?.to === id && e.c.socket && typeof e.c.socket === "object" && !Array.isArray(e.c.socket) && e.c.socket !== PURGED)
-        out[k] = this.componentsOf(k)!;   // a socket child as liftOps counts one (isSocketC)
-    return out;
+    return c ? Object.fromEntries(Object.entries(c).map(([k, v]) => [k, v === REDACTED ? REDACTED : structuredClone(v)])) : null;
   }
 
   private reconcileFromFold() {
@@ -1573,7 +1570,7 @@ export class WorldAgent {
       seen.add(id);
       this.entities.set(id, {
         id,
-        model: String((e as any).model ?? ""), kind: kindOf(e),
+        model: String((e as any).model ?? ""),
         pos: (e as any).pos, yaw: (e as any).yaw ?? 0,
         ...((e as any).scale != null ? { scale: (e as any).scale } : {}),
         ...(Array.isArray((e as any).scale3) ? { scale3: (e as any).scale3 } : {}),   // a stretched thing stays stretched
@@ -1612,7 +1609,7 @@ export class WorldAgent {
   }
 
   /** A world: take the next view of this body's own fold, and act on what changed (said in the protocol's terms,
-   *  shared/protocol/viewdiff.js): percepts when `live`, supports always. The first view is diffed from nothing. */
+   *  shared/viewdiff.js): percepts when `live`, supports always. The first view is diffed from nothing. */
   private async applyView(live: boolean, actor: string | null, ts: number | null) {
     const prev = this.st as any;
     const next = this.replica.view(prev);   // carries the chat window this body already holds
@@ -4391,7 +4388,7 @@ export class WorldAgent {
     const r = [...this.reachRefusals].reverse().find((x) => holderOf(x) && x.ts > Date.now() - REACH_NOTE_MS);   // (target, class) exactly (F9)
     return r ? { r, by: holderOf(r)!.name, fresh: false } : null;
   }
-  /** A gesture's ops (shared/protocol/requests.js) as ONE request, sent after the previous one was answered. Ops planned
+  /** A gesture's ops (shared/requests.js) as ONE request, sent after the previous one was answered. Ops planned
    *  before that wait don't see what landed meanwhile, so a caller that planned from the replica pins what it read with
    *  `expect` (componentsOf): a change since is refused, not overwritten. `extra` rides the request (dry, expect,
    *  throughLock). The same requests a person's edit sends. */
@@ -5033,7 +5030,7 @@ export class WorldAgent {
     }
 
     // a socket is part of its host (a seat, a hook): listed under the host, never as a thing of its own
-    const ents = [...this.entities.values()].filter((e) => e.kind !== "socket");
+    const ents = [...this.entities.values()].filter((e) => !isSocketRec(e));
     L.push(ents.length ? `\nThings (${ents.length}):` : "\nNo placed things yet.");
     // one composition per entity per look, shared by the sort and the line.
     // Resolved things sort by EFFECTIVE distance; unresolved ones make no
@@ -5129,7 +5126,7 @@ export class WorldAgent {
         L.push(`  - [${this.handle(e.id)}] ${short}: ${where} — ${f.why}${aff.length ? ` — ${aff.join(" · ")}` : ""}`);
       }
     }
-    if (ents.some((e) => e?.reactions) || [...this.entities.values()].some((e) => e.kind === "socket")) {
+    if (ents.some((e) => e?.reactions) || [...this.entities.values()].some(isSocketRec)) {
       L.push(`  (use a thing: act {verb: "use", args: {id, action?}} · sit or ride: attach {to: id, socket?} — a thing's \`who\` may limit either, and the reply says; detach gets you off, escape: true if it holds you)`);
     }
 

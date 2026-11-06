@@ -1,6 +1,6 @@
 // shape-render-test — the shape audit's wave 2, render-media-env family (notes/eidoverse/shape-audit/render-media-env.md;
 // PLAN.md "Wave 2" + LOCKED). Each row is a behaviour the audit changes, through the real door (a scratch world), the pure
-// reader that carries it, or the maintenance repair (shared/protocol/shaperepair.js). Written red first, against the tree before
+// reader that carries it, or the v1 importer's rules (tools/protocol/import-v1/shapes.js). Written red first, against the tree before
 // the change (wt/w2-physics, ec535895).
 //   usage: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/shape-render-test.ts
 // @ts-nocheck
@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import { scratchWorld } from './protocol/scratchworld.ts';
 import { COMPONENTS, statusOf, pinOf, materialize } from '../shared/protocol/componentspec.js';
 import { lightOf } from '../shared/components.js';
-import { isMeshBag } from '../shared/protocol/kind.js';
+import { isMeshBag } from '../shared/components.js';
 import * as PE from '../shared/particle_effects.js';
 import { foldCaption, describeCaptions, captionsDetail } from '../shared/captions.js';
 import { terrainParams } from '../shared/terrainmath.js';
@@ -26,7 +26,7 @@ const read = (p: string) => fs.readFileSync(ENGINE + p, 'utf8');
 // the authority is authority.js and its leaves under authority/ (refactor split, 2026-10-17): a source check reads them all
 const readAuthority = () => ['shared/protocol/authority.js', ...fs.readdirSync(ENGINE + 'shared/protocol/authority').filter((f) => f.endsWith('.js')).sort().map((f) => 'shared/protocol/authority/' + f)].map(read).join('\n');
 const keys = (o: any) => JSON.stringify(Object.keys(o ?? {}).sort());
-const repairMod = async () => await import('../shared/protocol/shaperepair.js');
+const repairMod = async () => await import('./protocol/import-v1/shapes.js');
 const v1 = (...rest: any[]) => [{ seq: 0, ts: 1, actor: 'world', verb: 'genesis', args: { v: 2, dialect: 'eidoverse-log', roles: { ann: { role: 'owner' } } } },
   ...rest.map((e, i) => ({ seq: i + 1, ts: i + 2, actor: 'ann', ...e }))];
 
@@ -40,16 +40,16 @@ await tryRow('LI', async () => {
   let r = W.call('set', { id: 'lamp', component: 'light', value: { color: 0xffffff } });
   check('LI2 a new light stores decay 2 and daytime dim', r.ok && C('lamp').light.decay === 2 && C('lamp').light.daytime === 'dim' && !('shadows' in C('lamp').light) && !('day' in C('lamp').light), [r.refused, C('lamp').light]);
   r = W.call('set', { id: 'porch', component: 'light', value: { day: false } });
-  check('LI3 day: false is taken and stored as daytime: full (it burns at noon)', r.ok && C('porch').light.daytime === 'full' && !('day' in C('porch').light), [r.refused, C('porch')?.light]);
-  r = W.call('set', { id: 'porch', component: 'light', value: { day: true } });
-  check('LI3 …day: true as daytime: dim', r.ok && C('porch').light.daytime === 'dim', [r.refused, C('porch')?.light]);
+  check('LI3 a light written with day is refused: the field is daytime (nothing deployed wrote day; the v1 translator writes daytime)', code(r) === 'schema' && /day is gone: renamed daytime/.test(r.refused?.reason ?? '') && !/taken/.test(r.refused?.reason ?? ''), r.refused);
+  r = W.call('set', { id: 'porch', component: 'light', value: { daytime: 'full' } });
+  check('LI3 …daytime full is taken', r.ok && C('porch').light.daytime === 'full', [r.refused, C('porch')?.light]);
   r = W.call('set', { id: 'lamp', component: 'light', value: { shadows: true } });
   check('LI4 shadows is refused (read by nothing; it returns when the rig reads it)', code(r) === 'schema' && /shadows/.test(r.refused?.reason ?? ''), r.refused);
   r = W.call('set', { id: '@world', component: 'light', value: {} });
   check('LI5 a light on @world is refused (on: thing)', code(r) === 'thing-only', r.refused);
   const Lo = lightOf({ light: { color: 0xff0000, decay: 1.7, daytime: 'full' } });
   check('LI6 lightOf reads decay and daytime', Lo?.decay === 1.7 && Lo?.daytime === 'full', Lo);
-  check('LI6 …an older value without decay reads 1.7 (the rig\'s old constant), without daytime as dim', lightOf({ light: {} })?.decay === 1.7 && lightOf({ light: { day: false } })?.daytime === 'full' && lightOf({ light: {} })?.daytime === 'dim', [lightOf({ light: {} }), lightOf({ light: { day: false } })]);
+  check('LI6 …an older value without decay reads 1.7 (the rig\'s old constant), without daytime as dim; the old spelling day: false is read no more (S6): dim too', lightOf({ light: {} })?.decay === 1.7 && lightOf({ light: { day: false } })?.daytime === 'dim' && lightOf({ light: {} })?.daytime === 'dim', [lightOf({ light: {} }), lightOf({ light: { day: false } })]);
   check('LI7 an unknown kind is that light absent (one rule with isMeshBag)', lightOf({ light: { kind: 'area' } }) === null && !isMeshBag({ shape: 'torus' }), lightOf({ light: { kind: 'area' } }));
   check('LI7b …but an unknown daytime drops only daytime: the light is there, at its meaning of absence (dim), with the rest read (PROTOCOL §9.2: a field that says what the component is goes whole; any other unknown member drops the field)', lightOf({ light: { daytime: 'twilight', intensity: 5 } })?.daytime === 'dim' && lightOf({ light: { daytime: 'twilight', intensity: 5 } })?.intensity === 5, lightOf({ light: { daytime: 'twilight', intensity: 5 } }));
   check('LI8 the realizer passes decay and daytime to the rig', /decay: L\.decay/.test(read('client/lib/realize/models.js')) && /L\.daytime/.test(read('client/lib/realize/models.js')), '');
@@ -138,10 +138,10 @@ await tryRow('AD', async () => {
   check('AD7 every client and agent reader that names a thing by its model goes through the shared word', stale.length === 0, stale);
   // the sim (shiplist FL1, 10-16): an addressed dynamic thing is stamped, punted, and flies in the authority and in a client's fold
   {
-    const { request, LAB_CATALOGUE } = await import('../shared/protocol/authority.js');
+    const { request } = await import('../shared/protocol/authority.js'); const { LAB_CATALOGUE } = await import('./protocol/labmodels.js');
     const { readLog } = await import('../shared/protocol/fold.js');
-    const { openLive } = await import('../server/livehost.ts');
-    const { makeReplica, clientCutOf } = await import('../shared/protocol/replica.js');
+    const { openLive } = await import('./protocol/labhost.ts');
+    const { makeReplica, clientSnapshotOf } = await import('../shared/protocol/replica.js');
     const { scratch } = await import('./protocol/common.ts');
     const CA = `eido:sha256/${'5'.repeat(64)}`;
     const cat = { get: (n: string) => LAB_CATALOGUE.get(n === CA ? 'crate' : n), list: (q: string) => LAB_CATALOGUE.list(q) };
@@ -153,7 +153,7 @@ await tryRow('AD', async () => {
     lc('rowan', 'set', { id: '@world', component: 'physics-engine', value: { engine: 'eidosim@1.0.0' } });
     lc('rowan', 'create', { id: 'cuball', model: CA, components: { physics: { kind: 'dynamic', who: 'member' }, transform: { pos: [0, 0, 0], scale: 0.3 } } });
     lc('rowan', 'move', { to: [0, 0, -0.5] });
-    const rep = makeReplica(); rep.adopt(JSON.parse(JSON.stringify({ ...clientCutOf(lw), you: 'vic' })));
+    const rep = makeReplica(); rep.adopt(JSON.parse(JSON.stringify({ ...clientSnapshotOf(lw), you: 'vic' })));
     const from = LL().length; const pr = lc('rowan', 'punt', { id: 'cuball', power: 6 }); rep.ingest(LL().slice(from), from);
     const flown: string[] = []; for (let t = 0; t < 40; t++) { const b = rep.simAt?.(now + t * 33)?.bodies?.cuball; if (b) flown.push(b.p.join()); }
     const c0 = lw.state().entities.cuball.c;
@@ -233,12 +233,10 @@ await tryRow('DS', async () => {
   const r1 = W.call('set', { id: 'frame', component: 'picture', value: { src: 'store/images/0123456789abcdef.png', description: 'a print' } });
   const r2 = W.call('set', { id: 'radio', component: 'sound', value: { src: 'store/audio/0123456789abcdef.ogg', alt: 'rain' } });
   check('DS4 the door takes description and refuses alt', r1.ok && W.state().entities.frame.c.picture.description === 'a print' && code(r2) === 'schema', [r1.refused, r2.refused]);
-  const { renameFields, renameOps } = await repairMod();
+  const { renameFields } = await import('./protocol/import-v1/shapes.js');
   const rp = renameFields('picture', { src: 'store/images/a.png', alt: 'a print' }), rs = renameFields('sound', { src: 'store/audio/a.ogg', alt: 'rain', description: 'kept' }), rl = renameFields('picture', { src: 'store/images/a.png', look: 'older' });
   check('DS5 repair: a stored alt (or the look before it) is description (one time); description already there wins', rp.value.description === 'a print' && !('alt' in rp.value) && rs.value.description === 'kept' && !('alt' in rs.value) && rl.value.description === 'older' && !('look' in rl.value), [rp, rs, rl]);
-  const ops = renameOps({ entities: { f: { c: { picture: { src: 'store/images/a.png', alt: 'a print' } } }, g: { c: { picture: { src: 'store/images/a.png', description: 'd' } } } } });
-  check('DS5 …renameOps writes only what needs it', ops.length === 1 && ops[0].id === 'f' && ops[0].value.description === 'a print', ops);
-  const src = ['shared/protocol/descriptors.js', 'shared/editschema.js', 'shared/components.js', 'client/lib/pictures.js', 'client/lib/sounds.js'].map(read).join('\n');
+  const src = ['shared/descriptors.js', 'shared/editschema.js', 'shared/components.js', 'client/lib/pictures.js', 'client/lib/sounds.js'].map(read).join('\n');
   check('DS6 alt leaves the editors (descriptors, editschema, components, the client\'s panels)', !/['"]alt['"]|\.alt\b|\balt:|ALT_/.test(src), (src.match(/.{0,40}(['"]alt['"]|\.alt\b|\balt:|ALT_).{0,40}/g) ?? []).slice(0, 5));
 });
 
@@ -304,12 +302,19 @@ await tryRow('SK', async () => {
   check('SK2 …override too (the weather act stamps it)', code(r) === 'stamped' || code(r) === 'derived', r.refused);
   r = W.call('set', { id: '@world', component: 'sky', value: { hours: 9, forecast: { seed: 1, states: ['rain'], epoch: 3 } } });
   check('SK2 …and a forecast\'s epoch', code(r) === 'stamped' || code(r) === 'derived', r.refused);
-  r = W.call('sky', { hours: 8, clock: 'real', tz: 'Europe/Paris', weatherSeconds: 12 });
+  const old = [W.call('sky', { hours: 8, clock: 'real', tz: 'Europe/Paris' }), W.call('sky', { hours: 8, tz: 'Europe/Paris', weatherSeconds: 12 })];
+  r = W.call('sky', { hours: 8, tz: 'Europe/Paris', transition: 12 });
   const s = W.state().entities['@world'].c.sky;
-  check('SK3 the sky act takes the old spellings and stores today\'s: clock real → tz governs (no clock, no dormantRated), weatherSeconds → transition', r.ok && s.tz === 'Europe/Paris' && !('clock' in s) && !('dormantRated' in s) && s.transition === 12 && !('weatherSeconds' in s) && s.hours === 8, [r.refused, s]);
+  check('SK3 the sky act refuses the old spellings (unknown-arg), the fix naming today\'s: clock → tz, weatherSeconds → transition; today\'s are stored as sent', code(old[0]) === 'unknown-arg' && /tz/.test(old[0].refused?.fix ?? '') && code(old[1]) === 'unknown-arg' && /transition/.test(old[1].refused?.fix ?? '')
+    && r.ok && s.tz === 'Europe/Paris' && !('clock' in s) && !('dormantRated' in s) && s.transition === 12 && !('weatherSeconds' in s) && s.hours === 8, [old.map((x) => x.refused), r.refused, s]);
+  const fw = [W.call('sky', { hours: 8, forecast: { seed: 1, states: ['rain'], dwellSec: [600, 900] } }), W.call('weather', { forecast: { seed: 1, states: ['rain'], transitionSec: 40 } }),
+    W.call('set', { id: '@world', component: 'sky', value: { hours: 9, forecast: { seed: 1, states: ['rain'], dwellSec: [600, 900] } } })];
+  check('SK3b …and a forecast\'s old field names (sky, weather, set): refused (schema), naming dwell / transition; nothing stored', fw.every((x) => code(x) === 'schema')
+    && fw[0].refused?.didYouMean?.[0] === 'dwell' && fw[1].refused?.didYouMean?.[0] === 'transition' && fw[2].refused?.didYouMean?.[0] === 'dwell'
+    && JSON.stringify(W.state().entities['@world'].c.sky) === JSON.stringify(s), fw.map((x) => x.refused ?? x.ok));
   check('SK3 …tz present means the wall clock governs', Math.abs(hoursAt({ tz: 'UTC', hours: 3, rate: 0, ts: 0 }, Date.UTC(2026, 0, 1, 15, 30)) - 15.5) < 1e-9, hoursAt({ tz: 'UTC', hours: 3, rate: 0, ts: 0 }, Date.UTC(2026, 0, 1, 15, 30)));
   check('SK4 the sky reader turns the sun by azimuth in radians', /a\.azimuth \?\? Math\.PI/.test(read('client/lib/sky.js')) && !/degToRad\(a\.azimuth/.test(read('client/lib/sky.js')), '');
-  check('SK5 a forecast reads dwell and transition (dwellSec/transitionSec read too, in an older value)', effectiveSky({ forecast: { seed: 1, states: ['rain', 'clear'], dwell: [600, 600], transition: 20, epoch: 1 } }, 2).seconds === 20, effectiveSky({ forecast: { seed: 1, states: ['rain', 'clear'], dwell: [600, 600], transition: 20, epoch: 1 } }, 2));
+  check('SK5 a forecast reads dwell and transition', effectiveSky({ forecast: { seed: 1, states: ['rain', 'clear'], dwell: [600, 600], transition: 20, epoch: 1 } }, 2).seconds === 20, effectiveSky({ forecast: { seed: 1, states: ['rain', 'clear'], dwell: [600, 600], transition: 20, epoch: 1 } }, 2));
   const { repairWorld } = await repairMod();
   const R = repairWorld({ sky: { clock: 'real', tz: 'America/Los_Angeles', dormantRated: { hours: 7, rate: 2, ts: 100 }, ts: 500, azimuth: 90, weatherSeconds: 20, sun: 1.3, fill: 0.7, world: 'earth', forecast: { seed: 2, states: ['rain'], dwellSec: [600, 900], transitionSec: 40, epoch: 9 } } }).c.sky;
   check('SK6 repair: clock real + dormantRated → tz with hours/rate/ts the parked clock; azimuth ×π/180; weatherSeconds → transition; forecast dwell/transition; world dropped; sun and fill kept', R && R.tz === 'America/Los_Angeles' && R.hours === 7 && R.rate === 2 && R.ts === 100 && Math.abs(R.azimuth - Math.PI / 2) < 1e-12 && R.transition === 20 && keys(R.forecast) === keys({ seed: 2, states: ['rain'], dwell: [600, 900], transition: 40, epoch: 9 }) && JSON.stringify(R.forecast.dwell) === '[600,900]' && R.forecast.transition === 40 && ['clock', 'dormantRated', 'world', 'weatherSeconds'].every((k) => !(k in R)) && R.sun === 1.3 && R.fill === 0.7, R);
@@ -331,9 +336,10 @@ await tryRow('TE', async () => {
   const W = scratchWorld('w2r-terrain');
   let r = W.call('set', { id: '@world', component: 'terrain', value: { kind: 'raster', blob: 'x', w: 2, h: 2 } });
   check('TE4 a raster terrain is refused as reserved', code(r) === 'reserved', r.refused);
-  r = W.call('set', { id: '@world', component: 'terrain', value: { seed: 4, layers: [{ color: '#4a5d33', repeat: 16 }] } });
+  const rh = W.call('set', { id: '@world', component: 'terrain', value: { seed: 4, layers: [{ color: '#4a5d33', repeat: 16 }] } });
+  r = W.call('set', { id: '@world', component: 'terrain', value: { seed: 4, layers: [{ color: 0x4a5d33, repeat: 16 }] } });
   const t = W.state().entities['@world'].c.terrain;
-  check('TE5 a layer colour "#rrggbb" is taken and stored as an int; the sim\'s defaults are written', r.ok && t.layers[0].color === 0x4a5d33 && t.amplitude === 3 && t.size === 80 && t.octaves === 4 && t.frequency === 2.5 && t.flatHeight === 0, [r.refused, t]);
+  check('TE5 a layer colour "#rrggbb" is refused (a colour is an int); an int is taken and the sim\'s defaults are written', code(rh) === 'shape' && r.ok && t.layers[0].color === 0x4a5d33 && t.amplitude === 3 && t.size === 80 && t.octaves === 4 && t.frequency === 2.5 && t.flatHeight === 0, [r.refused, t]);
   r = W.call('set', { id: '@world', component: 'terrain', value: { seed: 4, water: { level: 1 } } });
   check('TE6 terrain.water is refused: water is its own component', code(r) === 'schema' && /water/.test(`${r.refused?.reason} ${r.refused?.fix}`), r.refused);
   const Wa = COMPONENTS.water;
@@ -357,15 +363,14 @@ await tryRow('OT', () => {
   check('OT5 water joins the world look (editWorld)', /WORLD_LOOK = new Set\(\[[^\]]*"water"/.test(readAuthority()), '');
 });
 
-// ===================================================================== the load, and the translator, apply the same rules
+// ===================================================================== the importer's rules, and the translator applies them
 await tryRow('LD', async () => {
-  const { shapeRepairOps } = await repairMod();
-  const st = { entities: { '@world': { c: { sky: { azimuth: 180, hours: 6 } } }, l: { c: { light: { kind: 'point', day: true, shadows: false } } } } };
-  const ops = shapeRepairOps(st);
-  check('LD1 the repair\'s ops reach @world (sky) and things (light)', ops.some((o: any) => o.id === '@world' && o.comp === 'sky' && Math.abs(o.value.azimuth - Math.PI) < 1e-12) && ops.some((o: any) => o.id === 'l' && o.comp === 'light' && o.value.decay === 1.7), ops);
+  const { repairWorld, repairComps } = await repairMod();
+  const W0 = repairWorld({ sky: { azimuth: 180, hours: 6 } }).c, L0 = repairComps({ light: { kind: 'point', day: true, shadows: false } }).c;
+  check('LD1 the importer\'s rules reach @world (sky) and things (light)', Math.abs(W0.sky.azimuth - Math.PI) < 1e-12 && L0.light.decay === 1.7, [W0.sky, L0.light]);
   const t = translate(v1({ verb: 'sky', args: { hours: 9, azimuth: 90 } }, { verb: 'terrain', args: { seed: 2, layers: [{ color: '#010203', repeat: 4 }] } }));
   const w = t.final.translated['@world'];
-  check('LD2 translate-v1@12 writes @world as the maintenance repair does (sky radians and the registry\'s defaults, terrain colours and the sim\'s defaults)', Math.abs((w?.sky?.azimuth ?? 0) - Math.PI / 2) < 1e-12 && w?.sky?.fog === 1 && w?.terrain?.layers?.[0]?.color === 0x010203 && w?.terrain?.octaves === 4 && !t.stats.divergences, [w?.sky, w?.terrain, t.stats.divergences]);
+  check('LD2 translate-v1@12 writes @world by those rules (sky radians and the registry\'s defaults, terrain colours and the sim\'s defaults)', Math.abs((w?.sky?.azimuth ?? 0) - Math.PI / 2) < 1e-12 && w?.sky?.fog === 1 && w?.terrain?.layers?.[0]?.color === 0x010203 && w?.terrain?.octaves === 4 && !t.stats.divergences, [w?.sky, w?.terrain, t.stats.divergences]);
 });
 
 console.log(`${pass} passed, ${fail} failed`);

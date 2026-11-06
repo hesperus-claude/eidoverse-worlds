@@ -14,7 +14,8 @@
 // @ts-nocheck
 import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { scratch } from "./protocol/common.ts";
-import { request, LAB_CATALOGUE } from "../shared/protocol/authority.js";
+import { request } from "../shared/protocol/authority.js";
+import { LAB_CATALOGUE } from "./protocol/labmodels.js";
 import { openWorld } from "../server/filehost.ts";
 import { viewState } from "../shared/protocol/view.js";
 import { enc, encName } from "../shared/protocol/names.js";
@@ -46,8 +47,8 @@ export function agentOnDoor(agent: any, tag = "agent", { owner = "olive", start 
   let head = -1;
   const sync = async (live: boolean, who: string | null = null, ts: number | null = null) => {
     const E = w.entries;
-    if (!joined) { A.replica.adopt({ state: wireState(w.state()), head: E.length - 1 }); head = E.length - 1; }
-    else { const r = A.replica.ingest(JSON.parse(JSON.stringify(E.slice(head + 1))), head + 1); head = E.length - 1; if (r.sky) A.skyStamp = r.sky; if (r.resync) A.replica.adopt({ state: wireState(w.state()), head }); }
+    if (!joined) { A.replica.adopt({ dialect: "eidoverse-log", v: 4, state: wireState(w.state()), seq: E.length - 1 }); head = E.length - 1; }
+    else { const r = A.replica.ingest(JSON.parse(JSON.stringify(E.slice(head + 1))), head + 1); head = E.length - 1; if (r.sky) A.skyStamp = r.sky; if (r.resync) A.replica.adopt({ dialect: "eidoverse-log", v: 4, state: wireState(w.state()), head }); }
     await A.applyView(joined ? live : false, who, ts ?? clock.t);
     joined = true;
   };

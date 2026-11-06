@@ -125,7 +125,8 @@ try {
   check("walks across the upper floor, still upstairs", await walk(0, -2.4) && near(a.pos.y, gy + UPPER), `y ${a.pos.y.toFixed(3)}`);
   a.setPosture("idle");
   check("standing still upstairs does not drop it to the ground floor", near(a.pos.y, gy + UPPER), `y ${a.pos.y.toFixed(3)}`);
-  await legacyVerb(a, "comp", { id: "tower", type: "sockets", data: { bench: { pos: [-0.8, UPPER + 0.45, -2.4], body: { pose: "sitchair" } } } });
+  // a seat is a socket child of the tower (its station's anim is the pose)
+  await a.request("create", { id: "$bench", components: { parent: { to: sceneId(a, "tower") }, transform: { pos: [-0.8, UPPER + 0.45, -2.4], q: [0, 0, 0, 1], scale: [1, 1, 1] }, socket: { name: "bench" }, station: { anim: "sitchair" } } });
   await sleep(200);
   await legacyVerb(a, "mount", { id: "walker", to: "tower", slot: "bench" });
   await tryUntil("the walker is seated", () => !!a.myOccupancy, { ms: 2000, step: 50 });
@@ -208,7 +209,7 @@ try {
       const there = await walk(-6, 0) && await walk(-6, 10) && await walk(19, 10);
       check("(at the test ground, x 19)", there && Math.abs(a.pos.x - 19) < 0.15, `at (${a.pos.x.toFixed(2)}, ${a.pos.z.toFixed(2)})`);
       const wy = a.heightAt(20, 10);
-      await legacyVerb(a, "spawn", { id: "wall", lib: wallLib, pos: [21, wy, 10], yaw: 0, collide: "exact" });
+      await legacyVerb(a, "spawn", { id: "wall", lib: wallLib, pos: [21, wy, 10], yaw: 0, collide: "mesh" });
       await tryUntil("the agent holds the wall", () => a.entities.get(sceneId(a, "wall")), { ms: 1000, step: 25 });
       const crossed = await walk(21, 10);
       check("a pen spawned just now, its shape still downloading: a walk into it waits for it, then is refused — never passes through its wall",

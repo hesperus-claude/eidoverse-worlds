@@ -6,7 +6,7 @@
 import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { openWorld } from "../../server/filehost.ts";
 import { fold } from "../../shared/protocol/fold.js";
-import { simFold } from "../../shared/protocol/simlayer.js";
+import { simFold } from "./labmodels.js";   // the sim over the lab table (its logs name lab models)
 import { ENG, labWorld } from "./labworld.ts";
 import { suite } from "./suite.ts";
 const { ok, done } = suite("disabled-check", { cap: Infinity });

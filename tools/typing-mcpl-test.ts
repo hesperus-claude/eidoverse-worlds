@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { foundWorlds, saysIn } from "./harness.ts";
 import { createServer } from "node:net";
+import { helloOf } from "../shared/protocol/hello.js";
 
 // kernel-handed ports, so two runs on one machine never read each other's world
 const freePort = () => new Promise<number>((resolve, reject) => {
@@ -68,7 +69,7 @@ try {
     watcher.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); seen.push(m); all.push(m);
       if (m.type === "typing" && m.id === "claude") frames.push(Date.now());
       if (m.type === "snapshot") { clearTimeout(t); res(); } };
-    watcher.onopen = () => watcher.send(JSON.stringify({ type: "join", world: "commons", id: "watcher", avatar: "a.vrm", replica: true }));
+    watcher.onopen = () => watcher.send(JSON.stringify({ type: "join", hello: helloOf(), world: "commons", id: "watcher", avatar: "a.vrm", replica: true }));
   });
 
   // a raw MCP host connecting to the MCPL door as the "claude" agent

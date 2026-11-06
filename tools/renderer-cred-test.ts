@@ -1,7 +1,7 @@
 // The renderers' credential and a private world's HTTP reads (#260 house I143, I144): the cases access-test.ts held
 // before it was retired, against a scratch server.
 //   - every join shape × credential: only the renderer flag with the renderers' credential watches an invite-only world;
-//     the door key alone is 4010, the renderers' credential without the flag (a lite ?renderer page included) is 4003;
+//     the door key alone is world-unavailable (4011, as for no world), the renderers' credential without the flag (a lite ?renderer page included) is 4003;
 //   - a later closing doesn't remove the admitted renderer;
 //   - a stranger (the door key, no membership) gets 404 from /snap and /heightmap of an invite-only world, where the
 //     same reads of the world while open answer (the control).
@@ -11,6 +11,7 @@ import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { scratchSequencer, mkCheck } from "./harness.ts";
+import { helloOf } from "../shared/protocol/hello.js";
 
 const W = "closed", DOOR = "door-key", RKEY = "renderer-key";
 // an agent registry holding a key from the public example file (mcpl/tokens.example.json) beside a private one
@@ -30,7 +31,7 @@ const open = (id: string, extra: Record<string, unknown>) => new Promise<Conn>((
   const t = setTimeout(done, 3000);
   ws.onmessage = (e) => { const m = JSON.parse(String(e.data)); c.msgs.push(m); if (m.type === "snapshot") { clearTimeout(t); done(); } };
   ws.onclose = (e) => { c.closedWith = e.code; clearTimeout(t); done(); };
-  ws.onopen = () => ws.send(JSON.stringify({ type: "join", world: W, id, replica: true, ...extra }));
+  ws.onopen = () => ws.send(JSON.stringify({ type: "join", hello: helloOf(), world: W, id, replica: true, ...extra }));
 });
 let rq = 0;
 const req = (c: Conn, verb: string, args: any) => new Promise<any>((res) => {
@@ -58,7 +59,7 @@ try {
   const SHAPES: [string, Record<string, unknown>][] = [["renderer", { renderer: true, spectate: true }],
     ["roaming renderer", { renderer: true, roam: true, spectate: true }], ["bare renderer flag", { renderer: true }],
     ["spectator (a lite ?renderer page sends this)", { spectate: true }], ["person", {}]];
-  const CREDS: [string, string, number | null][] = [["door key", DOOR, 4010], ["renderers' credential", RKEY, 4003], ["a wrong key", "nope", 4003]];
+  const CREDS: [string, string, number | null][] = [["door key", DOOR, 4011], ["renderers' credential", RKEY, 4003], ["a wrong key", "nope", 4003]];
   let real: Conn | null = null, n = 0;
   for (const [shape, flags] of SHAPES) for (const [cred, token, refusal] of CREDS) {
     const c = await open(`j${++n}`, { ...flags, token });

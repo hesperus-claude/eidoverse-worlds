@@ -199,11 +199,11 @@ const EMBODIED_VERBS = {
     if ((spec && carried(spec)) || dependents.length || carriedUp.length) rateCheck(w, actor); // this grab will be logged
     const actOnce = () => (act ??= w.append(actOf(w, actor, "grab", a)));
     if (carriedUp.length && plan) { changeEntry(w, plan, actOnce()); notes.push({ carried: carriedUp, why: `they were resting on ${a.id}, which carries: they ride along as its children now` }); }
-    if (spec && carried(spec)) { w.append({ kind: "sim", actor, cause: actOnce(), verb: live ? "catch" : "lift", body: { id: a.id } });
+    if (spec && carried(spec)) { w.append({ kind: "physics", actor, cause: actOnce(), verb: live ? "catch" : "lift", body: { id: a.id } });
       if (live) notes.push({ id: a.id, why: "caught it in the air (logged: the sim had it)" }); }
     if (dependents.length) {
       if (spec && carried(spec)) {
-        for (const k of dependents) w.append({ kind: "sim", actor, cause: actOnce(), verb: "launch", body: { id: k, p: worldT(st, k).pos.slice(), yaw: qYaw(worldT(st, k).q), ...(ENGINES[st.entities["@world"]?.c["physics-engine"]?.engine]?.rotates ? { q: worldT(st, k).q.slice() } : {}), v: [0, 0, 0], handled: [actor] } });
+        for (const k of dependents) w.append({ kind: "physics", actor, cause: actOnce(), verb: "launch", body: { id: k, p: worldT(st, k).pos.slice(), yaw: qYaw(worldT(st, k).q), ...(ENGINES[st.entities["@world"]?.c["physics-engine"]?.engine]?.rotates ? { q: worldT(st, k).q.slice() } : {}), v: [0, 0, 0], handled: [actor] } });
         notes.push({ fell: dependents, why: `they were resting on ${a.id}; picking it up let them fall (physics will log where they land)` });
       } else {
         changeEntry(w, plan, actOnce());
@@ -320,12 +320,9 @@ const EMBODIED_VERBS = {
   // volley) is launched with v, or with power along the line
   // from where the body stands through it, lifted (physobj's 0.9 ratio: a knee-high hop at power 4). Its gates are grab's:
   // dynamic, physics.who, its locks and its ancestors', and nobody's hand. A thing in flight is caught and re-launched (logged).
-  // `contact: true` is a moving body's push (shoveGate); `shove: true` is its old spelling, taken at the door and recorded
-  // as `contact` (`shove` is the word for knocking a BODY over). Both at once is no request.
+  // `contact: true` is a moving body's push (shoveGate); `shove` stays the word for knocking a BODY over (`shove` is the word for knocking a BODY over)
   // blast: {from, act} when a blast punts it (force, below): the line starts at the blast, no body or reach, one act for all
   punt(w, actor, a, blast = null) {
-    if (a.shove !== undefined) { if (a.contact !== undefined) refuse("shape", "contact, or its old spelling shove: not both", "send contact: true");
-      a = { ...a, contact: a.shove }; delete a.shove; }
     const me = blast ? { at: blast.from } : body(w, actor); const st = w.state(); const e = st.entities[a.id];
     if (!e) refuse("not-found", `no '${a.id}'`, "look lists what's here", { didYouMean: guess(a.id, Object.keys(st.entities)) });
     notAThing(st, a.id, "punted"); offRefuse(st, a.id, "punted");
@@ -354,8 +351,8 @@ const EMBODIED_VERBS = {
     if (!flying) admit(w, st, { actor, cap: { kind: "handle", via: "punt", ids: [a.id], comps: ["transform", "parent"] } }, [...(e.c.parent ? [delOp(a.id, "parent")] : []), setOp(a.id, "transform", { pos: t.pos.map(r3), q: t.q, scale: t.scale })]);
     else rateCheck(w, actor);
     const act = blast ? blast.act() : w.append(actOf(w, actor, "punt", a, { ...(flying ? { volley: true } : {}) }));
-    if (flying) w.append({ kind: "sim", actor, cause: act, verb: "catch", body: { id: a.id } });
-    const seq = w.append({ kind: "sim", actor, cause: act, verb: "launch", body: { id: a.id, p: here.map(noNeg0), yaw: flying && !b.q ? noNeg0(b.yaw) : qYaw(flying ? b.q : t.q), ...(ENGINES[sf.spec.engine]?.rotates ? { q: (flying ? b.q : t.q).slice(), ...(flying ? { w: b.w.slice() } : {}) } : {}), v: v.map(noNeg0), handled: [actor] } });
+    if (flying) w.append({ kind: "physics", actor, cause: act, verb: "catch", body: { id: a.id } });
+    const seq = w.append({ kind: "physics", actor, cause: act, verb: "launch", body: { id: a.id, p: here.map(noNeg0), yaw: flying && !b.q ? noNeg0(b.yaw) : qYaw(flying ? b.q : t.q), ...(ENGINES[sf.spec.engine]?.rotates ? { q: (flying ? b.q : t.q).slice(), ...(flying ? { w: b.w.slice() } : {}) } : {}), v: v.map(noNeg0), handled: [actor] } });
     return { ok: true, seq, act, flying: a.id, from: here.map(r3), v: v.map(r3), ...(flying ? { volley: true } : {}), ...(notes.length ? { notes } : {}), next: "wait (or any request) logs where it comes to rest" };
   },
   // a blast (/boom): each body in radius is shoved through its own consent (bodyGate, as the body verb), each loose

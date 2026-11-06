@@ -1,5 +1,5 @@
 // sockbody — what a person's body does at a socket: the `station` component on a socket entity (formerly the `body`
-// block of `socket` / `sockets.<name>`, still read here as the old spelling the door lifts), as data.
+// block of `socket` / `sockets.<name>`, still read here as the old world's spelling the importer lifts), as data.
 //
 // The alpha registers the station's core only (shared/protocol/componentspec.js station: action, pose, anchor, exit,
 // leaveBy, who). The rest of the researched shape below is RESERVED: the door refuses it (STATION_RESERVED), its names are
@@ -36,7 +36,7 @@
 //     who      'builder'        member | builder | owner
 //   }
 //
-// Pure: no DOM, no three, no clock. The authority validates with checkSockets; the browser, the door and the agent process read with bodyOf.
+// Pure: no DOM, no three, no clock. The authority validates with checkSocket and checkStation; the browser, the door and the agent process read with bodyOf.
 
 import { REACH_CHAINS } from './joints.js';
 import { HUMANOID_BONES } from './humanoid.js';
@@ -44,7 +44,7 @@ import { checkAccepts, checkKeys, nearMiss } from './grab.js';
 import { isReservedAnimName } from './animdefs.js';
 import { BUILTIN_IDS, isWhoValue, whoWords } from './protocol/roles.js';
 import { COMPONENTS, materialize } from './protocol/componentspec.js';
-import { isPurged } from './protocol/fold.js';
+import { isRedacted } from './protocol/fold.js';
 import { isNum, isObj } from './protocol/is.js';
 
 // surface: the seat authors its support plane; a body's profiled seat contact lands on it (client/lib/seatcore.js)
@@ -63,8 +63,6 @@ const isWho = isWhoValue;   // a role id, {permission} or {roles}
  *  occupant's input (riding their presence), and param.<name> from the thing's `params` component (scripts write it). */
 export const SIGNALS = ['speed', 'turn', 'phase', 'swing', 'throttle', 'steer', 'aimYaw', 'aimPitch'];
 export const BODY_KEYS = ['action', 'anchor', 'pose', 'poses', 'sync', 'approach', 'enter', 'leave', 'exit', 'reach', 'hold', 'look', 'input', 'leaveBy', 'fromSeat', 'who'];
-// accepts/radius (shared/grab.js): a free socket takes a released thing whose grabbable.fits shares a keyword, within radius
-const SOCKET_KEYS = ['pos', 'q', 'part', 'body', 'accepts', 'radius'];
 // a socket entity's own component: its pose is the entity's transform, so pos and q aren't here
 const SOCKET_ENTITY_KEYS = Object.keys(COMPONENTS.socket.fields);   // name, part, accepts, radius
 /** The station's registered keys, and the researched ones the alpha holds back (refused as reserved, names kept). */
@@ -234,31 +232,8 @@ export function reachWins(policy, hand, target) {
 
 // ---------------------------------------------------------------- the authority's check
 
-/** The whole `sockets` component, checked (closed keys, ranges, enums, the one-driver rule). Null when good, else
- *  {code: 'shape'|'schema', reason, fix, didYouMean?} — the authority refuses with it verbatim, and the inspector's planner
- *  speaks the same words. */
-export function checkSockets(v, at = 'sockets') {
-  if (!isObj(v)) return bad('shape', `${at} must be {<name>: {pos, q?, part?, body?}}`);
-  let drivers = [];
-  for (const [k, sk] of Object.entries(v)) {
-    const sat = `${at}.${k}`;
-    if (!/^[a-z0-9][a-z0-9_-]{0,31}$/i.test(k)) return bad('shape', `${sat}: a socket's name is letters, digits, - and _ (up to 32)`);
-    if (!isObj(sk)) return bad('shape', `${sat} must be {pos, q?, part?, body?}`);
-    let r = checkKeys(sat, sk, SOCKET_KEYS, 'a socket'); if (r) return r;
-    if (!nums(sk.pos, 3)) return bad('shape', `${sat}.pos must be [x, y, z] in the thing's own frame`);
-    if (sk.q !== undefined && !unitQ(sk.q)) return bad('shape', `${sat}.q is a unit quaternion [x, y, z, w] (the socket's rotation in the thing's frame)`);
-    if (sk.part !== undefined && !(typeof sk.part === 'string' && sk.part)) return bad('shape', `${sat}.part names a node of its model`);
-    if ((r = checkAccepts(sk, sat))) return r;
-    if (sk.body === undefined) continue;
-    r = checkBody(sk.body, `${sat}.body`); if (r) return r;
-    if (sk.body.input?.move === 'drive') drivers.push(k);
-  }
-  if (drivers.length > 1) return bad('shape', `${at}: only one socket may drive (${drivers.join(', ')} all have input.move 'drive')`, "one driver per thing (a vehicle has one wheel); passengers' input can still shape their own pose: input.move 'walk'");
-  return null;
-}
-
 /** One socket entity's `socket` component, checked (closed keys, accepts): null when good. The rules that need its
- *  siblings (a unique name) are the door's. A body block is the station's now (the door lifts an old write of one). */
+ *  siblings (a unique name) are the door's. A body block is the station's now (the door refuses one on a socket). */
 export function checkSocket(v, at = 'socket') {
   if (!isObj(v)) return bad('shape', `${at} must be {name, part?, accepts?, radius?}`);
   if (v.body !== undefined) return bad('schema', `${at}.body: what a person's body does at a socket is the station component on the same entity now`, 'station {action, anim?, anchor?, exit?, leaveBy?, who?} beside socket', ['station']);
@@ -379,7 +354,7 @@ export function resolveSeat(world, seat) {
 
 /** What a socket is for, read from what it has (never stored): a station if it has one, a snap point if accepts, else
  *  an attach point. `c` is the socket's record (a fold `c` or a view's `comp`). */
-export const socketRole = (c) => (isObj(c?.station) && !isPurged(c.station) ? 'station' : Array.isArray(c?.socket?.accepts) ? 'snap' : 'attach');   // the authority's own reads this one (authority/sockets.js)
+export const socketRole = (c) => (isObj(c?.station) && !isRedacted(c.station) ? 'station' : Array.isArray(c?.socket?.accepts) ? 'snap' : 'attach');   // the authority's own reads this one (authority/sockets.js)
 /** A host's sockets, as its socket children (PLAN-sockets-entities §1): [{id, name, sock, station}] in `kids` order. `kids(host)`
  *  lists a thing's child ids; `rec(id)` is a record's components (a fold `c`, or a view's `comp`). A socket switched off
  *  on its own is a closed seat: not listed. The one reader every client and agent surface shares (the authority's own is
@@ -395,25 +370,6 @@ export function socketsIn(entities, host, opts) {
   const E = entities ?? {}; const recC = (k) => E[k]?.c ?? E[k] ?? null; const up = (k) => E[k]?.c?.parent?.to ?? E[k]?.parent?.to;
   return socketsUnder(host, (h) => Object.keys(E).filter((k) => up(k) === h), recC, opts);
 }
-/** A socket child as the old `sockets.<name>` entry read ({pos, q?, part?, body?, accepts?, radius?}): its pose is its own
- *  transform, local to its host, and its station is the entry's body. For the readers still written against the map (the
- *  Inspector's Sockets card and the seat gizmos, until the Parts UI: PLAN §10 12b); writing one back as a map is
- *  translated at the door (each body a station). `t` is the socket's transform ({pos, q}). */
-export function slotOf(sock, t, station = null) {
-  const { name, ...rest } = sock ?? {};
-  const q = Array.isArray(t?.q) && t.q.length === 4 && !(t.q[0] === 0 && t.q[1] === 0 && t.q[2] === 0 && t.q[3] === 1) ? { q: t.q.slice() } : {};
-  // the map's body block keeps its old spelling: the station's anim is its pose (stationOfBody turns it back at the door)
-  const body = isObj(station) ? (({ anim, ...r }) => (anim !== undefined ? { ...r, pose: anim } : r))(JSON.parse(JSON.stringify(station))) : null;
-  return { pos: Array.isArray(t?.pos) ? t.pos.slice() : [0, 0, 0], ...q, ...JSON.parse(JSON.stringify(rest)), ...(body ? { body } : {}) };
-}
-/** A host's socket children as the old `sockets` map ({name: slotOf…}), switched-off ones included (a map written back
- *  must not drop them), or null when it has none. `entities` as socketsIn. */
-export function socketMapIn(entities, host) {
-  const E = entities ?? {}; const out = {};
-  for (const x of socketsIn(E, host, { all: true })) { const e = E[x.id]; out[x.name] = slotOf(x.sock, e?.c ? e.c.transform : { pos: e?.pos, q: e?.q }, x.station); }
-  return Object.keys(out).length ? out : null;
-}
-
 /** One line saying what a body does at a socket, for anyone reading it as text (the agent process's look, the sit reply).
  *  door: the agents' door reads it, so the way off is the door's own (detach, or a move; detach {escape: true} past a
  *  seat that holds you), not a person's controls (X, get up, jump: no agent has them). */

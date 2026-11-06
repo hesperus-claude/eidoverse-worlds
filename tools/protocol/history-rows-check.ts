@@ -5,10 +5,10 @@ import { suite } from "./suite.ts";
 const SU = suite("history-rows-check", { cap: Infinity }), { ok } = SU;
 const nameOf = (id: string) => ({ "u-a": "Ann", "u-b": "Bob" } as any)[id] ?? id;
 const entries = [
-  { seq: 7, kind: "act", actor: "u-a", verb: "set", ts: 1, body: { request: { id: "lamp", component: "light" } } },
-  { seq: 8, kind: "change", actor: "u-a", verb: "set", ts: 1, cause: 7, body: {} },
-  { seq: 9, kind: "act", actor: "u-b", verb: "delete", ts: 2, body: { request: { id: "lamp" }, refused: { code: "rights" } } },
-  { seq: 10, kind: "say", actor: "u-b", verb: "say", ts: 3, body: { text: "hi" } },
+  { seq: 7, kind: "request", actor: "u-a", verb: "set", ts: 1, body: { args: { id: "lamp", component: "light" } } },
+  { seq: 8, kind: "change", actor: "u-a", op: "set", ts: 1, cause: 7, body: {} },
+  { seq: 9, kind: "request", actor: "u-b", verb: "delete", ts: 2, body: { argNames: ["id"], refused: { code: "rights" } } },
+  { seq: 10, kind: "say", actor: "u-b", ts: 3, body: { text: "hi" } },
 ];
 const rows = worldHistoryRows(entries, nameOf);
 ok(rows.length === 2, "H1 only acts are rows (state/say are not)", rows.map((r: any) => r.seq));

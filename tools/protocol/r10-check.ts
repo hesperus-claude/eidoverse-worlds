@@ -25,6 +25,7 @@ import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { TRANSLATOR } from "./import-v1/translate-v1.js";
 import { labClock, pinned } from "./clock.ts";
 import { suite } from "./suite.ts";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -93,8 +94,8 @@ const D = await import(TREE + "shared/protocol/authority.js");
 D.fixtureIds?.(true);   // the fixtures below seed the ids they read (ids-check covers the refusal)
 const F = await import(TREE + "shared/protocol/fold.js");
 const SB = await import(TREE + "shared/protocol/sandbox.js");
+const REQ = await import(TREE + "shared/requests.js");
 const AU = await import(TREE + "shared/protocol/scriptaudit.js");
-const SR = await import(TREE + "shared/protocol/shaperepair.js");
 const SK = await import(TREE + "shared/sockbody.js");
 if (D.setScriptDuty) D.setScriptDuty({ maxMs: 1e9 });
 const ONLY = opt("only")?.split(",") ?? null;
@@ -104,13 +105,13 @@ function openWorld(name: string) {
   const logPath = path.join(root, "worlds", `${name}.jsonl`), storeDir = path.join(root, "store");
   const entries = F.readLog(readLogBytes(logPath)).map(D.posAt);
   const blobPath = (h: string) => path.join(storeDir, `${String(h).replace(/[^a-z0-9]/g, "-")}.json`);
-  const w = D.worldOf({ name, entries,
+  const w = D.worldOf({ catalogue: LAB_CATALOGUE, simModels: LAB_MODELS, name, entries,
     getBlob: (h: string) => JSON.parse(fs.readFileSync(blobPath(h), "utf8")),
     putBlob: (v: unknown) => { const s = F.jcs(v); const h = `sha256:${F.sha256(s)}`; putBlobFile(blobPath(h), s, h); return h; },
     now: () => pinned(), writeLine: (line: string) => appendDurable(logPath, line),
     presence: { bodies: {}, holds: {} }, savePresence: () => {}, scripts: SB.SANDBOX,
     custody: custodyAt(path.join(root, "keys", "custody.json")), ...modLogAt(path.join(root, "worlds", `${name}.mod.jsonl`)) });
-  w.catalogue = D.LAB_CATALOGUE;
+  w.catalogue = LAB_CATALOGUE;
   return w;
 }
 const clock = labClock(); let N = 0;
@@ -126,13 +127,15 @@ function session() {
 const show = (r: any) => (r?.crashed ? `CRASH ${r.crashed}` : r?.ok ? "ok" : `refused ${r?.refused?.code}: ${String(r?.refused?.reason).slice(0, 160)}`);
 const comp = (s: any, id: string, c: string) => s.w().state().entities[id]?.c[c];
 const roles = (s: any, m: Record<string, string>) => { for (const [who, role] of Object.entries(m)) s.call("olive", "set", { id: "@world", component: `roles:${who}`, value: { role } }); };
-const lastUse = (s: any) => s.entries().findLast((e: any) => e.kind === "act" && e.verb === "use");
-const SEAT = (extra: any = {}) => ({ sockets: { a: { pos: [0, 0.45, 0], body: { action: "sit", ...extra } } } });
+const lastUse = (s: any) => s.entries().findLast((e: any) => e.kind === "request" && e.verb === "use");
+// a seat is a socket child with a station: create the host, then its seat as its child
+function mkSeat(s: any, actor: string, args: any) { const r = s.call(actor, "create", args); if (!r.ok) return r;
+  const o = REQ.addSocket(args.id, { name: "a" }, { pos: [0, 0.45, 0], station: { action: "sit" } }); return s.call(actor, o.verb, o.args); }
 const seated = (s: any, who: string) => !!s.w().presence.occupants?.[who];
 const inboxOf = (s: any, who: string) => JSON.stringify(s.w().presence.inbox?.[who] ?? s.w().presence.inboxes?.[who] ?? null);
 
 const RT = await import(TREE + "shared/protocol/authority/rights.js");
-const FU = (s: any, seq: number) => { const ch = s.entries()[seq]; const ops = ch?.body?.ops ?? []; return (ch?.body?.followUps ?? []).map((k: number) => `${ops[k]?.verb} ${ops[k]?.id}.${ops[k]?.comp ?? "*"}`); };
+const FU = (s: any, seq: number) => { const ch = s.entries()[seq]; const ops = ch?.body?.ops ?? []; return (ch?.body?.cascade ?? []).map((k: number) => `${ops[k]?.op} ${ops[k]?.id}.${ops[k]?.comp ?? "*"}`); };
 const readText = (rel: string) => { try { return fs.readFileSync(TREE + rel, "utf8"); } catch { return fs.readFileSync(ENGINE + rel, "utf8"); } };
 const section = (md: string, head: RegExp) => { const i = md.search(head); if (i < 0) return ""; const rest = md.slice(i + 1); const j = rest.search(/\n## /); return md.slice(i, j < 0 ? undefined : i + 1 + j); };
 
@@ -154,8 +157,8 @@ const cases: Case[] = [
   { id: "S1", what: "(holes M1, p3) a world with a spawn at [-18,0,0]: visitor vic, refused a teleport to olive's chair at [17,0], is refused `use sit` from 35 m too (out-of-reach), stays tracked at the spawn, and his step to the chair is too-fast; only refusals logged. Within reach the sit is fine", run(s) {
       s.call("olive", "create-world", { title: s.name }); roles(s, { vic: "member" });
       s.call("olive", "set", { id: "@world", component: "spawn", value: { pos: [-18, 0, 0] } });
-      s.call("olive", "create", { id: "chair", model: "chair", components: SEAT(), place: { at: [17, 0] } });
-      s.call("olive", "create", { id: "stool", model: "chair", components: SEAT(), place: { at: [-15, 0] } });
+      mkSeat(s, "olive", { id: "chair", model: "chair", place: { at: [17, 0] } });
+      mkSeat(s, "olive", { id: "stool", model: "chair", place: { at: [-15, 0] } });
       s.call("vic", "move", { to: [-18, 0, 0] });
       const tp = s.call("vic", "move", { to: [17, 0, -0.6], teleport: true });
       const n0 = s.entries().length;
@@ -167,7 +170,7 @@ const cases: Case[] = [
     good: (o) => /^refused spawn/.test(o.tp) && /^refused out-of-reach/.test(o.sit) && /^refused too-fast/.test(o.m1) && JSON.stringify(o.at) === "[-18,0,0]" && o.logged.every((x: string) => / refused$/.test(x)) && o.near === "ok" && o.seat?.near === true },
   { id: "S2", what: "(holes M1 b) a seat not boarded within reach (no `near`: a presence file from before r10, or a body not tracked when it sat) never re-anchors the track: the step off is measured from where the body was", run(s) {
       s.call("olive", "create-world", { title: s.name }); roles(s, { vic: "member", bob: "builder" });
-      s.call("olive", "create", { id: "chair", model: "chair", components: SEAT(), place: { at: [20, 0] } });
+      mkSeat(s, "olive", { id: "chair", model: "chair", place: { at: [20, 0] } });
       s.call("vic", "move", { to: [0, 0, 0] });
       s.w().presence.occupants = { vic: { to: Object.keys(s.w().state().entities).find((k) => s.w().state().entities[k].c.parent?.to === "chair"), since: s.entries().length } };
       const m = s.call("vic", "move", { to: [20, 0, -0.6] });
@@ -179,7 +182,7 @@ const cases: Case[] = [
     good: (o) => /^refused too-fast/.test(o.m) && o.mv === "ok" && JSON.stringify(o.at) === "[0,0,0]" && o.msgAt === null && o.told },
   { id: "S3", what: "(holes L5) the first step off a seat is the stand-up: under a metre from the seat clears it (not only past 1 m)", run(s) {
       s.call("olive", "create-world", { title: s.name }); roles(s, { vic: "member" });
-      s.call("olive", "create", { id: "chair", model: "chair", components: SEAT(), place: { at: [4, 0] } });
+      mkSeat(s, "olive", { id: "chair", model: "chair", place: { at: [4, 0] } });
       s.call("vic", "move", { to: [4, 0, -0.6] }); const sit = s.call("vic", "use", { id: "chair", action: "sit" });
       const was = seated(s, "vic"); const step = s.call("vic", "move", { to: [4.5, 0, -0.6] });
       return { sit: show(sit), was, step: show(step), seated: seated(s, "vic") }; },
@@ -196,10 +199,10 @@ const cases: Case[] = [
       const s = session(); const o: any = leverUndo(s, "olive"); const w = s.w(); const L = s.entries();
       o.creator = RT.creatorOf(w, "lever", "reactions")?.by ?? null; o.setter = RT.lastSetterOf(w, "lever", "reactions"); o.at = AU.creatorAt(L, "lever", "reactions", L.length - 1)?.rights ?? null;
       // a script key the same way (the sponsor view): olive's delete of x drops nothing on a script (r8 H1), so drive the readers with a hand-made log
-      const mk = (ops: any, actor: string, fu?: number[]) => ({ kind: "change", actor, verb: "batch", body: { ops, ...(fu ? { followUps: fu } : {}) } });
-      const H: any[] = [{ kind: "genesis", body: {} }, { kind: "act", actor: "bob", verb: "set", body: {} }, { ...mk([{ verb: "set", id: "d", comp: "script:a", value: { src: "s" } }], "bob"), cause: 1 },
-        { kind: "act", actor: "olive", verb: "delete", body: {} }, { ...mk([{ verb: "delete", id: "x" }, { verb: "delete", id: "d", comp: "script:a" }], "olive", [1]), cause: 3 },
-        { kind: "act", actor: "olive", verb: "undo", body: {} }, { ...mk([{ verb: "create", id: "x" }, { verb: "set", id: "d", comp: "script:a", value: { src: "s" } }], "olive", [1]), cause: 5 }];
+      const mk = (ops: any, actor: string, fu?: number[]) => ({ kind: "change", actor, op: "batch", body: { ops, ...(fu ? { cascade: fu } : {}) } });
+      const H: any[] = [{ kind: "genesis", body: {} }, { kind: "request", actor: "bob", verb: "set", body: {} }, { ...mk([{ op: "set", id: "d", comp: "script:a", value: { src: "s" } }], "bob"), cause: 1 },
+        { kind: "request", actor: "olive", verb: "delete", body: {} }, { ...mk([{ op: "delete", id: "x" }, { op: "delete", id: "d", comp: "script:a" }], "olive", [1]), cause: 3 },
+        { kind: "request", actor: "olive", verb: "undo", body: {} }, { ...mk([{ op: "create", id: "x" }, { op: "set", id: "d", comp: "script:a", value: { src: "s" } }], "olive", [1]), cause: 5 }];
       o.sponsor = AU.sponsorAt(H, "d", "script:a", H.length - 1)?.rights ?? null; o.hCreator = AU.creatorAt(H, "d", "script:a", H.length - 1)?.rights ?? null;
       roles(s, { bob: "member" }); o.demoted = show(s.call("vic", "use", { id: "lever", action: "go" }));
       return o; },
@@ -213,11 +216,11 @@ const cases: Case[] = [
       // a follow-up set on the new life (hand-made: a clear of a reference wes's handler doesn't hold can't happen, so mark one)
       const w = s.w(); const L = s.entries();
       return { nw: show(nw), creator: RT.creatorOf(w, "lever", "reactions")?.by ?? null, at: AU.creatorAt(L, "lever", "reactions", L.length - 1)?.rights ?? null,
-        hand: (() => { const mk = (ops: any, actor: string, fu?: number[]) => ({ kind: "change", actor, verb: "batch", body: { ops, ...(fu ? { followUps: fu } : {}) } });
-          const W2: any = { entries: [{ kind: "genesis", body: {} }, { kind: "act", actor: "bob", verb: "set", body: {} }, { ...mk([{ verb: "set", id: "l", comp: "reactions", value: 1 }], "bob"), cause: 1 },
-            { kind: "act", actor: "olive", verb: "delete", body: {} }, { ...mk([{ verb: "delete", id: "x" }, { verb: "delete", id: "l", comp: "reactions" }], "olive", [1]), cause: 3 },
-            { kind: "act", actor: "wes", verb: "set", body: {} }, { ...mk([{ verb: "set", id: "l", comp: "reactions", value: 2 }], "wes"), cause: 5 },
-            { kind: "act", actor: "olive", verb: "undo", body: {} }, { ...mk([{ verb: "set", id: "l", comp: "reactions", value: 2 }], "olive", [0]), cause: 7 }], presence: {} };
+        hand: (() => { const mk = (ops: any, actor: string, fu?: number[]) => ({ kind: "change", actor, op: "batch", body: { ops, ...(fu ? { cascade: fu } : {}) } });
+          const W2: any = { entries: [{ kind: "genesis", body: {} }, { kind: "request", actor: "bob", verb: "set", body: {} }, { ...mk([{ op: "set", id: "l", comp: "reactions", value: 1 }], "bob"), cause: 1 },
+            { kind: "request", actor: "olive", verb: "delete", body: {} }, { ...mk([{ op: "delete", id: "x" }, { op: "delete", id: "l", comp: "reactions" }], "olive", [1]), cause: 3 },
+            { kind: "request", actor: "wes", verb: "set", body: {} }, { ...mk([{ op: "set", id: "l", comp: "reactions", value: 2 }], "wes"), cause: 5 },
+            { kind: "request", actor: "olive", verb: "undo", body: {} }, { ...mk([{ verb: "set", id: "l", comp: "reactions", value: 2 }], "olive", [0]), cause: 7 }], presence: {} };
           return { creator: RT.creatorOf(W2, "l", "reactions")?.by ?? null, at: AU.creatorAt(W2.entries, "l", "reactions", W2.entries.length - 1)?.rights ?? null }; })() }; },
     good: (o) => o.nw === "ok" && o.creator === "wes" && o.at === "wes" && o.hand.creator === "wes" && o.hand.at === "wes" },
   // ---------------- A: the auditor's stand-ins ----------------
@@ -241,7 +244,7 @@ const cases: Case[] = [
       const u = s.call("olive", "upload", { text: 'world.on("enter", (e) => { const n = (world.get("self", "t/n")?.n ?? 0) + 1; world.set("self", "t/n", { n }); });' });
       s.call("olive", "set", { id: "door", component: "script:greet", value: { src: u.src, scope: { ids: "self", comps: ["t/n"] }, on: ["enter"] } });
       s.step(); D.presenceEvent(s.w(), "enter", "u-vicvicvicvicvicvicvi");
-      const L = JSON.parse(JSON.stringify(s.entries())); const ai = L.findLastIndex((e: any) => e.kind === "act" && e.verb === "script");
+      const L = JSON.parse(JSON.stringify(s.entries())); const ai = L.findLastIndex((e: any) => e.kind === "request" && e.verb === "script");
       const ci = L.findIndex((e: any, i: number) => i > ai && e.kind === "change" && e.cause === ai); L[ci] = JSON.parse(JSON.stringify(L[ci]).replace('"n":1', '"n":999'));
       const A = AU.auditScripts(L, s.w().getBlob, { run: SB.runScript });
       return { checks: A.flags.map((f: any) => f.check), s: A.skipped.length }; },
@@ -260,9 +263,9 @@ const cases: Case[] = [
       s.call("olive", "create-world", { title: s.name }); s.call("olive", "set", { id: "@world", component: "physics-engine", value: { engine: "eidosim@1.0.0" } });
       s.call("olive", "create", { id: "plinth", components: { mesh: { shape: "box", size: [1.5, 0.8, 1.5] }, transform: { pos: [0, 0, 0] } } });
       const n0 = s.entries().length;
-      const r = s.call("olive", "batch", { ops: [{ verb: "set", args: { id: "plinth", component: "mesh", value: { shape: "box", size: [1.5, 0.3, 1.5] } } },
+      const r = s.call("olive", "batch", { requests: [{ verb: "set", args: { id: "plinth", component: "mesh", value: { shape: "box", size: [1.5, 0.3, 1.5] } } },
         { verb: "create", args: { id: "crate", components: { mesh: { shape: "box", size: [0.4, 0.4, 0.4] }, physics: { kind: "dynamic" }, parent: { to: "plinth" }, transform: { pos: [0, 0.6, 0] } } } }] });
-      const E = s.entries().slice(n0); const rs = E.find((e: any) => e.kind === "act" && e.verb === "resettle"); const ln = E.find((e: any) => e.kind === "sim" && e.verb === "launch" && e.body?.id === "crate");
+      const E = s.entries().slice(n0); const rs = E.find((e: any) => e.kind === "request" && e.verb === "resettle"); const ln = E.find((e: any) => e.kind === "physics" && e.verb === "launch" && e.body?.id === "crate");
       return { r: show(r), resettle: rs?.body?.occupants ?? null, launchY: ln?.body?.p?.[1] ?? null, crate: !!comp(s, "crate", "physics") }; },
     good: (o) => o.r === "ok" && JSON.stringify(o.resettle) === '["crate"]' && typeof o.launchY === "number" && o.crate },
   { id: "F4", what: "(review of PR #260, followups.js:58) a resettle the gate would refuse (the speck freed from its scaled host would stand at world scale 1800, past the stored ±1000) refuses the asker's write whole: nothing is written, the host keeps its scale", run(s) {
@@ -273,7 +276,7 @@ const cases: Case[] = [
       const r = s.call("olive", "set", { id: "big", component: "transform", value: { pos: [0, 0, 0], scale: [90, 90, 90] } });
       return { c: show(c), r: show(r), refused: r?.refused?.code ?? null, wrote: s.entries().length - n0, scale: comp(s, "big", "transform")?.scale?.[0] }; },
     good: (o) => o.c === "ok" && o.refused !== null && !String(o.r).startsWith("CRASH") && o.wrote <= 1 && o.scale === 100 },
-  { id: "F2", what: "(scars M3) builder vic deletes his crate with owner olive's locked vase resting on it (unparented): the delete lands, the vase is set down as the authority's follow-up (named in followUps), and the vase stays olive's", run(s) {
+  { id: "F2", what: "(scars M3) builder vic deletes his crate with owner olive's locked vase resting on it (unparented): the delete lands, the vase is set down as the authority's follow-up (named in cascade), and the vase stays olive's", run(s) {
       s.call("olive", "create-world", { title: s.name }); roles(s, { vic: "builder" });
       s.call("vic", "create", { id: "crate", components: { mesh: { shape: "box", size: [1, 1, 1] }, transform: { pos: [3, 0, 0] } } });
       const v = s.call("olive", "create", { id: "vase", components: { mesh: { shape: "box", size: [0.3, 0.4, 0.3] }, transform: { pos: [3, 1, 0] }, lock: true } });
@@ -283,7 +286,7 @@ const cases: Case[] = [
   // ---------------- U: vacated ----------------
   { id: "U1", what: "(holes L6) olive removes the seat vic sits on: vic gets `vacated {socket, at}` in his inbox (as for an edit), and his track restarts at the seat", run(s) {
       s.call("olive", "create-world", { title: s.name }); roles(s, { vic: "member" });
-      s.call("olive", "create", { id: "chair", model: "chair", components: SEAT(), place: { at: [4, 0] } });
+      mkSeat(s, "olive", { id: "chair", model: "chair", place: { at: [4, 0] } });
       s.call("vic", "move", { to: [4, 0, -0.6] }); s.call("vic", "use", { id: "chair", action: "sit" });
       const sock = s.w().presence.occupants?.vic?.to;
       const del = s.call("olive", "delete", { id: sock });
@@ -298,7 +301,7 @@ const cases: Case[] = [
   { id: "U3", what: "(claims O3) vic rides olive's carousel (set up before he sat); a thing its other handler named is deleted (a follow-up clear on the carousel's reactions); the carousel's turn still carries him", run(s) {
       s.call("olive", "create-world", { title: s.name }); roles(s, { vic: "member" });
       s.call("olive", "create", { id: "x", model: "crate", place: { at: [9, 0] }, components: { home: { pos: [9, 0, 0] } } });
-      s.call("olive", "create", { id: "carousel", model: "chair", components: { ...SEAT(), reactions: { turn: { kind: "set", component: "motion", value: { type: "spin", axis: [0, 1, 0], speed: 30 } }, sweep: { kind: "reset", targets: ["x"] } } }, place: { at: [4, 0] } });
+      mkSeat(s, "olive", { id: "carousel", model: "chair", components: { reactions: { turn: { kind: "set", component: "motion", value: { type: "spin", axis: [0, 1, 0], speed: 30 } }, sweep: { kind: "reset", targets: ["x"] } } }, place: { at: [4, 0] } });
       s.call("vic", "move", { to: [4, 0, -0.6] }); const sit = s.call("vic", "use", { id: "carousel", action: "sit" });
       const d = s.call("olive", "delete", { id: "x" });
       s.call("olive", "move", { to: [4, 0, -1.5] }); const turn = s.call("olive", "use", { id: "carousel", action: "turn" });
@@ -327,17 +330,16 @@ const cases: Case[] = [
 ];
 const PROTO = () => readText("spec/PROTOCOL.md");
 cases.push(
-  { id: "X1", what: "(holes M4 = scars M1; claims R1) PROTOCOL §3's batch row names followUps with its well-formedness (non-empty, strictly ascending integers, in range, else the entry is malformed) and its invariant (no asker's rights or locks; folded like any op; authorship skips it; a restore steps over its delete; a verifier re-runs the gate on unmarked ops only); §10 and the version history say minor 0 gained it before release", run() {
+  { id: "X1", what: "(holes M4 = scars M1; claims R1) PROTOCOL §3's batch row names cascade with its well-formedness (non-empty, strictly ascending integers, in range, else the entry is malformed) and its invariant (no asker's rights or locks; folded like any op; authorship skips it; a restore steps over its delete; a verifier re-runs the gate on unmarked ops only); §10 and the version history say minor 0 gained it before release", run() {
       const md = PROTO(); const s3 = section(md, /\n## 3\. /); const s10 = section(md, /\n## 10\. /); const vh = md.slice(md.indexOf("## Version history"));
-      return { row: /\| `batch` \| `\{ops: \[[^`]*\], followUps\?: \[i, …\]\}`/.test(s3), shape: /non-empty, strictly ascending list of integer indices/.test(s3) && /`batch-followups`/.test(s3) && /whole entry\*\* malformed/.test(s3),
-        inv: /without the asker's rights or locks/.test(s3) && /applies them like\s+any op/.test(s3) && /\*\*authorship\*\*/.test(s3) && /steps over\s+the marked `delete` it reverses/.test(s3) && /\*\*unmarked ops\s+only\*\*/.test(s3) && /remaps `followUps`/.test(s3),
-        minor: /`followUps` \(§3\) was added to this protocol \*\*at minor 0\*\*/.test(s10) && /minor 0 gained the batch body's `followUps`/.test(vh) }; },
-    good: (o) => o.row && o.shape && o.inv && o.minor },
-  { id: "X2", what: "(scars M3; claims R2, R3) §7: the gate's follow-up exception (named in followUps), and one table of the authority's consequences (clears and set-down: followUps; resettle: the system's own act; stamps: the asker's); §4's deletion names the clears and sets down what rested", run() {
+      return { row: /\| `batch` \| `\{ops: \[[^`]*\], cascade\?: \[i, …\]\}`/.test(s3), shape: /non-empty, strictly ascending list of integer indices/.test(s3) && /`batch-cascade`/.test(s3) && /whole entry\*\* malformed/.test(s3),
+        inv: /without the asker's rights or locks/.test(s3) && /applies them like\s+any op/.test(s3) && /\*\*authorship\*\*/.test(s3) && /steps over\s+the marked `delete` it reverses/.test(s3) && /\*\*unmarked ops\s+only\*\*/.test(s3) && /remaps `cascade`/.test(s3) }; },
+    good: (o) => o.row && o.shape && o.inv },
+  { id: "X2", what: "(scars M3; claims R2, R3) §7: the gate's follow-up exception (named in cascade), and one table of the authority's consequences (clears and set-down: cascade; resettle: the system's own act; stamps: the asker's); §4's deletion names the clears and sets down what rested", run() {
       const md = PROTO(); const s7 = section(md, /\n## 7\. /); const s4 = section(md, /\n## 4\. /);
       return { gate: /except that the\s+authority's own follow-ups inside a write pass it without the asker's rights, locks, keys or in-flight\s+check/.test(s7),
-        table: /\| a deletion's reference clears[^\n]*`followUps` \|/.test(s7) && /\| a deletion's set-down[^\n]*`followUps` \|/.test(s7) && /\| occupants set down or dropped[^\n]*`resettle \{hosts, occupants, asked\}`[^\n]*\| `system` \|/.test(s7) && /\| stamps on what the asker is writing[^\n]*\| the asker \|/.test(s7),
-        del: /The change entry names them \(`followUps`, §3\)/.test(s4) && /set\s+down onto what is below, as a follow-up/.test(s4) && s4.includes(`${TRANSLATOR.split("/").pop()}\`, §14)`) }; },
+        table: /\| a deletion's reference clears[^\n]*`cascade` \|/.test(s7) && /\| a deletion's set-down[^\n]*`cascade` \|/.test(s7) && /\| occupants set down or dropped[^\n]*`resettle \{hosts, occupants, asked\}`[^\n]*\| `system` \|/.test(s7) && /\| stamps on what the asker is writing[^\n]*\| the asker \|/.test(s7),
+        del: /The change entry names them \(`cascade`, §3\)/.test(s4) && /set\s+down onto what is below, as a follow-up/.test(s4) && s4.includes(`${TRANSLATOR.split("/").pop()}\`, §14)`) }; },
     good: (o) => o.gate && o.table && o.del },
   { id: "X3", what: "(scars M2, M5) Body ownership: arrival is presence (the world's log records nothing about a body; the hash reaches the moderator log only when someone acts); B2 runs in admit on every op, follow-ups and system writes included, references nulled at read time; B5 doesn't end on leaving; `arrive` stays reserved", run() {
       const md = PROTO(); const b = fs.readFileSync(new URL("../../docs/AVATAR-DIRECTION.md", import.meta.url), "utf8");   // the guard rails are direction now (house markup D, #260 10-20)
@@ -348,7 +350,7 @@ cases.push(
   { id: "X4", what: "(claims R4–R7, R9) §8: unlogged grabs carry no identity (releases do), two stand-ins of two shapes, rerun-anon; §5: vacated {socket, by, why, at}, a sit within reach, the stand tile held; COMPONENT-LADDER @12 and later; SCRIPTS and AGENTS say the escape, the seat's own motion as when you sat, and where an agent stands", run() {
       const md = PROTO(); const s8 = section(md, /\n## 8\. /); const s5 = section(md, /\n## 5\. /);
       const lad = readText("docs/COMPONENT-LADDER.md"), sc = readText("docs/SCRIPTS.md"), ag = readText("AGENTS.md");
-      return { s8: /a grab that isn't itself logged, records no trigger actor/.test(s8) && /a release keeps its trigger, since it has its own act,\s+except a leaving holder's whose drop was refused where the authority doesn't\s+put the thing back \(no engine, or no stored pose\): that one has none/.test(s8) && (() => { const au = fs.readFileSync(new URL("../../docs/SCRIPTS.md", import.meta.url), "utf8"); return /second stand-in of another shape/.test(au) && /flagged `rerun-anon`/.test(au); })() && /An auditor's re-run of a script is a\s+check, never the record/.test(s8),   // the auditor's procedure is docs since the house's view (#260 10-20)
+      return { s8: /a grab that isn't itself logged, records no trigger actor/.test(s8) && /a release keeps its trigger, since it has its own (act|request),\s+except a leaving holder's whose drop was refused where the authority doesn't\s+put the thing back \(no engine, or no stored pose\): that one has none/.test(s8) && (() => { const au = fs.readFileSync(new URL("../../docs/SCRIPTS.md", import.meta.url), "utf8"); return /second stand-in of another shape/.test(au) && /flagged `rerun-anon`/.test(au); })() && /An auditor's re-run of a script is a\s+check, never the record/.test(s8),   // the auditor's procedure is docs since the house's view (#260 10-20)
         s5: /`vacated \{socket, by,\s+why, at\}`/.test(s5) && /\(`out-of-reach`\)/.test(s5) && /the stand tile pressed\s+and held/.test(fs.readFileSync(new URL("../../docs/SEATS.md", import.meta.url), "utf8")),   // the binding is the client's since the house's view (#260 10-20)
         lad: /translate-v1@12 and later/.test(lad), sc: /pressing and holding the stand tile/.test(sc) && /`rerun-anon`/.test(sc),
         ag: /`detach \{escape\?\}`/.test(ag) && /as it was when they sat, carries its occupants/.test(ag) && /where you were let go; you stand\s+there/.test(ag) }; },

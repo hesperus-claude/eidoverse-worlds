@@ -8,7 +8,7 @@ import path from "node:path";
 import { directoryAt, directoryFor, isMinted, accountTag, foldName, lockFor } from "../../server/directory.ts";
 import { CUSTODY_FILE, DIRECTORY_FILE, OLD_NAMES, custodyFileIn } from "../../server/keyfiles.ts";
 import { custodyAt } from "../../server/custody.ts";
-import { openLive } from "../../server/livehost.ts";
+import { openLive } from "./labhost.ts";
 import { request, actIndexOf, isBanned } from "../../shared/protocol/authority.js";
 import { suite } from "./suite.ts";
 import { COMPONENTS } from "../../shared/protocol/componentspec.js";
@@ -181,13 +181,13 @@ ok(foldName("Marígold") === foldName("marigold") && foldName("JOSÉ") === foldN
   const m0 = w.entries.length;
   const ref: any = request(w, anon, "delete", { id: "@world" });
   const rec = w.entries.slice(m0);
-  ok(!ref.ok && rec.length === 1 && rec[0].kind === "act" && rec[0].actor === anon && rec[0].body?.refused?.code === ref.refused?.code && JSON.stringify(rec[0].body?.args) === '["id"]' && !("request" in rec[0].body),
+  ok(!ref.ok && rec.length === 1 && rec[0].kind === "request" && rec[0].actor === anon && rec[0].body?.refused?.code === ref.refused?.code && JSON.stringify(rec[0].body?.argNames) === '["id"]' && !("args" in rec[0].body),
     "B4 a refused write is recorded: an act with its argument names and {refused: {code}}, never the values (engine-scars 6a), no state", rec.map((e: any) => [e.kind, e.body]));
   const m1 = w.entries.length;
   request(w, anon, "delete", { id: "@world", dry: true }); request(w, anon, "inspect", { id: "nope" }); request(w, anon, "frobnicate", {});
   ok(w.entries.length === m1 + 1 && w.entries.at(-1).body?.refused?.code === "unknown-verb", "B5 dry runs and reads aren't recorded; an unknown verb is (it's what was tried)", w.entries.slice(m1).map((e: any) => e.body?.refused));
   const huge: any = request(w, anon, "set", { id: "nope", component: "label", value: "q".repeat(5000) });
-  ok(!huge.ok && JSON.stringify(w.entries.at(-1).body?.args) === '["component","id","value"]' && JSON.stringify(w.entries.at(-1)).length < 600, "B6 a refused request's values never reach the log, however long: its names and code do (the values go to the in-memory ring)", w.entries.at(-1).body);
+  ok(!huge.ok && JSON.stringify(w.entries.at(-1).body?.argNames) === '["component","id","value"]' && JSON.stringify(w.entries.at(-1)).length < 600, "B6 a refused request's values never reach the log, however long: its names and code do (the values go to the in-memory ring)", w.entries.at(-1).body);
   T += 20000; const before = w.entries.length; const TRIES = 300;
   for (let i = 0; i < TRIES; i++) request(w, anon, "delete", { id: "@world" });   // refusals cost bytes too
   const written = w.entries.length - before; const grewB = w.entries.slice(before).reduce((a: number, e: any) => a + JSON.stringify(e).length, 0);
@@ -211,7 +211,7 @@ ok(foldName("Marígold") === foldName("marigold") && foldName("JOSÉ") === foldN
   ok(set("transform@2", { pos: [1e9, 0, 0] }).refused?.code === "schema", "S3 transform@2 is a near-miss too");
   ok(request(w, me, "set", { id: "@world", component: "terrain:base", value: { amp: 0 } }).refused?.code === "shape" && set("light:main", { intnsity: 5 }).refused?.code === "shape",
     "S4 an unkeyed name written keyed (terrain:base, light:main) no longer dodges the schema");
-  ok(set("label", 42).refused?.code === "shape" && set("sockets", "nope").refused?.code === "shape" && set("model", { x: 1 }).refused?.code === "shape", "S5 label, sockets and model are typed");
+  ok(set("label", 42).refused?.code === "shape" && set("model", { x: 1 }).refused?.code === "shape", "S5 label and model are typed");
   ok(set("placer", { id: "me" }).refused?.code === "derived", "S6 placer is derived (L2): refused");
   const lit: any = request(w, me, "create", { id: "lamp", components: { transform: { pos: [2, 1, 2] }, light: {} } });
   ok(lit.ok && w.state().entities.lamp.c.light.intensity === COMPONENTS.light.defaults.intensity && w.state().entities.lamp.c.light.range === COMPONENTS.light.defaults.range, "S7 an agent's light {} gets the registry's defaults, as the editor's does (R9)", w.state().entities.lamp?.c.light);
@@ -245,9 +245,7 @@ ok(foldName("Marígold") === foldName("marigold") && foldName("JOSÉ") === foldN
   q(ann, "create", { id: "post", model: "crate", place: { at: [11, 11] } });
   const war: any[] = [];
   for (const v of ["a", "b", "c"]) { const s1 = q(bob, "set", { id: "post", component: "label", value: v }); war.push(q(cy, "undo", { act: actOf(s1) })); }
-  ok(war[0].ok && war[1].ok && war[2].refused?.code === "revert-war", "U8 the third revert across people on one thing within the hour is refused below owner (a dispute)", war.map((r) => r.ok || r.refused?.code));
-  const last = [...w.entries.keys()].reverse().find((i) => w.entries[i].kind === "act" && w.entries[i].actor === bob && w.entries[i].verb === "set");
-  ok(q(ann, "undo", { act: last }).ok, "U9 …an owner still can (owners settle it)");
+  ok(war.every((r) => r.ok), "U8 undo keeps no count: a third revert across people on one thing within the hour is taken like the first", war.map((r) => r.ok || r.refused?.code));
   ok(q(bob, "undo", { acts: 3 }).refused?.code === "unknown-arg", "U10 a typo'd undo argument is refused, not a silent undo of your latest act (R10)"); }
 
 // ---- W: the sky panel in a world (it couldn't write at all: fromv1 had no 'sky' / 'weather') ----
@@ -351,7 +349,7 @@ ok(foldName("Marígold") === foldName("marigold") && foldName("JOSÉ") === foldN
 // directory identities and content addresses, and is compared with HER sim (shared/sim.js beside the v1 fold, as sweep §3).
 { const { emptyState: v1Empty, foldEntry } = await import("./import-v1/fold.js");
   const eidosim = await import("./import-v1/eidosim-v1.js");   // HER engine: what the v1 log means
-  const { simFold, DEFAULT_ENGINE } = await import("../../shared/protocol/simlayer.js");
+  const { DEFAULT_ENGINE } = await import("../../shared/protocol/simlayer.js"); const { simFold } = await import("./labmodels.js");
   const { readLog, fold } = await import("../../shared/protocol/fold.js");
   const TV1 = await import("./import-v1/translate-v1.js");
   const crypto = await import("node:crypto");
@@ -389,18 +387,21 @@ ok(foldName("Marígold") === foldName("marigold") && foldName("JOSÉ") === foldN
     out.others = [!off.length, off.slice(0, 5)];
     // @11: her flights are plain logged writes: no launch, no digest; every flight of hers rests on the record; the world
     // runs today's eidosim from her epoch on; the sim layer reads the history without a disagreement
-    const flown = t.lines.filter((e: any) => e.kind === "sim").length;
+    const flown = t.lines.filter((e: any) => e.kind === "physics").length;
     const sf = simFold(t.lines, endOf(t.lines), { models: {} });
     out.carrier = [t.r.sim && !flown && !sf.checks.disagree.length && t.r.sim.rests === t.r.sim.launches && (launches < 0 || t.r.sim.launches === launches)
       && (!t.r.sim.engine || t.r.sim.engine.engine === DEFAULT_ENGINE), { flown, checks: sf.checks, sim: t.r.sim }];
     out.strict = [t.back.status === "ok" && !t.back.diagnostics.some(([, c]: any) => String(c).startsWith("malformed")), t.back.diagnostics.slice(0, 3)];
     out.tier0 = [Array.isArray(t.lines[0].body.owners[0]) && t.lines[0].body.owners[0].length === 0, t.lines[0].body.owners];   // #260 rereview blocker 1: no founder
-    out.stamp = [t.lines[1].body.from.translator === TV1.TRANSLATOR_SIM, t.lines[1].body.from.translator];
+    // S4 (Mica 11-05): one provenance carrier: genesis names the import tool's writer at the sim translator's number, and the
+    // `translated` receipt repeats it; `from` (the parent) names no translator
+    const pv = t.lines[0].body.provenance;
+    out.stamp = [pv?.writer?.name === "eidoverse-translate-v1" && pv.writer.version === `${TV1.translatorVersion(TV1.TRANSLATOR_SIM)}.0.0` && JSON.stringify(t.lines[1].body.provenance) === JSON.stringify(pv) && !("translator" in t.lines[1].body.from), { pv, from: t.lines[1].body.from }];
     // identities: every old actor's act (and the launch it caused) is an opaque directory id, never the old name
-    const people = t.lines.filter((e: any) => (e.kind === "act" && e.verb === "imported") || (e.kind === "sim" && e.verb === "launch"));
+    const people = t.lines.filter((e: any) => (e.kind === "request" && e.verb === "imported") || (e.kind === "physics" && e.verb === "launch"));
     // (v1's own system actors keep their v1 spelling on this path, as before: "world" stays "world", "door" is "system")
     const named = people.filter((e: any) => !["system", "world", "sim"].includes(e.actor) && !isMinted(e.actor)).map((e: any) => e.actor);
-    const launchBy = t.lines.filter((e: any) => e.kind === "sim" && e.verb === "launch").every((e: any) => e.actor === t.lines[e.cause]?.actor);
+    const launchBy = t.lines.filter((e: any) => e.kind === "physics" && e.verb === "launch").every((e: any) => e.actor === t.lines[e.cause]?.actor);
     out.identities = [!named.length && launchBy && people.some((e: any) => isMinted(e.actor) && t.dir.entry(e.actor)), { named: [...new Set(named)].slice(0, 5), launchBy }];
     // R 10-17: every model is its library path, with model-hash sha256:<its bytes> beside it where this host has them; a
     // collider's box rides as physics.shape
@@ -507,11 +508,11 @@ ok(foldName("Marígold") === foldName("marigold") && foldName("JOSÉ") === foldN
         const t = importer("commons", X, libDir ? { libDir } : { lib });
         report("EP3", `an epoch entered after ${C.length} instant-fold entries (${src}, her epoch and punts on ${four.join(", ")}): every body rests where her sim rests, through the importer`, facts(t, X, { addresses, launches: tail.filter((e: any) => e.verb === "punt").length }));
         // the thousands before it: the pure translator over the copy alone and over the copy + epoch agree entry for entry
-        // up to the epoch's act (the second entry, the translator's stamp, differs by design: @10 says the sim ran)
+        // up to the epoch's act (@49: neither `translated` names a translator; provenance is the import tool's, given by it)
         const nonce = "ZXAzLXNhbWUtbm9uY2UtMDAw";   // one world id for both (the default nonce hashes the whole source)
-        const a = TV1.translate(C, { nonce }).out, b = TV1.translate(X, { nonce }).out; const k = b.findIndex((e: any) => e.kind === "act" && e.body?.verb === "epoch");
+        const a = TV1.translate(C, { nonce }).out, b = TV1.translate(X, { nonce }).out; const k = b.findIndex((e: any) => e.kind === "request" && e.body?.verb === "epoch");
         const same = k > 2 && b.slice(2, k).every((e: any, i: number) => JSON.stringify(e) === JSON.stringify(a[i + 2])) && JSON.stringify(a[0]) !== undefined;
-        ok(same && a[1].body.from.translator === TV1.TRANSLATOR && b[1].body.from.translator === TV1.TRANSLATOR_SIM, `EP3 …and the ${k - 2} entries before the epoch are byte-for-byte what the copy alone translates to`, { k }); }
+        ok(same && !("translator" in a[1].body.from) && !("translator" in b[1].body.from), `EP3 …and the ${k - 2} entries before the epoch are byte-for-byte what the copy alone translates to`, { k }); }
 
     } }
 
@@ -565,7 +566,7 @@ ok(foldName("Marígold") === foldName("marigold") && foldName("JOSÉ") === foldN
     const G = [F[0], { seq: 0.5, ts: F[0].ts + 1, actor: "world", verb: "grant", args: { id: "fixture", role: "owner" } }, ...F.slice(1)];
     const u = importer("undo", G, { lib });
     const live: any = u.ok ? openLive(u.at, "new", { now: () => endOf(u.lines) + 1000, custodyFile: path.join(path.dirname(u.at), CUSTODY_FILE) }) : null;
-    const punts = u.ok ? u.lines.map((e: any, i: number) => [e, i]).filter(([e]: any) => e.kind === "act" && e.body?.verb === "punt") : [];
+    const punts = u.ok ? u.lines.map((e: any, i: number) => [e, i]).filter(([e]: any) => e.kind === "request" && e.body?.verb === "punt") : [];
     const { request } = await import("../../shared/protocol/authority.js");
     const answers = punts.map(([e, i]: any) => request(live, e.actor, "undo", { act: i, dry: true }));
     ok(punts.length === 4 && answers.every((r: any) => r.refused?.code === "nothing"),

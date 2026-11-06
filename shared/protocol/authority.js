@@ -6,21 +6,21 @@
 // `changeEntry`, and it takes only what `admit` returned.
 // Storage is injected (server/filehost.ts opens worlds), so this module has no node: imports and no process/Date of its
 // own (callers pass the clock).
-import { bodyOf, socketQ, ONE_PLACE } from "../components.js";
+import { bodyOf, socketQ } from "../components.js";
 import { MOVER, TRACK, bodyBox, bodyScale, floorStep, sweep, tokensAfter } from "../mover.js";
-import { checkSockets, checkSocket, checkStation, inOccupyReach, OCCUPY_REACH } from "../sockbody.js";
+import { checkSocket, checkStation, inOccupyReach, OCCUPY_REACH } from "../sockbody.js";
 import { DEFAULT_WHO, grabOf, homeOf, checkGrabbable, wantsHome, fitsSocket, socketRadius, pickGrip, offsetOk, describeGrab } from "../grab.js";
-import { fold, opsOf, applyOps, cowState, applyCow, checkIJSON, isEntityId, isComponent, isIdentity, jcs, sha256, PURGED, DIALECT, VERSION, keyOk } from "./fold.js";
+import { fold, opsOf, applyOps, cowState, applyCow, checkIJSON, isEntityId, isComponent, isIdentity, jcs, sha256, REDACTED, DIALECT, VERSION, keyOk } from "./fold.js";
 import { mintId, PERSON_ID, isPlaceholder } from "./ids.js";
 import { COMPONENTS, PENDULUM, defOf, registered, baseOf, isNamespaced, materialize, mapRefs, refsOf, refFields, outOfRange, rangeWords, resolveVersioned, statusOf, canonicalName, STATUSES } from "./componentspec.js";
 import { validate, verbHelp, ownArg, VERBSPEC, RESERVED_VERBS, REMOVED_VERBS } from "./verbspec.js";
 import { dec, partSlot } from "./names.js";
 import { READ_ONLY } from "./verbclasses.js";
 import { isRefusalCode } from "./refusalcodes.js";
+import { FEATURE_VERBS, KNOWN_FEATURES, featureDecision, declaredBefore } from "./features.js";
 import { foldSkyEntry } from "../forecast.js";
 import { normalizeCaptionArgs, captionRefusal, foldCaption } from "../captions.js";
 import * as C from "./consent.js";
-import * as TR from "./sculpt.js";
 import * as SR from "./scriptrules.js";
 import * as R from "./roles.js";
 import { graphemes, cleanText } from "../text.js";
@@ -28,8 +28,7 @@ import { mediaTier, tierWords } from "../mediasrc.js";
 import { saysOf } from "../says.js";
 import { readOut } from "../a11y.js";
 import { instanceProblem, effectFor, effectBlobName, effectProblem, EFFECT_KIND, ESSENTIAL_NAMES, isEssential, LEGACY_FIELDS } from "../particle_effects.js";
-import { livePoses, digestOf, restEta, ENGINES, carried, worldPose, TICK_MS, offChain, simCutOf } from "./simlayer.js";
-import { shapeRepairOps, shapesMarked, SHAPES_VERSION } from "./shaperepair.js";
+import { livePoses, digestOf, restEta, ENGINES, carried, worldPose, TICK_MS, offChain, simSnapshotOf } from "./simlayer.js";
 import { atWrite } from "./assetref.js";
 import { eidoHex } from "../eido.js";
 import { trustRefusal } from "../drafts.js";
@@ -39,12 +38,12 @@ import { reachTo, massOf, shoveCap, feetOn, sweptCovers } from "../shove.js";
 import { r3, noNeg0, unNegZero } from "./round.js";
 import { shapeError, isBoxShape } from "./shapes.js";
 import { CTX, UP } from "./authority/ctx.js";
-import { SOCKETS_PER_HOST, isLegacyParent, isSocketC, socketRules, actionRules, socketsOf, allSockets, socketPoint, socketRole, liftOps, legacyHosts, liftHostOps, modelSocketNames } from "./authority/sockets.js";
+import { SOCKETS_PER_HOST, isSocketC, socketRules, actionRules, socketsOf, allSockets, socketPoint, socketRole } from "./authority/sockets.js";
 import { Refusal, refuse, said } from "./authority/refuse.js";
-import { LAB_CATALOGUE, modelOf, geomOf, boxOfM, geomE, withCatalogue, meshShape } from "./authority/catalogue.js";
-export { LAB_CATALOGUE, withCatalogue, MESH_SIZE, meshSize, meshGeom, meshShape } from "./authority/catalogue.js";
+import { NO_CATALOGUE, modelOf, geomOf, boxOfM, geomE, withCatalogue, meshShape } from "./authority/catalogue.js";
+export { NO_CATALOGUE, withCatalogue, MESH_SIZE, meshSize, meshGeom, meshShape } from "./authority/catalogue.js";
 import { readback } from "./authority/storage.js";
-import { CHANGE, FOLLOW_UP, IMPORTED_ONLY, VOLATILE, clone, createOps, delOp, followUp, followUpsOf, isE, lockedC, nonce16, opsQuiet, qr3, scratch, setOp, versionOf, versionSeq } from "./authority/storage.js";
+import { CHANGE, FOLLOW_UP, IMPORTED_ONLY, VOLATILE, clone, createOps, delOp, followUp, cascadeOf, isE, lockedC, nonce16, opsQuiet, qr3, scratch, setOp, versionOf, versionSeq } from "./authority/storage.js";
 export { posAt, worldOf, seal, readback } from "./authority/storage.js";
 import { NONE, aabb, ancestors, descendants, hits, localFrom, obbs, qYaw, qinv, qmul, qrot, satCost, satDepth, surfacesOf, worldT, yawQ } from "./authority/math.js";
 import { SPATIAL, WORK_BUDGET, clockMs, familyOf, groundOf, groundReady, hitsIx, kidsMap, near, spatial, spend, supportBelow, supportUnder } from "./authority/spatial.js";
@@ -56,12 +55,12 @@ export { reachAdmits, reachLetGo, noteRefused } from "./authority/bodyconsent.js
 import { MOD_VERBS } from "./authority/moderation.js";
 import { USE_VERBS, actionsOf, offersFor, pivotOf, reactionCap, toggleOf } from "./authority/use.js";
 import { READ_VERBS, buildCreateFrom, buildPublish, buildUpdate, thingSaid } from "./authority/blueprints.js";
-import { actIndexOf, buildSculpt, buildSky, buildUndo, buildWeather } from "./authority/undo.js";
+import { actIndexOf, buildSky, buildUndo, buildWeather } from "./authority/undo.js";
 export { actIndexFresh, actIndexOf, entityBefore } from "./authority/undo.js";
 import { DRY, DUTY, allScripts, budgetOf, dutyLeft, dutyLog, installCheck, logRt, overCpu, particlesCheck, pauseOnly, pausedBy, presentOf, rtKey, rtOf, sampleOf, scopeIds, scriptCeiling, scriptDefaults, scriptDepth, scriptMemo, scriptRights, scriptsCfg, sponsorOf, uploadEffect } from "./authority/scripts.js";
 export { DUTY, scriptCeiling, scriptDefaults, setScriptConfig, setScriptDuty, unpaused } from "./authority/scripts.js";
-import { SCRIPT_VERBS, activate, drainAll, heldEvent, maintain, maintenanceNeeds, writeBlock } from "./authority/scriptrun.js";
-export { ORPHANS, checkpointNow, expireRoles, liftWorld, maintain, maintenanceNeeds, presenceEvent, repairShapes, scriptsView, settle, settleOrphans, tick } from "./authority/scriptrun.js";
+import { SCRIPT_VERBS, activate, drainAll, heldEvent } from "./authority/scriptrun.js";
+export { ORPHANS, checkpointNow, expireRoles, presenceEvent, scriptsView, settle, settleOrphans, tick } from "./authority/scriptrun.js";
 import { clearOccupant, leftOccupied, occupiedRefuse, occupantOf, occupyRights, setOccupant, occupantOn, vacateAt, vacateWhy, vacatesFor } from "./authority/occupants.js";
 import { arrivalBox, body, buildEpoch, dist, gripPoint, gripOf, lawOf, pathBlocked, restampEngine, settleSim, shearFree, sizeOf, solidAt } from "./authority/physics.js";
 import { fliesIn, flyingWorld, gripHow, homeScale, launch, recentRests, releasePos, returnDue, returnHome, returnPlan, sameHome, secondGrip, shaped, shoveGate, snapTarget, stampHomes, stampResetHomes, vec3s } from "./authority/manipulate.js";
@@ -103,7 +102,7 @@ function wire(args) {
 // directory may not know a founder yet), null for the authority's own work.
 function enter(w, actor) {
   const outer = { ...CTX }, wq = { changedQ: w.changedQ, sayQ: w.sayQ, heldQ: w.heldQ, now: w.now, pinTs: w.pinTs };
-  CTX.cat = w.catalogue ?? LAB_CATALOGUE; CTX.through = false; CTX.nameOf = w.nameOf ?? null; CTX.mintW = w; CTX.work = { left: WORK_BUDGET.units, until: clockMs() + WORK_BUDGET.ms, k: 0 };
+  CTX.cat = w.catalogue ?? NO_CATALOGUE; CTX.through = false; CTX.nameOf = w.nameOf ?? null; CTX.mintW = w; CTX.work = { left: WORK_BUDGET.units, until: clockMs() + WORK_BUDGET.ms, k: 0 };
   CTX.isAnon = (id) => w.kindOf?.(id) === "anon"; CTX.knownId = (id) => (actor != null && id === actor) || !w.kindOf || w.kindOf(id) != null;   // the asker is known (a founder names themself)
   return () => { Object.assign(CTX, outer); w.changedQ = wq.changedQ; w.sayQ = wq.sayQ; w.heldQ = wq.heldQ; w.now = wq.now; w.pinTs = wq.pinTs; };
 }
@@ -121,15 +120,15 @@ export function request(w, actor, verb, args = {}) {
     // write lines its own verifier calls forged (a moved dir, a lost or swapped custody file): it refuses instead (R5).
     if (h && w.exists && w.custody()?.sign && w.custody().sequencer() !== w.entries[0]?.body?.sequencer && !READ_ONLY.has(verb))
       refuse("custody", "this server doesn't hold the key that signs this world's log, so it can't write to it", "only this server's operator can fix this, by restoring the world's signing key or handing the world over to this server; asking again won't change it, and reads still work");
-    if (h && w.exists && w.state().status !== "ok") refuse("unreadable", `this world's log can't be read here ('${w.state().status}': ${w.state().status === "unknown-version" ? "it's written in a protocol version this server doesn't read" : "its first entry isn't a genesis this server can read"}), and the authority won't act on a log it can't read`, "only this server's operator can fix this, by repairing the log or serving it with a server that reads its version; asking again won't change it until then");
-    // writes the record itself stops (writeBlock: an altered log, a world waiting for its maintenance command): every write
-    // but `leave` and the operator's own, and the scripts the host sets off meet the same gate (scriptrun activate)
-    if (h && w.exists && !READ_ONLY.has(verb) && verb !== "leave" && CTX.operator !== actor) { const b = writeBlock(w); if (b) refuse(b.code, b.reason, b.fix, b.extra); }
+    if (h && w.exists && w.state().status !== "ok") refuse("unreadable", `this world's log can't be read here ('${w.state().status}': ${w.state().status === "unknown-version" ? "it's written in a protocol version this server doesn't read" : w.state().status === "unsupported-feature" ? "it requires a feature this server doesn't implement" : "its first entry isn't a genesis this server can read"}), and the authority won't act on a log it can't read`, "only this server's operator can fix this, by repairing the log or serving it with a server that reads its version; asking again won't change it until then");
     if (!h && Object.hasOwn(REMOVED_VERBS, verb)) refuse("removed", `'${verb}' was removed: ${REMOVED_VERBS[verb].why}`, REMOVED_VERBS[verb].fix);
     if (!h && Object.hasOwn(RESERVED_VERBS, verb)) refuse("reserved", `'${verb}' is a reserved request: ${RESERVED_VERBS[verb].why}`, "help lists every verb");
     if (!h) refuse("unknown-verb", `there is no '${verb}'`, "help lists every verb", { didYouMean: guess(verb, Object.keys(VERBS)) });
-    // `leave` passes: it settles their own presence (the server sends it when it removes them, so a kicked body and what
-    // it held are released)
+    // §F F-1: a feature's verb is refused until the world has declared the feature (genesis requires, or a requiresAdd before this seq)
+    if (w.exists && FEATURE_VERBS.has(verb) && !declaredBefore(featureDecision(w.entries, KNOWN_FEATURES), FEATURE_VERBS.get(verb), w.entries.length))
+      refuse("unsupported-feature", `'${verb}' belongs to the feature ${FEATURE_VERBS.get(verb)}, which this world hasn't declared`, "a world declares a feature in its genesis requires, or later by a governance requiresAdd; never after its first use");
+    // `leave` passes: it settles their own presence (the server sends it when it removes them; review 10-07: a kicked
+    // body and what it held were never released)
     // an operator's recorded repair (operatorRepair) is not the person's own request: their sanctions and role here don't gate it
     if (w.exists && verb !== "help" && verb !== "leave" && CTX.operator !== actor && isBanned(w, actor)) refuse("banned", `${said(actor)} is banned from this world`, "the moderator log says so; ask a moderator");
     w.changedQ = []; w.sayQ = []; w.heldQ = [];
@@ -184,8 +183,8 @@ const REF_KEYS = new Set(["id", "to", "on", "beside", "hang", "against", "near",
 const REF_LISTS = new Set(["targets", "marks", "ids", "refs"]);
 function placeholders(w, verb, args) {
   const creates = verb === "create" ? [[null, args]]
-    : (verb === "batch" || verb === "fork-copy") && Array.isArray(args?.ops) ? args.ops.map((o, i) => [i, o && o.verb === "create" && o.args && typeof o.args === "object" ? o.args : null]).filter(([, a]) => a) : [];
-  const at = (i) => (i === null ? "" : `batch op ${i}: `);
+    : (verb === "batch" || verb === "fork-copy") && Array.isArray(args?.requests) ? args.requests.map((o, i) => [i, o && o.verb === "create" && o.args && typeof o.args === "object" ? o.args : null]).filter(([, a]) => a) : [];
+  const at = (i) => (i === null ? "" : `batch request ${i}: `);
   const no = (reason, fix) => { try { refuse("shape", reason, fix); } catch (e) { UNLOGGED_REFUSALS.add(e); throw e; } };
   const keep = CTX.forking || FIXTURE_IDS; const ids = {};
   const anyPh = creates.some(([, a]) => isPlaceholder(a.id));   // a refusal of a request that holds placeholders isn't recorded (they never reach the log)
@@ -247,10 +246,10 @@ function logRefusal(w, actor, verb, args, code) {
     if (code === "rate") { const m = (w.unrecorded ??= new Map()); m.set(actor, (m.get(actor) ?? 0) + 1); return; } // an attempt all the same: counted, not written
     // a refused contact push is a walk that met something, not a request anyone made in words: counted, not written
     // (`shove: true` is its old spelling)
-    if (verb === "punt" && (args?.contact === true || args?.shove === true)) { const m = (w.unrecorded ??= new Map()); m.set(actor, (m.get(actor) ?? 0) + 1); return; }
+    if (verb === "punt" && args?.contact === true) { const m = (w.unrecorded ??= new Map()); m.set(actor, (m.get(actor) ?? 0) + 1); return; }
     if (UNLOGGED.has(code)) return;
     const names = argNames(verb, args);
-    const body = { args: names.known, refused: { code } }; if (names.unknown) body.unknownArgs = names.unknown;
+    const body = { argNames: names.known, refused: { code } }; if (names.unknown) body.unknownArgs = names.unknown;
     // a verb the authority doesn't have is recorded as `unknown-verb`: its name is the visitor's text (32 characters of it,
     // in a permanent, forkable record), so it goes to the ring only, as argument values do
     const asVerb = Object.hasOwn(VERBS, verb) || Object.hasOwn(RESERVED_VERBS, verb) || Object.hasOwn(REMOVED_VERBS, verb) ? verb : "unknown-verb";
@@ -271,7 +270,7 @@ function expectCheck(w, list) {
     if (!x || typeof x !== "object" || Array.isArray(x) || typeof x.id !== "string" || typeof x.component !== "string" || Object.keys(x).some((k) => !["id", "component", "value"].includes(k)))
       refuse("shape", `expect entries are {id, component, value?}, got ${JSON.stringify(x)?.slice(0, 80)}`, "leave value out to expect the component to be absent");
     const e = st.entities[x.id]; const has = !!e && x.component in e.c; const cur = has ? e.c[x.component] : undefined;
-    const same = "value" in x ? has && cur !== PURGED && jcs(cur) === jcs(x.value) : !has;
+    const same = "value" in x ? has && cur !== REDACTED && jcs(cur) === jcs(x.value) : !has;
     if (same) continue;
     const lt = lastTouch(w, x.id, x.component);
     const why = !e ? `${x.id} is gone` : lt ? `${said(lt.actor)} changed it at ${lt.seq}` : "it isn't what you started from";
@@ -340,10 +339,8 @@ export function operatorRepair(w, actor, verb, args = {}) {
   const door = (verb === "set" || verb === "delete") && args && args.id === "@world" && REPAIR_COMP(args.component);
   // the shape repair is a maintenance command, never the load's; an operator runs it here, recorded
   // with the operator's id (the act's `by`, operator: true). Not a request word: it has no verb at the door
-  if (verb === "repair" || verb === "repair-shapes") { const r = maintain(w, { by: actor, operator: true, dryRun: args?.dryRun === true });
-    return r.refused ? { ok: false, refused: r.refused } : { ok: true, ...r }; }
   if (!(door || verb === "unban"))
-    return { ok: false, refused: { code: "rights", reason: `an operator's repair covers @world's roles, access, default-role and role-defs (set, delete), lifting a ban or kick (unban) and the maintenance command (repair: lift-sockets, rename-components, repair-shapes); not ${String(verb).slice(0, 32)}${args?.component !== undefined ? ` ${String(args.component).slice(0, 64)}` : ""}`,
+    return { ok: false, refused: { code: "rights", reason: `an operator's repair covers @world's roles, access, default-role and role-defs (set, delete), and lifting a ban or kick (unban); not ${String(verb).slice(0, 32)}${args?.component !== undefined ? ` ${String(args.component).slice(0, 64)}` : ""}`,
       fix: "anything else goes through the world's own roles: repair a role (set {id: '@world', component: 'roles:<id>', value: {role: 'owner'}}), then act as that person" } };
   CTX.operator = actor; try { return request(w, actor, verb, args); } finally { CTX.operator = false; }
 }

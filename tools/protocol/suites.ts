@@ -13,7 +13,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["laws", "laws-check.ts", 1],            // the ground's height and the sky's forecast are data: spec/conformance/laws.json            // the heading law's trig is data: spec/conformance/trig.json, bit for bit
   ["engine", "engine-check.ts", 1],          // what "carries" means: every carried engine version reproduces its conformance digests (house, #260 10-21)
   ["normative", "normative-check.ts", 1], // spec/NORMATIVE.md is the closed set, and its consent/roles tables equal the reference (10-20, nissa-seru)     // reviewer item 5 (10-18): the kernel (envelope, kinds, ops, identity grammar, version, transform, parent) is trial-kernel: a change is red unless the same change carries a translator, a changelog line and old-red/new-green vectors (spec/kernel-pin.json)
-  ["gov-reserved", "gov-reserved-check.ts", 1], // reviewer item 8 (10-18): governance is RESERVED; the server refuses to serve a log holding a `sequencer` entry, truthfully
+  ["gov-reserved", "gov-reserved-check.ts", 1],
+  ["freeze", "freeze-check.ts", 1],       // docs/DESIGN-log-vocabulary.md §F: feature declarations, provenance, the hello order, a key is not admission, custody read-only (F22–F31, P3) // reviewer item 8 (10-18): governance is RESERVED; the server refuses to serve a log holding a `sequencer` entry, truthfully
   ["diffcheck", "diffcheck.ts", 1],
   ["hygiene", "hygiene-check.ts", 1],       // patterns that broke the gate site by site (Windows paths, sh -c, symlinks, fixed sleeps), refused as a class; debt only goes down        // review #260 rereview (10-19) blocker 3: the range is clean under `git diff --check`; two documented exemptions only
   ["body-state-bundle", "../body-state-bundle-test.ts", 1], // the built MCP entry points carry body_state and none of the test rig, corpus scanner or fixture paths
@@ -22,6 +23,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["shard", "shard-check.ts", 1],        // CI's sharded gate: shards cover SUITES once whatever the timings; a merge passes only every shard, every suite, one head
   ["nov1", "nov1-check.ts", 1],         // R 10-06 "no more v1 anywhere": no runtime file loads the old-world importer or speaks v1
   ["vocab", "vocab-check.ts", 1],       // R 10-14 one vocabulary: a record is read in the protocol's names (model, flat components), never lib / comp
+  ["vocab-fixtures", "vocab-fixtures-check.ts", 1], // docs/DESIGN-log-vocabulary.md §5: F4, F5, F7, F10, F12, F20 (a reader given the next v: unknown-version, nothing folded; no minor)
   ["nonumber", "nonumber-check.ts", 1], // R 10-07 "a version number isn't a name": the protocol's number lives only in genesis {dialect, v}
   ["determinism", "determinism-check.ts", 1], // Covenant I: no host sin/cos/atan2/exp/log/pow/random, Date.now or performance.now in fold.js, eidosim or the sim modules they reach (TEACHING-FINDINGS 11-02)
   ["hostile", "hostile-check.ts", 2],   // PROTOCOL §6 proof 1: hostile logs against the strict fold
@@ -95,7 +97,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["seatcore", "../seatcore-test.ts", 1], // the seat-profile contract as hand math (#101 B): schema, contact height, the verdict cache
   ["msgrate", "../msgrate-test.ts", 1],
   ["clientlog", "../clientlog-test.ts", 1], // the /clientlog tee's door and budget (server/clientlog.ts: rate, size, scrub, disk; no read path) and the client's side of it // server/msgrate.ts: the message cap is a token bucket (a server stall is not the client's flood)
-  ["shape-render", "../shape-render-test.ts", 1], // #260 I515: the shape audit's render rows and the maintenance repair's; ran only as an import before
+  ["shape-render", "../shape-render-test.ts", 1], // #260 I515: the shape audit's render rows and the v1 importer's; ran only as an import before
   ["originof", "../originof-test.ts", 1], // #260 I98: the ?orrery= guard (generate.js originOf) takes only an http(s) base, never markup or javascript:
   ["renderer-cred", "../renderer-cred-test.ts", 1], // #260 I143/I144: the renderers' credential (flag + key) watches an invite-only world; a stranger's /snap and /heightmap of it are 404
   ["renderer-join", "../renderer-join-test.ts", 1], // a page claims to be a renderer only when it can render
@@ -112,7 +114,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["browser", "browser-check.ts", 1],   // the shared core imported by headless Chromium, byte-for-byte with bun
   ["descriptors", "../descriptor-defaults-test.ts", 1], // C5 (DEBT 10-12 #3a): every record and inspector default is the registry's, through the editor translation
   ["schema-layers", "../schema-layers-test.ts", 1], // one description per component field (componentspec.js): the inspector, the door's refusals and limitsOf all read it
-  ["light-readers", "../light-readers-test.ts", 1], // D2 (DEBT-2 #5): a light is found by kindOf and the rig's complight key, its gizmo is no box or material slot
+  ["light-readers", "../light-readers-test.ts", 1], // D2 (DEBT-2 #5): a light is found by its light component and the rig's complight key, its gizmo is no box or material slot
   ["kind", "../kind-test.ts", 1], // one kindOf: a light component is a light, a bare thing an Empty, a model a model; the route and the agent's inspect head agree
   ["ghost-mesh-size", "../ghost-mesh-size-test.ts", 1], // D1: every shape × scale the build ghost sends passes the door's mesh check (the plane at 1/1.1 did not)
   ["boot-init", "../boot-init-test.ts", 1], // D3: every client init* has a caller (initOccupants had none)
@@ -172,7 +174,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["ids", "ids-check.ts", 1],
   ["scars", "scars-check.ts", 1],       // R 10-17 02:45 engine-scars + consent gaps: refused acts keep names + code, look's own table, an edit that moves a seat unseats its occupants (sitting is consent), READBACK vs purge, the refusal-code registry, a VERBSPEC row per verb, the spec pins           // R 10-17 ID HARDENING: opaque minting, writers never choose ids ($placeholders), delete clears refs, lint finds dangling ones
   ["r8", "r8-check.ts", 1],             // review round 8 (10-17): a delete never re-sponsors a script; a fork copies no new model-hash; ref clears are the authority's follow-up (no third-party veto); the shape marker is the system's act; enter/leave record no identity
-  ["r9", "r9-check.ts", 1],             // review round 9 (10-17): authorship never comes from a follow-up (followUps in the entry); the seat's own motion as it was when you sat; a script seat keeps the escape; two stand-ins; the agent hears unseated; a seat re-anchors the track
+  ["r9", "r9-check.ts", 1],             // review round 9 (10-17): authorship never comes from a follow-up (cascade in the entry); the seat's own motion as it was when you sat; a script seat keeps the escape; two stand-ins; the agent hears unseated; a seat re-anchors the track
   ["r10", "r10-check.ts", 1],            // review round 10 (10-17): a sit is within reach; a follow-up restore keeps its author; two stand-ins of two shapes (rerun-anon); the authority's consequences are follow-ups (resettle is the system's act, a delete's set-down passes no lock); unseated on a socket gone and at its `at`
   ["r11", "r11-check.ts", 1],            // review round 11 (10-17): a friend and a delegate can be removed (unfriend, undelegate; owner only); rename-components in §7 and §4; a seat's stand says detach; a declaration passed on as sent; renames per thing, null a removal; the repo items
   ["names", "names-check.ts", 1],     // R 10-17 14:34–14:41: names carry no body plan and set no kind against another (refusal codes, punt {contact}, trusted-components, consent words + delegates, one people list, the occupy family, stale addresses)
@@ -181,6 +183,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["keyhints", "../keyhints-check.ts", 1], // R 10-04: no hidden keys in build mode (every modifier tagged and shown)
   ["client", "client-check.ts", 1],     // slice 3b: build mode in headless Chromium against a scratch server (one browser, guarded)
   ["upgrade", "upgrade-check.ts", 1], // an old-format world: the verified backup (CLI and server), the structured join refusal, the operator-only upgrade through the CLI
+  ["hello-refused", "hello-refused-check.ts", 1], // §F F-3: a hello the server refuses (update-required, unsupported-feature) is said in words by every client, never a join timeout
   ["refusedjoin", "refusedjoin-check.ts", 1], // R 10-16 00:02: a refused join (old-format world, no such world) stays on the splash in the server's words — the early socket's refusal is honoured, no redial, no empty world
   ["server", "server-check.ts", 1],     // the server: real processes, real WebSockets, scratch ports
   ["worlds-route", "../worlds-route-test.ts", 1], // GET /worlds, fetched: one people list with declared words, spectators absent, a join never founds
@@ -275,7 +278,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["xr-desktop-banner", "../xr-desktop-banner-probe.mjs", 1], // the desktop banner follows the session (xrmirror.js): the killswitch's outranks 'In VR', which outranks none; it follows the pref mid-session
   ["sky-bake-time", "../sky-bake-time-probe.mjs", 1], // every strip of a sky bake draws at one sky time and one sun (the VR 'banding', 09-27)
   ["sky-bakegraph", "../sky-bakegraph-probe.mjs", 1], // switching sky tiers back and forth reuses each bake graph instead of rebuilding the bake program
-  ["alias", "../../mcpl/alias-test.ts", 1], // old tool names AND their old argument shapes run the new tool (10-15)
+  ["alias", "../../mcpl/alias-test.ts", 1], // an old tool name is an old tool: exactly the unknown-tool (Mica 11-05); folded/removed tools name what does it now
   ["tool-replies", "../../mcpl/tool-replies-test.ts", 1], // what the agent's tools and body say and send (pure; #53 waits out the 8 s timeout)
   // socketteer's pathfinding stack (#235/#236/#239/#241, merged into the protocol 10-15): its own suites, as it ships them
   ["agent-mesh-collision", "../agent-mesh-collision-test.ts", 1], // #235: an agent's body collides with placed models (the support barrier, the 3-at-once governor)
@@ -306,7 +309,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["vrmheight", "../vrmheight-test.ts", 1], // a body's stature read from its VRM (vrmheight.ts via rig.js stature), the door's bodyHeightFor agreeing
   ["shape-attach", "../shape-attach-test.ts", 1], // shape audit 10-16 wave 2: socket/station, one action namespace, one home, grabbable registered, reactions frozen, look-at radians, places closed, spawn, lock, reserved names
   ["shape-physics", "../shape-physics-test.ts", 1], // shape audit 10-16 wave 2: transform pinned (glTF rule), parent −order, pivot {pos}, motion trims + repair, physics kind/reserved/kinematic, physics-engine, collider mesh, physics-joint + joint, structure, surface, stage
-  ["shape-repair", "../shape-repair-test.ts", 1], // review r7 (10-16): the maintenance repair once per world (a marker in the log), per thing, a node's name as data (motion:<slot> {node}); no empty stations by default
+  ["shape-import", "../shape-import-test.ts", 1], // the shape audit's rules live in the v1 importer: a translated world comes out in today's spelling, sockets lifted; nothing repairs a world founded today
   ["buildcheck", "../buildcheck-test.ts", 1], // #241: the build check against the walking body's rules
   ["buildcheck-queue", "../buildcheck-queue-test.ts", 1], // #241: checks are queued, cached, and answer for the bytes hashed
   ["buildcheck-route", "../buildcheck-route-test.ts", 1], // #241: GET /check and measure {check: true} (check_model)
@@ -388,12 +391,14 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["lod-client", "../lod-client-test.ts", 1], // #170: the dial, the residency sweep, the loader's wire, an owned sequencer's answer, the in-place swap and the collider agree
   ["realized-lifecycle", "../realized-lifecycle-test.ts", 1], // the model realizer's lifecycle over a held loader: full life, remove mid-load, re-model over a held load, demote/promote, reset, sockets
   ["components-wire", "../components-wire-test.ts", 1], // components from the door to the realizer: an Empty is an invisible group (a light-carrying one is a light), lamps, colliders, parents, an imported lamp
+  ["axes", "../axes-test.ts", 1], // the axis letters are one table (shared/axes.js); motion takes negative letters, look-at's door and turn don't (as before)
+  ["catalogue", "catalogue-check.ts", 1], // a world knows only the catalogue it is handed: no silent lab default; an uncatalogued model refuses truthfully; stored models still fold
+  ["compose", "../compose-test.ts", 1], // Mica 11-04: one thing carries model + mesh + light + socket, each realized on its own; labels read the components
   ["translate", "translate-check.ts", 1], // R 10-28 translation rulings (22 rights, 17 particles, 24 name bans, 50 report, version) + SWEEP-3 + light parity
   ["owners", "owners-check.ts", 1], // R 10-28: a translated world's owners are bound to the accounts main recorded for them; the rest listed, bindable (operator-repair bind)
   ["setup", "setup-check.ts", 1], // R 10-28: the first-run setup link: no operator → one boot line; a signed-in human or agent claims it once, stored, live; guests, other sites, wrong tokens refused
   ["importer", "importer-check.ts", 1], // the house's review of #260 (6291883302), the v1 importer: causes, the approval's hash, one identity per person, nothing left half-written, values read as v1 read them
   ["eidosim-v1", "import-v1/eidosim-v1-test.ts", 1], // the first eidosim's covenant tests, on the copy the importer keeps (house #260, importer I8)
-  ["render-scene-import", "../render-scene-import-test.ts", 1], // #260 I464: server/render-scene.ts links (nothing serves it), and particles project through resolveParticles
   ["channelbox", "../channelbox-test.ts", 1], // #260 I242: the channel box through the real door; the rotate order is the viewer's (PROTOCOL §9.1), never sent
   ["euler", "../euler-test.ts", 1], // the channel box's rotate math (shared/euler.js): a property sweep over all six orders against three.js
   ["last-world", "../last-world-test.ts", 1], // #281 (main, merged 10-27): a bare link goes back to the last world you were in; the real net.js writes it at the door's yes and forgets a refused or empty world
@@ -404,7 +409,6 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["consent-scripts-list", "../consent-scripts-list-test.ts", 1], // consent {allow|block} naming a script or a sponsor's scripts reaches the authority through the server; an allow naming nobody says how to name someone
   ["custody-save", "../custody-save-test.ts", 1], // a governance key is handed out only once the keys file holds it: a failed save hands out nothing
   ["client-tools", "../run-client.ts --import-only --skip-suites --strict-env", 14], // refactor plan 2 D5: every tools/*-{test,check} loads (a stub missing an export, a moved module); a hung import reads SLOW, not red (run-client-settle pins it); the full run is `bun tools/run-client.ts`
-  ["migrate-genesis", "migrate-genesis-check.ts", 1],   // migrate-genesis keeps the whole old log, fsynced, before it replaces it; the dry run writes nothing
   ["replica-freeze", "../replica-freeze-test.ts", 1],   // C7a: the client's fold is frozen in dev, and still folds every later entry (it sat outside the gate and couldn't start)
 ];
 

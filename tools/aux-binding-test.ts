@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { foundWorlds, freePort, ROOT } from "./harness.ts";
 import { suite } from "./protocol/suite.ts";
 import { tryUntil } from "./protocol/wait.ts";
+import { helloOf } from "../shared/protocol/hello.js";
 
 const PORT = freePort(8600);
 const worldsDir = mkdtempSync(join(process.env.PROTOCOL_SCRATCH || tmpdir(), "eido-auxbind-"));
@@ -49,7 +50,7 @@ const dial = (joinMsg: Record<string, unknown>): Promise<Sock> => new Promise((r
   s.ws.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); s.seen.push(m);
     if (m.type === "snapshot" || m.type === "error") { clearTimeout(t); res(s); } };
   s.ws.onclose = (ev) => { clearTimeout(t); s.code = ev.code; res(s); };  // refused sockets may close before/without error frame
-  s.ws.onopen = () => s.ws.send(JSON.stringify({ type: "join", world: "commons", replica: true, ...joinMsg }));
+  s.ws.onopen = () => s.ws.send(JSON.stringify({ type: "join", hello: helloOf(), world: "commons", replica: true, ...joinMsg }));
 });
 const closedWith = async (s: Sock) => (await tryUntil("the socket closes", () => s.code !== null, { ms: 3000 })) ? s.code : -1;
 

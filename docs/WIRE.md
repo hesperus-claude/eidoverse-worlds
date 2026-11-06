@@ -40,7 +40,7 @@ client); a page from another build isn't a supported pair.
 - Rate caps: **60 msgs/s** per connection (`MSG_RATE`): past it, a
   `request` is answered refused `rate` (never run) and anything else is
   dropped; past twice the cap, requests are dropped too. The authority's
-  own rate per identity over everything it makes the log hold (acts and says: entries and bytes per window: server policy,
+  own rate per identity over everything it makes the log hold (requests and says: entries and bytes per window: server policy,
   `server/config.ts` ACT_RATE, SAY_RATE, RATE_WINDOW_SEC, RATE_KIB, ANON_RATE_KIB; defaults 60, 20, 10 s, 256, 32), refused with code `rate`.
 - No message may kill the process: handler errors answer
   `{type:"error", error:"that request failed server-side — it has been logged"}`.
@@ -52,13 +52,13 @@ client); a page from another build isn't a supported pair.
 | 4002 | session takeover — same (id, surface) rejoined elsewhere |
 | 4003 | bad/missing join token, or login lacks scope |
 | 4004 | reserved name (world/system/sim/script:*, or a reserved agent name without its bearer) |
-| 4005 | a refused join, its words in the `error` sent just before the close: a malformed world name, an unusable surface name, no such world, an old-format world, a client that doesn't fold the log — final, do not retry. An old-format world's `error` also carries `refused {code: "old-format", reason, doc: "docs/TRANSLATING-OLD-WORLDS.md", upgrade: "operator-or-owner" (or "operator-cli": re-translated on the command line), operator: <this caller is a server operator>, may: <this caller may upgrade>, owner?: "bound" \| "name" (how the caller was recognised as its owner)}` (server/upgrade.ts). The one temporary 4005 is reason `full` (the world holds as many as `@world`'s `access {max}` admits): someone leaving makes room, so the browser shows the words and redials with backoff (`shared/redial.js`: a random wait between a floor and a doubling window — at least 5 s for a full world, at most 60 s, reset only by a join the server accepts). A `WorldAgent` (mcpl/agent.ts) kept open does the same: its `connect()` rejects with the words and it dials again on that schedule. The agent doors do not keep it open: the plain MCP door (mcpl/server.ts) exits, and the WS door (mcpl/net-server.ts) ends the session, on a first join or a `travel`, so their host connects again later |
+| 4005 | a refused join, its words in the `error` sent just before the close: a malformed world name, an unusable surface name, no such world, an old-format world, a client that doesn't fold the log — final, do not retry. An old-format world and an interrupted conversion are said only to the server's operator and (an old world) its recognised owner; to anyone else they are `world-unavailable`, as a missing world (server/access.ts toldOf; §F F-3). An old-format world's `error` also carries `refused {code: "old-format", reason, doc: "docs/TRANSLATING-OLD-WORLDS.md", upgrade: "operator-or-owner" (or "operator-cli": re-translated on the command line), operator: <this caller is a server operator>, may: <this caller may upgrade>, owner?: "bound" \| "name" (how the caller was recognised as its owner)}` (server/upgrade.ts). The one temporary 4005 is reason `full` (the world holds as many as `@world`'s `access {max}` admits): someone leaving makes room, so the browser shows the words and redials with backoff (`shared/redial.js`: a random wait between a floor and a doubling window — at least 5 s for a full world, at most 60 s, reset only by a join the server accepts). A `WorldAgent` (mcpl/agent.ts) kept open does the same: its `connect()` rejects with the words and it dials again on that schedule. The agent doors do not keep it open: the plain MCP door (mcpl/server.ts) exits, and the WS door (mcpl/net-server.ts) ends the session, on a first join or a `travel`, so their host connects again later |
 | 4006 | banned (per-world or global) |
 | 4008 | aux leg without a living primary, or aux cap (4 distinct surfaces) |
 | 4009 | aux leg presented no binding to the primary's identity authority |
 | 4010 | this world isn't open to you (`@world.access`, `server/access.ts` ACCESS_CLOSE): refused at the door (close reason `no access`; the `error` sent just before says why: not admitted, or an account younger than the world admits), or removed later because your access ended or changed (close reason `access ended`; a timed grant warns five minutes before). Final: not redialled |
 | 1012 | the world's state was replaced under you (its fold cache's re-derive disagreed, server/livehost.ts): redial; the rejoin's snapshot is the corrected state |
-| 4011 | nothing to watch yet: a spectator or renderer of a world nobody has founded. Not a refusal: redialled on the usual schedule, so an observer started early joins once the world exists |
+| 4011 | world-unavailable to a spectator or renderer (no such world, or not one it may discover: the same bytes). Redialled on the usual schedule, so an observer started early joins once the world exists |
 
 Any other drop (an outage, a server restart) is redialled on the same `shared/redial.js` schedule by the browser and by a `WorldAgent`: the first wait is at most 1.2 s, and each failed dial doubles the window up to 60 s, until a join is accepted. So after a long outage an agent may wait up to a minute to reconnect once the server is back. It is the browser's schedule, and it spares a recovering server every client dialling at once.
 
@@ -90,7 +90,7 @@ Every message belongs to exactly one plane:
 
 | type | plane | who may send | shape (essentials) | notes |
 |---|---|---|---|---|
-| `join` | — | anyone admitted | `{world, id?, token?, avatar?, surface?, spectate?, declares?, renderer?, roam?, agentToken?, replica, session?, clock?}` | travel = leave A, join B on the same socket. Verified sessions: `id` ignored, login name wins. An embodied (`world` surface) join must say `replica: true` — it folds the log itself — or it is refused. `session`: the page's own id (8–64 of `A-Za-z0-9_-`), relayed as its presence `session` (§4). `clock: true`: the server's time comes just before the snapshot (`clock {t}`, §4). `roam` (with `renderer`): a roaming renderer the screenshot broker may send to any world (`renderer-travel`); `token` = `RENDERER_TOKEN` with `renderer` lets it watch any world, closed ones included. The door's refusals: 4005 (a bad link, no such world, a conversion interrupted mid-swap, a client that doesn't fold the log; 4005 "full" is transient), 4006 (moderation), 4010 (this world isn't open to you, `@world.access`), 4011 (nothing to watch yet: redial). Answers `snapshot` (§4). |
+| `join` | — | anyone admitted | `{world, id?, token?, avatar?, surface?, spectate?, declares?, renderer?, roam?, agentToken?, replica, session?, clock?, hello?}` | travel = leave A, join B on the same socket. Verified sessions: `id` ignored, login name wins. An embodied (`world` surface) join must say `replica: true` — it folds the log itself — or it is refused. `session`: the page's own id (8–64 of `A-Za-z0-9_-`), relayed as its presence `session` (§4). `clock: true`: the server's time comes just before the snapshot (`clock {t}`, §4). `roam` (with `renderer`): a roaming renderer the screenshot broker may send to any world (`renderer-travel`); `token` = `RENDERER_TOKEN` with `renderer` lets it watch any world, closed ones included. `hello {dialect, v, features}` (exactly those keys) (shared/protocol/hello.js) is checked before any world lookup (`{type: "refused", code: "update-required", need}`), and the world's `requires` against `features` only after access (`unsupported-feature`); it is required: a join without one is refused `update-required`, and every in-repo client sends `helloOf()`. A world that doesn't exist and one the joiner may not discover answer alike: `{type: "error", code: "world-unavailable", error: "No accessible world named X."}`, close 4005 (4011 to a watcher). The door's refusals: 4005 (a bad link, world-unavailable, a conversion interrupted mid-swap, a client that doesn't fold the log; 4005 "full" is transient), 4006 (moderation), 4010 (this world isn't open to you, `@world.access`), 4011 (nothing to watch yet: redial). Answers `snapshot` (§4). |
 | `history` | read | anyone incl. spectators | `{before?, after?, limit?≤300, verbs?, reqId?}` | pages the chat newest-first; answers `history`. Arrival-only: only lines said since this connection arrived, unless the asker holds read-back by effective permission (the owner, or anyone currently holding `readChat` — a server operator only by a role here — granted to a whole role by the owner's Roles toggle, or to one person by a `grantRoles` holder in People, below their own role and only with permissions they hold): they page the master log. |
 | `debug` | read | anyone incl. spectators | `{limit?, kinds?}` or `{behavior}` or `{behaviors:true}` | the flight recorder (every refusal) + script status; answers `debug`. |
 | `pose` | presence | embodied | `{pose}` | latest-wins into the world's dirty map; fanned out in stage `frame`s at ~15Hz. Bag fields incl. the C18 `xr` tracked-body contract: **docs/pose-wire.md**. Non-finite / malformed samples are refused at the source (`server/posecheck.ts`, 09-06). |
@@ -108,29 +108,36 @@ Every message belongs to exactly one plane:
 | `bc` | dev | anyone | `{tag}` | crash breadcrumbs, printed on disconnect. |
 | `capture-result` | service | renderer legs | `{id, dataUrl?/error?}` | answers a server `capture` request (backs HTTP `/snap`). |
 | `capture-capabilities` | service | embodied legs | `{capture: {version: 1, engine: "unreal", scene}}` | an opt-in native donor says it can capture (server/screenshots.ts captureCapability); anything else clears it. |
-| `world-fork` | admin | owner | `{to}` | a new world (its own genesis) whose founding act names this one, holding a copy of its current state; answers `world-forked`. |
-| `operator-repair` | admin | server operator (`SERVER_OPERATORS`) | `{id, verb, args}` | a server operator's recorded repair of the world it is in (PROTOCOL §7a): `set`/`delete` of @world `roles:<id>`, `access`, `default-role`, `role-defs`, `unban`, and `repair` (the maintenance command, PROTOCOL §4: lift-sockets, rename-components, repair-shapes, each its own system act with `by` and `operator: true`; never run by a load; `args.dryRun: true` computes without writing; the pre-repair log is kept under the world's `repair-backups/` for `world.ts repair --rollback`; `repair-shapes` is accepted as its older name); answers `reply` with `operator: true`; the act's body carries `operator: true`. |
+| `world-fork` | admin | owner | `{to}` | a new world (its own genesis) whose founding request names this one, holding a copy of its current state; answers `world-forked`. |
+| `operator-repair` | admin | server operator (`SERVER_OPERATORS`) | `{id, verb, args}` | a server operator's recorded repair of the world it is in (PROTOCOL §7a): `set`/`delete` of @world `roles:<id>`, `access`, `default-role`, `role-defs`, `unban`; answers `reply` with `operator: true`; the request's body carries `operator: true`. |
 | `world-reset` | admin | owner | `{name}` (must equal the world's) | archives the log beside it and re-founds the world for the same owners. |
 | `world-bans` | read | anyone present | `{}` | answers a `mod` text summary. |
 | `world-upgrade-review` / `world-upgrade` | — | a server operator (`SERVER_OPERATORS`) or the world's owner (main's records bind the owner to this account, or name them with no account: world.ts owner-of), by a session or an agent credential (no join needed) | `{id, world}` / `{id, world, approved: <report hash>}` | an old-format world's upgrade (docs/TRANSLATING-OLD-WORLDS.md): the CLI's dry-run report `{ok, world, report, hash, owner?, warning?}`, then the backup and the CLI's translation bound to that hash `{ok, world, backup, report, rollback, people, owner?, claimed?, owned?, warning?}`. `owner {recognised: "bound" \| "name", name}`: how an owner was recognised; `claimed: true` + `owned`: an ownerless world's upgrader is now its owner; `warning`: no owner is bound to an account; `people`: everyone who holds a role, with the account bound to them (if any). Refused `{ok: false, refused: {code, reason, fix?}}`: not-old, rights (ask the server's operator or the world's owner), cli, shape (approved isn't a hash), busy, rate, stale (another hash), refused, failed (server/upgrade.ts). |
-| `server-ban` / `server-unban` / `server-bans` | admin | server operator (`SERVER_OPERATORS`) | `{id, days?, reason?}` | server-wide, persisted in `.bans.json`, not requests (there is no server-wide log). The old `global-*` names run nothing and are refused naming these, until 2026-12-01 (messages.ts `MESSAGE_RENAMED`). |
+| `server-ban` / `server-unban` / `server-bans` | admin | server operator (`SERVER_OPERATORS`) | `{id, days?, reason?}` | server-wide, persisted in `.bans.json`, not requests (there is no server-wide log). |
 
 ## 4. Server → client messages
 
-- `snapshot` — the join answer: `{world, you, gen, yourSurfaces, recording,
-  cut: {dialect, v, head, worldId, verbs, state, sim, names, holds, mine, you},
-  state (the chat window: always `recentChat: []`, since speech is arrival-only;
-  `chatTotal` is the master log's line count for an admin, else 0), avatars (roster), yourRights, restore, present[{id, avatar, pose,
-  declares?, surfaces, session}]}`. `cut.state` is the fold at `head` (each component
-  wrapped `{v}` or `{purged: true}`, as in the digest); a joiner adopts that
-  cut and folds on from `head + 1`. Cost scales with the world, not its
-  history.
+- `snapshot` — the join answer, flat: `{type: "snapshot", dialect, v, requires,
+  world: <world id>, name: <directory name>, you, actor, gen, seq, state,
+  physics, names, holds, mine, verbs, chat: {recentChat, chatTotal}, yourSurfaces,
+  recording, avatars (roster), yourRights, restore, present[{id, avatar, pose,
+  declares?, surfaces, session}]}`. `world` is the world id, as in the log; the
+  directory name is `name`; `you` is this connection's id and `actor` the id
+  the log knows you by. `state` is the fold at `seq` (each component
+  wrapped `{v}` or `{redacted: true}`, as in the digest); `physics` is the
+  sim layer's snapshot (what flies, from which launch); `chat` is always
+  `recentChat: []`, since speech is arrival-only, and `chatTotal` the master
+  log's line count for an admin, else 0. A joiner adopts the snapshot and
+  folds on from `seq + 1`; one that doesn't know `{dialect, v}` refuses
+  it whole with `unknown-version` (shared/protocol/replica.js `adopt`), never
+  a half-view. Cost scales with the world, not its history. (`cut` was the
+  old nested payload: docs/DESIGN-log-vocabulary.md §1.8.)
 - `geom` — async join follow-up: `{geom: {lib: {bbox}}}` placeholders.
 - `log` — `{world, from, entries, names?}`: the raw entries the authority just
   appended, starting at seq `from`, fanned to everyone; `names` maps new
   identities to display names. The authored plane's only carrier. A gap, a
-  purge or a genesis means the client can't continue its cut and asks for a
-  fresh snapshot.
+  redaction, a governance entry or a genesis means the client can't continue
+  its snapshot and asks for a fresh one (`resync`).
 - `reply` — `{id, verb, ok, reply}`: the authority's own answer to your
   request, whole under `reply` (`{ok: false, refused: {code, reason,
   fix}}` when refused). A request whose creates named placeholders (`$name`:
@@ -139,7 +146,7 @@ Every message belongs to exactly one plane:
   socket they occupy says so in its notes (`{who, vacated: true, socket, why}`), and the one let go finds
   `vacated {socket, host?, by, why, at?}` in their body inbox (the `inbox` request; PROTOCOL §5): presence, never logged.
 - `holds` — `{world, holds: {id: {by, hand, grip?|offset?, second?}}}`:
-  who holds what (presence), sent whenever it changes and in every cut.
+  who holds what (presence), sent whenever it changes and in every snapshot.
 - `moderated` — `{verb, by, text}`: bystanders' line when the authority removed
   someone. A guest's mute is also filed against their address and re-issued
   at their next join, as one record per moderator: all the channels that
@@ -220,7 +227,7 @@ Reach travels inside presence pose bags (`pose.reach`, relayed opaquely —
 see the amended spec/PROTOCOL.md §5).
 
 Wire additions since the v0 freeze (each flagged in its commit):
-physics (PROTOCOL_v2): `snapshot.cut.sim` (the sim layer's cut: what flies,
+physics (PROTOCOL_v2): `snapshot.physics` (the sim layer's snapshot: what flies,
 from which launch, adopted by joiners) ·
 `/defs` (the def registry, charter §3 — instance content as data, slice 2) ·
 `/tick` (heartbeat gauges, charter §4 — per-system runs/worst-ms/errors,
@@ -240,7 +247,7 @@ client must currently reproduce, and a candidate for a deliberate ruling:
 
 1. `world-fork`/`world-reset`/`world-bans` and the `global-*` family are
    messages, not requests — world lifecycle lives outside the authority.
-2. Objects settle through requests (put, drop, throw: checked acts),
+2. Objects settle through requests (put, drop, throw: checked requests),
    while `bodydrag` settles through the dragged body's OWNER, on the
    presence plane. Two motion idioms, one seam.
 3. `snapshot.yourRights` is advisory — clients re-derive rights from

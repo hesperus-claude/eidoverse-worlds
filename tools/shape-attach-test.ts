@@ -6,7 +6,7 @@
 import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { scratchWorld } from './protocol/scratchworld.ts';
 import { COMPONENTS, statusOf, pinOf, refsOf, mapRefs, materialize } from '../shared/protocol/componentspec.js';
-import { legacyHosts, liftHostOps, socketId } from '../shared/protocol/authority/sockets.js';
+import { legacyHosts, liftHostOps } from './protocol/import-v1/shapes.js';
 import { evalLookAt } from '../shared/lookat.js';
 import { toWorld, toLocal } from '../mcpl/places.ts';
 import { translate } from './protocol/import-v1/translate-v1.js';
@@ -25,7 +25,7 @@ tryRow('ST', () => {
 
   check('ST1 the registry: socket is {name, part?, accepts?, radius?} (no body)', JSON.stringify(Object.keys(COMPONENTS.socket.fields)) === '["name","part","accepts","radius"]', COMPONENTS.socket.fields);
   check('ST1 …station is its own component, core {action, anim, anchor, exit, leaveBy, who, input} (R 10-17: anim was pose; input opened for the drive helm, step 3b)', JSON.stringify(Object.keys(COMPONENTS.station?.fields ?? {})) === '["action","anim","anchor","exit","leaveBy","who","input"]', COMPONENTS.station);
-  check('ST1 …sockets (the old map) is reserved, lift-only', statusOf('sockets') === 'reserved' && !!COMPONENTS.sockets.lifted);
+  check('ST1 …sockets (the old map) is no name: the registry holds no entry for it', !Object.hasOwn(COMPONENTS, 'sockets'));
 
   let r = mk('lie1', { name: 'bunk' }, { station: { action: 'lie' } });
   check('ST2 a station is materialized on write: lie → anim lie, anchor root', r.ok && JSON.stringify(C('lie1')?.station) === '{"action":"lie","anchor":"root","anim":"lie"}', [r.refused, C('lie1')]);
@@ -37,7 +37,7 @@ tryRow('ST', () => {
   check('ST3 use {lie} attaches there in the stored pose', u.ok && u.attach?.to === 'lie1' && u.attach.pose === 'lie', u);
 
   r = mk('old1', { name: 'stool', body: { action: 'sit' } });
-  check('ST4 a socket written with the old body block is lifted: socket without body + station', r.ok && C('old1')?.socket && !('body' in C('old1').socket) && C('old1')?.station?.action === 'sit' && C('old1')?.station?.anim === 'sitchair', [r.refused, C('old1')]);
+  check('ST4 a socket written with the old body block is refused (schema), the fix naming the station beside it; nothing is made', code(r) === 'schema' && /station/.test(r.refused?.fix ?? '') && !C('old1'), [r.refused, C('old1')]);
   check('ST5 a station key the alpha holds back (reach) is refused as reserved', code(mk('rb1', { name: 'rb' }, { station: { reach: { leftHand: { at: [0, 1, 0] } } } })) === 'reserved');
   check('ST5 …so are poses, sync, approach, enter, leave, look, fromSeat', ['poses', 'sync', 'approach', 'enter', 'leave', 'look', 'fromSeat'].every((k, i) => code(mk(`rb${i + 2}`, { name: `rb${i + 2}` }, { station: { [k]: k === 'fromSeat' ? true : k === 'sync' || k === 'enter' || k === 'leave' ? 'x' : k === 'approach' ? [0, 0, 0, 0] : {} } })) === 'reserved'));
   { const r = mk('in1', { name: 'helm' }, { station: { action: 'drive', input: { move: 'drive' } } });
@@ -47,11 +47,11 @@ tryRow('ST', () => {
   check('ST6 a station hangs only on a socket entity', code(W.call('set', { id: 'crate2', component: 'station', value: { action: 'sit' } })) !== 'ok');
   check('ST7 station.who names a role here', code(mk('wh1', { name: 'wh' }, { station: { who: 'wizard' } })) === 'shape' && mk('wh2', { name: 'wh2' }, { station: { who: 'builder' } }).ok);
 
-  // the map lift: body → station
+  // the old map: no name, so the door refuses a write of it as any unknown name (schema, did you mean socket)
   W.call('create', { id: 'sofa', model: 'crate' });
-  r = W.call('set', { id: 'sofa', component: 'sockets', value: { left: { pos: [-0.4, 0.5, 0], body: {} }, right: { pos: [0.4, 0.5, 0], body: { action: 'sit', pose: 'sit' } } } });
-  const L = C(socketId('sofa', 'left')), R = C(socketId('sofa', 'right'));
-  check('ST8 the old sockets map lifts each body to a station on its socket child', r.ok && L?.station?.anim === 'sitchair' && R?.station?.anim === 'sit' && !('body' in (L?.socket ?? {})), [r.refused, L, R]);
+  const map = { left: { pos: [-0.4, 0.5, 0], body: {} }, right: { pos: [0.4, 0.5, 0], body: { action: 'sit', pose: 'sit' } } };
+  r = W.call('set', { id: 'sofa', component: 'sockets', value: map });
+  check('ST8 a write of the old sockets map is refused (schema, did you mean socket); the sofa holds nothing new', code(r) === 'schema' && (r.refused?.didYouMean ?? []).includes('socket') && !C('sofa')?.sockets, r.refused ?? r);
 
   // a stored socket.body (a log stored before station), lifted at load
   const st = { diagnostics: [], entities: { h: { c: { transform: { pos: [0, 0, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] } } }, s: { c: { parent: { to: 'h' }, transform: { pos: [0, 1, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] }, socket: { name: 'seat', body: { action: 'lie' } } } } } };

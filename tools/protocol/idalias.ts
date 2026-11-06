@@ -15,7 +15,7 @@ export function idAliases() {
     if (v && typeof v === "object") { const o = {}; for (const [k, x] of Object.entries(v)) o[k] = sub(x, k); return o; }
     return v; };
   const names = new Set();
-  const named = (a) => { if (a && typeof a === "object" && typeof a.id === "string" && !a.id.startsWith("$") && /^[a-z0-9][a-z0-9-]*$/.test(a.id) && !/^u-[a-z2-7]{20}$/.test(a.id)) { names.add(a.id); return { ...a, id: `$${a.id}` }; } return a; };
+  const named = (a) => { if (a && typeof a === "object" && typeof a.id === "string" && !a.id.startsWith("$") && /^[a-z0-9][a-z0-9-]*$/.test(a.id) && !/^u-[a-z2-7]{20}(?:[a-z2-7]{4})?$/.test(a.id)) { names.add(a.id); return { ...a, id: `$${a.id}` }; } return a; };
   return {
     /** the request as the wire gets it: a create's chosen id → '$id', every known name → its minted id */
     out(verb, args = {}) {
@@ -23,7 +23,7 @@ export function idAliases() {
       // known name is replaced, so it never resolves to an older thing that had the same name
       const mark = (o) => { const n = named(o); return n === o ? sub(o, null) : { ...sub({ ...o, id: undefined }, null), id: n.id }; };
       if (verb === "create") return mark(args);
-      if (verb === "batch" && Array.isArray(args?.ops)) return { ...sub({ ...args, ops: undefined }, null), ops: args.ops.map((o) => (o?.verb === "create" ? { ...o, args: mark(o.args) } : sub(o, null))) };
+      if (verb === "batch" && Array.isArray(args?.requests)) return { ...sub({ ...args, requests: undefined }, null), requests: args.requests.map((o) => (o?.verb === "create" ? { ...o, args: mark(o.args) } : sub(o, null))) };
       return sub(args, null); },
     /** keep what the reply minted */
     back(reply) { for (const [k, v] of Object.entries(reply?.ids ?? {})) if (k.startsWith("$")) map.set(k.slice(1), v); return reply; },

@@ -65,7 +65,7 @@ if (process.argv.includes("--mutants")) {
     const d = scratch("txnmut");
     for (const dir of ["server", "shared", "client", "mcpl"]) copyTree(path.join(ENGINE, dir), path.join(d, dir));
     fs.mkdirSync(path.join(d, "tools/protocol"), { recursive: true });
-    for (const f of ["common.ts", "suite.ts", "txn-check.ts", "wait.ts"]) fs.copyFileSync(path.join(ENGINE, "tools/protocol", f), path.join(d, "tools/protocol", f));
+    for (const f of ["common.ts", "suite.ts", "txn-check.ts", "wait.ts", "labhost.ts", "labmodels.js"]) fs.copyFileSync(path.join(ENGINE, "tools/protocol", f), path.join(d, "tools/protocol", f));
     fs.copyFileSync(path.join(ENGINE, "package.json"), path.join(d, "package.json")); fs.symlinkSync(path.join(ENGINE, "node_modules"), path.join(d, "node_modules"), "junction");
     const f = path.join(d, file); const src = fs.readFileSync(f, "utf8");
     if (src.split(find).length !== 2) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${file} (the fix moved?)`); continue; }
@@ -87,7 +87,7 @@ const { foundWorld, WorldLog, wireEntry } = await import("../../server/worldlog.
 const { World } = await import("../../server/world.ts");
 const { REQUEST_MESSAGES } = await import("../../server/requestwire.ts");
 const { directoryFor } = await import("../../server/directory.ts");
-const { openLive } = await import("../../server/livehost.ts");
+const { openLive } = await import("./labhost.ts");
 const { appendDurable } = await import("../../server/durable.ts");
 const { OPERATORS } = await import("../../server/operators.ts");
 const nodefs = (await import("node:fs")).default;
@@ -143,7 +143,7 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
   const restore = fault("t1", 2, "before");
   send(t, "create", { components: { description: "half" } }); await tryUntil('the reply to "half"', () => t.replies.length > 1, { ms: 3000, step: 10 }); restore();
   const r = t.replies[1];
-  const actPublished = t.logs.slice(logs0).some((m) => m.from === n0 && m.entries.length === 1 && m.entries[0].kind === "act");
+  const actPublished = t.logs.slice(logs0).some((m) => m.from === n0 && m.entries.length === 1 && m.entries[0].kind === "request");
   ok(r?.ok === false && r?.txn === "ambiguous" && r?.reply?.refused?.code === "ambiguous" && r?.reply?.from === n0 + 1 && actPublished
     && lines("t1").length === n0 + 1 && X.w.log.live.entries.length === n0 + 1,
     "T1 the 2nd line's write throws: ambiguous (never ok), from = that line; the act (1st line) is durable and published", { r, logs: t.logs.map((m) => [m.from, m.entries.length]), disk: lines("t1").length, n0 });
@@ -151,7 +151,7 @@ const described = (W_, label) => Object.values(W_.w.log.live.state().entities).s
   const re = openLive(path.join(W, "t1"), "t1-reopened");
   const { request: authorityRequest } = await import("../../shared/protocol/authority.js");
   const whole = (st) => Object.values(st.entities).some((e) => e.c?.description === "whole");
-  const stood = whole(re.state()) && re.state().status === "ok" && re.entries.length === n0 + 1 && re.entries[n0].kind === "act" && !Object.values(re.state().entities).some((e) => e.c?.description === "half");
+  const stood = whole(re.state()) && re.state().status === "ok" && re.entries.length === n0 + 1 && re.entries[n0].kind === "request" && !Object.values(re.state().entities).some((e) => e.c?.description === "half");
   const undo = authorityRequest(re, X.owner, "undo", {});
   ok(stood && undo?.ok === true && !whole(re.state()),
     "T1b reopened: the orphan act folds, nothing it asked for exists, and undo passes over it to the last act with a result (PROTOCOL §7)", { status: re.state().status, n: re.entries.length, undo }); }

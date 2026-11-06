@@ -13,7 +13,7 @@
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { componentsOf, entityOf, canon, sha256hex, RECORDS, addable, lightOf, colliderOf, isEmpty, recordHash } from '../shared/components.js';
+import { componentsOf, entityOf, canon, sha256hex, RECORDS, addable, lightOf, colliderOf, isMeshBag, recordHash } from '../shared/components.js';
 import { worldComponents, worldOf, worldState } from '../shared/worldentity.js';
 import { blueprintRefusal, blueprintHash, expand, overridesOf, placeVerbs, placeRefusal, copyTree, modernize, localComponents, LINK_KEY } from '../shared/blueprint.js';
 import { treeOf } from '../shared/hierarchy.js';
@@ -62,8 +62,8 @@ const st0 = { actor: 'a', ts: 1, born: 1 };
 const cases: [string, any, string[]][] = [
   // [name, folded entity, expected "Type:key" list after Transform]
   ['a lamp: a Model and a comp.light on one entity', { model: L, pos: [0, 0, 0], yaw: 0, light: { color: 0xff8800, intensity: 20, range: 8 }, ...st0 }, ['Model:', 'Light:light']],
-  ['comp.light burning at noon (day:false ⇄ burnsAtNoon)', { model: L, pos: [0, 0, 0], yaw: 0, light: { day: false, important: true }, ...st0 }, ['Model:', 'Light:light']],
-  ['comp.light with day:true kept verbatim', { model: L, pos: [0, 0, 0], yaw: 0, light: { day: true }, ...st0 }, ['Model:', 'Light:light']],
+  ['comp.light burning at noon (daytime: full ⇄ burnsAtNoon)', { model: L, pos: [0, 0, 0], yaw: 0, light: { daytime: 'full', important: true }, ...st0 }, ['Model:', 'Light:light']],
+  ['comp.light with an old day key kept verbatim (a key no record names)', { model: L, pos: [0, 0, 0], yaw: 0, light: { day: true }, ...st0 }, ['Model:', 'Light:light']],
   ['comp.light with a key no record names (extra, not lost)', { model: L, pos: [0, 0, 0], yaw: 0, light: { color: 1, flicker: 0.3, burnsAtNoon: 'x' }, ...st0 }, ['Model:', 'Light:light']],
   ['an empty comp.light {} (all defaults)', { model: L, pos: [0, 0, 0], yaw: 0, light: {}, ...st0 }, ['Model:', 'Light:light']],
   ['a comp.light that is not an object stays an Annotation', { model: L, pos: [0, 0, 0], yaw: 0, light: 'on', ...st0 }, ['Model:', 'Annotation:light']],
@@ -99,7 +99,7 @@ for (const [name, ent, want] of cases) {
 }
 check('lightOf reads comp.light with the fold\'s defaults; a v1 kind:"light" record is not a spelling the view has',
   canon(lightOf({ model: L, light: {} })) === canon({ color: 0xffd9a0, intensity: 16, range: 10, important: false, decay: 1.7, daytime: 'dim' })   /* shape audit 10-16: an older light falls off as decay 1.7; day → daytime */
-  && lightOf({ light: { color: 1, intensity: 2, range: 3, day: false } })?.daytime === 'full'
+  && lightOf({ light: { color: 1, intensity: 2, range: 3, daytime: 'full' } })?.daytime === 'full'
   && lightOf({ kind: 'light', color: 1, intensity: 2, range: 3, day: false }) === null
   && lightOf({ model: L, light: 'on' }) === null && lightOf({ model: L }) === null);
 check('lightOf never lets a bad field reach the rig (NaN, string, negative → default)',
@@ -111,7 +111,7 @@ check('colliderOf: comp.collider wins (mesh, and the older exact, as the walker\
   && colliderOf({ collide: 'box', collider: { shape: 'mesh' } }) === 'exact'
   && colliderOf({ collide: 'box', collider: { shape: 'triangles' } }) === 'box'
   && colliderOf({ model: L }) === undefined);
-check('isEmpty: no model, no light, no mesh (a malformed mesh — no registered shape — is an Empty, as the realizer reads it)', isEmpty({ pos: [0, 0, 0] }) && !isEmpty({ model: L }) && !isEmpty({ light: {} }) && !isEmpty({ mesh: { shape: 'box', size: [1, 1, 1] } }) && isEmpty({ mesh: {} }) && !isEmpty(null));
+check('isMeshBag: a mesh a reader may draw names a registered shape (a malformed mesh is absent, as the realizer reads it)', isMeshBag({ shape: 'box', size: [1, 1, 1] }) && !isMeshBag({}) && !isMeshBag({ shape: 'cone' }) && !isMeshBag(null) && !isMeshBag([]));
 check('a lamp (Model + comp.light) cannot add a second Light; an Empty can add one; Collider still needs a Model',
   !addable(componentsOf({ model: L, light: {} }).components).some((a) => a.name === 'Light')
   && addable(componentsOf({ pos: [0, 0, 0] }).components).some((a) => a.name === 'Light')

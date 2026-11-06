@@ -2,7 +2,7 @@
 //
 // A small centre card on the selected thing: a name, what starts it (someone using it, or a timer), what it may change,
 // whether it may speak, and the source (a template that runs as it stands). Create plans the requests an agent sends
-// (shared/protocol/newscript.js) and sends them through the editor's one write path (editwrites.js):
+// (client/lib/newscript.js) and sends them through the editor's one write path (editwrites.js):
 //   upload {text} → {src}, then ONE batch: script:<name> {src, scope, on, every?} + (on use) its reaction. One act, so
 //   one Ctrl+Z takes it off again.
 // A refusal (the scripts permission, a syntax error, a scope beyond your rights) is shown on the card in the authority's words,
@@ -12,7 +12,7 @@
 import * as Edits from './editwrites.js';
 import { net } from './net.js';
 import { refusalText } from '../../shared/protocol/refusal.js';
-import { planNewScript, TEMPLATES, TEMPLATE_SCOPE } from '../../shared/protocol/newscript.js';
+import { planNewScript, TEMPLATES, TEMPLATE_SCOPE } from './newscript.js';
 import { isOwner } from '../../shared/protocol/roles.js';
 
 /** May I install a script here (the scripts permission; the authority decides either way)? */
@@ -48,7 +48,7 @@ export function openNewScript(id) {
       <label>it may change <input type="text" class="sn-comps" placeholder="components on this thing, comma-separated"></label>
       <label><input type="checkbox" class="sn-say"> it may speak in chat</label>
       <textarea class="sn-src" spellcheck="false" aria-label="the script's source"></textarea>
-      <div class="sn-hint">JavaScript, run on the server with your rights and no more (docs/SCRIPTS.md). world.on('use' | 'tick', fn), world.get / world.set on this thing, world.say, world.log (its console).</div>
+      <div class="sn-hint">JavaScript, run on the server with your rights and no more (docs/SCRIPTS.md). world.on('use' | 'tick', fn), world.get / world.set on this thing, world.say, console.log (its console).</div>
       <div class="sn-err" role="status"></div>
       <div class="sn-btns"><button type="button" class="sn-no">Cancel</button><button type="button" class="sn-ok">Create</button></div></div>`;
     const $ = (s) => root.querySelector(s);

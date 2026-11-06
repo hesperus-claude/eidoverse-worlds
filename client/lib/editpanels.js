@@ -4,7 +4,7 @@
 // and GROUPS, the full editors (colours, toggles, lists, the same numbers beside their meaning).
 // A number a motion comp drives shows its REST pose, tinted: `place` moves the base the motion composes onto.
 
-import * as OP from '../../shared/protocol/requests.js';
+import * as OP from '../../shared/requests.js';
 import { worldHistoryRows, historyView, HISTORY_MODES, mergeHistory } from './historyrows.js';
 import { creditLine } from '../../shared/libcredits.js';
 import { THREE, scene } from './core.js';

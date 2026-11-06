@@ -3,16 +3,17 @@
 // world-upgrade {id, world, approved} → {type, id, ok, world, backup, report, rollback, people, warning?}: the CLI's in-place translation, bound to
 // that hash (a verified backup first: server/backups.ts). Both run tools/protocol/world.ts itself: the translation has one code path.
 // A server operator (SERVER_OPERATORS) or the world's owner, by a proven account: an owner main's records bind to
-// that account ("bound"), or one main recorded no account for whose name the account's is ("name", provisional): world.ts
-// owner-of. An ownerless world's upgrader becomes its owner (--claim); a recognised owner is bound to them (report.claim). The translation binds an owner to the account main
+// that account ("bound"), or one main recorded no account for whose name the account's is ("name", provisional):
+// the access index (worldindex.ts ownerIn, server/ownerrecognise.ts). An ownerless world's upgrader becomes its owner (--claim); a recognised owner is bound to them (report.claim). The translation binds an owner to the account main
 // recorded for them; when no owner is bound, both replies carry `warning` and the server log says so (docs/TRANSLATING-OLD-WORLDS.md).
 import fs from "node:fs";
 import path from "node:path";
 import { WORLDS_DIR, BACKUPS_DIR, OPT_DIR, ROOT } from "./config.ts";
 import { accountOf } from "./auth.ts";
 import { isOperator } from "./operators.ts";
-import { oldWorldAt, type OldWorldKind } from "./oldworlds.ts";
-import { OLD_FORMAT_DOC, IF_YOU_RUN_IT } from "../shared/oldformat.js";
+import { type OldWorldKind } from "./oldworlds.ts";
+import { toldOf, unavailable } from "./access.ts";
+import { OLD_FORMAT_DOC } from "../shared/oldformat.js";
 import type { Client } from "./world.ts";
 
 type Any = any;
@@ -46,23 +47,6 @@ async function runCli(args: string[], extra: Record<string, string> = {}) {
 const tagged = (out: string, tag: string): Any => { const l = out.split("\n").find((x) => x.startsWith(`${tag} `)); try { return l ? JSON.parse(l.slice(tag.length + 1)) : null; } catch { return null; } };
 
 type Owner = { recognised: "bound" | "name" | null; owner?: string; ownerless: boolean; why?: string };
-const OWNER_MS = 30_000, ownerSeen = new Map<string, { at: number; p: Promise<Owner | null> }>();
-/** At most this many owner checks (CLI runs) at once for joins: a burst of refused joins can't fork the server. */
-export const JOIN_CHECKS = 2; let joinChecks = 0;
-/** world.ts owner-of: is this proven account an owner of the old world? Cached briefly per (world, account, name, log); null when
- *  the check didn't run. `join`: a refused join's check, skipped (null) while JOIN_CHECKS are already running. */
-export function ownerOf(world: string, who: { account: string; name: string } | null, { join = false } = {}): Promise<Owner | null> {
-  if (!who) return Promise.resolve(null);
-  let st: { size: number; mtimeMs: number }; try { st = fs.statSync(path.join(WORLDS_DIR, world, "log.jsonl")); } catch { return Promise.resolve(null); }
-  const key = JSON.stringify([world, who.account, who.name, st.size, st.mtimeMs]), now = Date.now(), hit = ownerSeen.get(key);
-  if (hit && now - hit.at < OWNER_MS) return hit.p;
-  if (join && joinChecks >= JOIN_CHECKS) return Promise.resolve(null);
-  for (const [k, v] of ownerSeen) if (now - v.at >= OWNER_MS) ownerSeen.delete(k);
-  if (join) joinChecks++;
-  const p = runCli(["owner-of", "--", world], { EIDO_UPGRADER_ACCOUNT: who.account, EIDO_UPGRADER_NAME: who.name }).then((r) => tagged(r.out, "owner-json") as Owner | null).catch(() => null)
-    .finally(() => { if (join) joinChecks--; });
-  ownerSeen.set(key, { at: now, p }); return p;
-}
 
 // one run per world at a time; at most RATE_N requests per account per RATE_MS (each runs the translator)
 const RATE_N = 6, RATE_MS = 10 * 60_000;
@@ -74,18 +58,19 @@ async function takeUpgrade({ c, ws }: Ctx, msg: Any, type: string, shape?: () =>
   const refuse = (code: string, reason: string, fix?: string) => { ws.send(JSON.stringify({ type, id, ok: false, refused: { code, reason, ...(fix ? { fix } : {}) } })); return null; };
   const who = provenWho(c, msg), account = who?.account ?? null, operator = isOperator(account);
   const world = String(msg.world ?? "");
-  const old = oldWorldAt(WORLDS_DIR, world);
-  const rights = (why = "") => refuse("rights", `upgrading a world saved in an older format is for this server's operator (an account in SERVER_OPERATORS) or the world's owner, signed in${why ? ` (${why})` : ""}. ${IF_YOU_RUN_IT}`, "ask the server's operator or the world's owner");
-  let owner: Owner | null = null;
-  if (!old) return refuse("not-old", `there is no world saved in an older format called "${world.slice(0, 64)}" here`);   // to anyone: a join says as much
-  if (!account) return rights("not signed in");
+  // §F F-3 (Mica 11-05): an old world is said only to the operator and its recognised owner (access.ts toldOf); to anyone
+  // else, as a world that isn't there. A guest is neither, so is answered at once, for any name
+  const unavailableHere = () => { const u = unavailable(world.slice(0, 64)); return refuse(u.code, u.message); };
+  if (!account) return unavailableHere();
   const bad = shape?.(); if (bad) return refuse("shape", bad[0], bad[1]);   // before the rate slot: a malformed request runs nothing
-  // the rate next: an owner check runs the CLI (a read and fold of the old log), so it is spent on the slot
+  // the rate next: an owner check runs the CLI, so it is spent on the slot; and a slot
+  // spent only on an old world's name would tell a stranger it is there)
   const now = Date.now(), mine = (recent.get(account) ?? []).filter((t) => now - t < RATE_MS);
   if (mine.length >= RATE_N) return refuse("rate", `at most ${RATE_N} upgrade requests in ${RATE_MS / 60_000} minutes`, "try again later");
   recent.set(account, [...mine, now]);   // taken in the same turn as the check, before the await below
-  if (!operator) { if (old.kind !== "translatable") return rights();
-    owner = await ownerOf(world, who); if (!owner?.recognised) return rights(owner?.why ?? ""); }
+  const told = await toldOf(world, { account }, who);
+  if (told.kind !== "old") return operator ? refuse("not-old", `there is no world saved in an older format called "${world.slice(0, 64)}" here`) : unavailableHere();
+  const old = told.old; const owner = told.owner ? { recognised: told.owner, owner: told.ownerName, ownerless: false } as Owner : null;
   if (old.kind !== "translatable") return refuse("cli", `"${world}" was saved before this protocol's names changed; it is re-translated from its original old log on the command line (the boot notice gives the commands): ${OLD_FORMAT_DOC}`);
   if (running.has(world)) return refuse("busy", `"${world}" is already being reviewed or upgraded`, "wait for that to finish");
   running.add(world);   // in the same turn as the busy check

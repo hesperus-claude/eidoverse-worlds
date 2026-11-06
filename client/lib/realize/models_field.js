@@ -6,12 +6,15 @@
 import { P } from '../scheduler.js';
 import { COMPONENTS } from '../../../shared/protocol/componentspec.js';
 import { solidOff } from '../../../shared/protocol/simlayer.js';
-import { kindOf, isMeshBag } from '../../../shared/protocol/kind.js';
-export { kindOf, isMeshBag };
+import { isMeshBag } from '../../../shared/components.js';
+export { isMeshBag };
 
-/** What the realizer needs to know about a realized id to detect identity
- *  drift. kind: kindOf's word; model only meaningful for models.
- *  @typedef {{ kind: 'model'|'mesh'|'light'|'empty', model?: string }} RealizedView */
+/** The model a record draws, or null: the one component that decides what a realized object IS (a GLB, or a bare frame).
+ *  Mesh, light and socket are realized on that frame, each on its own (models.js syncParts, syncCompLight). */
+export const modelOf = (ent) => (typeof ent?.model === 'string' ? ent.model : null);
+
+/** What the realizer needs to know about a realized id to detect identity drift: the model it wears (none for a frame).
+ *  @typedef {{ model?: string|null }} RealizedView */
 
 /** The registered `mesh` component (shared/protocol/componentspec.js), read as a client reads it: a malformed value is
  *  absent (the thing is an Empty), never a throw. A field outside its range is clamped to it; a capsule is at least its
@@ -49,8 +52,7 @@ export function planReconcile(stEntities, realized) {
   for (const [id, view] of realized) {
     const ent = stEntities[id];
     if (!ent || offIn(stEntities, id)) { retire.push(id); continue; }
-    const foldedKind = kindOf(ent);
-    if (view.kind !== foldedKind || (foldedKind === 'model' && view.model !== ent.model) || (foldedKind === 'mesh' && view.mesh !== meshKeyOf(ent))) {
+    if ((view.model ?? null) !== modelOf(ent)) {
       retire.push(id);
       create.push({ id, ent });
     }

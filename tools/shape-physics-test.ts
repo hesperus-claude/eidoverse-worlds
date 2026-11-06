@@ -6,6 +6,7 @@
 import { fileURLToPath } from "node:url";
 import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from 'node:fs';
+import { addSocket } from '../shared/requests.js';
 import { scratchWorld } from './protocol/scratchworld.ts';
 import { COMPONENTS, statusOf, pinOf, materialize } from '../shared/protocol/componentspec.js';
 import { evalWholeMotion } from '../client/lib/motioneval.js';
@@ -46,9 +47,9 @@ await tryRow('PA', () => {
   const r = W.call('set', { id: 'cup', component: 'parent', value: { to: 'table', order: 'a0' } });
   check('PA2 a written order is taken and dropped: the stored parent is {to}', r.ok && JSON.stringify(W.state().entities.cup.c.parent) === '{"to":"table"}', [r.refused, W.state().entities.cup.c.parent]);
   W.call('create', { id: 'sofa', model: 'crate' });
-  const m = W.call('set', { id: 'sofa', component: 'sockets', value: { left: { pos: [0, 0.5, 0], body: {} } } });
+  const m = W.sendAll([addSocket('sofa', { name: 'left' }, { pos: [0, 0.5, 0], station: {} })]);
   const kid = Object.values(W.state().entities).find((e: any) => e.c.parent?.to === 'sofa' && e.c.socket);
-  check('PA3 the authority writes no order either (a socket child made by the lift)', m.ok && JSON.stringify(kid?.c.parent) === '{"to":"sofa"}', [m.refused, kid?.c.parent]);
+  check('PA3 the authority writes no order either (a socket child, requests.js addSocket)', m.ok && JSON.stringify(kid?.c.parent) === '{"to":"sofa"}', [m.refused, kid?.c.parent]);
   const old = [{ seq: 0, ts: 1, actor: 'world', verb: 'genesis', args: { v: 2, dialect: 'eidoverse-log', roles: { ann: { role: 'owner' } } } },
     { seq: 1, ts: 2, actor: 'ann', verb: 'spawn', args: { id: 'cart', lib: 'crate', pos: [0, 0, 0] } },
     { seq: 2, ts: 3, actor: 'ann', verb: 'spawn', args: { id: 'box', lib: 'crate', pos: [1, 0, 0] } },
@@ -89,7 +90,7 @@ await tryRow('MO', async () => {
   const a = evalWholeMotion(base, m, 300), b = evalWholeMotion({ ...base, pivot: [0, 0, 0] }, m, 300);
   check('MO7 a whole pendulum with no pivot component swings about its origin', a.ok && near(a.pos, b.pos) && near(a.pos, [0, 0, 0]), [a.pos, b.pos]);
 
-  const { repairComps, shapeRepairOps } = await import('../shared/protocol/shaperepair.js');
+  const { repairComps } = await import('./protocol/import-v1/shapes.js');
   const R = repairComps({ motion: { type: 'pendulum', amplitude: 0.4, axis: 'z' }, collider: { shape: 'exact' } }).c;
   check('MO8 repair: amplitude → amp, a letter axis → its vector, the old period/damp/maxAmp readings written, the old swing point a pivot', JSON.stringify(R.motion) === '{"type":"pendulum","axis":[0,0,1],"amp":0.4,"period":3.5,"damp":0,"maxAmp":1.1}' && JSON.stringify(R.pivot) === '{"pos":[0,2,0]}', R);
   check('MO8 …collider exact → mesh', R.collider?.shape === 'mesh', R.collider);
@@ -101,13 +102,8 @@ await tryRow('MO', async () => {
   check('MO8 …a whole motion\'s pivot field moves to the pivot component', !('pivot' in P4.motion) && JSON.stringify(P4.pivot) === '{"pos":[0.1,0.2,0.3]}', P4);
   const P5 = repairComps({ motion: { type: 'pendulum', period: 2, damp: 0.1, maxAmp: 0.9 }, pivot: { pos: [0, 1, 0] } });
   check('MO8 …a pendulum that already has its pivot and readings is left alone (a second run finds nothing)', P5.set.length === 0 && P5.del.length === 0, P5);
-  const st = { entities: { '@world': { c: {} }, s: { c: { motion: { type: 'pendulum', amp: 0.3, period: 2, damp: 0, maxAmp: 0.9 } } }, t: { c: { motion: { type: 'spin', axis: 'y' } } } } };
-  const ops = shapeRepairOps(st);
-  check('MO9 the repair\'s ops: a pivot for the pendulum that relied on [0, 2, 0], a vector axis for the spin', ops.some((o: any) => o.id === 's' && o.comp === 'pivot' && JSON.stringify(o.value) === '{"pos":[0,2,0]}') && ops.some((o: any) => o.id === 't' && o.comp === 'motion' && JSON.stringify(o.value.axis) === '[0,1,0]') && ops.length === 2, ops);
-  const Ld = readAuthority();
-  // item 9 (10-18): the repair is the explicit command's (repairShapes), never the load's (liftWorld computes no repair ops)
-  const lift = Ld.slice(Ld.indexOf('export function liftWorld'), Ld.indexOf('export function maintain')), cmd = Ld.slice(Ld.indexOf('export function maintain'));
-  check('MO9 …and the maintenance command applies them (maintain: repair-shapes), while the load never does', !/shapeRepairOps\(/.test(lift) && /shapeRepairOps\(/.test(cmd) && /"repair-shapes"/.test(cmd), '');
+  const S = repairComps({ motion: { type: 'pendulum', amp: 0.3, period: 2, damp: 0, maxAmp: 0.9 } }).c, T = repairComps({ motion: { type: 'spin', axis: 'y' } }).c;
+  check('MO9 the importer\'s rules: a pivot for the pendulum that relied on [0, 2, 0], a vector axis for the spin', JSON.stringify(S.pivot) === '{"pos":[0,2,0]}' && JSON.stringify(T.motion.axis) === '[0,1,0]', [S, T]);
 
   const old = [{ seq: 0, ts: 1, actor: 'world', verb: 'genesis', args: { v: 2, dialect: 'eidoverse-log', roles: { ann: { role: 'owner' } } } },
     { seq: 1, ts: 2, actor: 'ann', verb: 'spawn', args: { id: 'bell', lib: 'crate', pos: [0, 0, 0] } },
@@ -164,7 +160,7 @@ await tryRow('CO', () => {
   check('CO1 …and its absence is pinned for both readers (physics: its box; walking: the size rule)', /physics/.test(Co.absentMeans?.shape ?? '') && /16 m²/.test(Co.absentMeans?.shape ?? '') && /2 m²/.test(Co.absentMeans?.shape ?? ''), Co.absentMeans);
   const W = scratchWorld('w2p-collider').seed({ hut: { model: 'crate', pos: [0, 0, 0] } });
   const r = W.call('set', { id: 'hut', component: 'collider', value: { shape: 'exact' } });
-  check('CO2 exact is taken and stored as mesh', r.ok && W.state().entities.hut.c.collider.shape === 'mesh', [r.refused, W.state().entities.hut.c.collider]);
+  check('CO2 exact is refused (the word is mesh; nothing deployed wrote exact)', r.refused?.code === 'shape' && /got "exact"/.test(r.refused.reason) && !W.state().entities.hut.c.collider, [r.refused, W.state().entities.hut.c.collider]);
   check('CO3 the walker reads mesh as its triangles (and an old exact the same)', colliderOf({ collider: { shape: 'mesh' } }) === 'exact' && colliderOf({ collider: { shape: 'exact' } }) === 'exact' && colliderOf({ collider: { shape: 'box' } }) === 'box');
 });
 await tryRow('JT', () => {

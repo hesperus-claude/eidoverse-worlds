@@ -15,6 +15,7 @@
 //     the card (so the red is about the panel, not a missed aim);
 //   leaving VR drops the quad and puts the desktop card back as it was.
 import { launchBrowser, ownedWorld, checker, iwerInit } from './probe-harness.mjs';
+import { helloOf } from '../shared/protocol/hello.js';
 
 const { check, done } = checker();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -32,7 +33,7 @@ function peer(id, pose) {
   const ws = new WebSocket(`${world.origin.replace(/^http/, 'ws')}/ws`);
   const p = { ws, pose, timer: null };
   ws.onopen = () => {
-    ws.send(JSON.stringify({ type: 'join', world: WORLD, id, token: world.key }));
+    ws.send(JSON.stringify({ type: 'join', hello: helloOf(), world: WORLD, id, token: world.key }));
     p.timer = setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'pose', pose: p.pose })); }, 66);
   };
   peers.push(p);

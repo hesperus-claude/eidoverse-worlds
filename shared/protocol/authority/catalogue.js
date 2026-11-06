@@ -1,8 +1,7 @@
 // shared/protocol/authority/catalogue.js — the model catalogue and a thing's geometry. A leaf: math and the spatial
 // index read a thing's box through geomE; nothing here reaches the gate. The load-time `CTX.cat = LAB_CATALOGUE` lets an
 // out-of-call reader (a test reading the index) find the lab's catalogue in force.
-import { PURGED } from "../fold.js";
-import { MODELS } from "../labmodels.js";
+import { REDACTED } from "../fold.js";
 import { COMPONENTS } from "../componentspec.js";
 import { collisionBoxes } from "../../structure.js";
 import { CTX } from "./ctx.js";
@@ -17,8 +16,8 @@ import { isNum } from "../is.js";
 //   size     absent → a model this server can name but not measure (no placement help, no collisions, said so).
 // request() sets CTX.cat for the duration of one synchronous call; nothing in the authority awaits, so calls can't interleave.
 // own keys only: MODELS["constructor"] is Object (L1's no-prototype rule)
-export const LAB_CATALOGUE = Object.freeze({ get: (n) => (Object.hasOwn(MODELS, n) ? MODELS[n] : undefined), list: (q) => Object.entries(MODELS).filter(([k, m]) => k.includes(q) || m.label.includes(q)) });
-CTX.cat = LAB_CATALOGUE;
+export const NO_CATALOGUE = Object.freeze({ get: () => undefined, list: () => [] });
+CTX.cat = NO_CATALOGUE;
 const modelOf = (name) => (typeof name === "string" ? CTX.cat.get(name) : undefined);
 const geomOf = (name) => { const m = modelOf(name); return m && m.size ? m : undefined; };
 const boxOfM = (m) => m.box ?? [[-m.size[0] / 2, 0, -m.size[2] / 2], [m.size[0] / 2, m.size[1], m.size[2] / 2]];
@@ -28,7 +27,7 @@ const boxOfM = (m) => m.box ?? [[-m.size[0] / 2, 0, -m.size[2] / 2], [m.size[0] 
 // hold. Past STRUCT_MAX solid boxes the building's whole box stands (as server/solids.ts does).
 const STRUCT_MAX = 512; const STRUCTGEO = new WeakMap();
 function structGeom(v) {
-  if (!v || typeof v !== "object" || Array.isArray(v) || v === PURGED) return undefined;
+  if (!v || typeof v !== "object" || Array.isArray(v) || v === REDACTED) return undefined;
   if (STRUCTGEO.has(v)) return STRUCTGEO.get(v);
   // a building whose boxes can't be derived has no solid geometry here (walked and placed through), so the operator is told,
   // once per structure value (the result is cached per value just below)
@@ -55,7 +54,7 @@ function structGeom(v) {
 const r4 = (n) => Math.round(n * 1e4) / 1e4;
 export const MESH_SIZE = COMPONENTS.mesh.ranges.size;
 const MESHGEO = new WeakMap();
-const meshOk = (v) => v && typeof v === "object" && !Array.isArray(v) && v !== PURGED && COMPONENTS.mesh.enums.shape.includes(v.shape)
+const meshOk = (v) => v && typeof v === "object" && !Array.isArray(v) && v !== REDACTED && COMPONENTS.mesh.enums.shape.includes(v.shape)
   && Array.isArray(v.size) && v.size.length === 3 && v.size.every((x) => isNum(x) && x >= MESH_SIZE.min && x <= MESH_SIZE.max);
 /** What a mesh value measures, by shape (the client's readMesh reads the same): a sphere is x³; a cylinder is x wide and y tall;
  *  a capsule is at least its diameter tall; a plane is 0.05 thick. */
@@ -79,5 +78,5 @@ export function meshShape(v) {
 /** A thing's geometry: its building's (structure) if it has one, else its mesh's, else its model's. */
 const geomE = (e) => (e?.c.structure !== undefined ? structGeom(e.c.structure) : e?.c.mesh !== undefined ? meshGeom(e.c.mesh) : geomOf(e?.c.model));
 /** Run fn with world w's catalogue in force (also for callers outside request(), e.g. a server's settle tick). */
-export function withCatalogue(w, fn) { const prev = CTX.cat; CTX.cat = w.catalogue ?? LAB_CATALOGUE; try { return fn(); } finally { CTX.cat = prev; } }
+export function withCatalogue(w, fn) { const prev = CTX.cat; CTX.cat = w.catalogue ?? NO_CATALOGUE; try { return fn(); } finally { CTX.cat = prev; } }
 export { modelOf, geomOf, boxOfM, geomE };

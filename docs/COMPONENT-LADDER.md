@@ -24,15 +24,16 @@ definition in `shared/protocol/componentspec.js`; `schema` returns it, and the I
   (`--ack "<why>"`, written as `kernel: <why>` with the diff beneath), and vectors (`--vectors <dir>`:
   `spec/kernel-vectors/<dir>/vectors.json`, entries the OLD reader — snapshotted from git into `old-fold.js` at re-pin time —
   refuses and the NEW reader folds clean; the gate runs them). The pin records the companions and the check verifies them
-  at every run, so none can be dropped after the fact. Not an acknowledgement rung: `--ack` alone never re-pins the kernel.
+  at every run, so none can be dropped after the fact. The kernel the first deploy ships was pinned once by the first-deploy
+  ceremony (`--pin --first-deploy --ack --vectors first-deploy`): no older reader was deployed, so its vectors are synthetic
+  fixtures with the verdict this reader gives each (K3, K3b). Not an acknowledgement rung: `--ack` alone never re-pins the kernel.
   A **scope extension** (a registered name entering the kernel with the shape the registry pin already holds, as model, roles
   and access did on 10-18) changes what no stored byte means: it re-pins on `--ack` alone, no translator or vectors, and the
   pin records the names (kernel-check K12 proves a shape change can't ride in on it).
 - **reserved**: the name is held (nobody else may take it) but every write is refused, with one refusal for all reserved
   names (code `reserved`; the definition's `instead` says what to use meanwhile). Today: `physics-joint` (the
   constraint between two bodies; renamed from `joint` 10-16, nothing stored it), `joint` (a skeleton node: Maya, glTF,
-  VRM; for avatar entity trees), `surface` (with physics' reserved fields), `schemas`, `terrain-grid`, `terrain-tile`, `terrain-paint`; `sockets` (the old map: lift-only, the door turns a write of it into
-  socket children); and the names R held for shapes not settled yet (shape audit 10-16; `material` got its shape R 10-27): `anim-pose` (one frame; R 10-17), `anim-clip`,
+  VRM; for avatar entity trees), `surface` (with physics' reserved fields), `schemas`, `terrain-grid`, `terrain-tile`, `terrain-paint`; and the names R held for shapes not settled yet (shape audit 10-16; `material` got its shape R 10-27): `anim-pose` (one frame; R 10-17), `anim-clip`,
   `anim-states`, `camera`, `video`, `spring-joint`, `link`, `tags`; and `body-owner`, `edit-grant`, `avatar-deny`
   (the avatar guard rails' names, PROTOCOL §7a).
 - **reserved inside a trial component**: a field or a kind can be held the same way, refused with code `reserved` while
@@ -49,13 +50,11 @@ definition in `shared/protocol/componentspec.js`; `schema` returns it, and the I
     `density` stay open: the body shove reads them.
     `layers`, `mask`, `ccd` are cut, not held.
 - **cut fields that say where they went** (the registry's `dropped`): a write of one is refused with a pointer, a
-  stored one is repaired by the explicit maintenance command (shared/protocol/shaperepair.js; `bun tools/protocol/world.ts repair <name>`, which runs lift-sockets, rename-components and repair-shapes in that order; never at load: reviewer item 9 + the lead's ruling, 10-18) and by translate-v1@12 and later: `motion.amplitude`
+  v1 one is written in today's spelling by translate-v1@12 and later (tools/protocol/import-v1/shapes.js): `motion.amplitude`
   (→ `amp`), `motion.part` (→ `motion:<slot> {node: <part>}`: a node's name from a model file is data in the value, never part of a key; readers find the part by `node`), `physics.material` (→ `surface`), `sky.weatherSeconds` (→
   `transition`; the sky act still takes it), `sky.clock` (→ `tz`; likewise), `terrain.water` (→ the `water` component).
   Some are taken at the door instead and stored in today's spelling: `parent.order` (dropped), `light.day` (→
-  `daytime`) and the first protocol's grass knobs. The command's acts are `lift-sockets`, `rename-components` and `repair-shapes` (each with `command` and `by`: provenance; one pre-repair backup under `repair-backups/` for `--rollback`); a world needing a step its readers can't serve loads but refuses writes with `repair-needed`. The shape repair runs once per world (the system's
-  `repair-shapes` act marks the world; a founding or translation writes one; older worlds' markers are read back, and a
-  purged one counts as marked); PROTOCOL §4 lists everything it repairs.
+  `daytime`) and the first protocol's grass knobs. A world founded today is written in today's spelling, so nothing repairs it (PROTOCOL §4).
 - **references are stored as written** (R 10-17, binding: "definitely serve path again alongside hash"): `model` is its
   library path, a particle Essential its name, `grass.preset` its name (back as a field: Fable #4, expanding later is
   cheap, un-expanding impossible). `model-hash` (trial, 10-17; `sha256:<64 hex>`, written by the server) rides beside a
@@ -67,7 +66,7 @@ definition in `shared/protocol/componentspec.js`; `schema` returns it, and the I
   `water` is a dry world, and absent fields read as `0x1d5a6e`, 0.82, a kind decided from the ground
   (shared/waterkind.js) and no current. Its readers moved with it: the authority's ground (spatial.js), the client
   (drawing, ground panel), the agent, and the mover's water law (shared/mover.js), through shared/terrainshape.js's
-  `worldWater`, which reads an older `terrain.water` until the maintenance command moves it.
+  `worldWater`.
 - **stable**: promised. Its meaning never changes; it only grows by additions, and a changed meaning is a new versioned
   name (rung 4). None is stable at v1.
 

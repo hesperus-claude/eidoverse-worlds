@@ -4,9 +4,9 @@
 //   bun tools/protocol/gov-reserved-check.ts
 import fs from "node:fs"; import path from "node:path"; import os from "node:os"; import { spawnSync } from "node:child_process";
 import { jcs, readLog } from "../../shared/protocol/fold.js"; import { sha256, sha256Bytes, hexBytes } from "../../shared/protocol/hash.js";
-import { openLive } from "../../server/livehost.ts";
+import { openLive } from "../labhost.ts";
 import { suite } from "./suite.ts";
-const ENGINE = path.resolve(import.meta.dir, "../.."); const { check, done } = suite("gov-reserved-check", { cap: 300 });
+const ENGINE = path.resolve(import.meta.dir, "./.."); const { check, done } = suite("gov-reserved-check", { cap: 300 });
 const W = fs.mkdtempSync(path.join(process.env.PROTOCOL_SCRATCH ?? os.tmpdir(), "gov-"));
 const found = (name: string) => { const r = spawnSync(process.execPath, ["tools/protocol/world.ts", "found", name, "--owner", "u-aaaaaaaaaaaaaaaaaaaaaa", "--title", name], { cwd: ENGINE, env: { ...process.env, WORLDS_DIR: W }, encoding: "utf8" }); if (r.status !== 0) throw new Error(r.stderr); return path.join(W, name); };
 const step = (prev: string, e: Record<string, unknown>) => { const { head, sig, ...s } = e as any; const b = new Uint8Array(64); b.set(hexBytes(prev), 0); b.set(hexBytes(sha256(jcs(s))), 32); return sha256Bytes(b); };
@@ -17,7 +17,7 @@ try {
 
   const gov = found("gov"); const log = path.join(gov, "world.jsonl");
   const entries = readLog(fs.readFileSync(log)); const last = entries.at(-1) as any;
-  const e: Record<string, unknown> = { world: last.world, kind: "sequencer", actor: "system", verb: "sequencer", body: { key: "ed25519:" + "A".repeat(43), sigs: [{ key: "ed25519:" + "B".repeat(43), v: "C".repeat(86) }] }, ts: last.ts + 1 };
+  const e: Record<string, unknown> = { world: last.world, kind: "governance", actor: "system", body: { key: "ed25519:" + "A".repeat(43), sigs: [{ key: "ed25519:" + "B".repeat(43), v: "C".repeat(86) }] }, ts: last.ts + 1 };
   e.head = step(last.head, e); fs.appendFileSync(log, JSON.stringify(e) + "\n");
   const before = { log: fs.readFileSync(log), files: fs.readdirSync(gov).sort().join(",") };   // the bytes and the listing openLive must leave alone
   let err = ""; try { openLive(gov, "gov"); } catch (x) { err = String((x as Error)?.message ?? x); }

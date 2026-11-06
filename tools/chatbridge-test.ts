@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { ROOT, foundWorlds, freePort, saysIn } from "./harness.ts";
 import { suite } from "./protocol/suite.ts";
 import { tryUntil } from "./protocol/wait.ts";
+import { helloOf } from "../shared/protocol/hello.js";
 
 const BRIDGE = process.env.CHATBRIDGE ?? "tools/chatbridge/index.ts";   // another build, for a red-first control
 const W = mkdtempSync(join(tmpdir(), "ew-chatbridge-"));
@@ -29,7 +30,7 @@ const join_ = (id: string) => new Promise<{ ws: WebSocket; msgs: any[] }>((res, 
   const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`); const msgs: any[] = [];
   const t = setTimeout(() => rej(new Error(`${id} join timed out`)), 8000);
   ws.onmessage = (e) => { const m = JSON.parse(String(e.data)); msgs.push(m); if (m.type === "snapshot") { clearTimeout(t); res({ ws, msgs }); } if (m.type === "error") { clearTimeout(t); rej(new Error(m.error)); } };
-  ws.onopen = () => ws.send(JSON.stringify({ type: "join", world: "commons", id, replica: true }));
+  ws.onopen = () => ws.send(JSON.stringify({ type: "join", hello: helloOf(), world: "commons", id, replica: true }));
 });
 const say = (c: { ws: WebSocket }, text: string) => c.ws.send(JSON.stringify({ type: "request", id: `t-${Math.random()}`, verb: "say", args: { text } }));
 

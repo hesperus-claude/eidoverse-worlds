@@ -46,7 +46,7 @@ await C("U1", "the translator keeps model paths (R 10-17) and writes model-hash 
     { seq: 2, ts: 3, actor: "olive", verb: "spawn", args: { id: "b", lib: "claude/no-such-thing", pos: [1, 0, 0] } }];
   const content = (p: string) => (p === `store/${H.slice(0, 16)}.glb` ? `sha256:${H}` : null);
   const r = T.translate(old, { content }); const f = r.final.translated;
-  const act = r.out.find((e: any) => e.kind === "act" && e.body?.verb === "spawn" && e.body?.args?.id === "a");
+  const act = r.out.find((e: any) => e.kind === "request" && e.body?.verb === "spawn" && e.body?.args?.id === "a");
   return [f.a.model === `store/${H.slice(0, 16)}.glb` && f.a["model-hash"] === `sha256:${H}` && f.b.model === "claude/no-such-thing" && !("model-hash" in f.b) && r.stats.divergences === 0 && JSON.stringify(r.stats.modelsUnhashed) === JSON.stringify(["claude/no-such-thing"])
     && r.stats.modelsHashed === 1 && act?.body?.args?.lib === `store/${H.slice(0, 16)}.glb`, { a: f.a, b: f.b, stats: r.stats, act: act?.body }]; });
 

@@ -20,6 +20,7 @@ import path from "node:path";
 import { scratch } from "./common.ts";
 import { tryUntil } from "./wait.ts";
 import { suite } from "./suite.ts";
+import { helloOf } from "../../shared/protocol/hello.js";
 const root = scratch("reachgate");
 process.env.WORLDS_DIR = path.join(root, "w"); process.env.OPT_DIR = path.join(root, "opt"); process.env.SKIP_OPT_SWEEP = "1";
 process.env.JOIN_TOKEN ??= "test-door";
@@ -51,7 +52,7 @@ const req = (c, verb, args) => w.log.requestSync(c.actorId, verb, args);
 const vic = person("Vic", "v", [0, 0, 0]), sly = person("Sly", "s", [0.6, 0, 0]);
 const tom = person("Tom", "t", [-0.6, 0, 0]);
 const ann = person("Ann", "a", [5, 0, 0]), bob = person("Bob", "b", [5.6, 0, 0]);
-const head0 = w.log.head;
+const head0 = w.log.seq;
 
 // RG1 (Vic's gates set, never by leaning on a default)
 { const sw = req(vic, "consent", { move: false, touch: false }); ok(sw?.ok, "(RG1 setup) Vic turns both gates off", sw);
@@ -169,7 +170,7 @@ const head0 = w.log.head;
   pose(vic, { p: [0, 0, 0], yaw: 0 }); }
 
 // RG10 (everything above went through the relay only)
-ok(w.log.head === head0, "RG10 nothing about a reach is appended to the log", w.log.live.entries.slice(head0 + 1).map((e) => e.verb));
+ok(w.log.seq === head0, "RG10 nothing about a reach is appended to the log", w.log.live.entries.slice(head0 + 1).map((e) => e.verb));
 
 
 // RG9 (Tom: a stranger neither of Vic's lists names)
@@ -335,7 +336,7 @@ let skipped = null; const SKIP = Symbol("skip");
     const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`); const msgs = [];
     ws.onmessage = (ev) => msgs.push(JSON.parse(String(ev.data)));
     await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
-    ws.send(JSON.stringify({ type: "join", world: "yard", id: "Vic", avatar: "", replica: true }));
+    ws.send(JSON.stringify({ type: "join", hello: helloOf(), world: "yard", id: "Vic", avatar: "", replica: true }));
     await tryUntil("Vic's join is answered", () => msgs.some((m) => m.type === "snapshot" || m.type === "error"), { ms: 4000, step: 50 });
     let rn = 0; const vreq = async (verb, args = {}) => { const id = `q${++rn}`; ws.send(JSON.stringify({ type: "request", id, verb, args }));
       const r = await tryUntil(`the reply to Vic's ${verb}`, () => msgs.find((m) => m.type === "reply" && m.id === id), { ms: 4000, step: 50 }); return r ? r.reply : { ok: false, timeout: true }; };
@@ -348,7 +349,7 @@ let skipped = null; const SKIP = Symbol("skip");
     try { ({ WorldAgent } = await import("../../mcpl/agent.ts")); ({ HANDLERS } = await import("../../mcpl/tools.ts")); }
     catch (e) { if (!/Cannot find module/.test(String(e))) throw e; skipped = String(e).replace(/^.*Cannot find module /, "").slice(0, 120); throw SKIP; }
     ag = new WorldAgent({ url: `ws://127.0.0.1:${port}/ws`, name: "Hep", world: "yard", avatar: "" });
-    await ag.connect(); await tryUntil("the agent has its cut", () => ag.cut, { ms: 3000, step: 50 });
+    await ag.connect(); await tryUntil("the agent has its cut", () => ag.snapshot, { ms: 3000, step: 50 });
     await tryUntil("the agent knows Vic's identity", () => ag.actorIds.get("Vic") || (vicPose(), false), { ms: 2000, step: 50 });
     ok(!!ag.actorIds.get("Vic"), "(AG setup) the agent knows Vic's identity");
     const call = (name, a = {}) => HANDLERS[name](ag, a, { agent: ag, canPush: () => false, heldActivity: [], cursor: { caughtUpTo: null } }, name);

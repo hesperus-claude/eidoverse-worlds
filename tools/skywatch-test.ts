@@ -16,7 +16,7 @@ const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok,
 
 const T0 = 1_754_000_000_000;
 const MIN = 60e3, HOUR = 3600e3;
-const policyArgs = { seed: 7, states: ["clear", "overcast", "rain"], dwellSec: [300, 900], transitionSec: 20 };
+const policyArgs = { seed: 7, states: ["clear", "overcast", "rain"], dwell: [300, 900], transition: 20 };
 
 // the sky is @world's, set through `sky` / `weather` on a pinned-clock scratch door (tools/agent-scratch.ts) at T0;
 // provenance is the LOG's: the door strips seq/by from the value, so the agent reads them from the entry
@@ -93,7 +93,7 @@ for (const src of SOURCES) {
   const ag = new WorldAgent({ url: noWorldUrl(), name: "late" }) as any; const events: any[] = [];
   ag.onEvent = (ev: any) => { if (ev.kind === "weather") events.push(ev); };
   // the live fold's cut, serialized and adopted by a fresh replica: what a joiner gets (never the live object itself)
-  ag.replica = makeReplica(); ag.replica.adopt(JSON.parse(JSON.stringify({ state: wireState(live.ag.replica.st), head: live.ag.replica.head })));
+  ag.replica = makeReplica(); ag.replica.adopt(JSON.parse(JSON.stringify({ dialect: "eidoverse-log", v: 4, state: wireState(live.ag.replica.st), seq: live.ag.replica.seq })));
   await ag.applyView(false, null, T0);
   check("a late joiner's sky is the live agent's", JSON.stringify(ag.skyState) === JSON.stringify(live.ag.skyState), JSON.stringify([ag.skyState, live.ag.skyState]));
   ag.checkSky(T0 + 5 * MIN);
@@ -155,7 +155,7 @@ for (const src of SOURCES) {
   // accelerated commons shape, then the owner flips to real time re-issuing the standing bag (the tuner's gather() spread)
   const { ag, events, door } = await rig({ hours: 6.8, rate: 24, clouds: "cumulus", forecast: policyArgs }, "mica");
   const { ts: _ts, ...standing } = ag.skyState;
-  const flip = await door.act("sky", { ...standing, clock: "real", tz: "America/Los_Angeles" }, { who: "antra", at: T0 + HOUR, live: false });
+  const flip = await door.act("sky", { ...standing, tz: "America/Los_Angeles" }, { who: "antra", at: T0 + HOUR, live: false });
   check("#65 the door takes the clock flip (the standing bag re-issued)", flip.ok, JSON.stringify(flip.refused));
   ag.look();
   const sky = ag.worldInfo.sky;

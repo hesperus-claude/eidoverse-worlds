@@ -37,6 +37,7 @@ import { HANDLERS } from "../mcpl/tools.ts";
 import { foundWorlds, freePort } from "./harness.ts";
 import { suite } from "./protocol/suite.ts";
 import { until, tryUntil } from "./protocol/wait.ts";
+import { helloOf } from "../shared/protocol/hello.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = resolve(process.env.EIDOVERSE_DIR ?? join(ROOT, "..", "eidoverse-video"));
@@ -107,7 +108,7 @@ try {
   // OUR scratch WORLDS_DIR or nothing below is inspecting our child
   watcher = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
   await new Promise<void>((res, rej) => {
-    watcher!.onopen = () => { watcher!.send(JSON.stringify({ type: "join", world: "seatlab", id: "watcher", token: DOOR, replica: true })); res(); };
+    watcher!.onopen = () => { watcher!.send(JSON.stringify({ type: "join", hello: helloOf(), world: "seatlab", id: "watcher", token: DOOR, replica: true })); res(); };
     watcher!.onerror = () => rej(new Error("watcher ws failed"));
   });
   watcher.onmessage = (ev) => { try { const m = JSON.parse(String(ev.data)); if (m.type === "avatar-profile-updated") watcherEvents.push(m); } catch { /* not ours */ } };

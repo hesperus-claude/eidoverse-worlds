@@ -42,6 +42,7 @@ import { createServer as createHttpServer } from "node:http";
 import { suite } from "./protocol/suite.ts";
 import { until, tryUntil, pause } from "./protocol/wait.ts";
 import { capabilityMatches, CAP, MCPL_ADVERTISEMENT, FEATURE_SETS } from "../mcpl/declaration.ts";
+import { helloOf } from "../shared/protocol/hello.js";
 
 // racy in principle, which is why readiness below verifies ownership rather than trusting whatever answers
 const SEQ_PORT = freePort(9400), DOOR_PORT = freePort(11400);
@@ -246,14 +247,14 @@ try {
   let arrivals = 0, posedSinceArrival = false, obsJoined = false;
   obs = new WebSocket(`ws://127.0.0.1:${SEQ_PORT}/ws`);
   {
-    obs.onopen = () => obs.send(JSON.stringify({ type: "join", world: "commons", id: "observer", token: JOIN, replica: true }));
+    obs.onopen = () => obs.send(JSON.stringify({ type: "join", hello: helloOf(), world: "commons", id: "observer", token: JOIN, replica: true }));
     obs.onmessage = (ev) => {
       const m = JSON.parse(String(ev.data));
       if (m.type === "snapshot") obsJoined = true;
       if (m.type === "arrive" && m.id === "claude") { arrivals++; posedSinceArrival = false; }
       if (m.type === "frame" && m.poses?.claude) posedSinceArrival = true;
       // chat is the log stream's say entries; their actors are opaque ids, named by the stream
-      if (m.type === "snapshot") Object.assign(names, m.cut?.names ?? {});
+      if (m.type === "snapshot") Object.assign(names, m.names ?? {});
       if (m.type === "log") { Object.assign(names, m.names ?? {});
         for (const e of m.entries ?? []) if (e?.kind === "say") seen.push({ who: names[e.actor] ?? e.actor, text: e.body?.text }); }
       if (m.type === "typing" && m.id === "claude") typings.push(Date.now());

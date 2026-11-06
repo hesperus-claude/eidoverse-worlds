@@ -24,6 +24,7 @@ import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.t
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
 import { suite } from "./suite.ts";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -79,6 +80,7 @@ const TREE = path.resolve(opt("tree") ?? ENGINE) + "/";
 const D = await import(TREE + "shared/protocol/authority.js");
 D.fixtureIds?.(true);   // the fixtures below seed the ids they read (R 10-17: a writer never chooses one; ids-check covers the refusal)
 const F = await import(TREE + "shared/protocol/fold.js");
+const REQ = await import(TREE + "shared/requests.js");
 const C = await import(TREE + "shared/protocol/consent.js");
 const ONLY = opt("only")?.split(",") ?? null;
 const root = scratch("scars");
@@ -87,7 +89,7 @@ function openWorld(name: string) {
   const logPath = path.join(root, "worlds", `${name}.jsonl`), storeDir = path.join(root, "store");
   const entries = F.readLog(readLogBytes(logPath)).map(D.posAt);
   const blobPath = (h: string) => path.join(storeDir, `${String(h).replace(/[^a-z0-9]/g, "-")}.json`);
-  return D.worldOf({ name, entries,
+  return D.worldOf({ catalogue: LAB_CATALOGUE, simModels: LAB_MODELS, name, entries,
     getBlob: (h: string) => JSON.parse(fs.readFileSync(blobPath(h), "utf8")),
     putBlob: (v: unknown) => { const s = F.jcs(v); const h = `sha256:${F.sha256(s)}`; putBlobFile(blobPath(h), s, h); return h; },
     now: () => pinned(), writeLine: (line: string) => appendDurable(logPath, line),
@@ -103,13 +105,15 @@ function session() {
 }
 const code = (r: any) => r?.refused?.code;
 const show = (r: any) => (r?.crashed ? `CRASH ${r.crashed}` : r?.ok ? "ok" : `refused ${r?.refused?.code}: ${String(r?.refused?.reason).slice(0, 140)}`);
-const lastAct = (s: any) => s.entries().findLast((e: any) => e.kind === "act");
+const lastAct = (s: any) => s.entries().findLast((e: any) => e.kind === "request");
 // owner olive, builder bob, visitor vic
 function cast(s: any) {
   s.call("olive", "create-world", { title: s.name });
   for (const [who, role] of [["bob", "builder"], ["vic", "member"]]) s.call("olive", "set", { id: "@world", component: `roles:${who}`, value: { role } });
 }
-const SEAT = { sockets: { seat: { pos: [0, 0.45, 0], body: { action: "sit" } } } };
+// a seat is a socket child with a station: the host is created, then each seat [name, pos] as its child
+function seated(s: any, actor: string, args: any, seats: [string, number[]][] = [["seat", [0, 0.45, 0]]]) { const r = s.call(actor, "create", args); if (!r.ok) return r;
+  return s.call(actor, "batch", { requests: seats.map(([name, pos]) => REQ.addSocket(args.id, { name }, { id: `$${name}`, pos, station: { action: "sit" } })) }); }
 const read = (p: string) => fs.readFileSync(path.join(TREE, p), "utf8");
 
 type Case = { id: string; what: string; run: (s: any) => any; good: (o: any) => boolean };
@@ -120,12 +124,12 @@ const cases: Case[] = [
       const r = s.call("vic", "set", { id: "lamp", component: "label", value: "my phone is 555-0100" });
       const a = lastAct(s);
       return { r: code(r), verb: a?.verb, body: a?.body, log: JSON.stringify(s.entries()).includes("555-0100") }; },
-    good: (o) => o.r === "rights" && o.verb === "set" && JSON.stringify(o.body?.args) === '["component","id","value"]' && o.body?.refused?.code === "rights" && !("request" in (o.body ?? {})) && !o.log },
+    good: (o) => o.r === "rights" && o.verb === "set" && JSON.stringify(o.body?.argNames) === '["component","id","value"]' && o.body?.refused?.code === "rights" && !("args" in (o.body ?? {})) && !o.log },
   { id: "L2", what: "…argument names are the verb's own (VERBSPEC): a name the verb doesn't take is counted, never written (a key is text too)", run(s) { cast(s);
       const r = s.call("vic", "set", { id: "nothing", component: "label", value: 1, "call me on 555-0100": true });
       const a = lastAct(s);
       return { r: code(r), body: a?.body, log: JSON.stringify(s.entries()).includes("555-0100") }; },
-    good: (o) => o.r === "unknown-arg" && JSON.stringify(o.body?.args) === '["component","id","value"]' && o.body?.unknownArgs === 1 && !o.log },
+    good: (o) => o.r === "unknown-arg" && JSON.stringify(o.body?.argNames) === '["component","id","value"]' && o.body?.unknownArgs === 1 && !o.log },
   { id: "L3", what: "…the values go to the authority's in-memory ring (never persisted), capped", run(s) { cast(s);
       s.call("olive", "create", { id: "lamp", model: "crate", place: { at: [0, 0] } });
       s.call("vic", "set", { id: "lamp", component: "label", value: "hello there" });
@@ -137,7 +141,7 @@ const cases: Case[] = [
       const r = s.call("vic", "call-me-on-5550100", { secret: "555-0100" }); const a = lastAct(s);
       const ring = D.refusalRing ? D.refusalRing(s.w()) : [];
       return { r: code(r), verb: a?.verb, body: a?.body, log: JSON.stringify(s.entries()).includes("5550100") || JSON.stringify(s.entries()).includes("555-0100"), ring: ring.at(-1)?.verb }; },
-    good: (o) => o.r === "unknown-verb" && o.verb === "unknown-verb" && JSON.stringify(o.body?.args) === "[]" && o.body?.unknownArgs === 1 && !o.log && o.ring === "call-me-on-5550100" },
+    good: (o) => o.r === "unknown-verb" && o.verb === "unknown-verb" && JSON.stringify(o.body?.argNames) === "[]" && o.body?.unknownArgs === 1 && !o.log && o.ring === "call-me-on-5550100" },
   { id: "L7", what: "one consent per body, and nothing around it (recut A2, house plan #260 10-20; two gates and two lists, R 10-28): what consent grants lands in presence fields (poseBy, draggedBy, tumble, the reaches a relay caches), and the authority and the relay write them in bodyconsent.js alone, where every path (a request, a script's world.pose, a seat, a stream) is decided first; a write anywhere else in shared/ or server/ is a path around the gates", run() {
       const walk = (d: string): string[] => fs.readdirSync(path.join(TREE, d), { withFileTypes: true }).flatMap((e) => e.isDirectory() ? (e.name === "node_modules" ? [] : walk(path.join(d, e.name))) : /\.(js|ts|mjs)$/.test(e.name) ? [path.join(d, e.name)] : []);
       const WRITE = /\.(poseBy|poseSponsor|draggedBy|dragSponsor|tumble)\s*(=[^=]|\?\?=)|reaches\s*\?\?=|\.reaches\)?\[[^\]]+\]\s*=[^=]/;
@@ -183,7 +187,7 @@ const cases: Case[] = [
     good: (o) => o.t === "ok" && JSON.stringify(o.bob) === '["vic"]' && JSON.stringify(o.vic) === '["vic"]' && JSON.stringify(o.ann) === "[]" },
   // ---------------- O: an edit that would move a seat (scars r8 M1: sitting is consent, standing up is the exit) ----------------
   { id: "O1", what: "bob sits on a chair: the owner's place, set transform and set parent of it all land, and each lets bob go (vacated, standing where he was, told in his inbox and the reply's notes)", run(s) { cast(s);
-      s.call("olive", "create", { id: "chair", model: "chair", components: SEAT, place: { at: [4, 0] } });
+      seated(s, "olive", { id: "chair", model: "chair", place: { at: [4, 0] } });
       s.call("olive", "create", { id: "rug", model: "crate", place: { at: [9, 0] } });
       const sitThen = (f: () => any) => { s.call("bob", "move", { to: [4, 0, -0.6] }); const sit = s.call("bob", "use", { id: "chair", action: "sit" }); const r = f(); return { sit: sit.ok, r: show(r), seated: !!s.w().presence.occupants?.bob, note: (r.notes ?? []).some((n: any) => n.who === "bob" && n.vacated) }; };
       const pl = sitThen(() => s.call("olive", "place", { id: "chair", at: [4, 0.01] }));
@@ -194,7 +198,7 @@ const cases: Case[] = [
     good: (o) => [o.pl, o.tr, o.pa].every((x) => x.sit && x.r === "ok" && !x.seated && x.note) && o.told === 3 },
   { id: "O2", what: "…a motion on the chair, or on the table it hangs from (a parent moves its children), lands and lets bob go the same way", run(s) { cast(s);
       s.call("olive", "create", { id: "table", model: "table", place: { at: [4, 0] } });
-      s.call("olive", "create", { id: "chair", model: "chair", components: { ...SEAT, parent: { to: "table" }, transform: { pos: [0, 0, 1.2] } } });
+      seated(s, "olive", { id: "chair", model: "chair", components: { parent: { to: "table" }, transform: { pos: [0, 0, 1.2] } } });
       s.call("bob", "move", { to: [4, 0, 0.6] }); const sit = s.call("bob", "use", { id: "chair", action: "sit" });
       const m1 = s.call("olive", "set", { id: "chair", component: "motion", value: { type: "spin", axis: [0, 1, 0], speed: 1 } }); const s1 = !!s.w().presence.occupants?.bob;
       s.call("bob", "use", { id: "chair", action: "sit" });
@@ -202,13 +206,13 @@ const cases: Case[] = [
       return { sit: show(sit), m1: show(m1), m2: show(m2), s1, s2 }; },
     good: (o) => o.sit === "ok" && o.m1 === "ok" && o.m2 === "ok" && !o.s1 && !o.s2 },
   { id: "O3", what: "vic starts the carousel bob sits on (a use of the carousel's own reaction, which writes its motion): it lands and bob stays seated — the seat's own motion is what he sat down for (a swing's push, where a world carries the impulse kind, is the same rule)", run(s) { cast(s);
-      const mk = s.call("olive", "create", { id: "carousel", model: "chair", components: { ...SEAT, transform: { pos: [4, 0, 0] }, reactions: { start: { kind: "set", component: "motion", value: { type: "spin", axis: [0, 1, 0], speed: 0.5 } } } } }); if (!mk.ok) return { mk: show(mk) };
+      const mk = seated(s, "olive", { id: "carousel", model: "chair", components: { transform: { pos: [4, 0, 0] }, reactions: { start: { kind: "set", component: "motion", value: { type: "spin", axis: [0, 1, 0], speed: 0.5 } } } } }); if (!mk.ok) return { mk: show(mk) };
       s.call("bob", "move", { to: [4, 0, -0.6] }); const sit = s.call("bob", "use", { id: "carousel", action: "sit" });
       s.call("vic", "move", { to: [4, 0, -1.5] }); const go = s.call("vic", "use", { id: "carousel", action: "start" });
       return { sit: show(sit), go: show(go), motion: s.w().state().entities.carousel.c.motion?.type, seated: !!s.w().presence.occupants?.bob }; },
     good: (o) => o.sit === "ok" && o.go === "ok" && o.motion === "spin" && o.seated },
   { id: "O4", what: "…bob may move the chair he sits on himself and stays seated, and anyone may edit what doesn't move it (a label) without unseating him", run(s) { cast(s);
-      s.call("olive", "create", { id: "chair", model: "chair", components: SEAT, place: { at: [4, 0] } });
+      seated(s, "olive", { id: "chair", model: "chair", place: { at: [4, 0] } });
       s.call("bob", "move", { to: [4, 0, -0.6] }); s.call("bob", "use", { id: "chair", action: "sit" });
       const lab = s.call("olive", "set", { id: "chair", component: "label", value: "the good chair" }); const s1 = !!s.w().presence.occupants?.bob;
       const own = s.call("bob", "place", { id: "chair", at: [5, 0] }); const s2 = !!s.w().presence.occupants?.bob;
@@ -230,8 +234,8 @@ const cases: Case[] = [
       return { mv: show(mv), u: show(u) }; },
     good: (o) => o.mv === "ok" && o.u === "ok" },
   { id: "O7", what: "bob and vic sit on a two-seat bench: the owner's move of it lets BOTH go, not just the first occupant found (holes r8 M2)", run(s) { cast(s);
-      const BENCH = { sockets: { a: { pos: [-0.5, 0.45, 0], body: { action: "sit" } }, b: { pos: [0.5, 0.45, 0], body: { action: "sit" } } } };
-      s.call("olive", "create", { id: "bench", model: "chair", components: BENCH, place: { at: [4, 0] } });
+      const BENCH: [string, number[]][] = [["a", [-0.5, 0.45, 0]], ["b", [0.5, 0.45, 0]]];
+      seated(s, "olive", { id: "bench", model: "chair", place: { at: [4, 0] } }, BENCH);
       s.call("bob", "move", { to: [3.6, 0, -0.6] }); const b = s.call("bob", "use", { id: "bench", action: "sit" });
       s.call("vic", "move", { to: [4.4, 0, -0.6] }); const v = s.call("vic", "use", { id: "bench", action: "sit" });
       const both = Object.keys(s.w().presence.occupants ?? {}).sort().join(",");
@@ -240,7 +244,7 @@ const cases: Case[] = [
       return { b: show(b), v: show(v), both, r: show(r), left: Object.keys(s.w().presence.occupants ?? {}).join(","), unseated }; },
     good: (o) => o.b === "ok" && o.v === "ok" && o.both === "bob,vic" && o.r === "ok" && o.left === "" && o.unseated === "bob,vic" },
   { id: "O8", what: "a reaction on ANOTHER thing that moves the seat (a reset button across the room sending the chair home) is someone else's edit: it lands and lets the occupant go", run(s) { cast(s);
-      s.call("olive", "create", { id: "chair", model: "chair", components: { ...SEAT, home: { pos: [4, 0, 0] } }, place: { at: [6, 0] } });
+      seated(s, "olive", { id: "chair", model: "chair", components: { home: { pos: [4, 0, 0] } }, place: { at: [6, 0] } });
       s.call("olive", "create", { id: "button", model: "crate", components: { reactions: { reset: { kind: "reset", targets: ["chair"] } } }, place: { at: [-6, 0] } });
       s.call("bob", "move", { to: [6, 0, -0.6] }); const sit = s.call("bob", "use", { id: "chair", action: "sit" });
       s.call("vic", "move", { to: [-6, 0, -1] }); const r = s.call("vic", "use", { id: "button", action: "reset" });
@@ -250,11 +254,11 @@ const cases: Case[] = [
   { id: "Q1", what: "an owner named the engine's version; its cause act's body is purged (in memory, and as the stored {commit} stub): the server never restamps it", run(s) { cast(s);
       const OLD = "eidosim@0.9.0";   // a version this server doesn't carry, of an engine it does: restampable unless the owner chose it
       const set = s.call("olive", "set", { id: "@world", component: "physics-engine", value: { engine: OLD } });
-      const actSeq = s.entries().findLastIndex((e: any) => e.kind === "act" && e.verb === "set");
-      const w = s.w(); clock.advance(100); w.append({ kind: "purge", actor: "system", verb: "purge", body: { values: [{ seq: actSeq }] } });
+      const actSeq = s.entries().findLastIndex((e: any) => e.kind === "request" && e.verb === "set");
+      const w = s.w(); clock.advance(100); w.append({ kind: "redaction", actor: "system", body: { values: [{ seq: actSeq }] } });
       s.reopen(); s.call("olive", "look", {});
       const restamp1 = s.entries().filter((e: any) => e.verb === "restamp-engine").length;
-      const w2 = s.reopen(); w2.entries[actSeq].body = { commit: "0".repeat(64) }; s.call("olive", "look", {});
+      const w2 = s.reopen(); w2.entries[actSeq].body = { commitment: "0".repeat(64) }; s.call("olive", "look", {});
       const restamp2 = s.entries().filter((e: any) => e.verb === "restamp-engine").length;
       const spec = s.w().state().entities["@world"].c["physics-engine"];
       return { set: show(set), restamp1, restamp2, engine: spec.engine }; },
@@ -263,20 +267,20 @@ const cases: Case[] = [
       s.call("bob", "create", { id: "lamp", model: "crate", components: { reactions: { on: { kind: "set", component: "t/lit", value: { on: true } } } }, place: { at: [0, 0] } });
       const u = s.call("vic", "use", { id: "lamp", action: "on" });
       const before = D.creatorOf(s.w(), "lamp", "t/lit")?.rights;
-      const useSeq = s.entries().findLastIndex((e: any) => e.kind === "act" && e.verb === "use");
-      const w = s.reopen(); w.entries[useSeq].body = { commit: "0".repeat(64) };
+      const useSeq = s.entries().findLastIndex((e: any) => e.kind === "request" && e.verb === "use");
+      const w = s.reopen(); w.entries[useSeq].body = { commitment: "0".repeat(64) };
       const stub = D.creatorOf(w, "lamp", "t/lit");
-      const w2 = s.reopen(); clock.advance(100); w2.append({ kind: "purge", actor: "system", verb: "purge", body: { values: [{ seq: useSeq }] } });
+      const w2 = s.reopen(); clock.advance(100); w2.append({ kind: "redaction", actor: "system", body: { values: [{ seq: useSeq }] } });
       const idx = D.creatorOf(s.w(), "lamp", "t/lit");
       return { u: show(u), before, stub: stub ? stub.rights : "none", idx: idx ? idx.rights : "none" }; },
     good: (o) => o.u === "ok" && o.before === "bob" && o.stub === null && o.idx === null },
   { id: "Q3", what: "undo after an undo's body is purged: no crash, and the chain reads the purged undo as unknown, the same way the index does", run(s) { cast(s);
       s.call("bob", "create", { id: "lamp", model: "crate", place: { at: [0, 0] } });
       s.call("bob", "set", { id: "lamp", component: "label", value: "one" });
-      const u1 = s.call("bob", "undo", {}); const uSeq = s.entries().findLastIndex((e: any) => e.kind === "act" && e.verb === "undo");
-      const w = s.w(); clock.advance(100); w.append({ kind: "purge", actor: "system", verb: "purge", body: { values: [{ seq: uSeq }] } });
+      const u1 = s.call("bob", "undo", {}); const uSeq = s.entries().findLastIndex((e: any) => e.kind === "request" && e.verb === "undo");
+      const w = s.w(); clock.advance(100); w.append({ kind: "redaction", actor: "system", body: { values: [{ seq: uSeq }] } });
       const mem = s.call("bob", "undo", {}); const after1 = s.w().state().entities.lamp?.c.label ?? null;
-      const w2 = s.reopen(); w2.entries[uSeq].body = { commit: "0".repeat(64) };
+      const w2 = s.reopen(); w2.entries[uSeq].body = { commitment: "0".repeat(64) };
       const stub = s.call("bob", "undo", {});
       return { u1: show(u1), mem: show(mem), stub: show(stub), after1, readback: D.readback ? [D.readback(s.w(), uSeq), D.readback(w, uSeq)] : "absent" }; },
     good: (o) => o.u1 === "ok" && !/CRASH/.test(o.mem) && !/CRASH/.test(o.stub) && Array.isArray(o.readback) && o.readback[0] === null && o.readback[1] === null },
@@ -295,9 +299,9 @@ const cases: Case[] = [
     good: (o) => !o.oldShape && o.reserved && o.gov },
   { id: "X2", what: "readback: PROTOCOL §1 names where the authority reads old acts and that a purged one is unknown; READBACK lists each reader with its unknown rule", run() {
       const spec = read("spec/PROTOCOL.md"); const RB = (globalThis as any).__VC?.READBACK ?? {};
-      return { para: /\*\*Where the authority reads old acts \(readback\)\.\*\*/.test(spec) && /treats a purged body as \*\*unknown\*\*/.test(spec),
-        purge12: /act body the authority reads back, §1, may be purged/.test(spec), rows: Object.keys(RB), whole: Object.values(RB).every((r: any) => r.fields?.length && r.where && r.unknown) }; },
-    good: (o) => o.para && o.purge12 && ["act:undo", "act:use", "act:script", "act:sculpt", "act:*", "sim:launch"].every((k) => o.rows.includes(k)) && o.whole },
+      return { para: /\*\*Where the authority reads old requests \(readback\)\.\*\*/.test(spec) && /treats a redacted body as \*\*unknown\*\*/.test(spec),
+        purge12: /request body the authority reads back, §1, may be redacted/.test(spec), rows: Object.keys(RB), whole: Object.values(RB).every((r: any) => r.fields?.length && r.where && r.unknown) }; },
+    good: (o) => o.para && o.purge12 && ["request:undo", "request:use", "request:script", "request:*", "physics:launch"].every((k) => o.rows.includes(k)) && o.whole },
   { id: "X3", what: "avatars (house markup D, #260 10-20): the spec keeps only the bone (every write to a body goes through the one request path, and the body's owner decides), under its own heading, no 'sealed'; the guard rails (owner stamped at wear, one predicate, every path, the grant, the wearer's log) are direction in docs/AVATAR-DIRECTION.md; the precedence ladder between a world and the person in the body is in neither", run() {
       const spec = read("spec/PROTOCOL.md"); const sec = spec.slice(spec.indexOf("### Body ownership (avatars)"), spec.indexOf("\n## 8. ")); const dir = read("docs/AVATAR-DIRECTION.md");
       return { bone: /\*\*every write to a body goes\s+through the one request path, and the body's owner decides\*\*/.test(sec), noRules: !/\*\*B[1-6]\./.test(sec), pointer: sec.includes("docs/AVATAR-DIRECTION.md"), sealed: !/sealed/i.test(sec),

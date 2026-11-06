@@ -2,7 +2,7 @@
 //
 // The registry (shared/protocol/componentspec.js) is the one place a component's fields are described: type, default,
 // limits (ranges), unit (units) and one-line doc (docs). Everything else READS it:
-//   shared/protocol/descriptors.js   which fields a card shows and with what widget; limits/units/docs come from the registry
+//   shared/descriptors.js   which fields a card shows and with what widget; limits/units/docs come from the registry
 //   shared/components.js             the records' params, derived through the descriptors; only alias spellings and READS by hand
 //   shared/editschema.js             the inspector's rows (hand cards included) read limits through limitsOf
 //   shared/worldentity.js            @world's terrain and grass rows likewise
@@ -26,7 +26,7 @@ const src = (p: string) => readFileSync(join(ROOT, p), "utf8");
 
 // 1. the derived layers load (a registry field a reader names that isn't there throws at import)
 let D: any = null, C: any = null, E: any = null, W: any = null, loadErr = "";
-try { D = await import("../shared/protocol/descriptors.js"); C = await import("../shared/components.js"); E = await import("../shared/editschema.js"); W = await import("../shared/worldentity.js"); }
+try { D = await import("../shared/descriptors.js"); C = await import("../shared/components.js"); E = await import("../shared/editschema.js"); W = await import("../shared/worldentity.js"); }
 catch (e: any) { loadErr = String(e?.message ?? e); }
 check("the derived layers (descriptors, components, editschema, worldentity) load against the registry", !!D && !!C && !!E && !!W, loadErr);
 if (!D || !C || !E || !W) { console.log(`\n${S.pass} passed, ${S.fail} failed`); process.exit(1); }

@@ -39,12 +39,13 @@ import { editorsFor, commitEdit } from './inspect.js';
 import './lights.js';   // for its registered light editor (world.js pulls it in anyway)
 import { requestDebug, replica } from './net.js';
 import { sendOps, del, revertPose } from './editwrites.js';
-import * as OP from '../../shared/protocol/requests.js';
+import * as OP from '../../shared/requests.js';
 import { state } from './state.js';
 import { offIn } from './realize/models_field.js';
 import { makeSection, flashHint, html } from './ui.js';
 import { logChat } from './chat.js';
 import { myState } from './controller.js';
+import { kindHint } from '../../shared/hierarchy.js';
 import { modelWord } from '../../shared/eido.js';
 import { called } from './plainwords.js';
 import { escapeHtml as esc } from './markup.js';
@@ -105,9 +106,7 @@ function paintScene(force = false) {
   const { roots, kids, occupants } = treeData();
   const rows = [];
   const row = (id, depth) => {
-    const meta = metaOf(id);
-    const short = (meta?.model != null ? modelWord(meta.model) : (meta?.kind ?? '?').split('/').pop())   // an address: its word, never its hex
-      .split('_').slice(0, 3).join(' ');
+    const short = kindHint(bagOf(id));   // what it carries, a model by its word (never its hex)
     const badges = badgesFor(id);
     const scripts = behaviorRows.filter((b) => b.attach === id).map((b) => `📜${b.id}`);
     rows.push(`<div class="who-row sg-row${id === selected ? ' sel' : ''}" data-id="${esc(id)}" style="cursor:pointer;padding-left:${depth * 14}px">
@@ -127,7 +126,7 @@ function paintScene(force = false) {
     const meta = metaOf(selected);
     const bag = bagOf(selected);
     const pos = obj ? obj.getWorldPosition(_wp) : null;
-    const isLight = meta?.kind === 'light' && bag?.light?.kind !== 'spot';   // a spot shines along its -Z: its yaw is its aim
+    const isLight = !!obj?.userData?.empty && !!bag?.light && bag.light.kind !== 'spot';   // a bare bulb; a spot shines along its -Z: its yaw is its aim
 
     // generic transform editor — every entity has a pose; yaw/scale make no
     // sense on a bulb. Values are the entity's LOCAL frame (labelled when
@@ -173,7 +172,7 @@ function paintScene(force = false) {
       : `<div><button data-ce-add title="attach a component — any type folds, evaluators give known ones behavior">+ component</button></div>`;
 
     inspector = `<div style="border-top:1px solid var(--edge);margin-top:6px;padding-top:6px">
-      <div><b>${esc(selected)}</b> <span style="color:var(--dim)">${esc(meta?.model ?? '')}</span></div>
+      <div><b>${esc(selected)}</b> <span style="color:var(--dim)">${esc(meta?.model != null ? modelWord(meta.model) : '')}</span></div>
       <div style="color:var(--dim)">${pos ? `at (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)})` : 'loading'}${obj?.userData?.mountedTo ? ` · mounted on ${esc(obj.userData.mountedTo)}` : ''}</div>
       ${transform}
       ${eds.map((e) => e.html).join('')}

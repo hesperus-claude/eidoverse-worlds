@@ -7,7 +7,6 @@
 import { state } from './state.js';
 import { entities, childrenOf, ancestorsOf } from './world.js';
 import { realizedAs } from './realize/models.js';
-import { kindOf } from '../../shared/protocol/kind.js';
 import { childrenOf as scanChildren, ancestors as scanAncestors } from '../../shared/hierarchy.js';
 
 
@@ -25,18 +24,14 @@ export function foldParity() {
   for (const id of foldIds) {
     if (!sceneIds.has(id)) continue;
     out.checked++;
-    // identity: the fold's word on WHAT this id is (a light? which model?)
+    // identity: the fold's word on WHAT this id wears (which model, or none)
     // vs what the scene realized — where same-id-spawn overwrite semantics
     // would drift first (a still-loading reservation is tracked as nothing yet: skip)
     const meta = realizedAs(id);
     if (meta) {
       const ent = fold.entities[id];
-      const sceneKind = meta.kind;
-      const foldKind = kindOf(ent);
-      if (sceneKind !== foldKind || (foldKind === 'model' && meta.model !== ent.model)) {
-        out.identityDiffs.push({ id, scene: { kind: sceneKind, model: meta.model },
-          fold: { kind: foldKind, model: ent.model } });
-      }
+      const foldModel = typeof ent?.model === 'string' ? ent.model : null;
+      if ((meta.model ?? null) !== foldModel) out.identityDiffs.push({ id, scene: { model: meta.model ?? null }, fold: { model: foldModel } });
     }
   }
 

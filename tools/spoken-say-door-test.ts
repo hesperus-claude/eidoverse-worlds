@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { foundWorlds, freePort, saysIn } from "./harness.ts";
 import { suite } from "./protocol/suite.ts";
 import { until } from "./protocol/wait.ts";
+import { helloOf } from "../shared/protocol/hello.js";
 
 const WPORT = freePort(8800), MPORT = freePort(11800);
 const NONCE = `spokensay-${process.pid}-${Date.now()}`;   // the door's /healthz echoes it: the responder is our child
@@ -48,7 +49,7 @@ try {
     const t = setTimeout(() => rej(new Error("watcher join timeout — is the owned world up?")), 8000);
     watcher.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); seen.push(m);
       if (m.type === "snapshot") { clearTimeout(t); res(); } };
-    watcher.onopen = () => watcher.send(JSON.stringify({ type: "join", world: "commons", id: "watcher", spectate: true, replica: true }));
+    watcher.onopen = () => watcher.send(JSON.stringify({ type: "join", hello: helloOf(), world: "commons", id: "watcher", spectate: true, replica: true }));
   });
 
   // The advertised MCPL surface, exactly as a schema-driven client would use it.

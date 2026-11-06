@@ -20,6 +20,8 @@ import { ENGINE, scratch } from "./common.ts";
 import { tryUntil } from "./wait.ts";
 import { pin, LAB_EPOCH } from "./clock.ts";
 import { suite } from "./suite.ts";
+import { LAB_CATALOGUE } from "./labmodels.js";
+import { helloOf } from "../../shared/protocol/hello.js";
 
 const argv = process.argv.slice(2);
 const S = suite("physseeds", { cap: 500 }), { only } = S;
@@ -83,7 +85,7 @@ const { readLog } = await imp("shared/protocol/fold.js");
 const root = scratch("physseeds"); let N = 0;
 function live() {
   const dir = `${root}w${++N}/`; fs.mkdirSync(dir, { recursive: true }); let now = 1800000000000;
-  const w = openLive(dir, `w${N}`, { now: () => now, custodyFile: `${root}custody.json`, nameOf: () => null, kindOf: () => "human" });
+  const w = openLive(dir, `w${N}`, { now: () => now, custodyFile: `${root}custody.json`, nameOf: () => null, kindOf: () => "human", catalogue: LAB_CATALOGUE });
   const call = (actor, verb, args = {}, step = 100) => { now += step; return request(w, actor, verb, args); };
   return { w, call, L: () => readLog(fs.readFileSync(dir + "world.jsonl")) };
 }
@@ -115,13 +117,13 @@ function playground() {
 { const { call, L, w } = playground();
   call("rowan", "grab", { id: "ball" });
   const r = call("rowan", "throw", { id: "ball", v: [0, 2, 3], w: [0, 0, 6.28], t: 1800000000123 });
-  const act = L().filter((e) => e?.kind === "act" && e.verb === "throw").at(-1); const la = L().filter((e) => e?.kind === "sim" && e.verb === "launch").at(-1);
-  ok("TH1", r.ok && JSON.stringify(act?.body?.request?.w) === "[0,0,6.28]" && act?.body?.request?.t === 1800000000123 && JSON.stringify(la?.body?.w) === "[0,0,6.28]",
+  const act = L().filter((e) => e?.kind === "request" && e.verb === "throw").at(-1); const la = L().filter((e) => e?.kind === "physics" && e.verb === "launch").at(-1);
+  ok("TH1", r.ok && JSON.stringify(act?.body?.args?.w) === "[0,0,6.28]" && act?.body?.args?.t === 1800000000123 && JSON.stringify(la?.body?.w) === "[0,0,6.28]",
     "throw {w (rad/s, world), t (capture, authority clock)}: the act records the request, the launch carries w (eidosim ignores it, as it ignores roll)", [r.refused, act?.body, la?.body]);
   call("rowan", "wait", {}, 8000); { const p = w.state().entities.ball.c.transform.pos; call("rowan", "move", { to: [p[0], 0, p[2] - 0.5] }, 2000); }
   ok("TH2", call("rowan", "grab", { id: "ball" }).ok && call("rowan", "throw", { id: "ball", v: [0, 1, 1], w: [0, "x", 0] }).refused?.code === "shape", "a malformed w is refused");
   const d = call("rowan", "drop", { id: "ball", w: [1, 0, 0] });
-  const la2 = L().filter((e) => e?.kind === "sim" && e.verb === "launch").at(-1);
+  const la2 = L().filter((e) => e?.kind === "physics" && e.verb === "launch").at(-1);
   ok("TH3", d.ok && JSON.stringify(la2?.body?.w) === "[1,0,0]", "a drop with spin carries it too", [d.refused, la2?.body]);
 }
 
@@ -169,7 +171,7 @@ if (!only || only.some((x) => x.startsWith("SV"))) {
   ws.onmessage = (ev) => msgs.push(JSON.parse(String(ev.data)));
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
   const send = (m) => ws.send(JSON.stringify(m));
-  send({ type: "join", world: "glade", id: "Ann", avatar: "", replica: true });
+  send({ type: "join", hello: helloOf(), world: "glade", id: "Ann", avatar: "", replica: true });
   await tryUntil("Ann's join is answered", () => msgs.some((m) => m.type === "snapshot" || m.type === "error"), { ms: 4000, step: 50 });
   send({ type: "pose", pose: { p: [0, 0, 0], yaw: 0, speed: 0, t: lastTs + 5, seq: 42 } });
   await tryUntil("a frame arrives", () => msgs.some((m) => m.type === "frame"), { ms: 3000, step: 50 });

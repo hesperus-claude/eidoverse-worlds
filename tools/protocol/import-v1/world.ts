@@ -8,20 +8,22 @@ import path from "node:path";
 import { TRUST_NAMES } from "../../../server/config.ts";
 import { directoryFor, foldName, idOfBytes, ACCOUNT_SHAPE, type Entry } from "../../../server/directory.ts";
 import { mainKnowledge, type Known } from "../../../server/mainknew.ts";
+import { recogniseOwner } from "../../../server/ownerrecognise.ts";
 import { agentTokens, HN_ISS } from "../../../server/auth.ts";
 import { custodyAt, modLogAt } from "../../../server/custody.ts";
 import { custodyFileIn } from "../../../server/keyfiles.ts";
-import { seal, maintain, operatorRepair } from "../../../shared/protocol/authority.js";
+import { seal, operatorRepair } from "../../../shared/protocol/authority.js";
 import { emptyState as v1Empty, foldEntry } from "./fold.js";
 import { openLive } from "../../../server/livehost.ts";
 import { ENGINE_CATALOGUE, warm } from "../../../server/modelcatalogue.ts";
 import { readLog, fold, digest, keyOk } from "../../../shared/protocol/fold.js";
 import { simFold } from "../../../shared/protocol/simlayer.js";
-import { translate, TRANSLATOR, DROPPED, deferredFeatures, deferredRefusal, watchGrants, watchRefusal, accountIn, isAccount, isAccountName } from "./translate-v1.js";
+import { translate, TRANSLATOR, translatorVersion, DROPPED, deferredFeatures, deferredRefusal, watchGrants, watchRefusal, accountIn, isAccount, isAccountName } from "./translate-v1.js";
 import { sha256 } from "../../../shared/protocol/hash.js";
 import { jcs } from "../../../shared/protocol/fold.js";
 import { putBlobFile } from "../../../server/durable.ts";
 import { v1FoldBuild } from "./build.ts";
+import { provenanceAt } from "../../../server/provenance.ts";
 import { contentAddressOf, recordEido, storeNameMatches } from "../../../server/eidoindex.ts";
 
 type Any = any;
@@ -153,18 +155,20 @@ function identitySalt(worldsDir: string, sourceSha256: string): Buffer {
 }
 const sha256Hex = (b: Buffer) => crypto.createHash("sha256").update(b).digest("hex");
 
-/** The old world's owners as an upgrade checks them (server/upgrade.ts, through world.ts owner-of): the v1 fold's final owner
+/** The old world's owners as an upgrade checks them (server/ownerrecognise.ts; the server holds them in its access index, world.ts owners-of): the v1 fold's final owner
  *  roles, each through the translation's own identity mapper (mints no identity, writes none; the host's custody key, if none yet, is minted). Accounts stay in this process. */
 export function oldOwners(srcDir: string) {
   const srcBytes = fs.readFileSync(path.join(srcDir, "log.jsonl")), { old } = readOld(srcBytes);
   const st: Any = v1Empty(); for (const e of old) if (e?.verb !== "genesis") foldEntry(st, e);   // as translate folds it
   const worlds = path.dirname(path.resolve(srcDir)), self = path.basename(path.resolve(srcDir));
-  const m = identityMapper(old, directoryFor(worlds), { salt: identitySalt(worlds, sha256Hex(srcBytes)), known: mainKnowledge(worlds, { self }) });
+  const known = mainKnowledge(worlds, { self });
+  const m = identityMapper(old, directoryFor(worlds), { salt: identitySalt(worlds, sha256Hex(srcBytes)), known });
   return Object.entries<Any>(st.roles ?? {}).filter(([k, v]) => k !== "*" && v?.role === "owner").sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, v]) => {
     const a = m.accountOf(m.who(k, { sub: (v && typeof v.sub === "string" ? v.sub : undefined) ?? (isAccountName(k) ? k : undefined) }));
     // on a TRUST_NAMES server a name IS its local account: that binding is the name's, so it is recognised by name
     const byName = !!a.from?.startsWith("TRUST_NAMES");
-    return { name: byName ? k : a.name, account: byName ? null : a.account, unbound: byName ? "none" as const : a.unbound }; });
+    const name = byName ? k : a.name;
+    return { name, account: byName ? null : a.account, unbound: byName ? "none" as const : a.unbound, mainSubs: known(name)?.subs ?? [] }; });
 }
 /** May this signed-in account upgrade the old world as its owner (R 10-28)? "bound": main's records bind an owner to exactly this
  *  account; "name": an owner main recorded NO account for has this name, as the directory folds names (foldName; provisional: an alpha risk the owner
@@ -177,21 +181,7 @@ export function ownerRecognised(srcDir: string, account: string | null, name: st
   return recognisedSeen.get(key)!;
 }
 function recognise(srcDir: string, account: string | null, name: string | null) {
-  const owners = oldOwners(srcDir), ownerless = owners.length === 0;
-  if (!account) return { recognised: null, ownerless, why: "not signed in" };
-  if (ownerless) return { recognised: null, ownerless, why: "the world has no owner: an operator upgrades it and becomes its owner" };
-  const bound = owners.find((o) => o.account !== null && o.account === account);
-  if (bound) return { recognised: "bound" as const, owner: bound.name, ownerless };
-  const named = name ? owners.find((o) => o.unbound === "none" && foldName(o.name) === foldName(name)) : undefined;   // the directory's one rule for a name (accountsNamed)
-  if (named) {   // R 10-28: only if main never bound the name to another account, and only one account here holds the name
-    const worlds = path.dirname(path.resolve(srcDir));
-    const main = mainKnowledge(worlds, { self: path.basename(path.resolve(srcDir)) })(named.name)?.subs ?? [];
-    if (main.some((s) => s !== account)) return { recognised: null, ownerless, why: `main's records bind the owner ${named.name} to another account: that account is the owner` };
-    // a local:<name> (TRUST_NAMES) is the name itself, not another person holding it
-    if (directoryFor(worlds).accountsNamed(name!).some((s) => s !== account && !s.startsWith("local:"))) return { recognised: null, ownerless, why: `the name ${name} is held by more than one account on this server: which one is the owner isn't guessed` };
-    return { recognised: "name" as const, owner: named.name, ownerless }; }
-  const several = name ? owners.find((o) => o.unbound === "several" && foldName(o.name) === foldName(name)) : undefined;
-  return { recognised: null, ownerless, why: several ? `main recorded several accounts for the owner ${several.name}: which one is yours isn't guessed` : "main's records don't make this account one of the world's owners" };
+  return recogniseOwner(oldOwners(srcDir), account, name, (n) => directoryFor(path.dirname(path.resolve(srcDir))).accountsNamed(n));
 }
 type OwnerClaim = { by: string; how: "bound" | "name"; account: string };
 /** The upgrader recognised as an owner of the old world (ownerRecognised, its guards): bound to that owner in the translation (R 10-28). */
@@ -299,8 +289,20 @@ function dryTranslation(old: Any[], srcDir: string, world: string, owner: OwnerC
   const m = identityMapper(old, directoryFor(worlds), { salt: identitySalt(worlds, sourceSha256), known: mainKnowledge(worlds, { self: path.basename(path.resolve(srcDir)) }), owner });
   return { m, r: translateOld(old, world, { who: m.who, content }) };
 }
-/** Every translation of a v1 log here, dry or applied: one set of options (fold build, namespace, hull boxes), so the digest can't drift from the write. */
-const translateOld = (old: Any[], world: string, opts: Any) => translate(old, { foldBuild: v1FoldBuild(), namespace: world, boxOf: hullBox, lampsOf, ...opts });
+/** The translator's provenance (§F F-2; Mica 11-05, S4): writer eidoverse-translate-v1 at TRANSLATOR's number, from the source tree
+ *  this tool runs; read once. Null (said once) outside a git checkout: the genesis then carries none, never a guess. */
+let PROVENANCE: Any;
+/** The snapshot oracle's child only: the provenance its parent (world.ts translate, the same tree) already computed, so the
+ *  child doesn't re-hash the tree (~0.25 s a translation on Windows; inplace on Windows CI 11-05). It writes only its scratch. */
+export function presetTranslatorProvenance(p: Any) { PROVENANCE = p; }
+export function translatorProvenance() {
+  if (PROVENANCE === undefined) try { PROVENANCE = provenanceAt(path.resolve(import.meta.dir, "../../.."), "eidoverse-translate-v1", `${translatorVersion(TRANSLATOR)}.0.0`); }
+  catch (e) { PROVENANCE = null; console.warn(`[provenance] ${(e as Error)?.message ?? e}: worlds translated by this process carry no genesis provenance`); }
+  return PROVENANCE;
+}
+/** Every translation of a v1 log here, dry or applied: one set of options (fold build, namespace, hull boxes, provenance), so the digest can't drift from the write. */
+const translateOld = (old: Any[], world: string, opts: Any) => { const provenance = translatorProvenance();
+  return translate(old, { foldBuild: v1FoldBuild(), namespace: world, boxOf: hullBox, lampsOf, ...(provenance ? { provenance } : {}), ...opts }); };
 export function reportV1World(srcDir: string, { name, content, claim }: { name?: string; content?: (p: string) => string | null; claim?: boolean | { account: string; name: string } } = {}) {
   const src = path.join(srcDir, "log.jsonl");
   if (!fs.existsSync(src)) throw new Error(`${src}: no v1 log`);
@@ -364,7 +366,7 @@ export function translateV1World(srcDir: string, destDir: string, { founderKey, 
   const content = (p: string) => { const h = contentAddressOf(p); if (!h) return null; addressed.set(h, p); if (!storeNameMatches(p)) renamedBlobs.push(p); return `sha256:${h}`; };
   const renamedBlobs: string[] = [];   // store blobs whose bytes no longer hash to their name: hashed by what's here
   // the approval (the operator's countersignature; no owner attested), bound to the dry-run report's hash, rides in the
-  // world's own log right after the system's repair-shapes act, written by translate itself so every later cause counts it:
+  // world's own log right after `translated`, written by translate itself so every later cause counts it:
   // provenance a reader can check against `reportV1World` of log.original.jsonl. The fold never reads acts (PROTOCOL §1), so
   // this changes no state; a translation nothing approved carries none (the pure callers: sweep, oracle)
   const approved = approval ? { report: approval.report, approval: { over: approvalText(world, approval.report), owner: null, operator: { key: approval.operator.key, sig: approval.operator.sig }, noOwner: NO_OWNER } } : undefined;
@@ -392,7 +394,7 @@ export function translateV1World(srcDir: string, destDir: string, { founderKey, 
   if (r.stats.launches !== undefined) {
     const lines = readLog(text); const end = lines.reduce((m: number, e: Any) => (Number.isFinite(e?.ts) && e.ts > m ? e.ts : m), 0);
     const sf = simFold(lines, end, { models: {} });
-    const flown = lines.filter((e: Any) => e?.kind === "sim").length;
+    const flown = lines.filter((e: Any) => e?.kind === "physics").length;
     if (flown || sf.checks.disagree.length) throw new Error(`the translated world asks a reader to fly (${flown} sim entries) or its sim layer disagrees (${JSON.stringify(sf.checks.disagree.slice(0, 3))}): nothing written`);
     sim = { launches: r.stats.launches, rests: r.stats.rests, agree: sf.checks.agree, engine: back.entities?.["@world"]?.c?.["physics-engine"] ?? null };
   }
@@ -405,19 +407,12 @@ export function translateV1World(srcDir: string, destDir: string, { founderKey, 
   // back), so a rerun isn't refused as "already holds a world"; the shared directory is written last, once nothing can fail
   const touched: Touched = [{ file: path.join(destDir, "world.jsonl"), before: null }];
   try {
-    // lead's ruling 10-18: a LOAD never writes, so the translation runs the maintenance command on its own output here: the
-    // v1 sockets maps become socket children (lift-sockets, the system's act with by: "translate"); the renames and the shape
-    // repair are already in the projection and write nothing. A translated world therefore needs no step when it is served.
     // the derived particle effects (translate-v1 particlesOf): blobs of the world, by their content address, as an upload stores them
     for (const [h, doc] of r.effects ?? []) { const f = path.join(destDir, "blobs", `${h.replace(/[^a-z0-9]/g, "-")}.json`), b = jcs(doc);
       if (`sha256:${sha256(b)}` !== h) throw new Error(`a derived particle effect doesn't hash to its address ${h}`);
       if (!fs.existsSync(f)) { touched.push({ file: f, before: null }); putBlobFile(f, b, h); } }
     const live = openLive(destDir, world, { catalogue: ENGINE_CATALOGUE, scripts: null });
     for (const [h, doc] of r.effects ?? []) if (JSON.stringify(live.getBlob(h)) !== JSON.stringify(JSON.parse(jcs(doc)))) throw new Error(`the stored particle effect ${h} doesn't read back as written`);
-    const m: Any = maintain(live, { by: "translate" });
-    if (m.refused) throw new Error(`the translated world could not be lifted: ${m.refused.code}: ${m.refused.reason}`);
-    const maintenance = { lifted: m.steps.lift.made.length, liftFailed: m.steps.lift.failed, renamed: m.steps.rename.renamed.length, repaired: m.repaired.length, entries: live.entries.length };
-    if (maintenance.liftFailed.length) throw new Error(`the translated world's seats could not all be lifted: ${JSON.stringify(maintenance.liftFailed).slice(0, 300)}`);
     // v1 bans are the moderator's record in v4 (the authority reads bans only from world.mod.jsonl): file each one there, or a
     // translated world quietly unbans everyone (component review, world-settings #3)
     const banned = Object.entries<Any>(back.entities?.["@world"]?.c ?? {}).filter(([k]) => k.startsWith("imported-bans:"));
@@ -440,9 +435,9 @@ export function translateV1World(srcDir: string, destDir: string, { founderKey, 
       people.unshift({ name: claimed.name, role: "owner", id, account: claimed.account, from: "claimed: they upgraded it (it had no owner)", claimed: true }); }
     for (const [h, p] of addressed) recordEido(h, p);
     if (!deferIdentities) dir.put(planned);
-    // the approval act (translation-approved, bound to the dry-run report) sits right after the translation's marker, BEFORE the
-    // content it approves; the maintenance acts (lift-sockets by: "translate") come at the tail, derived from that approved content
-    return { source, unparsed, planned, people, claimed, effects: [...(r.effects?.keys() ?? [])], identities: Object.keys(planned).length, renamedBlobs, addressed: [...addressed.keys()], stats: r.stats, entries: live.entries.length, worldId: back.worldId, digest: digest(live.state()), maintenance, ...places, ...(sim ? { sim } : {}) };
+    // the approval act (translation-approved, bound to the dry-run report) sits right after `translated`, BEFORE the content it
+    // approves; the socket lifts (lift-sockets) come at the translation's tail, derived from that approved content
+    return { source, unparsed, planned, people, claimed, effects: [...(r.effects?.keys() ?? [])], identities: Object.keys(planned).length, renamedBlobs, addressed: [...addressed.keys()], stats: r.stats, entries: live.entries.length, worldId: back.worldId, digest: digest(live.state()), ...places, ...(sim ? { sim } : {}) };
   } catch (x) {
     const undone: string[] = [];
     for (const { file, before } of [...touched].reverse()) try { if (before === null) fs.rmSync(file, { force: true }); else fs.writeFileSync(file, before); undone.push(path.basename(file)); } catch { /* named below as not undone */ }

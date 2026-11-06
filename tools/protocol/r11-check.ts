@@ -8,12 +8,11 @@
 // Rows:
 //   C   consent after recut A2: a stored table narrows to two gates (C4); the verb's doc names them and a retired argument
 //       (friend, delegate…) is refused with a pointer (C5). C1/C2/C3/C6 retired with the tier they tested
-//   X   the spec says it (stern M2): §7's table lists rename-components; §4 says a rename runs at every load, unmarked
 //   B   the agent's body (stern L1, L2): declaring stand on a seat says to detach (it never moves you off); a declaration
 //       is passed on as sent, never read as a kind
 //   R   renames (stern L3): a stored null old field is a removal; renames are admitted per thing
 //   D   repo items (claims R1, R3, R4) and the docs pass: the consent code's words, move's name order, attach's dead pose
-//       arg and /seatpose gone, replies and help in today's words, the inspector's sockets.<slot>|anim; a removed
+//       arg and /seatpose gone, replies and help in today's words; a removed
 //       command (/ghost, /unghost) answers why
 //   (stern L4, the interrupted in-place swap, is inplace-check IP13: it needs a v1 world and the CLI)
 // @ts-nocheck
@@ -24,6 +23,7 @@ import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.t
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
 import { suite } from "./suite.ts";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -34,16 +34,11 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["the door doesn't take the retired words", "shared/protocol/verbspec.js", ", delegate: { type: \"any\", doc: \"retired (recut A2)\" }", ", delegateX: { type: \"any\", doc: \"retired (recut A2)\" }", ["C5"]],
   ["a stored table migrates only narrower: a pause still refuses", "shared/protocol/consent.js", "return t.paused || modes.includes(\"deny\") ? \"refuse\"", "return modes.includes(\"deny\") ? \"refuse\"", ["C4"]],
   ["a stored table migrates only narrower: a closed cell still refuses", "shared/protocol/consent.js", "return t.paused || modes.includes(\"deny\") ? \"refuse\"", "return t.paused ? \"refuse\"", ["C4"]],
-  ["§7 forgets rename-components", "spec/PROTOCOL.md", "\n| components and fields renamed before release (§4), by the explicit `repair` command (never at load) | its own act `rename-components {renamed, why, failed?}` and its change | `system` | the system's capability, per thing | the actor |", "", ["X1"]],
-  ["§4 forgets the rename", "spec/PROTOCOL.md", "**A pure rename is the command's second step, idempotent.**", "**A pure rename runs.**", ["X1"]],
   ["a seated declaration says nothing", "mcpl/tools.ts", "and grants nothing${seated}`); }", "and grants nothing`); }", ["B1"]],
   ["a declaration dropped", "mcpl/ping-wire.ts", "const d = typeof declares === \"string\" && declares ? { declares } : {};", "const d = {};", ["B2"]],
-  ["a stored null renamed to anim: null", "shared/protocol/shaperepair.js", "else if (p === null) renamed.push({ field: \"pose\", to: null });", "", ["R1"]],
-  ["renames all or nothing", "shared/protocol/authority/scriptrun.js", "if (kept.length && !dryRun) { const ids = [...new Set(kept.map((o) => o.id))], comps", "if (kept.length && !dryRun && !rename.failed.length) { const ids = [...new Set(kept.map((o) => o.id))], comps", ["R2"]],
   ["the consent code's old words", "shared/protocol/refusalcodes.js", "(touch, pose, shove, displace…)", "(touch, pose, shove, move…)", ["D1"]],
   ["move's old name order", "AGENTS.md", "a thing by id (its entrance, else beside it), a place's name or label, a thing's label or handle,", "a thing (id, label or handle: its entrance, else beside it), a place's name or label,", ["D2"]],
   ["attach takes pose again", "mcpl/tools.ts", ", action: { type: \"string\" } }, required: [\"to\"] } },", ", action: { type: \"string\" }, pose: { type: \"string\" } }, required: [\"to\"] } },", ["D3"]],
-  ["the inspector says |pose", "shared/editschema.js", "k: `${slot}|anim`, label: `${slot} anim`, value: b.pose, def", "k: `${slot}|pose`, label: `${slot} anim`, value: b.pose, def", ["D4"]],
   ["CONTROL (no-op: must stay green)", "shared/protocol/authority/gate.js", "// ---------- L7: the one gate ----------", "// ---------- L7:  the one gate ----------", []],
 ];
 async function runSelf(tree: string, only: string[] | null) {
@@ -83,7 +78,7 @@ const D = await import(TREE + "shared/protocol/authority.js");
 D.fixtureIds?.(true);
 const F = await import(TREE + "shared/protocol/fold.js");
 const C = await import(TREE + "shared/protocol/consent.js");
-const SR = await import(TREE + "shared/protocol/shaperepair.js");
+const SR = await import(ENGINE + "tools/protocol/import-v1/shapes.js");
 const VS = await import(TREE + "shared/protocol/verbspec.js");
 const RC = await import(TREE + "shared/protocol/refusalcodes.js");
 if (D.setScriptDuty) D.setScriptDuty({ maxMs: 1e9 });
@@ -94,13 +89,13 @@ function openWorld(name: string, presence: any = { bodies: {}, holds: {} }) {
   const logPath = path.join(root, "worlds", `${name}.jsonl`), storeDir = path.join(root, "store");
   const entries = F.readLog(readLogBytes(logPath)).map(D.posAt);
   const blobPath = (h: string) => path.join(storeDir, `${String(h).replace(/[^a-z0-9]/g, "-")}.json`);
-  const w = D.worldOf({ name, entries,
+  const w = D.worldOf({ catalogue: LAB_CATALOGUE, simModels: LAB_MODELS, name, entries,
     getBlob: (h: string) => JSON.parse(fs.readFileSync(blobPath(h), "utf8")),
     putBlob: (v: unknown) => { const s = F.jcs(v); const h = `sha256:${F.sha256(s)}`; putBlobFile(blobPath(h), s, h); return h; },
     now: () => pinned(), writeLine: (line: string) => appendDurable(logPath, line),
     presence, savePresence: () => {}, scripts: null,
     custody: custodyAt(path.join(root, "keys", "custody.json")), ...modLogAt(path.join(root, "worlds", `${name}.mod.jsonl`)) });
-  w.catalogue = D.LAB_CATALOGUE;
+  w.catalogue = LAB_CATALOGUE;
   return w;
 }
 const clock = labClock(); let N = 0;
@@ -140,12 +135,6 @@ const cases: Case[] = [
       return { doc: /move and touch/.test(doc) && /allow, block and unlist/.test(doc) && !/delegate|switch|asks? /.test(doc), r: show(r), r2: show(r2) }; },
     good: (o) => o.doc && [o.r, o.r2].every((x) => /^refused shape/.test(x) && /two gates/.test(x)) },
   // ---------------- X: the spec says it ----------------
-  { id: "X1", what: "(stern M2) §7's table of the authority's consequences lists rename-components ({renamed, why}: the system's act and change); §4 says a pure rename is not marker-gated: the explicit repair command renames what it finds (a load never writes) and writes nothing when there's nothing", run() {
-      const md = PROTO(); const s7 = section(md, /\n## 7\. /); const s4 = section(md, /\n## 4\. /);
-      return { s7: /\| [^\n]*explicit `repair` command \(never at load\)[^\n]*`rename-components \{renamed, why, failed\?\}`[^\n]*\| `system` \|/.test(s7),
-        s4: /\*\*A pure rename is the command's second step, idempotent\.\*\*/.test(s4) && !/at every load/.test(s7) && /`RENAMED_COMPONENTS`/.test(s4) && /`RENAMED_FIELDS`/.test(s4) && /not marker-gated/.test(s4) && /writes nothing\s+when there is nothing to rename/.test(s4) && /admitted per thing/.test(s4) }; },
-    good: (o) => o.s7 && o.s4 },
-  // ---------------- B: the agent's body ----------------
   { id: "B1", what: "(stern L1) on a seat, anim {bodyMode: stand} never takes you off it (body-mode grants nothing): the reply says you're still attached and to detach; the tool's text says the same", async run() {
       const TL = await import(TREE + "mcpl/tools.ts"); let detached = false, mode: any = null;
       const ag: any = { myOccupancy: { to: "seat1" }, socketName: () => "the bench", anims: [], clip: "sitchair", target: null,
@@ -165,22 +154,6 @@ const cases: Case[] = [
       const g = SR.renameFields("grabbable", { pose: null, grips: { h: { pos: [0, 0, 0], fingers: null } } }), st = SR.renameFields("station", { action: "sit", pose: null });
       return { g: JSON.stringify(g.value), gr: g.renamed.length, st: JSON.stringify(st.value), sr: st.renamed.length }; },
     good: (o) => o.g === '{"grips":{"h":{"pos":[0,0,0]}}}' && o.gr === 2 && o.st === '{"action":"sit"}' && o.sr === 1 },
-  { id: "R2", what: "(stern L3) renames are admitted per thing: a log holding one station whose old pose the door refuses as anim (\"live\", reserved) and one cup whose grabbable.pose is fine: the cup is renamed by the repair, the station is named in the act's failed and left as it was", run(s) {
-      s.call("olive", "create-world", { title: s.name }); s.call("olive", "create", { id: "cup", model: "book", place: { at: [0, 0] } });
-      s.call("olive", "create", { id: "bench", model: "crate", place: { at: [4, 0] } });
-      s.call("olive", "create", { components: { parent: { to: "bench" }, transform: { pos: [0, 0.5, 0] }, socket: { name: "bunk" }, station: { action: "lie" } } });
-      const L = s.entries(); const wid = L[1]?.world ?? L[0]?.world; const ts = L.at(-1).ts; const n = L.length;
-      const E0 = s.w().state().entities; const kid = Object.keys(E0).find((k) => E0[k].c.socket?.name === "bunk");
-      const gv = { who: "member", pose: "pistol" }, sv = { action: "lie", pose: "live" };
-      s.append([{ world: wid, kind: "act", actor: "olive", verb: "set", body: { request: { id: "cup", component: "grabbable", value: gv } }, ts: ts + 1 },
-        { world: wid, kind: "change", actor: "olive", cause: n, verb: "set", body: { id: "cup", comp: "grabbable", value: gv }, ts: ts + 1 },
-        { world: wid, kind: "act", actor: "olive", verb: "set", body: { request: { id: kid, component: "station", value: sv } }, ts: ts + 2 },
-        { world: wid, kind: "change", actor: "olive", cause: n + 2, verb: "set", body: { id: kid, comp: "station", value: sv }, ts: ts + 2 }]);
-      clock.advance(1000);
-      const w1 = s.reopen(); const out = D.maintain(w1); const w2 = s.reopen(); const E = w2.state().entities;
-      const act = w2.entries.findLast((e: any) => e.kind === "act" && e.verb === "rename-components");
-      return { g: E.cup?.c.grabbable ?? null, st: E[kid]?.c.station ?? null, failed: act?.body?.failed ?? null, renamed: act?.body?.renamed ?? null, out: JSON.stringify(out).slice(0, 300), status: w2.state().status, kid }; },
-    good: (o) => o.status === "ok" && o.g?.anim === "pistol" && !("pose" in o.g) && o.st?.pose === "live" && Array.isArray(o.failed) && o.failed.some((f: any) => f.id === o.kid) && o.renamed?.some((r: any) => r.id === "cup") },
   // ---------------- D: repo items and the docs pass ----------------
   { id: "D1", what: "(claims R1) the consent refusal code's words: a body act (touch, pose, shove, displace…) their table refuses; no `move` class, no edit that would move them (an edit vacates since round 8)", run() {
       const w = RC.REFUSAL_CODES?.consent?.when ?? ""; return { w }; },
@@ -192,11 +165,11 @@ const cases: Case[] = [
       const tl = readText("mcpl/tools.ts"); const row = tl.split("\n").find((l) => l.includes('{ name: "attach"')) ?? ""; const reg = readText("client/lib/commands/registry.js"), h = readText("client/lib/commands/handlers.js"), lb = readText("client/lib/localbody.js");
       return { schema: /pose: \{ type/.test(row), handler: /a\.pose != null && body\.poses/.test(tl), seatpose: /seatpose/.test(reg + h), choose: /chooseSeatPose/.test(h + lb) }; },
     good: (o) => !o.schema && !o.handler && !o.seatpose && !o.choose },
-  { id: "D4", what: "(docs pass) replies and help in today's words: travel names anims and body-mode (not held pose and posture); ragdoll and live-pose replies name anim; /pushable says everyone (not a stranger); the inspector's sockets.<slot>|anim (|pose still read)", run() {
-      const net = readText("mcpl/net-server.ts"), tl = readText("mcpl/tools.ts"), reg = readText("client/lib/commands/registry.js"), es = readText("shared/editschema.js"), ag = readText("AGENTS.md");
+  { id: "D4", what: "(docs pass) replies and help in today's words: travel names anims and body-mode (not held pose and posture); ragdoll and live-pose replies name anim; /pushable says everyone (not a stranger); no sockets.<slot>|pose", run() {
+      const net = readText("mcpl/net-server.ts"), tl = readText("mcpl/tools.ts"), reg = readText("client/lib/commands/registry.js"), ag = readText("AGENTS.md");
       return { net: !/held pose and posture/.test(net), tl: !/a posture, or walking, stands you back up/.test(tl) && !/`pose \{ragdoll\} refused/.test(tl) && !/pose \{clear: true\} drops it/.test(tl) && !/sockets\.<slot>\|pose/.test(tl),
-        reg: !/stranger/.test(reg.split("\n").find((l) => l.includes("'pushable'")) ?? ""), es: (es.match(/k: `\$\{slot\}\|anim`/g) ?? []).length === 2 && !/k: `\$\{slot\}\|pose`/.test(es) && /what0 === 'anim' \? 'pose'/.test(es), ag: /sockets\.<slot>\|anim/.test(ag) }; },
-    good: (o) => o.net && o.tl && o.reg && o.es && o.ag },
+        reg: !/stranger/.test(reg.split("\n").find((l) => l.includes("'pushable'")) ?? ""), ag: !/sockets\.<slot>\|pose/.test(ag) }; },
+    good: (o) => o.net && o.tl && o.reg && o.ag },
   { id: "D5", what: "a removed command answers why, as /w does: /ghost and /unghost resolve to an unlisted row that says ghost was removed, and chat answers it locally (not 'unknown command')", async run() {
       const reg = await import(TREE + "client/lib/commands/registry.js"); const chat = readText("client/lib/chat.js");
       const rows = ["ghost", "unghost"].map((c) => reg.resolveCommand?.(c) ?? null);

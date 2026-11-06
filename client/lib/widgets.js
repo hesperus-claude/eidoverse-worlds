@@ -18,7 +18,7 @@
 //
 // The two canvas looks still differ in places (see layout() below); those differences are kept, not reconciled. The
 // facts a widget reads (step, dp, unit, deg, min, max, options, def) are the descriptor's `ui` facts
-// (shared/protocol/descriptors.js) as editschema's rowOf hands them on; the shared readers of them are FACTS below.
+// (shared/descriptors.js) as editschema's rowOf hands them on; the shared readers of them are FACTS below.
 
 import { svg as strokeSvg, rsvg, has as hasIcon, fsvg, hasFill, hasLine, stroke as strokeIcon } from './icons.js';
 import { EDIT as T, EDIT_VR as V, pictoRuns, hasPicto } from './edittheme.js';

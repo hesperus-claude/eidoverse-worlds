@@ -4,17 +4,18 @@
 import { bodyOf } from "../../components.js";
 import { inOccupyReach, OCCUPY_REACH } from "../../sockbody.js";
 import { grabOf } from "../../grab.js";
-import { PURGED } from "../fold.js";
+import { REDACTED } from "../fold.js";
 import { COMPONENTS, PENDULUM, unitTransform } from "../componentspec.js";
 import { r3 } from "../round.js";
 import { UP } from "./ctx.js";
 import { Refusal, refuse, said } from "./refuse.js";
-import { OLD_READINGS } from "../shaperepair.js";
 import { delOp, isE, lockedC, setOp } from "./storage.js";
 import { aabb, ancestors, qrot, worldT } from "./math.js";
 import { implicitOpens, isSocketC, socketsOf, toggleOf } from "./sockets.js";
 import { admits } from "./rights.js";
 import { whoWords } from "../roles.js";
+/** A pendulum's maxAmp when its value has none (componentspec motion absentMeans: the first protocol's push cap). */
+const ABSENT_MAX_AMP = 1.1;
 // the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
 // authority.js binds at load
 const actOf = (...a) => UP.actOf(...a);
@@ -139,7 +140,7 @@ function buildUse(ctx, a) {
     const L = Math.max(0.2, Math.hypot(pv[0] * sc[0], pv[1] * sc[1], pv[2] * sc[2]));
     const dw = a.args?.impulse == null && typeof h.angular === "number" ? h.angular : along / L;
     const th = a0 * Math.cos(ph), vel = -a0 * w0 * Math.sin(ph) + dw;
-    const amp = Math.min(mo.maxAmp ?? OLD_READINGS.pendulumMaxAmp, Math.hypot(th, vel / w0)), phase = Math.atan2(-(vel / w0), th);
+    const amp = Math.min(mo.maxAmp ?? ABSENT_MAX_AMP, Math.hypot(th, vel / w0)), phase = Math.atan2(-(vel / w0), th);
     reactionCap(ctx, a.id, "motion", action);
     ctx.refs.add(a.id); return [setOp(a.id, "motion", { ...mo, amp: r3(amp), phase: r3(phase), t0: now })];
   }
@@ -165,7 +166,7 @@ function buildUse(ctx, a) {
   }
   refuse("no-handler", `${a.id} declares '${action}' but its handler kind isn't one this engine runs`, `handler kinds: ${Object.keys(COMPONENTS.reactions.handlers).join(", ")} (schema {component: 'reactions'})`);
 }
-const objOf = (v) => (v && typeof v === "object" && !Array.isArray(v) && v !== PURGED ? v : {});
+const objOf = (v) => (v && typeof v === "object" && !Array.isArray(v) && v !== REDACTED ? v : {});
 // toggle's defaults: an openable's `open` (component `openable`, field `open`); a named component with no field toggles
 // the whole value (a plain boolean component). `unless` names a field of the same component that, when true, bars it.
 const barredBy = (e, h) => !!h?.unless && objOf(e.c[toggleOf(h).comp])[h.unless] === true;
@@ -243,7 +244,7 @@ const USE_VERBS = {
         // (a binding there, or the handler itself written by the translation: its cause is an `imported` act)
         const old = Object.entries(wc).find(([k, b]) => k.startsWith("imported-behavior:") && (k === `imported-behavior:${probe.script}` || b?.attach === a.id));
         const lt = lastTouch(w, a.id, "reactions", { authored: true }); const ce = lt ? w.entries[w.entries[lt.seq]?.cause] : null;
-        if (old || (isE(ce) && ce.kind === "act" && ce.verb === "imported"))
+        if (old || (isE(ce) && ce.kind === "request" && ce.verb === "imported"))
           refuse("no-runtime", `${a.id}'s '${probe.action}' runs the imported behaviour '${old ? old[0].slice("imported-behavior:".length) : probe.script}', carried by translation; the authority doesn't run the old script API`, `re-install it as script:${probe.script} on ${a.id} (docs/SCRIPTS.md); scripts lists imported behaviours as needs-reinstall`);
         refuse("no-handler", `${a.id}'s '${probe.action}' runs ${key}, which isn't installed on it`, "scripts {id} lists what runs here"); }
       const ev = { on: "use", action: probe.action, ...(a.args !== undefined ? { args: a.args } : {}), ...(held ?? {}) };
@@ -264,7 +265,7 @@ const USE_VERBS = {
 function worldHears(w, id, action, by, act, args, held, ran) {
   const wc = w.state().entities["@world"]?.c ?? {}, out = [];
   for (const [k, v] of Object.entries(wc)) { const name = k.slice(7);
-    if (!k.startsWith("script:") || !v || typeof v !== "object" || Array.isArray(v) || v === PURGED || !(Array.isArray(v.on) && v.on.includes("use"))) continue;
+    if (!k.startsWith("script:") || !v || typeof v !== "object" || Array.isArray(v) || v === REDACTED || !(Array.isArray(v.on) && v.on.includes("use"))) continue;
     if (by === "script:@world" || (id === "@world" && name === ran)) continue;
     out.push(activate(w, "@world", name, { on: "use", id, action, ...(args !== undefined ? { args } : {}), ...(held ?? {}), by, seq: act, cause: act })); }
   return out;

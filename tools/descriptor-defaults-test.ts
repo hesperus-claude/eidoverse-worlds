@@ -1,13 +1,13 @@
 // tools/descriptor-defaults-test.ts — the registry is the schema: every default the records (shared/components.js
 // RECORDS), the inspector (shared/editschema.js) and the hand (shared/grab.js) state equals what the authority writes,
-// materialize(key, {type}), read through the descriptor's editor translation (shared/protocol/descriptors.js).
+// materialize(key, {type}), read through the descriptor's editor translation (shared/descriptors.js).
 // Refactor plan C5 (notes/eidoverse/PLAN-refactor-2026-10-12.md); STRIKES C-S2.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/descriptor-defaults-test.ts
 // First run, at b6db5c47 (before the fixes in the same commit), 9 red: RECORDS Pendulum period 3.5 / damp 0 / maxAmp 1.1
 // against the registry's 2.4 / 0.08 / 0.9; the inspector's pendulum period def 3.5 and damp def 0; its orbit radius def 1
 // against 3; the Add Pendulum and Add Reactions seeds writing period 3.5; and Transform.scale (the record's uniform 1 against
 // the registry's [1, 1, 1], a vocabulary, now translated). Mutation: a registry pendulum period of 2.9 → 2 red.
-import { DESCRIPTORS, editorDefault, materializedOf, toWire, axisLetter, axisVector } from "../shared/protocol/descriptors.js";
+import { DESCRIPTORS, editorDefault, materializedOf, toWire, axisLetter, axisVector } from "../shared/descriptors.js";
 import { COMPONENTS, materialize } from "../shared/protocol/componentspec.js";
 import { RECORDS, LIGHT_DEFAULTS } from "../shared/components.js";
 import { inspectSchema, fieldAt, addOps, editOps } from "../shared/editschema.js";
@@ -153,7 +153,7 @@ console.log("\nthe translation itself:");
   check("the registry's pendulum axis reads as x, spin's and oscillate's as y, openable's hinge as y", editorDefault("Pendulum", "axis") === "x" && editorDefault("Spin", "axis") === "y" && editorDefault("Oscillate", "axis") === "y" && editorDefault("Openable", "axis") === "y");
   check("rate: the registry's degPerSec reads as the editor's rate; a period reads as 360/period; an rpm as ×6", editorDefault("Spin", "degPerSec") === 36 && DESCRIPTORS.Spin.fields.find((f) => f.k === "degPerSec")!.wire!.from(undefined, { period: 10 }) === 36 && DESCRIPTORS.Orbit.fields.find((f) => f.k === "degPerSec")!.wire!.from(undefined, { rpm: 2 }) === 12);
   check("light: daytime dim reads as burns-at-noon off; on writes daytime: full (the address is light.daytime, R 10-17: was light.noon) (shape audit 10-16: was day: false)", editorDefault("Light", "daytime") === false && toWire("Light", "daytime", true) === "full" && toWire("Light", "daytime", false) === "dim");
-  check("a whole-value card has exactly one path-less field (Grabbable.spec, Sockets.slots, Label.text…)", ["Grabbable", "Sockets", "Reactions", "Label", "Lock", "Hidden", "Openable"].every((c) => DESCRIPTORS[c].fields.filter((f) => f.path == null).length === 1));
+  check("a whole-value card has exactly one path-less field (Grabbable.spec, Reactions.actions, Label.text…)", ["Grabbable", "Reactions", "Label", "Lock", "Hidden", "Openable"].every((c) => DESCRIPTORS[c].fields.filter((f) => f.path == null).length === 1));
   check("every descriptor field's path is a registry field or default of its key", Object.values(DESCRIPTORS).every((d) => d.fields.every((f) => f.path == null || f.path in ((COMPONENTS as any)[d.key].fields ?? {}) || f.path in ((COMPONENTS as any)[d.key].defaults ?? {}) || d.key === "pivot")));
   check("every record param the inspector addresses by another name is named in the descriptor (burnsAtNoon → daytime, rate → degPerSec, slot → socket)", DESCRIPTORS.Light.fields.some((f) => f.k === "daytime" && f.param === "burnsAtNoon" && f.path === "daytime") && DESCRIPTORS.Spin.fields.some((f) => f.k === "degPerSec" && f.param === "rate") && DESCRIPTORS.Parent.fields.some((f) => f.k === "socket" && f.param === "slot"));
 }

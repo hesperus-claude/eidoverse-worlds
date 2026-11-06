@@ -15,7 +15,7 @@ import { modelOf, boxOfM, geomE } from "./catalogue.js";
 import { CHANGE, clone, createOps, delOp, followUp, lockedC, nonce16, qr3, scratch, setOp, versionSeq } from "./storage.js";
 import { NONE, aabb, ancestors, descendants, hits, localFrom, obbs, qYaw, qinv, qmul, qrot, inRect, surfacesOf, worldT, yawQ } from "./math.js";
 import { groundReady, hitsIx, near, spatial, spend, supportBelow } from "./spatial.js";
-import { isSocketC, liftOps, socketsOf } from "./sockets.js";
+import { isSocketC } from "./sockets.js";
 import { madeBy, roleOf } from "./rights.js";
 import { inboxPush } from "./bodyconsent.js";
 import { buildCreateFrom } from "./blueprints.js";
@@ -27,7 +27,7 @@ import { outsideWorld } from "../../spawn.js";
 import { isLookAt } from "./checks.js";
 import { Admitted, admit, rateCheck, rated } from "./gate.js";
 import { applyResettle, clearRefsTo, lastTouch, planResettle, resettleEntries, stampMedia, stampModelHash, stampShapes, stripDry, touched, warnOrNot, warnings } from "./followups.js";
-import { renameFields } from "../shaperepair.js";
+import { AXES, POSITIVE_AXES } from "../../axes.js";
 import { ratedHoursAt } from "../../forecast.js";
 // the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
 // authority.js binds at load
@@ -36,12 +36,12 @@ const guess = (...a) => UP.guess(...a);
 function changeShape(plan, cause, w) {
   // §2.4: in a chained log every set carries a salt (base64url, 16 random bytes), so a purged value's commit can't be
   // brute-forced from a guess. Added here, before fits() measures the entry. The fold ignores it.
-  // the authority's follow-ups are named in the entry itself: `followUps` lists their indices, so any
+  // the authority's follow-ups are named in the entry itself: `cascade` lists their indices, so any
   // reader of the log alone (purged values or not, this code version or another) can tell them from the asker's own ops,
   // and authorship (lastTouch {authored}, creatorOf, lastSetterOf, a script's sponsor) skips them. Always a batch then.
-  const ops = plan.ops.map((o) => (o.verb === "set" && "value" in o && o.salt === undefined ? { ...o, salt: nonce16(w) } : o));
-  const fu = plan.followUps ?? [];
-  const one = ops.length === 1 && !fu.length ? (({ verb, ...body }) => ({ verb, body }))(ops[0]) : { verb: "batch", body: { ops, ...(fu.length ? { followUps: [...fu] } : {}) } };
+  const ops = plan.ops.map((o) => (o.op === "set" && "value" in o && o.salt === undefined ? { ...o, salt: nonce16(w) } : o));
+  const fu = plan.cascade ?? [];
+  const one = ops.length === 1 && !fu.length ? (({ op, ...body }) => ({ op, body }))(ops[0]) : { op: "batch", body: { ops, ...(fu.length ? { cascade: [...fu] } : {}) } };
   return { kind: "change", actor: plan.who.actor, cause, ...one };
 }
 function changeEntry(w, plan, cause) {
@@ -55,8 +55,8 @@ function changeEntry(w, plan, cause) {
   (w.changedQ ??= []).push(seq); // `changed:<comp>` events, drained after the request (scripts, below)
   return seq;
 }
-const actEntry = (w, actor, verb, body) => ({ kind: "act", actor, verb, body });
-const actOf = (w, actor, verb, args, extra) => actEntry(w, actor, verb, { request: stripDry(args), ...(extra ?? {}) });
+const actEntry = (w, actor, verb, body) => ({ kind: "request", actor, verb, body });
+const actOf = (w, actor, verb, args, extra) => actEntry(w, actor, verb, { args: stripDry(args), ...(extra ?? {}) });
 
 // what an imported world's translation carried for the world's sky, terrain, grass
 // or water (imported:<it>) fills that slot in the view while it's empty (view.js). A request that sets or deletes the world's
@@ -68,14 +68,14 @@ function dropImportedShadows(ctx, ops, verb) {
   const add = []; const wc = ctx.st.entities["@world"]?.c;
   if (wc) for (const k of NATIVE_WORLD) { const imp = `imported:${k}`;
     if (!(imp in wc) || ops.some((o) => o.id === "@world" && o.comp === imp)) continue;
-    if (!ops.some((o) => o.id === "@world" && o.comp === k && (o.verb === "set" || o.verb === "delete"))) continue;
+    if (!ops.some((o) => o.id === "@world" && o.comp === k && (o.op === "set" || o.op === "delete"))) continue;
     add.push(delOp("@world", imp)); ctx.notes.push({ id: "@world", component: imp, why: `the imported world's leftover ${k} goes with the world's own ${k}` }); }
   if (verb === "undo") return add.length ? [...ops, ...add] : ops;
   const out = [];
   ops.forEach((o, i) => { out.push(o);
-    if (o.verb !== "delete" || o.id === "@world" || o.comp === undefined) return;
+    if (o.op !== "delete" || o.id === "@world" || o.comp === undefined) return;
     const n = idOut(o.comp);
-    if (!fillsFromImported(n) || !(o.comp in (ctx.st.entities[o.id]?.c ?? {})) || ops.slice(i + 1).some((x) => x.id === o.id && ((x.comp === o.comp && x.verb === "set") || (x.comp === undefined && x.verb === "delete")))) return;
+    if (!fillsFromImported(n) || !(o.comp in (ctx.st.entities[o.id]?.c ?? {})) || ops.slice(i + 1).some((x) => x.id === o.id && ((x.comp === o.comp && x.op === "set") || (x.comp === undefined && x.op === "delete")))) return;
     for (const k of Object.keys(ctx.st.entities[o.id]?.c ?? {})) {
       if (!k.startsWith("imported:") || idOut(k.slice(9)) !== n || ops.some((x) => x.id === o.id && x.comp === k)) continue;
       out.push(followUp(delOp(o.id, k))); ctx.notes.push({ id: o.id, component: k, why: `the imported thing's leftover ${n} goes with its own ${n}` }); } });
@@ -87,14 +87,11 @@ function commit(w, actor, verb, args, build) {
   const sent = clone(args); // L4: the act is the request AS SENT (builders may annotate their own copy)
   const st = w.state();
   const ctx = { st, actor, w, notes: [], refs: new Set() };
-  // the old spelling's writes (a sockets map) are lifted here, before the references are cleared below, so a socket child the
-  // lift takes away has the references to it cleared too, as a delete's are; admit then takes the ops as lifted
-  const pre = liftOps(st, stampModelHash(ctx, stampMedia(ctx, stampResetHomes(ctx, stampHomes(ctx, stampShapes(ctx, dropImportedShadows(ctx, build(ctx), verb)))))), w.everIds());
-  const ops = pre.ops;
+  const ops = stampModelHash(ctx, stampMedia(ctx, stampResetHomes(ctx, stampHomes(ctx, stampShapes(ctx, dropImportedShadows(ctx, build(ctx), verb))))));
   // whatever removes a thing (delete, a batch's delete, an undo of its create) clears the references to it in the same act
-  if (ops.some((o) => o.verb === "delete" && o.comp === undefined)) { const after = scratch(st, ops); const gone = new Set(ops.filter((o) => o.verb === "delete" && o.comp === undefined && !after.entities[o.id]).map((o) => o.id));
+  if (ops.some((o) => o.op === "delete" && o.comp === undefined)) { const after = scratch(st, ops); const gone = new Set(ops.filter((o) => o.op === "delete" && o.comp === undefined && !after.entities[o.id]).map((o) => o.id));
     if (gone.size) ops.push(...clearRefsTo({ ...ctx, st: after }, gone)); }
-  const plan = admit(w, st, { actor, cap: ctx.cap, restores: ctx.restores, preLifted: pre.notes }, ops); ctx.notes.push(...plan.notes);
+  const plan = admit(w, st, { actor, cap: ctx.cap, restores: ctx.restores }, ops); ctx.notes.push(...plan.notes);
   // the write's consequences (occupants re-dropped off a host whose shape changed) are planned and admitted HERE, against the
   // state the write leaves, before anything is appended: a refusal refuses the whole request, never half of it. A dry
   // run plans them too, and says
@@ -110,7 +107,7 @@ function commit(w, actor, verb, args, build) {
   const changeE = changeShape(plan, w.entries.length, w);
   // what a delete woke (buildDelete: things resting on what it removed as well as on their parent) falls from rest after the
   // change, caused by the act; only things the write leaves standing (a later batch op may have removed one)
-  const wakes = (ctx.launches ?? []).filter((b) => plan.after.entities[b.id]).map((b) => ({ kind: "sim", actor, cause: w.entries.length, verb: "launch", body: b }));
+  const wakes = (ctx.launches ?? []).filter((b) => plan.after.entities[b.id]).map((b) => ({ kind: "physics", actor, cause: w.entries.length, verb: "launch", body: b }));
   // what an engine's start finds in a hand (buildEpoch): lifted out of its world, caused by the act. Each names its holder as
   // actor, as a grab's own lift does, since orphanLifts reads the holder from it
   const lifts = liftsOf(w, ctx, plan);
@@ -133,7 +130,7 @@ function commit(w, actor, verb, args, build) {
 // and the replay seats it in the new engine's world, so a lift logged after the change would take it out again
 const liftsOf = (w, ctx, plan) => { const released = new Set(handsLetGo(w, plan, plan.after).map((g) => g.id));
   return (ctx.lifts ?? []).filter((id) => plan.after.entities[id] && w.presence.holds?.[id] && !released.has(id))
-    .map((id) => ({ kind: "sim", actor: w.presence.holds[id].by, cause: w.entries.length, verb: "lift", body: { id } })); };
+    .map((id) => ({ kind: "physics", actor: w.presence.holds[id].by, cause: w.entries.length, verb: "lift", body: { id } })); };
 
 // The hands a write's ops empty, by the rule the replay ends a lift by (simlayer's ends() and endsUnder()), so the two
 // agree on what is in a hand: a held thing it moves, re-parents, removes or switches off is where the record has it
@@ -182,7 +179,6 @@ function needThing(ctx, id) {
 // treated as no bounds, never a crash in every create's reply (review T0d)
 const boundsOf = (st) => { const B = st.entities["@world"]?.c.bounds; const v3 = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
   return B && v3(B.min) && v3(B.max) ? B : null; };
-const AXES = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1], "-x": [-1, 0, 0], "-y": [0, -1, 0], "-z": [0, 0, -1] };   // motioneval.js AXES
 // resolve a component value fully (R7): defaults written out, conveniences converted, stamps applied; shape and rights are
 // admit's
 function resolve(ctx, id, comp, value, prev) {
@@ -204,18 +200,6 @@ function resolve(ctx, id, comp, value, prev) {
   if (comp === "grass") { let r;
     try { r = atWrite(comp, value); } catch (x) { refuse("shape", `${id}.${comp}: ${String(x?.message ?? x).replace(/^\[flora\] /, "")}`, COMPONENTS.grass.help); }
     for (const n of r.notes) ctx.notes.push({ id, component: comp, ...n }); value = r.value; }
-  // grabbable.pose / station.pose are anim, a grip's fingers its grasp: a write in the old spelling is
-  // taken and stored in the new (shaperepair.js renameFields: the maintenance command renames a stored one the same way)
-  if (comp === "grabbable" || comp === "station") { const r = renameFields(comp, value); if (r.renamed.length) { value = r.value; for (const n of r.renamed) ctx.notes.push({ id, component: comp, ...n, why: "renamed before release (R 10-17): pose is anim, fingers is grasp" }); } }
-  // a motion's type is oscillate (names.js OLD_MOTION_TYPES): the old spelling is taken for one release and stored in the new (the
-  // maintenance command renames a stored one the same way: renameFields)
-  if (comp === "motion" || comp.startsWith("motion:")) { const r = renameFields(comp, value); if (r.renamed.length) { value = r.value; for (const n of r.renamed) ctx.notes.push({ id, component: comp, ...n, why: "renamed before release (R 10-17): a motion's bob is oscillate" }); } }
-  // a light's day (a double negative) is daytime: true = dim, false = full
-  if (comp === "light" && value && typeof value === "object" && !Array.isArray(value) && typeof value.day === "boolean") { const { day, ...rest } = value;
-    value = { ...rest, daytime: rest.daytime ?? (day ? "dim" : "full") }; ctx.notes.push({ id, component: comp, field: "day", sent: day, kept: value.daytime, why: "a light's day is daytime: dim | full" }); }
-  // a terrain layer's colour is an int, as every colour: "#rrggbb" is taken
-  if (comp === "terrain" && value && typeof value === "object" && !Array.isArray(value) && Array.isArray(value.layers) && value.layers.some((l) => typeof l?.color === "string" && /^#[0-9a-f]{6}$/i.test(l.color)))
-    value = { ...value, layers: value.layers.map((l) => (typeof l?.color === "string" && /^#[0-9a-f]{6}$/i.test(l.color) ? { ...l, color: parseInt(l.color.slice(1), 16) } : l)) };
   // a sky written by hand is stamped like the sky act's: ts is the instant its hours held (the stamped fields are refused in buildSet)
   if (comp === "sky" && value && typeof value === "object" && !Array.isArray(value) && value.ts === undefined) value = { ...value, ts: Math.floor(ctx.w.now()) };
   // every parameter written down (PROTOCOL §4): the definition's defaults and per-kind rules (componentspec materialize)
@@ -224,7 +208,6 @@ function resolve(ctx, id, comp, value, prev) {
   if (value && typeof value === "object" && !Array.isArray(value)) for (const [f, t] of Object.entries(COMPONENTS[comp.split(":")[0]]?.fields ?? {}))
     if (t === "axis" && typeof value[f] === "string" && Object.hasOwn(AXES, value[f].toLowerCase())) {
       const kept = AXES[value[f].toLowerCase()].slice(); ctx.notes.push({ id, component: comp, field: f, sent: value[f], kept, why: "an axis is stored as a vector" }); value = { ...value, [f]: kept }; }
-  if (comp === "collider" && value && typeof value === "object" && !Array.isArray(value) && value.shape === "exact") { ctx.notes.push({ id, component: comp, field: "shape", sent: "exact", kept: "mesh", why: "mesh is the word for its triangles" }); value = { ...value, shape: "mesh" }; }
   if (comp === "parent" && value && typeof value === "object" && !Array.isArray(value) && "order" in value) { const { order, ...rest } = value; ctx.notes.push({ id, component: comp, field: "order", sent: order, why: "siblings have no stored order: dropped" }); value = rest; }
   if (comp === "motion" && value && typeof value === "object") { const m = materialize("motion", value); const v = filled(m.value, m.filled);
     if (v.t0 === undefined) { v.t0 = ctx.w.now(); ctx.notes.push({ id, component: "motion", field: "t0", kept: v.t0, why: "stamped by the authority" }); } return v; }
@@ -286,7 +269,7 @@ function buildCreate(ctx, a) {
   if (!place) return made;
   admit(ctx.w, ctx.st, { actor: ctx.actor }, made);   // the one gate before place solves; again on the whole write after
   const placed = buildPlace({ ...ctx, st: scratch(ctx.st, made) }, { ...place, id, __made: true });
-  return [...made.filter((o) => !(o.verb === "set" && (o.comp === "transform" || o.comp === "parent"))), ...placed.filter((o) => o.verb === "set")];
+  return [...made.filter((o) => !(o.op === "set" && (o.comp === "transform" || o.comp === "parent"))), ...placed.filter((o) => o.op === "set")];
 }
 
 // a server-written component (componentspec writtenBy) named in a request by hand, below owner
@@ -338,8 +321,7 @@ function buildDelete(ctx, a) {
       const wt = worldT(ctx.st, a.id); ctx.refs.add(a.id);
       return [delOp(a.id, "parent"), setOp(a.id, "transform", { ...wt, pos: wt.pos.map(r3) })];
     }
-    // the old spelling's `delete sockets` still means "its sockets" (the door deletes its socket children)
-    if (!(a.component in e.c) && !(a.component === "sockets" && socketsOf(ctx.st, a.id, { off: true }).some((x) => x.id))) refuse("not-found", `${a.id} has no ${a.component}`, `it has: ${Object.keys(e.c).join(", ")}`);
+    if (!(a.component in e.c)) refuse("not-found", `${a.id} has no ${a.component}`, `it has: ${Object.keys(e.c).join(", ")}`);
     ctx.refs.add(a.id);
     return [delOp(a.id, a.component)];
   }
@@ -384,7 +366,7 @@ function buildDelete(ctx, a) {
 // has one: the pivot stays put and the thing swings round it) | 'origin'. The log gets a plain transform.
 function buildTurn(ctx, a) {
   const e = needThing(ctx, a.id); const st = ctx.st;
-  const AX = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };
+  const AX = POSITIVE_AXES;
   const ax0 = typeof a.axis === "string" ? AX[a.axis] : Array.isArray(a.axis) && a.axis.length === 3 && a.axis.every((v) => typeof v === "number" && Number.isFinite(v)) ? a.axis : null;
   const len = ax0 ? Math.hypot(...ax0) : 0;
   if (!ax0 || len < 1e-9) refuse("shape", `axis is 'x', 'y', 'z' or [x, y, z] (not zero)`, "e.g. turn {id, axis: 'x', deg: 30}");

@@ -162,11 +162,12 @@ console.log('\nrealized lifecycle — four registries, one id, every seam\n');
 {
   const T = stub.THREE;
   spawnAt('sw', 5, lib('swing')); await settle(); drain();
-  door('set', { id: 'sw', component: 'sockets', value: { seat: { pos: [0, 0.5, 0.1], part: 'plank', body: { action: 'sit' } }, hook: { pos: [0.4, 1, 0], accepts: ['coat'] } } });
+  door('create', { id: 'sw-seat', components: { parent: { to: 'sw' }, transform: { pos: [0, 0.5, 0.1], scale: [1, 1, 1] }, socket: { name: 'seat', part: 'plank' }, station: { action: 'sit' } } });
+  door('create', { id: 'sw-hook', components: { parent: { to: 'sw' }, transform: { pos: [0.4, 1, 0], scale: [1, 1, 1] }, socket: { name: 'hook', accepts: ['coat'] } } });
   const kids = Object.keys(S.state.st.entities).filter((k) => S.state.st.entities[k].parent?.to === 'sw');
   const seat = kids.find((k) => S.state.st.entities[k].socket?.name === 'seat'), hook = kids.find((k) => S.state.st.entities[k].socket?.name === 'hook');
   const so = seat && stub.entities.get(seat), ho = hook && stub.entities.get(hook);
-  check('a socket child is realized: an Empty (a Group marked socket), tracked as a socket', !!so && so.isGroup && so.userData.socket === true && M.realizedAs(seat)?.kind === 'socket', JSON.stringify({ seat, kind: M.realizedAs(seat ?? '') }));
+  check('a socket child is realized: a frame (a Group, no model) marked socket', !!so && so.isGroup && so.userData.socket === true && M.realizedAs(seat)?.kind === 'host' && !M.realizedAs(seat)?.model, JSON.stringify({ seat, as: M.realizedAs(seat ?? '') }));
   check('…with no collider, no caster and no box', !stub.colliders.has(seat) && !stub.casters.has(seat) && M.boxOf(seat) === null && !stub.colliders.has(hook), JSON.stringify({ seat: held(seat), box: M.boxOf(seat) }));
   check('a plain socket hangs on its host at its own pose', !!ho && ho.parent === stub.entities.get('sw') && ho.position.toArray().join() === '0.4,1,0', JSON.stringify({ parent: ho?.parent?.userData, pos: ho?.position?.toArray() }));
   const host = stub.entities.get('sw'); const plank = host.getObjectByName('plank'); const pivot = host.getObjectByName('pivot');
@@ -192,7 +193,7 @@ console.log('\nrealized lifecycle — four registries, one id, every seam\n');
   check('re-attached mid-swing, the socket still sits where the part at rest puts it', wp(so).distanceTo(want) < 1e-9, JSON.stringify({ at: wp(so).toArray(), want: want.toArray() }));
   // residency: a host whose sockets are bare frames still demotes (they move onto its stand-in); a part socket keeps it real
   spawnAt('bench', 6); await settle(); drain();
-  door('set', { id: 'bench', component: 'sockets', value: { rest: { pos: [0, 0.5, 0], body: {} } } });
+  door('create', { id: 'bench-rest', components: { parent: { to: 'bench' }, transform: { pos: [0, 0.5, 0], scale: [1, 1, 1] }, socket: { name: 'rest' }, station: {} } });
   const rest = Object.keys(S.state.st.entities).find((k) => S.state.st.entities[k].parent?.to === 'bench');
   stub.camera.position.set(0, 0, -500); M.residencySweep(); await settle();
   check('far: a host with a bare socket demotes, and its socket rides the stand-in', held('bench').entities === 'placeholder' && stub.entities.get(rest)?.parent === stub.entities.get('bench'), JSON.stringify({ bench: held('bench'), on: stub.entities.get(rest)?.parent?.userData }));

@@ -1,7 +1,8 @@
 // The door's refusals say what didn't happen, why, and what to do instead, with the agent's own value where that was
 // the problem. Run: bun tools/door-wording-test.ts
-// Main's test (#270), carried into the revised protocol (#260): a renamed or folded tool (tools.ts TOOL_ALIASES,
-// TOOL_FOLDS) is checked through the tool that does it now; a refusal that moved to the world's authority is gone
+// Main's test (#270), carried into the revised protocol (#260): a folded tool (tools.ts TOOL_ALIASES,
+// TOOL_FOLDS) is checked through the tool that
+// does it now; a refusal that moved to the world's authority is gone
 // here, with a note saying where it's pinned. body_state/reach use this protocol's facts: o.pose.clip is a clip,
 // a seat is left with detach, a reach is released with reach {release: true}.
 import { noWorldUrl } from "./no-world.ts";
@@ -142,10 +143,10 @@ try {
   const tracks = { leftUpperArm: [{ t: 0, q: [0, 0, 0, 1] }, { t: 0.5, q: [0, 0, -0.7, 0.7] }] };
   check("anim's tracks without dur say what was sent",
     /^animate needs dur, the length in seconds and more than 0, so nothing played; you sent nothing$/.test(said(await call("anim", { tracks }))));
-  // spawn is an old name (R 10-28): it runs nothing, and names create
+  // spawn is an old name: an unknown tool now (Mica 11-05), refused with the unknown-tool words, and nothing ran
   const noLib = said(await call("spawn", { query: "zzz" }));
-  check("spawn says it is create now, and nothing ran",
-    noLib === "spawn is now called create: call create (its arguments are in your tool list; they may differ from spawn's) — nothing ran", noLib);
+  check("spawn is refused as an unknown tool, and nothing ran",
+    noLib === `there's no tool named "spawn" on this server, so nothing ran (did you mean say?); your tool list has the ones it serves`, noLib);
   // place's id is the world's authority's to resolve here (namedThings passes an unknown name on, for the
   // authority's own not-found words, spec/refusal-codes.json), so main's two door-side place refusals have no door here.
   const noBody = said(await call("set_avatar", { avatar: "zed" }));
@@ -710,7 +711,7 @@ try {
   // A stand-in world on a WebSocket: each body's name picks how the join is answered.
   // A join's snapshot carries the authority's cut of the world here (replica.adopt): an empty world's.
   const snapshot = (extra: Record<string, unknown> = {}) => JSON.stringify({ type: "snapshot", state: null, entries: [], present: [],
-    cut: { state: wireState(emptyState()), head: 0, worldId: "w" }, ...extra });
+    dialect: "eidoverse-log", v: 4, state: wireState(emptyState()), seq: 0, world: "w", ...extra });
   const joins = new Map<string, number>();
   const answers: Record<string, (ws: any, n: number) => void> = {
     kicked: (ws) => { ws.send(snapshot()); setTimeout(() => ws.close(4006, "kicked"), 200); },

@@ -19,6 +19,7 @@ import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.t
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { translatorVersion } from "./import-v1/translate-v1.js";
 import { labClock, pinned } from "./clock.ts";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -108,7 +109,7 @@ function openWorld(name: string) {
   const logPath = path.join(root, "worlds", `${name}.jsonl`), storeDir = path.join(root, "store");
   const entries = F.readLog(readLogBytes(logPath)).map(D.posAt);
   const blobPath = (h: string) => path.join(storeDir, `${String(h).replace(/[^a-z0-9]/g, "-")}.json`);
-  return D.worldOf({ name, entries,
+  return D.worldOf({ catalogue: LAB_CATALOGUE, simModels: LAB_MODELS, name, entries,
     getBlob: (h: string) => { const s = fs.readFileSync(blobPath(h), "utf8"); if (`sha256:${F.sha256(s)}` !== h) throw new Error("blob mismatch"); return JSON.parse(s); },
     putBlob: (v: unknown) => { const s = F.jcs(v); const h = `sha256:${F.sha256(s)}`; putBlobFile(blobPath(h), s, h); return h; },
     now: () => pinned(), writeLine: (line: string) => appendDurable(logPath, line),
@@ -161,7 +162,7 @@ const cases: Case[] = [
     good: (o) => o.name === "oak door" && o.description === "A heavy oak door, iron-banded." && o.can?.[0] === "opens and shuts (use 'open')" && o.can?.includes("can be used: knock") && o.state?.includes("shut and locked") && o.state?.includes("fixed in place") },
   { id: "D3", what: "the reading follows the components, not the words: open the door and its state says open; a grabbable says it can be picked up; a seat says it can be sat on", run(s) { cast(s);
       thing(s, "door", { label: "oak door", ...DOOR, openable: { open: false } }); s.call("olive", "use", { id: "door", action: "open" });
-      thing(s, "cup", { grabbable: {} }); thing(s, "chair", { sockets: { seat: { pos: [0, 0.45, 0], body: { action: "sit" } } } });
+      thing(s, "cup", { grabbable: {} }); thing(s, "chair"); thing(s, "chair-seat", { parent: { to: "chair" }, transform: { pos: [0, 0.45, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] }, socket: { name: "seat" }, station: { action: "sit" } });
       return { door: lookOf(s, "door")?.state, cup: lookOf(s, "cup")?.can, chair: lookOf(s, "chair")?.can }; },
     good: (o) => o.door?.[0] === "open" && o.cup?.includes("can be picked up") && o.chair?.includes("can be sat on (seat)") },
   { id: "D4", what: "look clips a long description at 200 (inspect for all); inspect has it whole", run(s) { cast(s); thing(s, "lamp", { description: "x".repeat(300) });
@@ -348,7 +349,7 @@ const cases: Case[] = [
         const live = { effects: (b: string) => (b === h ? d : null) }; const ent = { model: "lamp.glb", pos: [0, 0, 0], yaw: 0, actor: "r", ts: 1, particles: { effect: h } };
         const rows = E.inspectSchema(ent, "l", live).groups.flatMap((g: any) => g.fields ?? []);
         const row = rows.find((f: any) => f.k === "param|cone"), glow = rows.find((f: any) => f.k === "param|glow");
-        const r = E.editOps(ent, "l", { "particles.param|cone": "30" }, live); const v = r.ops.flatMap((o: any) => o.verb === "batch" ? o.args.ops : [o]).find((o: any) => o.args?.component === "particles")?.args?.value;
+        const r = E.editOps(ent, "l", { "particles.param|cone": "30" }, live); const v = r.ops.flatMap((o: any) => o.verb === "batch" ? o.args.requests : [o]).find((o: any) => o.args?.component === "particles")?.args?.value;
         return { deg: row?.deg, glowDeg: glow?.deg, stored: v?.params?.cone, errors: r.errors }; }); },
     good: (o) => o.deg === true && !o.glowDeg && Math.abs(o.stored - Math.PI / 6) < 1e-3 },
   { id: "P10", what: "fire's former address (stored for a day before its angles became radians) still reads as fire; its pinned address is its new document's hash", run() {

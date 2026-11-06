@@ -1,5 +1,4 @@
 // shared/protocol/componentspec.js — the component types a builder can discover: their fields, defaults, ranges and help.
-// The lab's hand-written models are shared/protocol/labmodels.js.
 //
 // Every parameter is written down (PROTOCOL §4). The authority writes a
 // component's defaults into the stored value when it's created or set (materialize, below): `defaults` always, and each
@@ -8,7 +7,7 @@
 // renderer is a bug (pretrans-check D7); a changed default, type or enum is a changed meaning (spec/registry-pin.json, D8).
 //
 // ONE description, derived readers: a field's type (`fields`), default (`defaults`/`when`),
-// limits (`ranges`), unit (`units`) and one-line doc (`docs`) are written HERE and nowhere else. shared/protocol/descriptors.js
+// limits (`ranges`), unit (`units`) and one-line doc (`docs`) are written HERE and nowhere else. shared/descriptors.js
 // derives the inspector's rows from them (keeping only widget facts: step, decimals, soft maxima, which rows a card shows),
 // shared/components.js derives its records' params, shared/editschema.js and shared/worldentity.js read limits from here, and
 // the agent's `schema` request returns this table. tools/schema-layers-test.ts holds every reader to it. `units` and `docs`
@@ -97,11 +96,11 @@ export const COMPONENTS = {
   // intensity 25.93 = main's 16 cd at decay 1.7, matched at 5 m (half the default range): 16 × 5^0.3 (translate-v1 parityIntensity)
   light:     { on: "thing", fields: { kind: "string", color: "int", intensity: "number", range: "number", angle: "number", inner: "number", decay: "number", important: "bool", daytime: "string" },
     defaults: { kind: "point", color: 0xffd9a0, intensity: 25.93, range: 10, decay: 2, important: false, daytime: "dim" }, enums: { kind: ["point", "spot", "directional"], daytime: ["dim", "full"] },
-    dropped: { shadows: "read by nothing (it returns when the light rig reads it; absent = no shadows)", day: "renamed daytime: 'dim' (true) | 'full' (false); a write of day is taken and stored as daytime" },
+    dropped: { shadows: "read by nothing (it returns when the light rig reads it; absent = no shadows)", day: "renamed daytime: 'dim' (true) | 'full' (false)" },
     when: [{ if: { kind: "spot" }, set: { angle: Math.PI / 4, inner: 0 } }],
     ranges: { color: { min: 0, max: 0xffffff }, intensity: { min: 0 }, range: { gt: 0 }, angle: { gt: 0, max: Math.PI / 2 }, inner: { min: 0, max: Math.PI / 2 }, decay: { min: 0, max: 4 } },
     units: { range: "m", angle: "rad", inner: "rad" },
-    absentMeans: { decay: "1.7: the falloff exponent the light rig used before it was written (three.js decay); a value stored before 10-16 is repaired to 1.7 by the maintenance command (repair-shapes; docs/MAINTENANCE.md), never at load",
+    absentMeans: { decay: "1.7: the falloff exponent the light rig used before it was written (three.js decay); an older light is written 1.7 when its world is translated",
       intensity: "the default; on a light with no decay (stored before 10-16) 16, the old rig's, written by the same repair",
       daytime: "dim: it follows the day cycle (an older value's day: false meant full)" },
     docs: { kind: "point (shines every way), spot (a cone along its -Z) or directional (a sun: parallel light along its -Z everywhere, KHR_lights_punctual's; range and decay unread; the first by id is the renderer's sun)", color: "its colour, 0xRRGGBB, sRGB", intensity: "how bright it is: candela at decay 2 (KHR_lights_punctual); three.js units under this light's decay otherwise. Default 25.93: main's default light's brightness at 5 m", range: "a hard cutoff, metres: nothing beyond it is lit", angle: "a spot's cone half-angle, radians",
@@ -116,14 +115,14 @@ export const COMPONENTS = {
     // pinned facts: where it stands on its origin, and what a primitive does with the axes it ignores
     absentMeans: { origin: "the centre of its base: it stands on its own origin (every referent centres primitives; ours stands, as a model does)", ignored: "a sphere ignores size[1] and size[2], a cylinder and a capsule size[2], a plane size[1]" },
     units: { size: "m" }, docs: { shape: "box, sphere, cylinder, plane (flat on the ground, drawn on both sides) or capsule; it stands on its own origin", size: "its size [x, y, z] in metres; a sphere reads x as its diameter, a cylinder or capsule x as diameter and y as height, a plane x × z" },
-    help: "a parametric body drawn without a model: {shape: box|sphere|cylinder|plane|capsule, size: [x, y, z] (m, each 0.05..200)}. Its origin is the centre of its base (it stands on its own pos, as a model does). A sphere reads size[0] as its diameter; a cylinder and a capsule read size[0] as diameter and size[1] as height (a capsule is at least its diameter tall); a plane is size[0] × size[2] on the ground plane, 0.05 thick (it collides as a thin slab; things rest on it at 0.05), drawn on both sides. Never on a thing with a model or a light (one place per thing: give it a child). Its one material slot is 'surface' (hesperus/material:surface)" },
+    help: "a parametric body: {shape: box|sphere|cylinder|plane|capsule, size: [x, y, z] (m, each 0.05..200)}. Its origin is the centre of its base (it stands on its own pos, as a model does). A sphere reads size[0] as its diameter; a cylinder and a capsule read size[0] as diameter and size[1] as height (a capsule is at least its diameter tall); a plane is size[0] × size[2] on the ground plane, 0.05 thick (it collides as a thin slab; things rest on it at 0.05), drawn on both sides. It may share a thing with a model, a light or a socket (components compose: each is drawn). Its one material slot is 'surface' (hesperus/material:surface)" },
   // the closed forms every client and the agent evaluate (client/lib/motioneval.js). Rates are degrees a second (Unreal's
   // RotatingMovementComponent RotationRate, Unity's Rotate) or a period in seconds; a path is control points with a speed
   // or a duration and a loop mode (Unreal's InterpToMovementComponent: ControlPoints, Duration, OneShot/Loop/PingPong)
   // the per-type defaults are motioneval.js's readings, written down (a spin with no rate turned at 36°/s in every renderer)
   // amplitude (the first protocol's amp) and a whole motion's `part` field are gone (a node's
   // motion is motion:<slot> {node}: the node's name is DATA from the model file, any characters, never part of a key),
-  // refused at write, and repaired in a stored world by its maintenance command (shaperepair.js) and by translate-v1@12; an
+  // refused at write, and written in today's spelling when a world is translated; an
   // axis is stored as a vector (x|y|z|-x|-y|-z taken at write); `pivot` is a PART motion's hinge only (a whole thing turns
   // about its pivot component). The readings that lived only in motioneval.js are here, as absentMeans
   motion:    { on: "thing", keyed: "optional", when: [
@@ -150,7 +149,6 @@ export const COMPONENTS = {
   // the first spelling of attachment points: a map on the host. Reserved and lift-only: nothing stores it;
   // the door lifts a write of it into socket children (each body block a station on its child), and the maintenance command
   // lifts a stored world's. The name is held so it can't come back meaning something else.
-  sockets:   { status: "reserved", on: "thing", map: "object", lifted: "socket children + their stations (lifted at the door)", instead: "socket children: create {components: {parent: {to: <host>}, transform, socket: {name, accepts?, radius?, part?}, station?: {action, anim, anchor, exit?, leaveBy?, who?}}}", help: "reserved, lift-only: the old spelling of sockets (socket children now: the door lifts a write of it into socket children, each body block a station on its child, and the maintenance command lifts a world stored with it): {<name>: {pos: [x,y,z] (its own frame), q? [x,y,z,w] (its rotation: a rocket seat lies on its back), part? (a model node it rides), accepts? [keywords] + radius? (m, default 0.15): a thing released within radius whose grabbable.fits shares a keyword snaps in (a key on its hook, a sword in its rack), body?: what a person's body does there: {action ('sit'; what 'use' calls it), anchor (root, the default | hips | feet | head: the body point on the socket), pose (a clip; {clip, time: 'phase'}; or a blend {by: 'speed'|'steer'|…|'param.<name>', clips: [[0,'idle'],[2,'walk']]}), poses {<name>: pose} + sync, approach [x,y,z,yaw], enter/leave (clips), exit [x,y,z], reach {leftHand: {at, q?, part?, hint?, vr: snap|track|near}}, hold {<bone>: q}, look {yaw: [min,max]°, pitch, up: world|socket}, input {move: none|drive|walk, look: free|aim|locked} (one drive per thing), leaveBy (jump|menu|script), fromSeat, who (builder|owner)}}}" },
   // an attachment point as an entity of its own (Godot's Marker3D under its node, Unity's child Transform, Unreal's socket):
   // a child of the thing it belongs to, its pose its own transform (scale 1). ONLY the attach point. What a person's
   // body does there is the
@@ -534,7 +532,7 @@ export const COMPONENTS = {
                help: "the ground's base: {kind: 'flat', height (m)} (level everywhere; nothing else), or {kind: 'noise', seed, size, amplitude, octaves, frequency, flatRadius, flatHeight, segments, layers? [{color: 0xRRGGBB, repeat}], features?, heightmap?} (absent numbers are the sim's: seed 1, size 80 m, amplitude 3 m, octaves 4, frequency 2.5, flat radius 0); a raster kind is reserved; water is its own component" },
   // split out of terrain: on @world the world's one level (SL's per-region water); on a
   // thing a water body filling its sibling zone (Unity WaterSurface, Unreal WaterBody; optics named as KHR_materials_volume's).
-  // shared/terrainshape.js waterParams reads the level (an older terrain.water too); shared/zone.js reads the bodies
+  // shared/terrainshape.js waterParams reads the level; shared/zone.js reads the bodies
   water:     { fields: { level: "number", color: "int", opacity: "number", kind: "string", flow: "array", waves: "array", attenuationColor: "vec3", attenuationDistance: "number", scatterColor: "vec3", density: "number" },
                enums: { kind: ["still", "river", "ocean", "lake", "pool"] },
                ranges: { level: { min: -500, max: 500 }, color: { min: 0, max: 0xffffff }, opacity: { min: 0.1, max: 1 }, waves: { maxItems: 8 }, attenuationColor: { min: 0, max: 1 }, attenuationDistance: { gt: 0, max: 1e4 },
@@ -705,7 +703,7 @@ export function resolveVersioned(c, base) {
 // one a fields map can't name is listed in the definition's refPaths ("home.parent.to": "ref"). People are never copied,
 // so only thing references are ever rebound.
 export const REF_TYPES = new Set(["ref", "refs", "person", "people", "target", "scope"]);
-const PERSON_SHAPE = /^u-[a-z2-7]{20}$/;   // shared/protocol/ids.js PERSON_ID: an entity may never wear it
+const PERSON_SHAPE = /^u-[a-z2-7]{20}(?:[a-z2-7]{4})?$/;   // shared/protocol/ids.js PERSON_ID: an entity may never wear it
 /** [{path: ["field", …], type}] for every reference-bearing field of a name (its scope's ids included). */
 export function refFields(comp) {
   const d = defOf(comp); if (!d) return [];

@@ -39,7 +39,7 @@ import { REACH } from './protocol/physconst.js';
 import { materialize, COMPONENTS } from './protocol/componentspec.js';
 import { BUILTIN_IDS, isWhoValue, isBase, whoWords } from './protocol/roles.js';
 import { isReservedAnimName } from './animdefs.js';
-import { isPurged } from './protocol/fold.js';
+import { isRedacted } from './protocol/fold.js';
 import { isNum, isObj } from './protocol/is.js';
 
 export const WHO = BUILTIN_IDS;
@@ -88,7 +88,7 @@ const unitQ = (q) => nums(q, 4, 1.0001) && Math.abs(Math.hypot(...q) - 1) < 1e-3
 export function gripOf(g) {
   if (!isObj(g) || !nums(g.pos, 3)) return null;
   return { pos: g.pos, q: unitQ(g.q) ? g.q : [0, 0, 0, 1], hand: HANDS.includes(g.hand) ? g.hand : 'either', role: ROLES.includes(g.role) ? g.role : 'primary',
-    grasp: GRASPS.includes(g.grasp) ? g.grasp : GRASPS.includes(g.fingers) ? g.fingers : 'fist', hold: {},   // fingers: its older spelling (a stored grip the maintenance command hasn't renamed yet); a grip's bone overrides are cut
+    grasp: GRASPS.includes(g.grasp) ? g.grasp : 'fist', hold: {},   // a grip's bone overrides are cut (shape audit 10-16)
     part: typeof g.part === 'string' && g.part ? g.part : null };
 }
 
@@ -104,7 +104,7 @@ export function gripOf(g) {
 export function grabOf(c) {
   if (!isObj(c)) return null;
   const v = c.grabbable;
-  if (isObj(v)) return isPurged(v) ? null : fill(v, 'grabbable', c.home);   // a purged value is absent, not a grabbable
+  if (isObj(v)) return isRedacted(v) ? null : fill(v, 'grabbable', c.home);   // a purged value is absent, not a grabbable
   if (v === undefined && isObj(c.physics) && c.physics.kind === 'dynamic') return fill({ who: isWho(c.physics.who) ? c.physics.who : DEFAULT_WHO }, 'physics', c.home);
   return null;
 }

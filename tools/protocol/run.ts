@@ -49,7 +49,7 @@ const EXPECT: Record<string, number> = {
   "libfile": 0.1, "gaps": 5.6, "phys": 3.9, "physlive": 1.2, "phystick": 5.7, "sclock": 2.8, "physseeds": 2.1,
   "eidosim": 12, "eidosim-live": 1.5, "mover": 4.5, "zone-water": 0.6, "climb-env": 0.5, "drive": 0.6, "physics-area": 0.5, "water-vectors": 0.2, "avatar": 1, "remotes-limp-edge": 0.5, "colliders": 0.2, "collider-off-bodies": 2, "lying-support": 16, "replay": 0.4,
   "conformance": 2.9, "sweep": 0.3, "oracle": 0.4, "importer": 1.2, "translate": 6, "eidosim-v1": 0.2, "inplace": 15, "migrate-identities": 1.7, "oldworlds": 1.2, "browser": 1.5, "descriptors": 0.1,
-  "light-readers": 0.4, "ghost-mesh-size": 12, "boot-init": 0.5, "editor-range": 0.3, "editschema": 0.5, "scriptnew-expect": 0.5, "grant-command": 0.3, "custody-save": 0.1, "consent-scripts-list": 2, "killz-slumped": 32, "grant-until": 1, "lite-graph": 1, "first-name-account": 1, "retired-commands": 1, "animnames-retry": 2.5, "panels": 1, "surface-hold": 19, "particles": 1, "shadow-fade": 1, "frames-layout": 1, "models-field": 1, "environment-realizer": 0.3,
+  "light-readers": 0.4, "ghost-mesh-size": 12, "boot-init": 0.5, "editor-range": 0.3, "editschema": 0.5, "scriptnew-expect": 0.5, "grant-command": 0.3, "custody-save": 0.1, "migrate-minor-1": 3, "consent-scripts-list": 2, "killz-slumped": 32, "grant-until": 1, "lite-graph": 1, "first-name-account": 1, "retired-commands": 1, "animnames-retry": 2.5, "panels": 1, "surface-hold": 19, "particles": 1, "shadow-fade": 1, "frames-layout": 1, "models-field": 1, "environment-realizer": 0.3,
   "role-grammar": 0.3, "rot": 0.1, "onepose": 0.3, "msgrate": 0.1, "clientlog": 3, "dismount-height": 0.2, "helm-leave": 0.2, "build-gate": 0.3,
   "capsule-recovery": 10, "debug-tabs": 0.3, "governor-xr": 0.2, "unknown-comp": 1.1, "reach-order": 1.5,
   "editcommit": 0.8, "hierarchy-commit": 0.6, "verbclasses": 0.0, "authority-layers": 0.0, "authority": 9.0,
@@ -62,7 +62,7 @@ const EXPECT: Record<string, number> = {
   "shiplist-probe": 197, "agenttools": 20, "presence": 10, "modhole": 0.1, "xss-probe": 15, "pretrans": 2.8,
   "soundclock": 0.2, "eidomodel": 0.7, "party-probe": 486, "colour-picker": 8.1, "lock-strength": 10, "swim-lists": 10, "alias": 0.4, "navgrid": 64,
  "places": 130, "storey-walk": 1.5, "shape-attach": 0.7, "shape-physics": 0.7,
-  "shape-repair": 0.4, "buildcheck": 18, "buildcheck-queue": 7.4, "buildcheck-route": 22, "client-tools": 202, "door-is-error": 280, "history-request": 0.3, "skystamp": 0.5, "normative": 0.2, "predict-pending": 0.5, "last-world": 0.6, "event-wire": 0.1, "setup": 3, "named-pose": 2.6, "net-send-shape": 1, "navgrid-rows": 6.3, "one-binding": 0.3, "blockers-mutants-a": 110, "blockers-mutants-b": 110, "blockers-mutants-c": 110, "blockers-mutants-d": 110, "screenshots": 9, "snapframe-render": 0.1, "anim-backpressure": 0.3,
+  "shape-import": 0.4, "buildcheck": 18, "buildcheck-queue": 7.4, "buildcheck-route": 22, "client-tools": 202, "door-is-error": 280, "history-request": 0.3, "skystamp": 0.5, "normative": 0.2, "predict-pending": 0.5, "last-world": 0.6, "event-wire": 0.1, "setup": 3, "named-pose": 2.6, "net-send-shape": 1, "navgrid-rows": 6.3, "one-binding": 0.3, "blockers-mutants-a": 110, "blockers-mutants-b": 110, "blockers-mutants-c": 110, "blockers-mutants-d": 110, "screenshots": 9, "snapframe-render": 0.1, "anim-backpressure": 0.3,
   "remotes-lifecycle": 1,
   "bodygate": 0.5,
   "anim-wire": 6,
@@ -314,7 +314,9 @@ async function run(name: string, file: string): Promise<{ code: number | null; s
   let cmd = [process.execPath, path.resolve(ENGINE, "tools/protocol", script), ...args];
   const lock = process.env.PROTOCOL_HEADLESS_LOCK, guard = process.env.PROTOCOL_PERF_GUARD;
   if (laneOf(name) === "browser" && lock && guard) cmd = ["flock", lock, "bash", guard, "-t", String(timeoutOf(name)), "--", ...cmd];
-  const child = spawn(cmd[0], cmd.slice(1), { cwd: ENGINE, env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+  // detached: a process group to kill on POSIX. Not on Windows: there it means no console, and every process the suite starts
+  // then pays for one of its own (inplace 66 s attached, 131 s detached on Cyllene, 11-05); the kill walks parent links there
+  const child = spawn(cmd[0], cmd.slice(1), { cwd: ENGINE, env, detached: process.platform !== "win32", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
   current = child as unknown as { pid: number; exitCode: number | null; signalCode: string | null };
   let timedOut = false; const kept = outputKeeper(); const keep = (b: Buffer) => kept.add(b.toString());   // the tail, and every verdict line the cut dropped (suites.ts outputKeeper)
   child.stdout!.on("data", keep); child.stderr!.on("data", keep);

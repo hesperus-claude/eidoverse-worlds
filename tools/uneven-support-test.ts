@@ -30,6 +30,7 @@ import { supportHolders } from "../mcpl/physics.ts";
 import { summarizeGlb } from "../server/geometry.ts";
 import { foundWorlds, requester } from "./harness.ts";
 import { qFromYaw } from "../shared/rot.js";
+import { helloOf } from "../shared/protocol/hello.js";
 
 const PORT = Number(process.env.PORT ?? 9001);
 const URL_ = `ws://127.0.0.1:${PORT}/ws`;
@@ -87,7 +88,7 @@ const tf = (T: { pos: number[]; yaw: number; scale: number }) => ({ pos: T.pos, 
 const make = async (id: string, model: string, T: { pos: number[]; yaw: number; scale: number }) => {
   const r = await rq.request("create", { id, model, components: { transform: tf(T) } }); if (!r?.ok) throw new Error(`${id} wasn't made: ${JSON.stringify(r)}`); };
 await new Promise<void>((res, rej) => {
-  warden.onopen = () => { warden.send(JSON.stringify({ type: "join", world: WORLD, id: "warden", replica: true, avatar: "eidoverse/assets/vrms/claude.vrm" })); res(); };
+  warden.onopen = () => { warden.send(JSON.stringify({ type: "join", hello: helloOf(), world: WORLD, id: "warden", replica: true, avatar: "eidoverse/assets/vrms/claude.vrm" })); res(); };
   warden.onerror = () => rej(new Error("warden failed to connect"));
 });
 await sleep(400);

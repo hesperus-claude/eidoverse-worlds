@@ -4,7 +4,8 @@
 // request(openWorld(root, name), actor, verb, args), a `create-world` first to found the world (its founder is its owner).
 // @ts-nocheck
 import { scratch } from "./common.ts";
-import { request, LAB_CATALOGUE, liftWorld, fixtureIds } from "../../shared/protocol/authority.js";
+import { request, fixtureIds } from "../../shared/protocol/authority.js";
+import { LAB_CATALOGUE } from "./labmodels.js";
 import { openWorld } from "../../server/filehost.ts";
 import { viewState } from "../../shared/protocol/view.js";
 import { enc, encName } from "../../shared/protocol/names.js";
@@ -20,7 +21,7 @@ const clock = labClock();
 // the engine's catalogue is the library's GLB paths (server/modelcatalogue.ts); a scratch world names any path the tests
 // use: the lab's measured models where they exist, else a model the authority can name but not measure (no `size`)
 const ANY_MODEL = Object.freeze({ get: (n) => LAB_CATALOGUE.get(n) ?? (typeof n === "string" && n ? { label: n, surfaces: [] } : undefined), list: (q) => LAB_CATALOGUE.list(q) });
-const open = (root, name, catalogue = ANY_MODEL) => { const w = openWorld(root, name); w.catalogue = catalogue; liftWorld(w); return w; };
+const open = (root, name, catalogue = ANY_MODEL) => { const w = openWorld(root, name); w.catalogue = catalogue; return w; };
 let n = 0;
 const roots = new Map();
 
@@ -41,11 +42,11 @@ export function scratchWorld(tag = "edit", { owner = "olive", title = "scratch",
     call,
     /** send one planned request ({verb, args}); extra args (throughLock, dry, expect) ride along. */
     send: (req, extra = {}, actor = owner) => (req ? call(req.verb, { ...req.args, ...extra }, actor) : { ok: true, noop: true }),
-    /** several planned requests as ONE gesture (shared/protocol/requests.js batch semantics: one act). */
+    /** several planned requests as ONE gesture (shared/requests.js batch semantics: one act). */
     sendAll: (reqs, extra = {}, actor = owner) => {
-      const flat = reqs.filter(Boolean).flatMap((o) => (o.verb === "batch" ? o.args.ops : [o]));
+      const flat = reqs.filter(Boolean).flatMap((o) => (o.verb === "batch" ? o.args.requests : [o]));
       if (!flat.length) return { ok: true, noop: true };
-      return flat.length === 1 ? W.send(flat[0], extra, actor) : call("batch", { ops: flat, ...extra }, actor);
+      return flat.length === 1 ? W.send(flat[0], extra, actor) : call("batch", { requests: flat, ...extra }, actor);
     },
     state: () => (w ??= open(root, name, catalogue)).state(),
     /** the log's entries as the authority holds them */
@@ -71,7 +72,8 @@ export function scratchWorld(tag = "edit", { owner = "olive", title = "scratch",
         const s = r.scale3 ?? (Number.isFinite(r.scale) ? [r.scale, r.scale, r.scale] : [1, 1, 1]);
         const components = { transform: { pos, q, scale: s } };
         for (const [k, v] of Object.entries(recordComponents(r))) if (v !== undefined) components[encName(k)] = v;
-        if (r.parent?.to) components.parent = { to: enc(r.parent.to), ...(r.parent.socket ? { socket: r.parent.socket } : {}) };
+        // a socket is a record of its own ({parent: {to: host}, socket: {name}, station?}); parent {to, socket} names one
+        if (r.parent?.to) components.parent = { to: r.parent.socket ? socketChild(W.state(), enc(r.parent.to), r.parent.socket) : enc(r.parent.to) };
         const res = call("create", { id: enc(id), ...(r.model ? { model: r.model } : {}), components });
         if (!res.ok) throw new Error(`seed ${id}: ${JSON.stringify(res.refused)}`);
       }
@@ -79,6 +81,13 @@ export function scratchWorld(tag = "edit", { owner = "olive", title = "scratch",
     },
   };
   return W;
+}
+
+/** the id of host's socket child called `name` (a socket is a child entity: parent {to: <it>}); throws if it has none */
+export function socketChild(st, host, name) {
+  const k = Object.keys(st.entities).find((x) => st.entities[x].c.parent?.to === host && st.entities[x].c.socket?.name === name);
+  if (!k) throw new Error(`${host} has no socket '${name}'`);
+  return k;
 }
 
 /** The world object behind a scratch world (for the authority's system door: forkCopy). */
@@ -102,5 +111,5 @@ export function foldRecordOf(r, recs = null) {
 /** a request's ops, flattened (a batch's ops, or the one op) */
 export const flat = (x) => {
   const list = Array.isArray(x) ? x : x?.ops ?? (x ? [x] : []);
-  return list.filter(Boolean).flatMap((o) => (o.verb === "batch" ? o.args.ops : [o]));
+  return list.filter(Boolean).flatMap((o) => (o.verb === "batch" ? o.args.requests : [o]));
 };

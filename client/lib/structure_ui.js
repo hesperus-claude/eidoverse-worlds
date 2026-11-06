@@ -13,7 +13,7 @@
 // door's undo of MY act, editwrites.js), so it always lands on the building that
 // act changed, and keeps theirs where someone changed it since.
 
-import * as OP from '../../shared/protocol/requests.js';
+import * as OP from '../../shared/requests.js';
 import { sendOps } from './editwrites.js';
 import { flashHint } from './ui.js';
 import { THREE, canvas, camera, scene } from './core.js';

@@ -4,7 +4,7 @@
 // previewSky the desk's preset buttons call. The desk's 'log to world' for
 // the sky lives in a closure with the clock rules (skypanel gather()) — not
 // duplicated here; the quad says 'preview' and the desk commits.
-import * as OP from '../../shared/protocol/requests.js';
+import * as OP from '../../shared/requests.js';
 import { sendOps } from './editwrites.js';
 import { bus } from './base.js';
 import { myState } from './controller.js';

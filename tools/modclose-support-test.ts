@@ -19,6 +19,7 @@ import { WorldAgent } from "../mcpl/agent.ts";
 import { supportHolders } from "../mcpl/physics.ts";
 import { until, tryUntil } from "./protocol/wait.ts";
 import { suite } from "./protocol/suite.ts";
+import { helloOf } from "../shared/protocol/hello.js";
 
 const WORLD = "modtest";
 const CRATE = "eidoverse/assets/models/crate_large_blue.glb";
@@ -41,7 +42,7 @@ const { request: wardenReq } = requester(warden);
 /** a person's directory identity, as their arrival announced it (moderation names identities, never typed names) */
 const idOf = (name: string) => seen.find((m) => m.type === "arrive" && m.id === name)?.actorId;
 await until("the warden's socket opens", () => warden.readyState === WebSocket.OPEN);
-warden.send(JSON.stringify({ type: "join", world: WORLD, id: "warden", avatar: "eidoverse/assets/vrms/claude.vrm", replica: true }));
+warden.send(JSON.stringify({ type: "join", hello: helloOf(), world: WORLD, id: "warden", avatar: "eidoverse/assets/vrms/claude.vrm", replica: true }));
 await until("the warden's snapshot", () => seen.some((m) => m.type === "snapshot"));
 
 // ---- two residents, one platform -------------------------------------------

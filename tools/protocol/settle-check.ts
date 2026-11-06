@@ -58,7 +58,7 @@ for (const verb of ["throw", "drop"]) { const W = `ride-${verb}`; call(W, "rowan
   const on = ["a", "b"].every((k) => st(W).entities[k].c.parent?.to === "tray");
   call(W, "vic", "move", { to: [0, 0, -0.9] }); const g = call(W, "vic", "grab", { id: "tray" });
   const n0 = openWorld(root, W).entries.length; const th = call(W, "vic", "throw", { id: "tray", v: [0, 3, 4], w: [3.2, 0, 0] });
-  const L = openWorld(root, W).entries.slice(n0).filter((e) => e.kind === "sim" && e.verb === "launch"); const vOf = (id) => L.find((e) => e.body.id === id)?.body.v;
+  const L = openWorld(root, W).entries.slice(n0).filter((e) => e.kind === "physics" && e.verb === "launch"); const vOf = (id) => L.find((e) => e.body.id === id)?.body.v;
   const d = (x, y) => x && y ? Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) : 0;
   ok(on && g.ok && th.ok && d(vOf("a"), vOf("tray")) > 0.05 && d(vOf("b"), vOf("tray")) > 0.05 && d(vOf("a"), vOf("b")) > 0.05,
     "SE7 thrown with spin, each occupant leaves with its own velocity (the tray's at its spot, and a flick), so the load fans out from the hand", { on, grab: g.ok ?? g.refused, throw: th.ok ?? th.refused, v: { tray: vOf("tray"), a: vOf("a"), b: vOf("b") } });
@@ -103,8 +103,8 @@ for (const verb of ["throw", "drop"]) { const W = `ride-${verb}`; call(W, "rowan
   const c4 = st(W).entities.crate3.c; const w4 = c4.parent?.to === "mp" ? c4.transform.pos[1] * 0.5 : c4.transform.pos[1];
   const ws = c4.parent?.to === "mp" ? (c4.transform.scale ?? [1, 1, 1]).map((v, i) => v * [2.5, 0.5, 2.5][i]) : (c4.transform.scale ?? [1, 1, 1]);
   // r2 S2.1/S2.2/S2.3 under an engine: a no-op write re-drops nothing; a socketed child rides its socket; a deleted body frees the occupants
-  call(W, "rowan", "set", { id: "plinth", component: "sockets", value: { perch: { pos: [0.5, 0.3, 0.5] } } });
-  call(W, "rowan", "create", { id: "cup", model: "ball", components: { physics: { kind: "dynamic", who: "member" }, parent: { to: "plinth", socket: "perch" }, transform: { pos: [0, 0, 0] } } });
+  call(W, "rowan", "create", { id: "plinth-perch", components: { parent: { to: "plinth" }, transform: { pos: [0.5, 0.3, 0.5], q: [0, 0, 0, 1], scale: [1, 1, 1] }, socket: { name: "perch" } } });
+  call(W, "rowan", "create", { id: "cup", model: "ball", components: { physics: { kind: "dynamic", who: "member" }, parent: { to: "plinth-perch" }, transform: { pos: [0, 0, 0] } } });
   const n1 = openWorld(root, W).entries.length; const same = call(W, "rowan", "set", { id: "plinth", component: "mesh", value: { shape: "box", size: [1.5, 0.3, 1.5] } }); clock.t += 8000; call(W, "vic", "look", {});
   ok(same.ok && openWorld(root, W).entries.length - n1 === 2 && !(same.notes ?? []).some((n) => n.fell), "SE14 re-asserting the plinth's mesh value re-drops nothing: 2 rows, no fell note (r2 S2.1)", { rows: openWorld(root, W).entries.length - n1, notes: same.notes });
   const grow = call(W, "rowan", "set", { id: "plinth", component: "mesh", value: { shape: "box", size: [1.5, 0.5, 1.5] } }); clock.t += 8000; call(W, "vic", "look", {});
@@ -177,6 +177,6 @@ for (const verb of ["delete", "grab"]) { const W = `straddle-foreign-${verb}`; c
   const r = call(W, "rowan", "set", { id: "plinth", component: "mesh", value: { shape: "box", size: [1.5, 0.3, 1.5] } });
   const added = openWorld(root, W).entries.slice(n0);
   ok(sw.ok && on === "plinth" && !r.ok && r.refused?.code === "foreign-engine" && r.refused.reason.includes(foreign) && r.refused.reason.includes("crate") && !added.some((e: any) => e.kind === "change") && st(W).entities.plinth.c.mesh.size[1] === 0.6,
-    "SE21 under a version this server doesn't carry, reshaping what a thing rests on is refused, naming the engine and what rests on it (only that engine re-drops it); the host keeps its shape", { sw: sw.ok ?? sw.refused, on, r: r.ok ?? r.refused, added: added.map((e: any) => [e.kind, e.verb]) }); }
+    "SE21 under a version this server doesn't carry, reshaping what a thing rests on is refused, naming the engine and what rests on it (only that engine re-drops it); the host keeps its shape", { sw: sw.ok ?? sw.refused, on, r: r.ok ?? r.refused, added: added.map((e: any) => [e.kind, e.verb ?? e.op]) }); }
 
 done();

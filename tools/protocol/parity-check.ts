@@ -23,6 +23,8 @@ import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.t
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "./clock.ts";
 import { suite } from "./suite.ts";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
+import { helloOf } from "../../shared/protocol/hello.js";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -137,7 +139,7 @@ async function sock(port: number) {
     ws.send(JSON.stringify({ type: "request", id, verb, args }));
     const t0 = Date.now(); const look = () => { const m = msgs.slice(k).find((x) => x.type === "reply" && x.id === id); if (m) return res(m.reply); if (Date.now() - t0 > 4000) return res({ timeout: true }); setTimeout(look, 30); }; look(); });
   return { msgs, req, close: () => ws.close(),
-    async join(id: string, extra = {}) { const k = msgs.length; ws.send(JSON.stringify({ type: "join", world: "glade", id, avatar: "", replica: true, ...extra }));
+    async join(id: string, extra = {}) { const k = msgs.length; ws.send(JSON.stringify({ type: "join", hello: helloOf(), world: "glade", id, avatar: "", replica: true, ...extra }));
       await tryUntil(`${id}'s join is answered`, () => msgs.slice(k).some((m) => m.type === "snapshot" || m.type === "error"), { ms: 4000, step: 50 });
       return { snapshot: msgs.slice(k).find((m) => m.type === "snapshot"), errors: msgs.slice(k).filter((m) => m.type === "error").map((m) => m.error) }; } };
 }
@@ -168,13 +170,13 @@ function openWorld(name: string) {
   const logPath = path.join(root, "worlds", `${name}.jsonl`), storeDir = path.join(root, "store");
   const entries = F.readLog(readLogBytes(logPath)).map(D.posAt);
   const blobPath = (h: string) => path.join(storeDir, `${String(h).replace(/[^a-z0-9]/g, "-")}.json`);
-  const w = D.worldOf({ name, entries,
+  const w = D.worldOf({ catalogue: LAB_CATALOGUE, simModels: LAB_MODELS, name, entries,
     getBlob: (h: string) => JSON.parse(fs.readFileSync(blobPath(h), "utf8")),
     putBlob: (v: unknown) => { const s = F.jcs(v); const h = `sha256:${F.sha256(s)}`; putBlobFile(blobPath(h), s, h); return h; },
     now: () => pinned(), writeLine: (line: string) => appendDurable(logPath, line),
     presence: { bodies: {}, holds: {} }, savePresence: () => {}, scripts: SB.SANDBOX,
     custody: custodyAt(path.join(root, "keys", "custody.json")), ...modLogAt(path.join(root, "worlds", `${name}.mod.jsonl`)) });
-  w.catalogue = D.LAB_CATALOGUE;
+  w.catalogue = LAB_CATALOGUE;
   return w;
 }
 const clock = labClock(); let N = 0;
@@ -244,7 +246,8 @@ const cases: Case[] = [
   // ---------------- O: occupy is the one word family (R 10-17 13:46) ----------------
   { id: "O1", what: "(R 13:46) a socket removed under vic: his inbox has `vacated {socket, by, why, at}` (no `unseated`, no `seat`), the reply's note says `vacated: true, socket`-free of seat words, and presence keeps `occupants` (no `seats`)", run(s) {
       s.call("olive", "create-world", { title: s.name }); s.call("olive", "set", { id: "@world", component: "roles:vic", value: { role: "member" } });
-      s.call("olive", "create", { id: "chair", model: "chair", components: { sockets: { a: { pos: [0, 0.45, 0], body: { action: "sit" } } } }, place: { at: [4, 0] } });
+      s.call("olive", "create", { id: "chair", model: "chair", place: { at: [4, 0] } });   // its seat: a socket child with a station
+      s.call("olive", "create", { id: "chair-a", components: { parent: { to: "chair" }, transform: { pos: [0, 0.45, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] }, socket: { name: "a" }, station: { action: "sit" } } });
       s.call("vic", "move", { to: [4, 0, -0.6] }); const sit = s.call("vic", "use", { id: "chair", action: "sit" });
       const pres = Object.keys(s.w().presence); const occ = s.w().presence.occupants?.vic?.to ?? null;
       const mv = s.call("olive", "set", { id: "chair", component: "transform", value: { pos: [6, 0, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] } });
@@ -254,7 +257,8 @@ const cases: Case[] = [
     good: (o) => o.sit === "ok" && !!o.occ && o.pres.includes("occupants") && !o.pres.includes("seats") && o.mv === "ok" && !!o.m && o.m.socket === o.occ && typeof o.m.why === "string" && Array.isArray(o.m.at) && !("seat" in o.m) && !o.types.includes("unseated") && /"vacated":true/.test(o.notes) && /"socket":/.test(o.notes) && !/unseated|"seat":/.test(o.notes) },
   { id: "O1b", what: "…a dry run of that move says who it would stand up (vacates), and changes nothing: vic stays seated", run(s) {
       s.call("olive", "create-world", { title: s.name }); s.call("olive", "set", { id: "@world", component: "roles:vic", value: { role: "member" } });
-      s.call("olive", "create", { id: "chair", model: "chair", components: { sockets: { a: { pos: [0, 0.45, 0], body: { action: "sit" } } } }, place: { at: [4, 0] } });
+      s.call("olive", "create", { id: "chair", model: "chair", place: { at: [4, 0] } });   // its seat: a socket child with a station
+      s.call("olive", "create", { id: "chair-a", components: { parent: { to: "chair" }, transform: { pos: [0, 0.45, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] }, socket: { name: "a" }, station: { action: "sit" } } });
       s.call("vic", "move", { to: [4, 0, -0.6] }); const sit = s.call("vic", "use", { id: "chair", action: "sit" }); const occ = s.w().presence.occupants?.vic?.to ?? null;
       const dry = s.call("olive", "set", { id: "chair", component: "transform", value: { pos: [6, 0, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] }, dry: true });
       return { sit: show(sit), occ, dry: show(dry), vacates: dry?.vacates ?? null, still: s.w().presence.occupants?.vic?.to ?? null }; },
@@ -301,7 +305,7 @@ const cases: Case[] = [
     good: (o) => o.clip === "sit" && o.posture === "sit" },
   { id: "P7", what: "world_history (matrix G2): act + say by default; kinds picks others; before + after is a window read forward from after and cut at before", async run() {
       const T = await import(TREE + "mcpl/tools.ts"); const asked: any[] = [];
-      const E = [{ seq: 5, kind: "act", verb: "create", by: "ann" }, { seq: 6, kind: "change", by: "ann" }, { seq: 7, kind: "say", by: "bob", text: "hi" }, { seq: 9, kind: "act", verb: "delete", by: "ann" }];
+      const E = [{ seq: 5, kind: "request", verb: "create", by: "ann" }, { seq: 6, kind: "change", by: "ann" }, { seq: 7, kind: "say", by: "bob", text: "hi" }, { seq: 9, kind: "request", verb: "delete", by: "ann" }];
       const ag: any = { request: async (_v: string, args: any) => { asked.push(args); return { ok: true, entries: E, next: null }; } };
       const t = async (a: any) => (await T.HANDLERS.world_history(ag, a, {}, "world_history"))?.content?.[0]?.text ?? "";
       const def = await t({}), ch = await t({ kinds: ["change"] }), win = await t({ after: 4, before: 8 });

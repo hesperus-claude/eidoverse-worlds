@@ -98,7 +98,7 @@ for (const row of ROWS) {
   const lines = (f: string) => code(f).split("\n");
   const lit = /\b(min|max|unit):\s*(?!(?:undefined|null)\b)[-'"\w.]/;
   const LIMITS: [string, (l: string) => boolean][] = [
-    ["shared/protocol/descriptors.js", (l) => lit.test(l) && !/const lim = |\.\.\.lim|unit \}|\{ min: r\.min \}|\{ min: r\.gt \}|\{ max: r\.max \}/.test(l)],
+    ["shared/descriptors.js", (l) => lit.test(l) && !/const lim = |\.\.\.lim|unit \}|\{ min: r\.min \}|\{ min: r\.gt \}|\{ max: r\.max \}/.test(l)],
     ["shared/components.js", (l) => lit.test(l) && !/p\.min = |p\.max = |p\.unit = |max: COMPONENTS\./.test(l)],
     ["shared/worldentity.js", (l) => /k: '(amplitude|size|segments|flatRadius|density|height|width|depth)'/.test(l) && /\b(min|max|unit):/.test(l)],
     // editschema's own literals are the Transform channels', a socket body's look limits, the draft Material's and the light's sliders (their max grows with the value)

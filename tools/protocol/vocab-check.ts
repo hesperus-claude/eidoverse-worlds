@@ -39,7 +39,6 @@ const EXEMPT: [string, RegExp, string][] = [
   ["shared/protocol/authority", /out\.comp = op\.comp|\bh\.comp\b|toggleOf\(h\)\.comp/, "an op being shaped (out) and a reaction handler (h) name the OP's component"],
   ["shared/protocol/authority", /activate\(w, id, name, \{ on: `changed:/, "a reaction's activation record names the OP's component (PROTOCOL §3), not a record's bag"],
   ["shared/sim.js", /sim\.boxes\[/, "the first eidosim's box table, keyed by library path (retires with it)"],
-  ["server/render-scene.ts", /./, "upstream #248's projection of the first protocol's fold for the native (Unreal) client, kept unwired: that client can't join a world here until it folds this protocol's log (docs/NATIVE-WORLD-RENDERING.md); it is ported to view records then, not before"],
   ["shared/zone.js", /ev\.comp === "light"/, "a world-change event names the OP's component (the realizer's event, PROTOCOL §3), not a record's bag"],
   ["client/lib/water.js", /\bA\.comp\[/, "the water analysis's connected-component labels (shared/waterkind.js analyzeWater), an array, not a record's bag"],
 ];
@@ -102,22 +101,21 @@ const riderWalk = (dir: string) => {
 for (const d of [...RUNTIME, ...DEPLOYED]) riderWalk(path.join(ROOT, d));
 for (const rel of RIDER_DOCS) { const p = path.join(ROOT, rel); if (fs.existsSync(p)) riderScan(rel, fs.readFileSync(p, "utf8")); else offences.push(`${rel}: missing (RIDER_DOCS lists it)`); }
 // A motion's back-and-forth along an axis is `oscillate` (R 10-17 21:40; it was `bob` before release). The old word as a
-// motion type ("bob", 'bob', a `bob:` key, the card "Bob") may appear only where the old spelling is READ: names.js
-// OLD_MOTION_TYPES (the door, the load's rename and every reader go through motionType). Runtime code (comments too:
+// motion type ("bob", 'bob', a `bob:` key, the card "Bob") may appear nowhere in runtime code: the door refuses it and
+// readers read the type as written; only the v1 translation maps it (tools/protocol/import-v1/shapes.js motionType). Runtime code (comments too:
 // "a bob's offset" names the type) and the docs; English uses ("head bob", "bobs up" in the water) are not a quoted word.
 // OSC_OK lists each allowed line, with why.
 const OSC_CODE = /['"`]bob['"`]|['"`]Bob['"`]|(?<![\w$.])[Bb]ob\s*:|\ba bob's\b|\bbob\/|\/bob\b/;
 const OSC_DOCS = ["spec/PROTOCOL.md", "spec/PHYSICS.md", "AGENTS.md", "DESIGN.md"];
 const OSC_DOC = /`bob`|\|bob\\?\||\bbob\s*\||\borbit, bob\b|\bbob, path\b|type: ?['"]bob['"]/;
 const OSC_OK: [string, RegExp, string][] = [
-  ["shared/protocol/names.js", /^export const OLD_MOTION_TYPES = Object\.freeze\(\{ bob: "oscillate" \}\);$/, "the old spelling's one reading (motionType): the door, the load's rename and the readers go through it"],
   ["shared/editschema.js", /Oscillate: \['float', 'hover', 'bob',/, "a word people search Add Component with (finds Oscillate), not a motion type"],
   ["spec/PROTOCOL.md", /motion's `type` `bob` → `oscillate`/, "§4: the load's rename, naming the old value so a reader of an old log knows it"],
   ["spec/PROTOCOL.md", /is `oscillate` \(R 10-17 21:40; was `bob`:/, "the version history records the rename"],
 ];
 const oscScan = (rel: string, text: string, re: RegExp) => text.split("\n").forEach((line, i) => {
   if (!re.test(line) || OSC_OK.some(([f, ok]) => rel === f && ok.test(line.trim()))) return;
-  offences.push(`${rel}:${i + 1}  says bob as a motion type (the word is oscillate; the old spelling is read only by names.js motionType): ${line.trim().slice(0, 100)}`);
+  offences.push(`${rel}:${i + 1}  says bob as a motion type (the word is oscillate; only the v1 translation maps the old one): ${line.trim().slice(0, 100)}`);
 });
 const oscWalk = (dir: string) => {
   if (!fs.existsSync(dir)) return;
@@ -167,6 +165,40 @@ const aiWalk = (dir: string) => {
   }
 };
 aiWalk(path.join(ROOT, "client"));
+// The log's vocabulary is minor 1's (docs/DESIGN-log-vocabulary.md D3, 2026-11-04): kinds request/physics/redaction/governance,
+// `op` on a change, `cascade`, `commitment`, `rewindWindow`, the view marker `redacted`, the snapshot blob key `snapshotJson`. A retired
+// spelling (act, sim, purge, sequencer as a kind; followUps; rewind_window; commit-unpurged; purged: true; verb on genesis/say; cutJson
+// written) may not come back into runtime code; the reads that still meet an old spelling on purpose are listed in LOG_OK, each with why.
+const LOG_RETIRED: [RegExp, string][] = [
+  [/\bkind\s*[!=]==?\s*['"](act|sim|purge|sequencer)['"]|\bkind:\s*['"](act|sim|purge|sequencer)['"]|"kind":\s*"(act|sim|purge|sequencer)"/, "a retired log kind (request, physics, redaction, governance)"],
+  [/\bfollowUps\b|batch-followups/, "`followUps` is `cascade`"],
+  [/\brewind_window\b/, "`rewind_window` is `rewindWindow`"],
+  [/commit-unpurged|\bpurged:\s*true\b|\{\s*"?purged"?\s*:/, "the redaction marker is `redacted` (commitment-unredacted)"],
+  [/\bverb:\s*['"](genesis|purge|sequencer)['"]|"verb":\s*"(genesis|purge|sequencer)"/, "genesis, redaction and governance carry no verb (a say entry neither; a chat line's verb is the client's own shape)"],
+  [/\bcutJson:/, "a checkpoint blob is written as snapshotJson (a blob keyed cutJson is skipped: no reader takes it)"],
+];
+const LOG_OK: [string, RegExp, string][] = [
+  ["mcpl/agent.ts", /kind(: | === )"act"/, "the agent's in-memory inbox event, never a log entry (D6)"],
+  ["mcpl/denoise.ts", /kind: "act"/, "the agent's inbox event (D6)"],
+  ["mcpl/declaration.ts", /kind === "act"/, "the agent's inbox event's speech facet (D6)"],
+  ["mcpl/net-server.ts", /kind === "act"/, "the agent's inbox event relayed to its MCP client (D6)"],
+  ["shared/protocol/names.js", /./, "the old world's spellings, read by the translator's renames only"],
+];
+const logScan = (rel: string, text: string) => text.split("\n").forEach((line, i) => {
+  if (/-test\.(ts|mjs)$/.test(rel) && /kind === "act"/.test(line)) return;   // the agent's own tests read its inbox (D6)
+  if (/^\s*(\/\/|\*|\/\*)/.test(line) || LOG_OK.some(([f, re]) => (rel === f || rel.startsWith(f)) && re.test(line))) return;
+  for (const [re, what] of LOG_RETIRED) if (re.test(line.replace(/\s\/\/\s.*$/, ""))) offences.push(`${rel}:${i + 1}  retired log spelling (${what}): ${line.trim().slice(0, 100)}`);
+});
+const logWalk = (dir: string) => {
+  if (!fs.existsSync(dir)) return;
+  for (const name of fs.readdirSync(dir)) {
+    if (SKIP_DIR.has(name)) continue;
+    const p = path.join(dir, name);
+    if (fs.statSync(p).isDirectory()) { logWalk(p); continue; }
+    if (EXT.test(name)) logScan(path.relative(ROOT, p).split(path.sep).join("/"), fs.readFileSync(p, "utf8"));
+  }
+};
+for (const d of [...RUNTIME, ...DEPLOYED, "tools/protocol/import-v1"]) logWalk(path.join(ROOT, d));
 for (const o of offences) console.log("  " + o);
 console.log(`[vocab-check] ${offences.length ? `${offences.length} old-spelling read(s)` : "one vocabulary: every runtime reader speaks the record in the protocol's names"}`);
 process.exit(offences.length ? 1 : 0);
