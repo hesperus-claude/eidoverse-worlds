@@ -22,6 +22,7 @@ import { ENGINE, scratch, copyTree, archiveTo } from "./common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
+import { until, pause } from "./wait.ts";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -141,7 +142,7 @@ const FAKE = { log: [] as any[], paths: {} as Record<string, any>, whepStatus: 2
 const fake = Bun.serve({ port: 0, async fetch(req) {
   const u = new URL(req.url); const body = req.method === "POST" ? await req.text() : "";
   FAKE.log.push({ method: req.method, path: u.pathname, auth: req.headers.get("authorization"), body });
-  if (req.method === "POST" && FAKE.delays.length) await new Promise((r) => setTimeout(r, FAKE.delays.shift()));   // a slow appliance, per offer
+  if (req.method === "POST" && FAKE.delays.length) await pause("a slow appliance, per offer: the order answers land in is what B8 tests", FAKE.delays.shift()!);
   if (u.pathname.startsWith("/v3/paths/get/")) { if (FAKE.apiDown) return new Response("down", { status: 503 }); const p = FAKE.paths[u.pathname.slice(14)]; return p ? Response.json(p) : new Response("not found", { status: 404 }); }
   if (req.method === "POST" && u.pathname.endsWith("/whep")) return FAKE.whepStatus === 201 ? new Response("v=0\r\nanswer-for:" + body.slice(0, 20), { status: 201, headers: { location: `${u.pathname.replace(/whep$/, "")}whep/session-${FAKE.log.length}` } }) : new Response("no", { status: FAKE.whepStatus });
   if (req.method === "DELETE") return new Response(null, { status: 200 });
@@ -155,7 +156,10 @@ const install = (doc: any) => VS.installSources?.(VS.parseRegistry(doc).sources)
 function viewer(world: any, sent: any[] = []) { const c: any = { world, spectator: false, ws: { send: (s: string) => sent.push(JSON.parse(s)) } }; world.clients.add(c); return { c, sent }; }
 // the sequencer's World.state is the VIEW (viewOf: components on the record, beside pos), so the fake is that shape exactly
 function fakeWorld(video: any, more: string[] = []) { const entities: any = { screen: { pos: [0, 0, 0], yaw: 0, video } }; for (const id of more) entities[id] = { pos: [0, 0, 0], yaw: 0, video: { ...video } }; return { state: { entities }, clients: new Set() }; }
-const tick = () => new Promise((r) => setTimeout(r, 5));
+// the broker closes some sessions fire-and-forget (a revoke): settled once every video-closed a viewer was told has its DELETE
+// at the appliance (a close with no resource has none, and no case here makes one)
+const dels = () => FAKE.log.filter((x) => x.method === "DELETE").length;
+const settled = (sent: any[], what = "every closed session's DELETE reached the appliance") => until(what, () => (dels() >= sent.filter((m) => m.type === "video-closed").length) || null, { ms: 3000 });
 
 type Case = { id: string; what: string; run: (s: any) => any; good: (o: any) => boolean };
 const cases: Case[] = [
@@ -272,14 +276,14 @@ const cases: Case[] = [
       install(REG()); FAKE.whepStatus = 201; const t = 3e9;
       const held = async (delays: number[], ids: string[], more: string[] = []) => {
         FAKE.log = []; FAKE.delays = [...delays]; const w = fakeWorld({ source: "solstice" }, more); const { c, sent } = viewer(w);
-        const rs = await Promise.all(ids.map((id, i) => VS.offer?.(c, { id, sdp: "o", req: `r${i}` }, t + i * 3000))); await tick();
+        const rs = await Promise.all(ids.map((id, i) => VS.offer?.(c, { id, sdp: "o", req: `r${i}` }, t + i * 3000))); await settled(sent);
         const out = { rs: rs.map((r: any) => r?.type === "video-answer" ? "answer" : r?.why), held: VS.sessionCount?.(c), posts: FAKE.log.filter((x) => x.method === "POST").length,
           dels: FAKE.log.filter((x) => x.method === "DELETE").length, closed: sent.filter((m) => m.type === "video-closed").map((m) => m.why) };
         w.clients.delete(c); await VS.sweep?.(); return out; };
       return { overlap: await held([200, 200, 200, 200, 200, 200], ["screen", "s2", "s3", "s4", "s5", "s6"], ["s2", "s3", "s4", "s5", "s6"]),
         oldLate: await held([300, 0], ["screen", "screen"]), oldFirst: await held([100, 300], ["screen", "screen"]), settled: await held([], ["screen"]).then(async () => {
           FAKE.log = []; FAKE.delays = []; const w = fakeWorld({ source: "solstice" }); const { c, sent } = viewer(w);
-          await VS.offer?.(c, { id: "screen", sdp: "o" }, t); const r = await VS.offer?.(c, { id: "screen", sdp: "o" }, t + 3000); await tick();
+          await VS.offer?.(c, { id: "screen", sdp: "o" }, t); const r = await VS.offer?.(c, { id: "screen", sdp: "o" }, t + 3000); await settled(sent);
           const out = { r: r?.type, held: VS.sessionCount?.(c), dels: FAKE.log.filter((x) => x.method === "DELETE").length, closed: sent.filter((m) => m.type === "video-closed").map((m) => m.why) };
           w.clients.delete(c); await VS.sweep?.(); return out; }) }; },
     good: (o) => o.overlap.held === 4 && o.overlap.posts === 4 && o.overlap.rs.filter((x: string) => x === "answer").length === 4 && o.overlap.rs.filter((x: string) => /at most 4/.test(x ?? "")).length === 2
@@ -288,7 +292,7 @@ const cases: Case[] = [
   { id: "B5", what: "a session ends, its appliance resource is DELETEd and the viewer told, when the screen's source changes, when the video comes down, and when the viewer leaves", async run() {
       install(REG({ "movie-night": { whep: `${APP}/movie/whep` } })); FAKE.whepStatus = 201;
       const run1 = async (mutate: (w: any, c: any) => void) => { FAKE.log = []; const w = fakeWorld({ source: "solstice" }); const { c, sent } = viewer(w);
-        const r = await VS.offer?.(c, { id: "screen", sdp: "o" }, Date.now() + Math.random() * 1e9); mutate(w, c); await VS.sweep?.(); await tick();
+        const r = await VS.offer?.(c, { id: "screen", sdp: "o" }, Date.now() + Math.random() * 1e9); mutate(w, c); await VS.sweep?.(); await settled(sent);
         return { opened: r?.type === "video-answer", del: FAKE.log.filter((x) => x.method === "DELETE").length, closed: sent.find((m) => m.type === "video-closed")?.why, left: VS.sessionCount?.(c) }; };
       return { changed: await run1((w) => { w.state.entities.screen.video = { source: "movie-night" }; }),
         down: await run1((w) => { delete w.state.entities.screen.video; }),
@@ -297,9 +301,9 @@ const cases: Case[] = [
     good: (o) => ["changed", "down", "left"].every((k) => o[k].opened && o[k].del === 1 && o[k].closed && o[k].left === 0) && /changed/.test(o.changed.closed) && /left/.test(o.left.closed)
       && o.steady.opened && o.steady.del === 0 && o.steady.left === 1 },
   { id: "B6", what: "the operator revokes a source: its sessions are closed and DELETEd, its observation forgotten, and the door refuses it", async run(s) {
-      install({ sources: {} }); await tick(); install(REG()); FAKE.log = []; FAKE.whepStatus = 201; const w = fakeWorld({ source: "solstice" }); const { c, sent } = viewer(w);
+      install({ sources: {} }); await until("no session is left from earlier cases", () => VS.sessionCount?.() === 0 || null, { ms: 3000 }); install(REG()); FAKE.log = []; FAKE.whepStatus = 201; const w = fakeWorld({ source: "solstice" }); const { c, sent } = viewer(w);
       await VS.offer?.(c, { id: "screen", sdp: "o" }, 5e9); V.noteSourceState?.("solstice", { state: "live", at: Date.now() });
-      install({ sources: {} }); await tick(); await tick();
+      install({ sources: {} }); await settled(sent, "the revoke's closes reached the appliance").catch(() => {});
       cast(s); s.call("olive", "create", { id: "screen", model: "crate", place: { at: [0, 0] } });
       return { del: FAKE.log.filter((x) => x.method === "DELETE").length, closed: sent.find((m) => m.type === "video-closed")?.why, obs: V.sourceStateOf?.("solstice"), left: VS.sessionCount?.(c),
         door: code(s.call("olive", "set", { id: "screen", component: "video", value: { source: "solstice" } })) }; },
