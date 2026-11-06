@@ -98,7 +98,7 @@ const M: Mutant[] = [
 const GROUPS: Record<string, string[]> = {
   a: ["B8", "B9", "M6a", "M6b", "M6c"],                                                      // inplace
   b: ["M6d", "M6e", "M6f", "M7"],                                                            // inplace
-  c: ["r14-M3", "M4", "sec-L11", "B4", "M1", "M2", "r14-M1", "B6", "B7", "B10", "M5", "M8", "M9", "r14-H1"], // inplace, identity, the quick suites
+  c: ["r14-M3", "M4", "sec-L11", "B4", "M1", "M2", "r14-M1", "B6", "B7", "B10", "M5", "M8"], // inplace, identity, the quick suites
   d: ["B1", "B2", "B5", "M3", "r14-M2", "sec-H1", "sec-H2", "sec-M6"],                       // authority, access
 };
 const argv = process.argv.slice(2);

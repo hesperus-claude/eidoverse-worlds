@@ -19,6 +19,7 @@
  */
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { DIALECT, VERSION } from "../shared/protocol/fold.js";
 GlobalRegistrator.register();
 
 let failures = 0;
@@ -226,7 +227,7 @@ console.log("\n━━ reconnect roster seed: the snapshot prunes through the fun
   bus.on("participant-teardown", (id: string) => torn.push(id));
   const disposedBefore = stubs.disposeCount;
   await _dispatch({ type: "snapshot", you: "tester", yourRights: { role: "member" },
-    present: [{ id: "stays", avatar: "vrms/stays.vrm" }], state: null, entries: [], throughSeq: 0 });
+    present: [{ id: "stays", avatar: "vrms/stays.vrm" }], state: {}, dialect: DIALECT, v: VERSION, entries: [], throughSeq: 0 });
   await settle();
   check("the absent id is torn down THROUGH the funnel", torn.includes("ghost"),
     `teardown events: ${JSON.stringify(torn)} (on main: raw dropRemote, no event)`);

@@ -4,7 +4,7 @@
 //   bun tools/protocol/gov-reserved-check.ts
 import fs from "node:fs"; import path from "node:path"; import os from "node:os"; import { spawnSync } from "node:child_process";
 import { jcs, readLog } from "../../shared/protocol/fold.js"; import { sha256, sha256Bytes, hexBytes } from "../../shared/protocol/hash.js";
-import { openLive } from "../labhost.ts";
+import { openLive } from "./labhost.ts";
 import { suite } from "./suite.ts";
 const ENGINE = path.resolve(import.meta.dir, "./.."); const { check, done } = suite("gov-reserved-check", { cap: 300 });
 const W = fs.mkdtempSync(path.join(process.env.PROTOCOL_SCRATCH ?? os.tmpdir(), "gov-"));

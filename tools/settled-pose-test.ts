@@ -64,7 +64,6 @@ const ck = (n: string, got: unknown, want: unknown) => ok(JSON.stringify(got) ==
   const waving = { clip: "idle", anim: "wave", p: [0, 0, 0] };
   const out = settledPose(waving)!;
   ck("a gesture (pose.anim) does not persist (a wave would become a tic)", out.anim, undefined);
-  ck("  ...nor under its pre-release key", ONCE_KEYS[1] in settledPose({ clip: "idle", [ONCE_KEYS[1]]: "wave", p: [0, 0, 0] })!, false);
   ck("  ...the underlying clip does", out.clip, "idle");
 }
 

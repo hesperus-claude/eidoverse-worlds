@@ -18,8 +18,7 @@ export const modelOf = (ent) => (typeof ent?.model === 'string' ? ent.model : nu
 
 /** The registered `mesh` component (shared/protocol/componentspec.js), read as a client reads it: a malformed value is
  *  absent (the thing is an Empty), never a throw. A field outside its range is clamped to it; a capsule is at least its
- *  diameter tall (the authority's meshSize says the same). kindOf is shared/protocol/kind.js's; a thing with both a
- *  model and a mesh exists only by carry and is its model. */
+ *  diameter tall (the authority's meshSize says the same). */
 export const MESH_SHAPES = COMPONENTS.mesh.enums.shape;
 const { min: SMIN, max: SMAX } = COMPONENTS.mesh.ranges.size;
 export function readMesh(m) {

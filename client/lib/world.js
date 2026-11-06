@@ -49,8 +49,7 @@ export function* bags() {
   const es = replica.st?.entities; if (!es) return;
   for (const k in es) if (k !== '@world') yield [dec(k) ?? k, es[k].c];
 }
-/** What a thing IS as realized and where from, for the panels: {kind, lib?} — the fold's word (shared/protocol/kind.js);
- *  the realizer keeps no second copy. */
+/** A thing's model, for the panels: {model?}, read from the fold. */
 export const metaOf = (id) => { const c = bagOf(id); return c ? { ...(typeof c.model === 'string' ? { model: c.model } : {}) } : null; };
 /** The tree's edges as this client's fold indexes them (shared/protocol/replica.js, kept at every ingest): the ids a
  *  carrier holds (id order), a thing's carrier, the ids above it nearest first — ids as the page spells them. One

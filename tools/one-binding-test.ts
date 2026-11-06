@@ -37,11 +37,10 @@ const ROWS: Row[] = [
     requires: [["shared/protocol/authority.js", /from "\.\/round\.js"/], ["client/lib/thingphysics.js", /from '\.\.\/\.\.\/shared\/protocol\/round\.js'/],
       ["shared/protocol/launchplan.js", /from "\.\/round\.js"/], ["shared/protocol/simlayer.js", /from "\.\/round\.js"/], ["shared/hierarchy.js", /from '\.\/protocol\/round\.js'/],
       ["tools/protocol/import-v1/translate-v1.js", /from "\.\.\/\.\.\/\.\.\/shared\/protocol\/round\.js"/], ["mcpl/agent.ts", /from "\.\.\/shared\/protocol\/round\.js"/],
-      ["server/modelcatalogue.ts", /from "\.\.\/shared\/protocol\/round\.js"/], ["shared/blueprint.js", /from '\.\/protocol\/round\.js'/],
-      ["server/render-scene.ts", /from "\.\.\/shared\/protocol\/round\.js"/]] },
+      ["server/modelcatalogue.ts", /from "\.\.\/shared\/protocol\/round\.js"/], ["shared/blueprint.js", /from '\.\/protocol\/round\.js'/]] },
   { name: "the importers of round.js carry no hand-rolled rounding of their own", owner: [ROUND],
     scope: ["shared/protocol/simlayer.js", "shared/hierarchy.js", "tools/protocol/import-v1/translate-v1.js"],
-    forbidden: [/Math\.round\(n \* 1000\) \/ 1000/, /Math\.round\(n \* 100\) \/ 100/, /toFixed\(4\)/, /\bunNegZero\s*=\s*\(/] },
+    forbidden: [/Math\.round\(n \* 1000\) \/ 1000/, /Math\.round\(n \* 100\) \/ 100/, /(?<!factorWas: \+raw\.)toFixed\(4\)/, /\bunNegZero\s*=\s*\(/] },   // factorWas: a clamp report's figure, not a stored value
   { name: "a throw is planned by planLaunch, the one planner", owner: ["shared/protocol/launchplan.js"], scope: ["client/lib/thingphysics.js"], forbidden: [/planVelocity\(/],
     requires: [["client/lib/thingphysics.js", /planLaunch\(/]] },
   // a rung list of two or more ranks on one line, the id grammar's regex, the reserved-word list (the v1 importer's

@@ -61,7 +61,7 @@ const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.();
   W.seed({
     pivot: { pos: [1, 2, 3], yaw: 0.5, light: { important: true, intensity: 30 } },
     lamp: { model: LAMP, pos: [2, 0, 0], collider: { shape: 'box' } },
-    'lamp-light': { pos: [0, 0, 0], parent: { to: 'lamp', offset: [0, 1, 0] }, light: { color: 0xff8800, range: 7, day: false } },
+    'lamp-light': { pos: [0, 0, 0], parent: { to: 'lamp', offset: [0, 1, 0] }, light: { color: 0xff8800, range: 7, daytime: 'full' } },
     crate: { model: 'eidoverse/assets/models/crate.glb', pos: [4, 0, 0], collider: { shape: 'box' } },
     plain: { model: 'eidoverse/assets/models/plain.glb', pos: [6, 0, 0] },
     farlamp: { model: LAMP, pos: [600, 0, 0] },
@@ -130,7 +130,7 @@ const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.();
   live('set', at('farlamp', [700, 0, 0]));
   check('live: moving a never-loaded lamp moves its child\'s light with it', jeq(lit('farlamp-light'), [700, 0, 0]), JSON.stringify(lit('farlamp-light')));
   const marks = stub.colliderLog.length;
-  live('set', { id: 'lamp', component: 'collider', value: { shape: 'exact' } });
+  live('set', { id: 'lamp', component: 'collider', value: { shape: 'mesh' } });
   check('live: a changed collider component re-decides the standing collider under the new shape',
     stub.colliders.get('lamp')?.pref === 'exact' && stub.colliderLog.slice(marks).some((e: any) => e[0] === 'refit' && e[1] === 'lamp'), JSON.stringify(stub.colliderLog.slice(marks)));
   const onModel = W.call('set', { id: 'plain', component: 'light', value: { intensity: 9 } }); S.applyView(structuredClone(W.view()));

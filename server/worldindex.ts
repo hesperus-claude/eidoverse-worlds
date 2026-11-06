@@ -16,6 +16,7 @@ import { readLogBytes } from "./durable.ts";
 import { directoryFor } from "./directory.ts";
 import { recogniseOwner, type OldOwner, type Recognised } from "./ownerrecognise.ts";
 import { opsOf } from "../shared/protocol/fold.js";
+import { WORLD_NAME_RE } from "./limits.ts";
 
 /** Tests only: EIDO_TEST_ACCESS_TRACE=<file> appends each index lookup, entry read, owner check and world load as a JSON line
  *  (access-check F23-O10/O11 read it; "refresh" is the background sweep's read, which no asker causes). Unset, nothing is written. */
@@ -29,7 +30,6 @@ export type Owners = OldOwner[];
 export type IndexEntry = { kind: "none" } | { kind: "interrupted" } | { kind: "saved"; door: DoorRead | null }
   | { kind: "old"; old: OldWorld; owners: Owners | null; ready: Promise<void> | null };
 const NONE: IndexEntry = { kind: "none" };
-const NAME = /^[a-z0-9_-]{1,64}$/i;
 const PROBES = ["", "world.jsonl", "world.mod.jsonl", "log.jsonl", "translation.lock"];
 const held = new Map<string, { key: string; e: IndexEntry }>();
 let listing = new Set<string>(), listKey = "", listedAt = 0;
@@ -51,7 +51,7 @@ export function lookup(name: string, { loaded = false } = {}): IndexEntry {
   return entry(name, loaded);
 }
 function entry(name: string, loaded: boolean, sweeping = false): IndexEntry {
-  if (!NAME.test(name)) return NONE;
+  if (!WORLD_NAME_RE.test(name)) return NONE;
   relist(Date.now());
   const d = path.join(WORLDS_DIR, name), key = PROBES.map((p) => statKey(path.join(d, p))).join("|");
   if (!listing.has(name)) return NONE;

@@ -276,7 +276,7 @@ let HV = '';   // the record's hash, "sha256:<hex>"
     desk: { model: LAMP, pos: [50, 0, 50], scale: 2, collider: { shape: 'box' } },
     arm: { model: LAMP, parent: { to: 'desk', offset: [0.2, 0.5, 0], q: tilt }, scale: 0.5 },
     shade: { model: LAMP, parent: { to: 'arm', offset: [0, 1, 0] }, motion: { type: 'spin', axis: 'y', degPerSec: 20 }, lock: true },
-    glow: { parent: { to: 'shade', offset: [0, -0.1, 0] }, light: { color: 0xff8800, intensity: 6, range: 4, day: false } },
+    glow: { parent: { to: 'shade', offset: [0, -0.1, 0] }, light: { color: 0xff8800, intensity: 6, range: 4, daytime: 'full' } },
   });
   const p = W.call('publish', { from: 'desk', name: 'Desk' });
   const HD = p.notes?.find((n: any) => n.record)?.record;
