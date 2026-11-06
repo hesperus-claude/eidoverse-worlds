@@ -16,6 +16,7 @@ import { decide as consentDecide, refusalWords } from "../shared/protocol/consen
 import { worlds, type World, type Client, authorityNow } from "./world.ts";
 import { stateSampleError } from "../shared/presencewire.js";
 import { screenshots } from "./screenshots.ts";
+import * as video from "./videosources.ts";
 import { REMOVED_VERBS } from "../shared/protocol/verbspec.js";
 import { serverBans, saveServerBans, banKey, ADDR_BAN_MS, bansLiftedBy, serverBansText, takePending, notPersisted } from "./moderation.ts";
 import { isOwner } from "../shared/protocol/roles.js";
