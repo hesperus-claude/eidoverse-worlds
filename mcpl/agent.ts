@@ -9,6 +9,7 @@ import { CLASSES, REACH_NOTE_MS, namedPointClass, pointClass } from "../shared/p
 import { helloOf, refusalWords } from "../shared/protocol/hello.js";
 import { describeBody, mayLeave, resolveSeat, socketsUnder, vacatedFromMine, vacatedAt } from "../shared/sockbody.js";
 import { grabOf, describeGrab } from "../shared/grab.js";
+import { noteSourceState } from "../shared/video.js";
 import { r3 } from "../shared/protocol/round.js";
 import { BodyStateReader, type BodyObservation, type PublicPose } from "./body-state.ts";
 import { mentionRegexFor } from "./mention.ts";
@@ -1376,6 +1377,11 @@ export class WorldAgent {
             break;
           case "pose":
             this.notePose(msg.id, msg.pose);
+            break;
+          case "video-state":
+            // what the projector observed of each video source (server/videosources.ts), as an AGE: look's video line
+            // (shared/says.js) reads it on this process's own clock, so another machine's clock can't freshen it
+            for (const x of ((msg as { states?: unknown }).states as any[] | undefined) ?? []) if (x && typeof x.source === "string" && Number.isFinite(x.ageMs)) noteSourceState(x.source, { state: x.state, at: Date.now() - x.ageMs });
             break;
           case "clock":
             // the server's time, sent just before each snapshot to a join
@@ -5645,7 +5651,7 @@ export class WorldAgent {
       // structure component buys: `components: structure` would be true and
       // useless, where "a building: 2 rooms, 14 walls, 1 door" is actionable.
       if (c.structure) { try { aff.push(describeStructure(c.structure)); } catch { /* a broken house is not a broken look() */ } }
-      const spoken = ["model", "parent", "sockets", "socket", "reactions", "motion", "particles", "picture", "material", "captions", "sound", "lock", "structure", "label", "hidden", "description", "openable", "story", "text", "look-at"];
+      const spoken = ["model", "parent", "sockets", "socket", "reactions", "motion", "particles", "picture", "material", "captions", "sound", "video", "lock", "structure", "label", "hidden", "description", "openable", "story", "text", "look-at"];
       if (copy) spoken.push("blueprint");
       if (lit) spoken.push("light");   // described above; a malformed one stays listed
       if (col === "mesh" || col === "exact" || col === "box") spoken.push("collider");
