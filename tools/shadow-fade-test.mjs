@@ -430,7 +430,7 @@ const biasChecks = (r, c = check) => {
   // THE INVARIANT: whatever the dials say, the bias IS texels x texel size.
   // That is the property the fix established; the specific look is Janus's to
   // choose.
-  c('born normalBias equals texels x texel size', 
+  c('born normalBias equals texels x texel size',
     Math.abs(r.born.normalBias - r.born.texels * (r.born.texelMM / 1000)) < 1e-4,
     `normalBias=${r.born.normalBias} texels=${r.born.texels} texelMM=${r.born.texelMM}`);
   c('born bias is not the old hand-picked 0.02 constant', Math.abs(r.born.normalBias - 0.02) > 1e-6,

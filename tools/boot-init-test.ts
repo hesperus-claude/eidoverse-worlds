@@ -24,7 +24,9 @@ for (const { name, f } of inits) {
   for (const { src } of files) for (const m of src.matchAll(new RegExp(`\\b${esc(name)}\\s+as\\s+(\\w+)`, "g"))) names.add(m[1]);
   const isDef = (src: string, at: number) => /(?:function|const)\s+$/.test(src.slice(Math.max(0, at - 40), at));
   const called = files.some(({ src }) => [...names].some((n) => [...src.matchAll(new RegExp(`(?<![\\w$])${esc(n)}\\s*\\(`, "g"))].some((m) => !isDef(src, m.index!))));
-  if (!called) uncalled.push(`${name} (${f})`);
+  // ...or called by name through a dispatcher, its name the first argument (bodyruntime_core.js `step('initLegDOF', vrm)`)
+  const byName = files.some(({ src }) => [...names].some((n) => new RegExp(`(?<![\\w$.])\\w+\\(\\s*(['"\`])${esc(n)}\\1\\s*[,)]`).test(src)));
+  if (!called && !byName) uncalled.push(`${name} (${f})`);
 }
 check("every init* export has a caller", uncalled.length === 0, uncalled.join(", "));
 

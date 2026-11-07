@@ -9,7 +9,7 @@ import { validateAvatarDef, validateBodyRuntime } from "../shared/avatardefs.js"
 import { makeBodyRuntime, writeAll, defForBody } from "../client/lib/bodyruntime_core.js";
 import { bodyRuntimeFor } from "../client/lib/bodyruntime.js";
 import { suite } from "./protocol/suite.ts";
-const { check, done } = suite("body-runtime");
+const { check, na, done } = suite("body-runtime");
 const ROOT = join(import.meta.dir, "..");
 const BODY_SHA: Record<string, string> = {
   claude_robot: "fbeaa3b4162b4fd6d893b13e4172a9a9e8e78eb964e4ae4a3373c1a5bb2ca2f0",
@@ -145,7 +145,9 @@ check("dispose + pooled rewear retakes constraints from the limp owner", !mgr.co
 const lib = process.env.EIDOVERSE_DIR;
 if (lib) {
   for (const [name, sha] of Object.entries(BODY_SHA)) {
-    const bytes = readFileSync(join(lib, "eidoverse/assets/vrms", `${name}.vrm`));
+    const file = join(lib, "eidoverse/assets/vrms", `${name}.vrm`);
+    if (!existsSync(file)) { na(`${name}.vrm has the reviewed content hash and CC BY metadata`, `not in this library (${lib}); the gate's pinned library predates it`); continue; }
+    const bytes = readFileSync(file);
     check(`${name}.vrm has the reviewed content hash`, createHash("sha256").update(bytes).digest("hex") === sha);
     const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength); let off = 12, gltf: any = null;
     while (off < bytes.length) { const n = dv.getUint32(off, true), typ = bytes.toString("ascii", off + 4, off + 8); off += 8;

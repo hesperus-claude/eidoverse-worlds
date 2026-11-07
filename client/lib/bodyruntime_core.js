@@ -12,7 +12,7 @@
 //                                             didn't change, so a held key would leave a pass reading its own output
 //                                             from the frame before), then keepArmPose(vrm): the clip's arm pose
 //   last before vrm.update (after every       rehomeBody, applyHardwareDOF(LEG_JOINTS), applyLegClearance, applyArmDOF,
-//   other bone writer: reach, emotes, XR)     applyHandDOF, applyHeadExpression, applyCrown. The body's own limits
+//   other bone writer: reach, actions, XR)     applyHandDOF, applyHeadExpression, applyCrown. The body's own limits
 //                                             get the final word over every pose, whoever drives it
 // Every step is optional (a module exports what it has). None can break a frame: a step that throws is reported once
 // and skipped from then on, and the body plays on unclamped rather than not at all.
