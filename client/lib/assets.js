@@ -283,7 +283,7 @@ export async function loadVRM(libPath, { priority = 1 } = {}) {
       vrmMeta.set(vrm, { libPath, bytes: buf.byteLength });
       await work.yield();
       work.phase('skeleton');
-      VRMUtils.combineSkeletons?.(vrm.scene) ?? VRMUtils.removeUnnecessaryJoints?.(vrm.scene);
+      VRMUtils.combineSkeletons(vrm.scene);
       // SkinnedMesh bounds are bind-pose: a posed multi-primitive body would lose parts to culling
       vrm.scene.traverse((o) => { if (o.isSkinnedMesh) o.frustumCulled = false; });
       VRMUtils.rotateVRM0(vrm); // VRM0 → faces +Z

@@ -28,8 +28,8 @@ import { join, basename, dirname } from "node:path";
 // are not images. Use getSharp(), which resolves gltf-transform's own copy (resolveNestedSharp, tools-stamp.ts) and
 // fails closed. Why: docs/research/optimize-design-notes.md#one-libvips-per-process
 
-/** The choice itself, effects injected so a test can drive it. Fails CLOSED: once a nested copy resolves, an import
- *  failure PROPAGATES (callers then skip the texture pass) rather than falling back to the bare specifier. */
+/** The choice itself, effects injected so a test can drive it. Fails CLOSED: once a copy resolves from ndarray-pixels, an
+ *  import failure PROPAGATES (callers then skip the texture pass) rather than falling back to the bare specifier. */
 export async function pickSharp(
   resolveNested: () => string | null,
   load: (specifier: string) => Promise<any>,
@@ -39,14 +39,13 @@ export async function pickSharp(
     const mod = await load(nested);          // no catch: fail closed
     return { sharp: mod.default ?? mod, from: nested };
   }
-  // No nested copy exists, so the bare specifier IS the single copy.
+  // nothing resolved from ndarray-pixels: the bare specifier is the one copy left to try
   const mod = await load("sharp");
   return { sharp: mod.default ?? mod, from: "sharp (bare specifier)" };
 }
 
 let sharpP: Promise<{ sharp: any; from: string }> | null = null;
-/** Exported for tools/one-libvips-test.ts, which asserts `from` lands on the
- *  nested copy whenever one exists — the whole fix in one readable value. */
+/** Exported for tools/one-libvips-test.ts: `from` is the copy gltf-transform's own ndarray-pixels resolves, nested or the root's. */
 export function getSharp(): Promise<{ sharp: any; from: string }> {
   sharpP ??= pickSharp(resolveNestedSharp, (s) => import(s));
   return sharpP;

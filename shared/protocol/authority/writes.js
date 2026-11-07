@@ -396,6 +396,7 @@ function buildPlace(ctx, a) {
   const m = geomE(e); if (!m) refuse("shape", modelOf(e.c.model) ? `${a.id}'s model hasn't been measured here, so it has no size to place` : `${a.id} has no model or mesh, so it has no size to place`, "set its transform directly");
   // the one gate before any solving (so a refused place costs nothing): admit a move of this thing as it stands — rights,
   // locks, flight and rate, the checks the placed result meets — so a refusal costs nothing. admit runs again on the result.
+  // one place runs admit up to 3× on purpose: this pre-check, commit's on the result, planResettle's on its consequences (tel0s #260)
   if (!a.__made) admit(ctx.w, ctx.st, { actor: ctx.actor }, [setOp(a.id, "transform", COMPONENTS.transform.defaults)]);   // (the value is a stand-in: these checks don't read it)
   const st = ctx.st, cur = worldT(st, a.id), scale = cur.scale;
   const fam = new Set([a.id, ...descendants(st, a.id)]);

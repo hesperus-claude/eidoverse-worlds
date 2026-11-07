@@ -36,6 +36,12 @@
 //   ungated       a test-named file (-test, -check, -probe, .test, -bench, -mutants under tools/, tools/protocol/, tools/water/,
 //                 mcpl/) that no SUITES row runs or imports: every test is in the gate or gone (R 10-29). The ones still out
 //                 are listed in tools/protocol/ungated.json with one line why; that list only shrinks.
+//   redaction-parse  a redaction's targets read by hand (`.body.values`) outside fold.js: four parsers drifted apart when
+//                 {seq, op} became {seq, index}, and undo wrote a redacted value back (review 11-05 B1). Use fold.js
+//                 redactionsIn / redactedBodies.
+//   role-words    WORLD_ADMIN / "world admin" / "world operator" for the server's operator (R 10-27): say "server operator".
+//   authority-async  `async` or `await` under shared/protocol/authority*: UP and CTX are sound only because the authority never
+//                 yields mid-request (tel0s #260 11-06). Zero, no baseline.
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -93,6 +99,12 @@ export function roleWordHits(root = ENGINE): string[] {
 }
 const relTo = (root: string, p: string) => path.relative(root, p).split(path.sep).join("/");
 const rel = (p: string) => relTo(ENGINE, p);
+/** `async`/`await` as words in the authority's code (comments included: a word there is a plan to use it). */
+export const authorityAsync = (text: string) => [...text.matchAll(/\b(?:async|await)\b/g)].length;
+export function authorityAsyncHits(root = ENGINE): string[] {
+  const dir = path.join(root, "shared/protocol"); const files = [path.join(dir, "authority.js"), ...walk(path.join(dir, "authority"), [])].filter((p) => fs.existsSync(p));
+  return files.flatMap((p) => fs.readFileSync(p, "utf8").split("\n").flatMap((l, n) => (authorityAsync(l) ? [`${relTo(root, p)}:${n + 1}`] : [])));
+}
 /** A spawn of the mcpl server with no MCPL_STATE writes mcpl/state.json in the checkout (CI 40956937323: client-tools imports
  *  every test, so a top-level spawn runs). True when the text spawns net-server.ts without naming MCPL_STATE. */
 export const spawnsMcplStateless = (text: string) => /spawn\([^)]*mcpl\/net-server\.ts/.test(text) && !/MCPL_STATE/.test(text);
@@ -206,6 +218,11 @@ if (import.meta.main) {
   const stale = Object.keys(listed).filter((f) => !out.includes(f));
   check(`H${i++} ungated: ungated.json names only files that exist and are still out of the gate (a gated or deleted one comes off)`, stale.length === 0, stale.join("\n      "));
   console.log(`[hygiene] tests still out of the gate: ${out.length}`);
+
+  // authority-async (tel0s #260 11-06): nothing under shared/protocol/authority* yields, so UP and CTX stay sound
+  check(`H${i++} authority-async: caught in its known-bad form (3), and not in words that only contain it`, authorityAsync("async function f() { await g(); } const h = async () => 1;") === 3 && authorityAsync("// it awaits nothing; asynchronous work stays outside") === 0, "pattern");
+  const asyncHits = authorityAsyncHits();
+  check(`H${i++} authority-async: no async or await under shared/protocol/authority* (${asyncHits.length ? "found" : "none"})`, asyncHits.length === 0 && fs.existsSync(path.join(ENGINE, "shared/protocol/authority.js")), asyncHits.join("\n      "));
 
   // then the gate's code against the baseline (may only go down)
   const now = measure();

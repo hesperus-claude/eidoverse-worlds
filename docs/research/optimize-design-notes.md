@@ -4,11 +4,11 @@ Rationale moved out of the code comments. The code keeps one line + a pointer he
 
 ## One libvips per process
 
-The store's root manifest declares `sharp: ^0.33.5`; `@gltf-transform/functions` reaches sharp through
-`ndarray-pixels`, which declares `^0.35.0`. The ranges do not intersect, so no installer can dedupe them and both
-land on disk (`node_modules/sharp` beside `node_modules/ndarray-pixels/node_modules/sharp`). Importing bare `"sharp"`
-in optimize.ts would load a second native libvips into a process that already has one, and the two disagree about
-libvips' own enums:
+`@gltf-transform/functions` reaches sharp through `ndarray-pixels`, which declares `^0.35.0`. Whenever the store's
+root manifest declares a range that doesn't intersect it, as its `^0.33.5` once did, no installer can dedupe them and
+both land on disk (`node_modules/sharp` beside `node_modules/ndarray-pixels/node_modules/sharp`). Importing bare
+`"sharp"` in optimize.ts would then load a second native libvips into a process that already has one, and the two
+disagree about libvips' own enums:
 
     GLib-GObject-CRITICAL: value "32" of type 'gint' is invalid or out of
     range for property 'space' of type 'VipsInterpretation'
@@ -21,8 +21,9 @@ uninitialized memory, gltf-transform stamps it `image/webp`, and the store serve
 So optimize.ts never imports `"sharp"` by bare specifier. It resolves the copy gltf-transform itself uses
 (`resolveNestedSharp`, tools-stamp.ts) and hands that same module back as the encoder.
 
-Resolution and import are separate. The bare specifier is reached on exactly one condition: no nested copy could be
-resolved (a deduped or single-copy install, where the bare import is the same single copy). A nested copy that
+Resolution and import are separate. The bare specifier is reached on exactly one condition: no copy could be resolved
+from ndarray-pixels (in a deduped install that resolution finds the root's own copy, the only one, and the import takes
+it by that path). A nested copy that
 resolves but fails to import (ABI mismatch, missing dylib, damaged install) must not fall back: that would recreate
 the two-libvips condition in the one situation where things are already going wrong. `pickSharp` fails closed, both
 callers skip the texture pass, and a draco-only result ships. Less compression is a cost; an image that is not an
