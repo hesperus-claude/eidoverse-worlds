@@ -13,12 +13,9 @@
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { suite } from "./protocol/suite.ts";
 
-let pass = 0, fail = 0;
-const check = (name: string, ok: boolean, detail = "") => {
-  if (ok) { pass++; console.log(`  \x1b[32m✓\x1b[0m ${name}`); }
-  else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ""}`); }
-};
+const { check, done } = suite("glb2vrm");
 
 function makeGLB(nodeNames: string[]): Uint8Array {
   const json = { asset: { version: "2.0" }, nodes: nodeNames.map((name) => ({ name })), scenes: [{ nodes: [] }] };
@@ -110,5 +107,4 @@ console.log("a tripo-named rig passes the gate");
 }
 
 rmSync(dir, { recursive: true, force: true });
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();

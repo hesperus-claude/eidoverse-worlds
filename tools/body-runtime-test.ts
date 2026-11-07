@@ -8,8 +8,8 @@ import { join } from "node:path";
 import { validateAvatarDef, validateBodyRuntime } from "../shared/avatardefs.js";
 import { makeBodyRuntime, writeAll, defForBody } from "../client/lib/bodyruntime_core.js";
 import { bodyRuntimeFor } from "../client/lib/bodyruntime.js";
-let pass = 0, fail = 0;
-const check = (n: string, ok: boolean, d: unknown = "") => { ok ? pass++ : fail++; console.log(`  ${ok ? "\x1b[32m✓" : "\x1b[31m✗"}\x1b[0m ${n}${ok ? "" : `  ${JSON.stringify(d)}`}`); };
+import { suite } from "./protocol/suite.ts";
+const { check, done } = suite("body-runtime");
 const ROOT = join(import.meta.dir, "..");
 const BODY_SHA: Record<string, string> = {
   claude_robot: "fbeaa3b4162b4fd6d893b13e4172a9a9e8e78eb964e4ae4a3373c1a5bb2ca2f0",
@@ -158,5 +158,4 @@ if (lib) {
   }
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();
