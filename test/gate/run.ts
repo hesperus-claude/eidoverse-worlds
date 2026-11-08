@@ -125,7 +125,7 @@ const headOf = (dir: string) => { const r = spawnSync("git", ["-C", dir, "rev-pa
 // Declared like Chrome: required for the browser lane, fetched only by --library, never read from a guessed path.
 const LIBRARY_REPO = "https://github.com/SkyeShark/eidoverse-video.git";
 const LIBRARY_PIN = "9acc1528b2febac11338107645ef500a95985ca5";   // the library's PUBLIC head (10-19: e9f80d02 was a local snapshot, unfetchable by CI)
-// mcpl/ and tools/captionbot/ take sibling repos by path (file:…/tools/protocol/.siblings/<dir>). The gate owns that closure
+// mcpl/ and services/captionbot/ take sibling repos by path (file:…/tools/protocol/.siblings/<dir>). The gate owns that closure
 // (Mica, #260 r3; tel0s 11-06): ONE place pins them (here), --siblings checks them out in tools/protocol/.siblings/
 // (gitignored; never a developer's working copy beside the checkout) and installs their consumers from the lockfiles, and
 // deploy/deploy-vps.sh runs the same --siblings, so prod imports the pinned builds too. The preflight refuses a consumer
@@ -135,12 +135,12 @@ const LIBRARY_PIN = "9acc1528b2febac11338107645ef500a95985ca5";   // the library
 const SIBLINGS: [dir: string, url: string, commit: string, build: boolean][] = [
   ["agent-framework", "https://github.com/anima-research/agent-framework.git", "2f05c28e1923b7d07c6c6322b871303bd0d2d8d5", false],
   ["mcpl-core-ts", "https://github.com/anima-research/mcpl-core-ts.git", "e17f773a9247c41d5c872d760aac7f243748d134", true],
-  ["voice-kit", "https://github.com/anima-research/voice-kit.git", "b0699db3afd7e78de7d5d49f3ca4f0f5694887b3", true],   // tools/captionbot's STT seam
+  ["voice-kit", "https://github.com/anima-research/voice-kit.git", "b0699db3afd7e78de7d5d49f3ca4f0f5694887b3", true],   // services/captionbot's STT seam
 ];
 const SIBLINGS_DIR = path.join(ENGINE, "tools", "protocol", ".siblings");
 const siblingAt = (dir: string) => path.join(SIBLINGS_DIR, dir);
 /** Packages in this repo whose own package.json takes a sibling (file:): --siblings installs them once the siblings are built. */
-const SIBLING_USERS = ["mcpl", "tools/captionbot"];
+const SIBLING_USERS = ["mcpl", "services/captionbot"];
 /** Each sibling a package takes, read from its package.json: {pkg, name, dir, commit, build, spec}; `at` is where the spec points. */
 const CONSUMERS = SIBLING_USERS.flatMap((pkg) => { const j = JSON.parse(fs.readFileSync(path.join(ENGINE, pkg, "package.json"), "utf8"));
   return Object.entries({ ...j.dependencies, ...j.optionalDependencies } as Record<string, string>).flatMap(([name, spec]) => {

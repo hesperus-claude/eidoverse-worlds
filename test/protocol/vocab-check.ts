@@ -15,7 +15,7 @@ import path from "node:path";
 
 const ROOT = path.resolve(import.meta.dir, "../..");
 const RUNTIME = ["client", "mcpl", "server", "shared"];
-const DEPLOYED = ["tools/chatbridge", "tools/voicebot", "tools/captionbot"];
+const DEPLOYED = ["services/chatbridge", "services/voicebot", "services/captionbot"];
 const SKIP_DIR = new Set(["node_modules", "vendor", "dist", ".git"]);
 const EXT = /\.(m?js|cjs|ts|mts|cts)$/;
 // names that carry a log OP (whose `comp` is the op's component name): these reads are the protocol's, not the record's

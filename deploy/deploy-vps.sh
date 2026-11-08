@@ -23,9 +23,9 @@ echo "code: $before -> $after"
 if ! git diff --quiet "$before" "$after" -- client/package.json client/bun.lock client/package-lock.json 2>/dev/null; then
   (cd client && "$BUN" install)
 fi
-# mcpl/'s siblings (mcpl-core-ts, which the door imports, and agent-framework) and tools/captionbot's: run.ts pins them,
+# mcpl/'s siblings (mcpl-core-ts, which the door imports, and agent-framework) and services/captionbot's: run.ts pins them,
 # checks them out in tools/protocol/.siblings/ (gitignored, so the reset keeps them), builds them, and installs mcpl/ and
-# tools/captionbot/ with --frozen-lockfile; at the pin it only re-checks. Every deploy, since a pin can move in run.ts alone. A
+# services/captionbot/ with --frozen-lockfile; at the pin it only re-checks. Every deploy, since a pin can move in run.ts alone. A
 # plain `bun install` in mcpl/ dropped a missing optional sibling without a word and the door stopped on restart; this
 # fails here instead, under set -e, before the restarts.
 "$BUN" test/gate/run.ts --siblings
@@ -35,10 +35,10 @@ fi
 if ! git diff --quiet "$before" "$after" -- package.json bun.lock 2>/dev/null; then
   "$BUN" install
 fi
-# chat bridge (tools/chatbridge) — optional service; deps on manifest change,
+# chat bridge (services/chatbridge) — optional service; deps on manifest change,
 # restart only where the unit is actually installed
-if ! git diff --quiet "$before" "$after" -- tools/chatbridge/package.json tools/chatbridge/bun.lock 2>/dev/null; then
-  (cd tools/chatbridge && "$BUN" install)
+if ! git diff --quiet "$before" "$after" -- services/chatbridge/package.json services/chatbridge/bun.lock 2>/dev/null; then
+  (cd services/chatbridge && "$BUN" install)
 fi
 sudo systemctl try-restart eido-chatbridge 2>/dev/null || true
 

@@ -374,7 +374,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["voice-wire-mutation", "server/voice-wire-mutation-test.ts", 1], // every seam of the voice-state wire contract is load-bearing: each broken in place turns its row red
   ["voicesource-real", "client/voicesource-real-test.mjs", 1], // voiceSource() on the shipped module (voicesource.js)
   ["captions", "shared/captions-test.ts", 1], // shared/captions.js: the caption bag a reader sees and the request's rules
-  ["voicebot", "server/voicebot-test.ts", 1], // the show voice bot hears a world in DRY_RUN: joins as a spectator that folds the log, voices only configured speakers by display name
+  ["voicebot", "services/voicebot-test.ts", 1], // the show voice bot hears a world in DRY_RUN: joins as a spectator that folds the log, voices only configured speakers by display name
   ["tts-fault", "client/tts-fault-test.ts", 1], // TTS failure paths executed: a hung or dead phonemizer worker and an orphaned synthesis fail loudly, never hang (#91 r3 B3)
   ["spoken-form", "client/spoken-form-test.mjs", 1], // what the TTS speaks (tts-chunk.js spokenForm, ttsChunks), as a table: fenced code never spoken, how text is chunked
   ["ttsrow", "client/ttsrow-test.mjs", 1], // the audio panel's TTS section executed (ttsrow.js, ttslist.js): file and folder picks, the voice list in place

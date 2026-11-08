@@ -20,7 +20,7 @@ import path from "node:path";
 const ROOT = path.resolve(import.meta.dir, "../..");
 const RUNTIME = ["client", "mcpl", "server", "shared"];
 // the bots that join worlds in production (deploy/*.service): they speak the protocol too
-const DEPLOYED = ["tools/chatbridge", "tools/voicebot", "tools/captionbot"];
+const DEPLOYED = ["services/chatbridge", "services/voicebot", "services/captionbot"];
 const SKIP_DIR = new Set(["node_modules", "vendor", "dist", ".git"]);
 const EXT = /\.(m?js|cjs|ts|mts|cts|html)$/;
 const isTest = (f) => /(^|\/)[^/]*[-.](test|bench|probe)\.[mc]?[jt]s$/.test(f) || f.includes("/test/") || f.includes("/tests/");

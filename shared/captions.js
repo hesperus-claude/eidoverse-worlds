@@ -1,6 +1,6 @@
 // captions — what the `caption` verb MEANS, and the bag it folds into. Shared
 // verbatim between the sequencer (validator + fold), the caption bot that
-// writes it (tools/captionbot), the mcpl agent that reads it (text-tier
+// writes it (services/captionbot), the mcpl agent that reads it (text-tier
 // perception), and any client overlay, so no two of them can describe a
 // different screen.
 //

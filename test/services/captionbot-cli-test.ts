@@ -1,10 +1,10 @@
 // captionbot-cli-test — the shipping CLI's exit status is the spool's promise.
 //
-//   bun test/tools/captionbot-cli-test.ts
+//   bun test/services/captionbot-cli-test.ts
 //
 // captionbot-test proves WorldClient counts what the spool could not keep
 // (`spoolLost`); this proves the PROCESS an operator or batch caller actually
-// runs turns that count into its exit status. It spawns tools/captionbot/index.ts
+// runs turns that count into its exit status. It spawns services/captionbot/index.ts
 // in FILE mode with a saved-transcript replay (no audio, no STT, no world
 // reachable — the lines queue unconfirmed, which is exactly the case the spool
 // exists for) and reads the exit code back:
@@ -29,7 +29,7 @@ const check = (name: string, ok: unknown, detail = '') => {
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
 };
 
-const CLI = fileURLToPath(new URL('../../tools/captionbot/index.ts', import.meta.url));
+const CLI = fileURLToPath(new URL('../../services/captionbot/index.ts', import.meta.url));
 const dir = mkdtempSync(join(tmpdir(), 'captionbot-cli-'));
 const transcript = join(dir, 'lines.jsonl');
 writeFileSync(transcript, [

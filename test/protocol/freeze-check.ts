@@ -156,9 +156,9 @@ try {
     check("F22 mcpl/agent.ts sends a valid hello: it joins", !err, err); }
   { const r = spawnSync(process.execPath, ["server/tend.ts", "here"], { cwd: ENGINE, env: { ...process.env, PORT: String(port6), JOIN_TOKEN: "" }, encoding: "utf8", timeout: 20_000 });
     check("F22 server/tend.ts sends a valid hello: it joins (exit 0 at the snapshot)", r.status === 0, (r.stderr ?? "") + (r.stdout ?? "")); }
-  { const { WorldClient } = await import("../../tools/captionbot/world.ts"); const c: any = new WorldClient({ url: url6, token: "", world: "here", actor: "probe-captions", screenId: "none", agent: false });
+  { const { WorldClient } = await import("../../services/captionbot/world.ts"); const c: any = new WorldClient({ url: url6, token: "", world: "here", actor: "probe-captions", screenId: "none", agent: false });
     c.connect(); const ok = await tryUntil("the captionbot joins", () => c.open === true, { ms: 10_000, step: 50 }); c.ws.onclose = null; c.ws.close();
-    check("F22 tools/captionbot/world.ts sends a valid hello: it joins", !!ok); }
+    check("F22 services/captionbot/world.ts sends a valid hello: it joins", !!ok); }
   { // S5: one hello helper. Every file that builds a join imports helloOf (the page's inline socket spells it, checked below;
     // this suite's own raw join is the no-hello probe; Python spells it as HELLO)
     const own = new Set(["client/index.html", "test/protocol/freeze-check.ts", "test/labs/surface-test.py"]); const bad: string[] = [];

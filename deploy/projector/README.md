@@ -7,7 +7,7 @@ untouched, the client plays a URL, and the caption bot reads audio from it.
 
 ```
 OBS ──WHIP/RTMP──▶ mediamtx ──HLS/WHEP──▶ the screen comp (client plays a URL)
-                      └──RTSP (loopback)──▶ tools/captionbot ──caption──▶ the world
+                      └──RTSP (loopback)──▶ services/captionbot ──caption──▶ the world
 ```
 
 ## Run
@@ -51,7 +51,7 @@ does, not from the repository.
 | RTMP publish | `rtmp://host:1935/screen?user=publisher&pass=<key>` | OBS "Custom" (server + key as query), any encoder |
 | HLS play | `http://host:8888/screen/index.m3u8` | the screen comp, movie nights (~3–6 s behind) |
 | WHEP play | `http://host:8889/screen/whep` | the screen comp, phase 3 (sub-second + presentation delay) |
-| RTSP read | `rtsp://127.0.0.1:8554/screen` | `tools/captionbot` — loopback only |
+| RTSP read | `rtsp://127.0.0.1:8554/screen` | `services/captionbot` — loopback only |
 
 Publishing needs the key `mkconfig.sh` rendered (`publisher` / the key it
 printed or the one you set; OBS takes it as the stream key or the WHIP bearer
@@ -68,7 +68,7 @@ decision, made by the screen comp's source allow-list, not here.
 
 ## The captioner
 
-`tools/captionbot` reads the RTSP face and turns each final line of speech
+`services/captionbot` reads the RTSP face and turns each final line of speech
 into a caption for the screen: one door `caption` request per line
 (`{id, session, n, t0, t1, text, speaker?, title?}`, or `{id, session, end}`),
 which writes the screen's `captions` component by `shared/captions.js`'s rules.

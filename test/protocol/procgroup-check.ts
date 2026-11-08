@@ -182,12 +182,12 @@ check("PG5 a zombie in the group is not counted as left running", suiteMembers(7
   // agree, run.ts never resolves beside the checkout, and the deploy installs through the same --siblings
   const src = (f: string) => fs.readFileSync(new URL(f, import.meta.url), "utf8"), root = fileURLToPath(new URL("../../", import.meta.url));
   const dirs = ["agent-framework", "mcpl-core-ts", "voice-kit"], bad: string[] = [];
-  for (const pkg of ["mcpl", "tools/captionbot"]) { const j = JSON.parse(src(`../../${pkg}/package.json`));
+  for (const pkg of ["mcpl", "services/captionbot"]) { const j = JSON.parse(src(`../../${pkg}/package.json`));
     for (const [name, spec] of Object.entries({ ...j.dependencies, ...j.optionalDependencies } as Record<string, string>)) if (spec.startsWith("file:") && dirs.includes(path.basename(spec))
       && path.resolve(root, pkg, spec.slice(5)) !== path.join(root, "tools", "protocol", ".siblings", path.basename(spec))) bad.push(`${pkg}: ${name} ${spec}`);
     if (/file:(?:\.\.\/)+(?:agent-framework|mcpl-core-ts|voice-kit)\b/.test(src(`../../${pkg}/bun.lock`))) bad.push(`${pkg}/bun.lock still names a sibling beside the checkout`); }
   const rs = src("../gate/run.ts"), dv = src("../../deploy/deploy-vps.sh");
-  check("PG22 mcpl/ and tools/captionbot/ take the siblings from tools/protocol/.siblings/ (gitignored), never beside the checkout, and deploy-vps.sh installs mcpl/ through run.ts --siblings",
+  check("PG22 mcpl/ and services/captionbot/ take the siblings from tools/protocol/.siblings/ (gitignored), never beside the checkout, and deploy-vps.sh installs mcpl/ through run.ts --siblings",
     !bad.length && !/path\.resolve\(ENGINE, "\.\."/.test(rs) && /^tools\/protocol\/\.siblings\/$/m.test(src("../../.gitignore"))
     && /^"\$BUN" test\/gate\/run\.ts --siblings$/m.test(dv) && !/cd mcpl && "\$BUN" install/.test(dv), bad); }
 

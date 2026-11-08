@@ -25,13 +25,13 @@
 //   K. a failed overflow row says that a restart may send the line this run
 //      dropped.
 //
-//   bun test/tools/captionbot-test.ts   (run from a tree where tools/captionbot has its deps)
+//   bun test/services/captionbot-test.ts   (run from a tree where services/captionbot has its deps)
 import type { SttProvider, SttSession, SttTranscript, SttSessionOptions } from '@animalabs/voice-kit';
-import { AudioTap } from '../../tools/captionbot/tap.ts';
-import { framer } from '../../tools/captionbot/sources.ts';
-import { Captioner, type Caption } from '../../tools/captionbot/captioner.ts';
-import { ffmpegSource } from '../../tools/captionbot/sources.ts';
-import { WorldClient } from '../../tools/captionbot/world.ts';
+import { AudioTap } from '../../services/captionbot/tap.ts';
+import { framer } from '../../services/captionbot/sources.ts';
+import { Captioner, type Caption } from '../../services/captionbot/captioner.ts';
+import { ffmpegSource } from '../../services/captionbot/sources.ts';
+import { WorldClient } from '../../services/captionbot/world.ts';
 import { EventEmitter } from 'node:events';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

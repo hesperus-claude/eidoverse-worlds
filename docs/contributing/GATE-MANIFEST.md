@@ -9,7 +9,7 @@ disagree, so the table can't drift.
 
 ```sh
 bun install --frozen-lockfile                 # in the checkout root, in client/, and in mcpl/
-bun test/gate/run.ts --siblings          # clones/pins agent-framework, mcpl-core-ts and voice-kit in tools/protocol/.siblings/ (gitignored; never a working copy beside the checkout), builds them, and installs mcpl/ and tools/captionbot/, whose file: deps point there (the preflight refuses a copy that isn't the pin's build)
+bun test/gate/run.ts --siblings          # clones/pins agent-framework, mcpl-core-ts and voice-kit in tools/protocol/.siblings/ (gitignored; never a working copy beside the checkout), builds them, and installs mcpl/ and services/captionbot/, whose file: deps point there (the preflight refuses a copy that isn't the pin's build)
 CHROME=/path/to/chrome EIDOVERSE_DIR=/path/to/eidoverse-video bun test/gate/run.ts    # or: bun run test:protocol
 ```
 
@@ -509,7 +509,7 @@ time.
 | 337 | voice-wire-mutation | main | `test/server/voice-wire-mutation-test.ts` | bun | 10.5 s | 180 s |
 | 338 | voicesource-real | main | `test/client/voicesource-real-test.mjs` | bun | 0.2 s | 180 s |
 | 339 | captions | main | `test/shared/captions-test.ts` | bun | 0.2 s | 180 s |
-| 340 | voicebot | main | `test/server/voicebot-test.ts` | bun | 3 s | 180 s |
+| 340 | voicebot | main | `test/services/voicebot-test.ts` | bun | 3 s | 180 s |
 | 341 | tts-fault | main | `test/client/tts-fault-test.ts` | bun | 0.5 s | 180 s |
 | 342 | spoken-form | main | `test/client/spoken-form-test.mjs` | bun | 0.2 s | 180 s |
 | 343 | ttsrow | main | `test/client/ttsrow-test.mjs` | bun | 0.5 s | 180 s |

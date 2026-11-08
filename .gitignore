@@ -7,7 +7,7 @@ node_modules/
 /.sessions.json.[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].tmp
 mcpl/tokens.json
 mcpl/state.json
-tools/voicebot/voices.json
+services/voicebot/voices.json
 .env
 .env.*
 deploy/IDENTITY.md
@@ -71,5 +71,5 @@ __pycache__/
 # surface-parity frames are per-run evidence, not source
 notes/surface-parity/
 
-# the protocol gate's sibling checkouts (run.ts --siblings: mcpl/ and tools/captionbot/ take them by file:, deploy-vps.sh too)
+# the protocol gate's sibling checkouts (run.ts --siblings: mcpl/ and services/captionbot/ take them by file:, deploy-vps.sh too)
 tools/protocol/.siblings/

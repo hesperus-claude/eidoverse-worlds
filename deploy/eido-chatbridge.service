@@ -14,7 +14,7 @@ Wants=network-online.target
 
 [Service]
 User=ubuntu
-WorkingDirectory=/home/ubuntu/eidoverse-worlds/tools/chatbridge
+WorkingDirectory=/home/ubuntu/eidoverse-worlds/services/chatbridge
 ExecStart=/home/ubuntu/.bun/bin/bun index.ts
 Restart=always
 RestartSec=5

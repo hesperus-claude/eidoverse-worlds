@@ -5,9 +5,9 @@
   "description": "The projector's captioner: stream audio → VAD + STT → a bounded captions comp on the screen entity (voicebot run backwards)",
   "scripts": {
     "start": "bun index.ts",
-    "test": "bun ../captionbot-test.ts"
+    "test": "bun ../../test/services/captionbot-test.ts"
   },
   "dependencies": {
-    "@animalabs/voice-kit": "file:../protocol/.siblings/voice-kit"
+    "@animalabs/voice-kit": "file:../../tools/protocol/.siblings/voice-kit"
   }
 }

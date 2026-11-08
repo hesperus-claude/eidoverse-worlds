@@ -1,8 +1,8 @@
-// voicebot-test — the show voice bot (tools/voicebot) hears a world: DRY_RUN, no Discord, no TTS key. With a voices
+// voicebot-test — the show voice bot (services/voicebot) hears a world: DRY_RUN, no Discord, no TTS key. With a voices
 // file that maps nobody, every line it would voice logs `no voice for "<speaker>"`, which is the receipt that the line
 // reached the synth step, under the speaker's display name, filtered by SPEAKERS.
 //
-//   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/server/voicebot-test.ts
+//   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/services/voicebot-test.ts
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,7 +11,7 @@ import { tryUntil, pause } from "../gate/wait.ts";
 import { suite } from "../gate/suite.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 
-const BOT = process.env.VOICEBOT ?? "tools/voicebot/index.ts";   // another build, for a red-first control
+const BOT = process.env.VOICEBOT ?? "services/voicebot/index.ts";   // another build, for a red-first control
 const W = mkdtempSync(join(tmpdir(), "ew-voicebot-"));
 foundWorlds(W, ["commons"]);
 const voices = join(W, "voices.json"); writeFileSync(voices, JSON.stringify({ nobody: "REPLACE-me" }));

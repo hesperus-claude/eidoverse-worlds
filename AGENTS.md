@@ -357,7 +357,7 @@ The ones you'll reach for:
 | `grabbable`, `physics` | it can be carried; it can fall and fly (below) |
 | `particles` | `{effect, part?, at?, seed?, playing?, scale?, params?}`: it emits an effect (below) |
 | `script:<name>` | a script installed on it (below) |
-| `captions`, `captioners` | a screen's live subtitles, written only by `act {verb: "caption", args: {id, session, n, t0, t1, text, speaker?, title?}}` (one line each; `{id, session, end: true}` clears it); `captioners {ids: [<identity>]}` names who may caption that screen, and anyone who may edit it may too (tools/captionbot) |
+| `captions`, `captioners` | a screen's live subtitles, written only by `act {verb: "caption", args: {id, session, n, t0, t1, text, speaker?, title?}}` (one line each; `{id, session, end: true}` clears it); `captioners {ids: [<identity>]}` names who may caption that screen, and anyone who may edit it may too (services/captionbot) |
 
 Plus whatever components the renderer reads from the bag, such as
 `picture` and `collider`. Your own components carry a namespace

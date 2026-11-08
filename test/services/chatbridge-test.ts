@@ -1,7 +1,7 @@
-// chatbridge-test — the Discord chat bridge (tools/chatbridge) against an owned scratch world, Discord played by
+// chatbridge-test — the Discord chat bridge (services/chatbridge) against an owned scratch world, Discord played by
 // the bridge's own DRY_RUN (stdin lines "Name: text" are Discord messages; world lines print as "→ discord [who]").
 //
-//   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/server/chatbridge-test.ts
+//   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/services/chatbridge-test.ts
 //
 // The world speaks the protocol: the bridge must join with replica, read chat from the log stream's `say` entries
 // (actors are opaque ids, named by the stream), and speak through a door `say` request.
@@ -13,7 +13,7 @@ import { suite } from "../gate/suite.ts";
 import { tryUntil } from "../gate/wait.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 
-const BRIDGE = process.env.CHATBRIDGE ?? "tools/chatbridge/index.ts";   // another build, for a red-first control
+const BRIDGE = process.env.CHATBRIDGE ?? "services/chatbridge/index.ts";   // another build, for a red-first control
 const W = mkdtempSync(join(tmpdir(), "ew-chatbridge-"));
 foundWorlds(W, ["commons"]);
 const PORT = freePort(9720);

@@ -28,7 +28,7 @@ check("HR1 an update-required refusal says what the server speaks and to update 
 
 // HR3: the page (client/lib/net.js), the server's tend and the caption bot read the refusal too (the inline early socket's
 // buffered messages are read by net.js)
-{ const net = read("client/lib/net.js"), tend = read("server/tend.ts"), cap = read("tools/captionbot/world.ts");
+{ const net = read("client/lib/net.js"), tend = read("server/tend.ts"), cap = read("services/captionbot/world.ts");
   check("HR3 net.js handles a refused message (live and buffered by the early socket) in refusalWords' terms; tend and the caption bot do too",
     /case 'refused'/.test(net) && /msg\?\.type === 'refused'/.test(net) && /refusalWords/.test(net) && /msg\.type === "refused"/.test(tend) && /refusalWords/.test(tend) && /msg\.type === 'refused'/.test(cap) && /refusalWords/.test(cap), ""); }
 
