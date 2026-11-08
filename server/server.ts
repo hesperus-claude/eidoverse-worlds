@@ -187,7 +187,7 @@ setLoadedWorlds(() => worlds);
 registerSystem({ name: "access-sweep", everyMs: Math.max(250, envNumber("ACCESS_SWEEP_MS", 1000)),
   fn: (now) => sweepAccess(worlds.values(), expel as Expel, now) });
 
-// the operator's countersign (tools/seat-accept.ts) edits the store from another process: noticed here, pushed as a proposal's event is
+// the operator's countersign (tools/operator/seat-accept.ts) edits the store from another process: noticed here, pushed as a proposal's event is
 registerSystem({ name: "seat-store-poll", everyMs: 5000, fn: () => {
   const ext = seatStore.pollExternalChange();
   if (!ext) return;

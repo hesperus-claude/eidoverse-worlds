@@ -4,7 +4,7 @@
 // A bare worktree needs client/node_modules and mcpl/node_modules linked (mcpl/agent.ts pulls three/webgpu).
 //   Run: bun test/shared/skywatch-test.ts
 
-import { noWorldUrl } from "../../tools/no-world.ts";
+import { noWorldUrl } from "../harness/no-world.ts";
 import { WorldAgent } from "../../mcpl/agent.ts";
 import { normalizePolicy, segmentAt } from "../../shared/forecast.js";
 import { agentOnDoor } from "../harness/agent-scratch.ts";

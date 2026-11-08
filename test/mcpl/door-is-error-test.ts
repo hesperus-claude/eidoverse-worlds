@@ -14,7 +14,7 @@
 // call the agent's acts as main's tools did, answered as the door answers an
 // act, and FLIGHT THROUGH THE DOOR checks the door's own calls.
 import { tryUntil } from '../gate/wait.ts';
-import { noWorldUrl } from '../../tools/no-world.ts';
+import { noWorldUrl } from '../harness/no-world.ts';
 const { WorldAgent, GLIDE_ARRIVE_M } = await import('../../mcpl/agent.ts');
 const { handleTool } = await import('../../mcpl/tools.ts');
 

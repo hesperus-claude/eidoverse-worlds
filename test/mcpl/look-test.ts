@@ -1,4 +1,4 @@
-import { noWorldUrl } from "../../tools/no-world.ts";
+import { noWorldUrl } from "../harness/no-world.ts";
 import { WorldAgent } from "../../mcpl/agent.ts";
 
 let passed = 0;

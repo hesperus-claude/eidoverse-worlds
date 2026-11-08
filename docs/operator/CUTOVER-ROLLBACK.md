@@ -18,7 +18,7 @@ acceptance, it retires: relay-only is the product and this runbook expires.
 ## Pre-deploy gate (before cutover goes live)
 
 1. The composed receipt set green on the exact deploy sha (PR body lists it).
-2. `bun tools/join-canary.mjs <public-url> <good-key>` — joins; and with a bad
+2. `bun tools/operator/join-canary.mjs <public-url> <good-key>` — joins; and with a bad
    key — refused. The negative control is the half that catches auth wired
    open.
 3. `/version` on the deployment reports the deploy sha (a stale process is

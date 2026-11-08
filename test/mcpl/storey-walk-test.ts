@@ -14,7 +14,7 @@
  * height.
  */
 import { WorldAgent } from "../../mcpl/agent.ts";
-import { noWorldUrl } from "../../tools/no-world.ts";
+import { noWorldUrl } from "../harness/no-world.ts";
 import { tryUntil, pause } from "../gate/wait.ts";
 import { describeHere, planStructure } from "../../shared/structure.js";
 import { NAV_STEP } from "../../mcpl/navgrid.ts";

@@ -4,7 +4,7 @@
 streams the result as a held pose. This page keeps the reasons behind its rules
 and the numbers that chose them, so the code can stay short. "The fleet" means
 the shipped avatar rigs (14 at the time of most of these measurements; 44 for
-the later fleet checks). The sweeps live in `tools/rag-tune.mjs`, and
+the later fleet checks). The sweeps live in `test/labs/rag-tune.mjs`, and
 `test/client/ragdoll-test.ts` pins the behaviour.
 
 ## 1. The four things a particle sim needs

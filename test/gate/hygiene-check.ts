@@ -22,13 +22,13 @@
 //                 path): CI 42190828916, flight and voice-wire-mutation. Use common.ts slashed / pathEnd.
 //   chrome-flags  a Chromium launched with its own flag list (a quoted headless or remote-debugging-port flag) instead of
 //                 chrome.ts chromeArgs: five launchers each had a different list, and an OS's flag lived in a workflow's env.
-//                 Checked over all of tools/ and test/, where the benches that launch browsers outside the gate live.
+//                 Checked over all of tools/, bench/ and test/, where the benches that launch browsers outside the gate live.
 //   lab-clock     the authority's clock env set or deleted by hand: 124 inline "advance then pin" copies in 34 files (10-22),
 //                 where a helper that forgot to advance (or two sharing one counter) could run time backwards silently. Use
 //                 test/gate/clock.ts (labClock().advance, pin, unpinned).
 //   agent-url     a WorldAgent built without `url`: it falls back to 127.0.0.1:8940, whatever runs there (or a closed port,
-//                 which hangs ~2 min on a mirrored-network host). Pass the test's own server: tools/no-world.ts noWorldUrl().
-//                 Checked over tools/ only.
+//                 which hangs ~2 min on a mirrored-network host). Pass the test's own server: test/harness/no-world.ts noWorldUrl().
+//                 Checked over tools/ and bench/ only.
 //   own-ok        a suite counting its own rows (`let pass = 0, fail = 0`) instead of importing suite.ts.
 //   posix-mode    a file's mode asserted equal to an octal literal (`=== 0o600`) on a line that doesn't say what Windows does:
 //                 NTFS has no POSIX modes (stat says 666), so the row fails there or passes vacuously. Use suite.ts `mode()`,
@@ -109,7 +109,7 @@ export function authorityAsyncHits(root = ENGINE): string[] {
  *  every test, so a top-level spawn runs). True when the text spawns net-server.ts without naming MCPL_STATE. */
 export const spawnsMcplStateless = (text: string) => /spawn\([^)]*mcpl\/net-server\.ts/.test(text) && !/MCPL_STATE/.test(text);
 export function mcplStatelessHits(): string[] {
-  return walk(path.join(ENGINE, "tools"), []).filter((p) => spawnsMcplStateless(fs.readFileSync(p, "utf8"))).map(rel);
+  return ["tools", "bench"].flatMap((d) => walk(path.join(ENGINE, d), [])).filter((p) => spawnsMcplStateless(fs.readFileSync(p, "utf8"))).map(rel);
 }
 function walk(dir: string, acc: string[]) {
   if (!fs.existsSync(dir)) return acc;
@@ -127,12 +127,12 @@ export function measure(): Record<string, Record<string, number>> {
   for (const [, file] of SUITES) for (const f of localImports(suitePath(file))) suites.add(rel(f));
   const gate = new Set<string>(suites);
   for (const d of ["server", "shared", "mcpl"]) for (const f of walk(path.join(ENGINE, d), [])) gate.add(rel(f));
-  const files = new Set<string>([...gate, ...["tools", "test"].flatMap((d) => walk(path.join(ENGINE, d), [])).map(rel)]);
+  const files = new Set<string>([...gate, ...["tools", "bench", "test"].flatMap((d) => walk(path.join(ENGINE, d), [])).map(rel)]);
   const out: Record<string, Record<string, number>> = {};
   for (const f of [...files].sort()) {
     const counts = scan(fs.readFileSync(path.join(ENGINE, f), "utf8"));
     for (const k of Object.keys(counts)) {
-      if (f === SELF || EXEMPT[k]?.includes(f) || (SUITE_ONLY.has(k) && !suites.has(f)) || (TOOLS_ONLY.has(k) && !f.startsWith("tools/")) || (!ALL_TOOLS.has(k) && !gate.has(f))) continue;
+      if (f === SELF || EXEMPT[k]?.includes(f) || (SUITE_ONLY.has(k) && !suites.has(f)) || (TOOLS_ONLY.has(k) && !/^(tools|bench)\//.test(f)) || (!ALL_TOOLS.has(k) && !gate.has(f))) continue;
       (out[f] ??= {})[k] = counts[k];
     }
   }
@@ -155,7 +155,7 @@ export function ungatedTests(): string[] {
   const scan = (d: string): void => { for (const e of fs.readdirSync(path.join(ENGINE, d), { withFileTypes: true }))
     if (e.isDirectory()) { if (d.startsWith("test") && !NOT_TESTS.has(e.name)) scan(`${d}/${e.name}`); }
     else if (e.isFile() && TEST_NAME.test(e.name) && !gated.has(`${d}/${e.name}`)) out.push(`${d}/${e.name}`); };
-  for (const d of ["tools", "tools/water", "mcpl", "test"]) scan(d);
+  for (const d of ["tools", "tools/water", "bench", "mcpl", "test"]) scan(d);
   return out.sort();
 }
 export function compare(now: Record<string, Record<string, number>>, base: Record<string, Record<string, number>>) {

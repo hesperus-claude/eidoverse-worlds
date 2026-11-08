@@ -29,7 +29,7 @@
 //                               integrator; wing-idle and stamina-tick RENDER
 //                               periods are not, and T8 asks about the render.
 
-import { noWorldUrl } from '../../tools/no-world.ts';
+import { noWorldUrl } from '../harness/no-world.ts';
 import {
   makeConfig, initialState, step, bodyDown, bodyRecovered,
   leafAt, beatRemaining, sinkRate, glideRatio, glideRange,

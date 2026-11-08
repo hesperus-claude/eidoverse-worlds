@@ -1,6 +1,6 @@
 // named-pose-test: every registered pose name (plus a synthetic one on the wire rows) through every owner and reader; shared/wingpresence.js.
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/named-pose-test.ts (the browser parts re-run this file with --part, for their own mocks)
-import { noWorldUrl } from "../../tools/no-world.ts";
+import { noWorldUrl } from "../harness/no-world.ts";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { helloOf } from "../../shared/protocol/hello.js";

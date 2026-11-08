@@ -7,7 +7,7 @@ The design behind `server/seats.ts` (the server side of seat profiles; see also 
 - HTTP proposals require a NAMED actor: a tokens.json bearer or a home-node-verified aid1 identity (the same two legs
   /upload trusts). The anonymous door token may not write here: a seat profile moves every wearer of an avatar, and
   `?by=` is self-asserted.
-- The countersign that makes a profile load-bearing has NO HTTP path. `tools/seat-accept.ts` is run by the operator on
+- The countersign that makes a profile load-bearing has NO HTTP path. `tools/operator/seat-accept.ts` is run by the operator on
   the box, edits the store through `SeatStore`'s own functions, and the running server notices via an mtime watch
   (reload, diff, push `avatar-profile-updated`). Bearer tokens are never logged or echoed.
 - The countersign requires the revision the operator REVIEWED (`expectedRev`). Under the lock, an interleaved proposal

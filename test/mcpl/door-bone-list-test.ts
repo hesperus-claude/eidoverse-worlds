@@ -9,7 +9,7 @@
 // flight act was refused for a skeleton the body has, and fold_wings said it
 // had no wings.
 
-import { noWorldUrl } from '../../tools/no-world.ts';
+import { noWorldUrl } from '../harness/no-world.ts';
 import { WorldAgent } from '../../mcpl/agent.ts';
 import { devFlightProvider } from '../../shared/flightcap.js';
 import { rigBonesFor, bodyHeightFor } from '../../mcpl/rigbones.ts';

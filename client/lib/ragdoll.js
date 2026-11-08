@@ -86,7 +86,7 @@ const FIXED_DT = 1 / 60;   // the sim's only clock — see the header
 const MAX_FRAMES = 4;
 const PIN_JUMP = 0.12;     // metres/frame — past this a pin jumped, it did not move
 
-// Everything tunable, in one mutable object so a sweep (tools/rag-tune.mjs)
+// Everything tunable, in one mutable object so a sweep (test/labs/rag-tune.mjs)
 // can drive it without editing the file. Measurements: verlet-ragdoll.md §2.
 export const TUNING = {
   GRAVITY: -9.8,

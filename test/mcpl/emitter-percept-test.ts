@@ -11,7 +11,7 @@
 
 // agent.ts reads the coalescing window from env at module load, set SHORT (folding is under test, not duration):
 // the import must come AFTER this line, which a hoisted static import wouldn't
-import { noWorldUrl } from "../../tools/no-world.ts";
+import { noWorldUrl } from "../harness/no-world.ts";
 import { suite } from "../gate/suite.ts";
 import { until, tryUntil } from "../gate/wait.ts";
 process.env.EW_EMITTER_COALESCE_SEC = "0.25";

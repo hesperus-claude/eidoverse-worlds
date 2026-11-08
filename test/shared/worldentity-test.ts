@@ -18,7 +18,7 @@
 //
 // the world is read from the view (shared/protocol/view.js viewState); results and `undo` are the door's
 // (test/protocol/scratchworld.ts).
-import { noWorldUrl } from '../../tools/no-world.ts';
+import { noWorldUrl } from '../harness/no-world.ts';
 import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';

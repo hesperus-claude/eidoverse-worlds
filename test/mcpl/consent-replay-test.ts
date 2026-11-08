@@ -2,7 +2,7 @@
 // arrival where the authority's table differs, and what it holds when the read comes back is what is sent, so a change made
 // while that read is out isn't overwritten by the old one (house 6340433633, on b1ea081b; R 10-28: the same model as a person)
 import { WorldAgent } from "../../mcpl/agent.ts";
-import { noWorldUrl } from "../../tools/no-world.ts";
+import { noWorldUrl } from "../harness/no-world.ts";
 let pass = 0, fail = 0; const ok = (c: boolean, n: string, info?: unknown) => { if (c) { pass++; console.log(`ok   ${n}`); } else { fail++; console.log(`FAIL ${n}`, info === undefined ? "" : JSON.stringify(info)); } };
 type Held = { move: boolean | null; touch: boolean | null; allow: string[]; block: string[] };
 function agent(held: Held, during?: (ag: any) => void) {

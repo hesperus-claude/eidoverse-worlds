@@ -15,7 +15,7 @@
 // the SOURCE (the settled-pose-test pattern), so reverting a call site fails
 // the suite.
 
-import { noWorldUrl } from "../../tools/no-world.ts";
+import { noWorldUrl } from "../harness/no-world.ts";
 import { WorldAgent } from "../../mcpl/agent.ts";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

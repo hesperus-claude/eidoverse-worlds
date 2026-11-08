@@ -124,7 +124,7 @@ animate at frame rate without polling:
   (offset × parent scale, then yaw about Y); scale = parent scale × own scale.
 
 Ports must reproduce `shared/conformance/motion.json` (regenerate with
-`bun tools/motion-vectors.ts`; `--check` fails when stale).
+`bun tools/assets/motion-vectors.ts`; `--check` fails when stale).
 
 ## Inspecting an entity's components
 

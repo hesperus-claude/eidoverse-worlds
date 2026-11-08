@@ -23,7 +23,7 @@ process.env.EW_ACTIVITY_REFRESH_SEC = "0.35";
 const { NoiseGate, APPROACH_DWELL_MS, APPROACH_MAX_WAIT_MS, APPROACH_SAFE_WAIT_MS, APPROACH_STILL_MPS, APPROACH_RADIUS, REARM_RADIUS } =
   await import("../../mcpl/denoise.ts");
 const { WorldAgent } = await import("../../mcpl/agent.ts");
-const { noWorldUrl } = await import("../../tools/no-world.ts");
+const { noWorldUrl } = await import("../harness/no-world.ts");
 const { suite } = await import("../gate/suite.ts");
 const { tryUntil, pause } = await import("../gate/wait.ts");
 const { spawnSync } = await import("node:child_process");

@@ -60,7 +60,7 @@ export function directoryAt(file: string, now: () => number = Date.now, existing
   // two writers (the CLI tools and a running server) share this file: re-read and merge before every write, so neither
   // drops the other's entries. Ours win on a clash (the same id can only be minted by one of them).
   const tomb = new Set<string>();   // ids this process forgot (forgetPlanned): the merge below must not bring them back from disk
-  // an account another writer bound to an id this process holds (tools/operator-bind.ts, the server running): a bind only
+  // an account another writer bound to an id this process holds (tools/operator/operator-bind.ts, the server running): a bind only
   // adds, so it is taken, never written over; an account this process already gives another id stays that id's
   const takeBinds = (id: string, e: Entry) => { const mine = d.ids[id]; if (!mine || !Array.isArray(e?.subs)) return;
     // a rename another writer made since (newer renamedAt): its name is taken, not written over

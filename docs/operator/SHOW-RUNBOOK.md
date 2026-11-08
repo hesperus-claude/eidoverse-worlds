@@ -39,7 +39,7 @@ Verify with devtools: `X-Cache: HIT` on `/library/store/…` after first load.
 
 ```sh
 URL=wss://<host>/ws TOKEN=<door-key> PERFORMERS=24 SPECTATORS=176 DURATION_S=60 \
-  bun tools/loadtest.ts
+  bun bench/loadtest.ts
 ```
 
 Gates: 200/200 join, join p95 < 3s, spectator frames ≥ 12/s median, frame

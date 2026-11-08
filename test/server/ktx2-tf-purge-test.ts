@@ -2,7 +2,7 @@
 // a LINEAR transfer (converted data map), and an image over the texel cap (built before the cap). Each must say yes to
 // its case and no to the other's, and nothing to a non-KTX2 buffer.
 import { fileURLToPath } from "node:url";
-import { convertedLinear, overCap, staleOversize } from "../../tools/ktx2-tf-purge.ts";
+import { convertedLinear, overCap, staleOversize } from "../../tools/assets/ktx2-tf-purge.ts";
 import { KTX2_TEXEL_CAP } from "../../server/store-variants.ts";
 import { suite } from "../gate/suite.ts";
 const S = suite("ktx2-tf-purge");
@@ -32,7 +32,7 @@ check("…and an avatar variant never is (the VRM arm does not resize)", !staleO
   const root = mkdtempSync(`${tmpdir()}/purge-`);
   writeFileSync(`${root}/a.ktx2`, lin); writeFileSync(`${root}/a.ktx2.failed`, "kind=failure\n"); writeFileSync(`${root}/a.ktx2.deferred`, "budget");
   writeFileSync(`${root}/b.ktx2`, srgb); writeFileSync(`${root}/b.ktx2.failed`, "kind=failure\n");
-  const r = Bun.spawnSync(["bun", fileURLToPath(new URL("../../tools/ktx2-tf-purge.ts", import.meta.url)), root, "--apply"]);
+  const r = Bun.spawnSync(["bun", fileURLToPath(new URL("../../tools/assets/ktx2-tf-purge.ts", import.meta.url)), root, "--apply"]);
   const gone = (f: string) => !existsSync(`${root}/${f}`);
   check("--apply removes a purged variant AND its .failed/.deferred (so the sweep rebuilds it)", gone("a.ktx2") && gone("a.ktx2.failed") && gone("a.ktx2.deferred"),
     { out: new TextDecoder().decode(r.stdout).slice(-300), left: ["a.ktx2", "a.ktx2.failed", "a.ktx2.deferred"].filter((f) => !gone(f)) });

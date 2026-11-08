@@ -1,6 +1,6 @@
 // bun test/shared/structure-route-test.ts — routing over a griddled structure (shared/structure.js, shared/structure-route.js),
 // renderer/server-free. A planned route never crosses an authored solid wall (a door or arch is open, a window is not, a
-// diagonal is a wall), checked by tools/structure-oracle.ts apart from the planner; where no route exists it is refused
+// diagonal is a wall), checked by test/shared/structure-oracle.ts apart from the planner; where no route exists it is refused
 // with the router's one reason.
 //   1. the route table   2. caps and the worst case   3. support bases
 // The agent walks over these routes keep their own processes (structure-oracle.ts says why): structure-threshold-test
@@ -12,7 +12,7 @@ import { NON_FINITE_ENDPOINT, ROUTE_MAX_CELLS } from "../../shared/structure-rou
 let checks = 0;
 function check(ok: unknown, name: string) { assert.ok(ok, name); checks++; console.log("✓ " + name); }
 
-import { valid, type P } from "../../tools/structure-oracle.ts";
+import { valid, type P } from "./structure-oracle.ts";
 
 const terrain = (heightAt: (x: number, z: number) => number = () => 0, step = .5) => ({ kind: "terrain", heightAt, step });
 const flat = (h = 0) => terrain(() => h);

@@ -12,7 +12,7 @@
 // No browser, no three, no DOM. Parses the shipped VRM the way the agent does
 // and asserts on what the agent would receive.
 
-import { noWorldUrl } from '../../tools/no-world.ts';
+import { noWorldUrl } from '../harness/no-world.ts';
 import { readFileSync } from 'node:fs';
 import { makeConfig, initialState, step, bodyDown, bodyRecovered, takeOff } from '../../shared/flight.js';
 import { DEFAULT_LEAF_FORCE, terminalOf, leafForceFor } from '../../shared/leafforce.js';

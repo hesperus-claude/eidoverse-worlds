@@ -91,7 +91,7 @@ check("retirement clears the leg", (sfuDiag(W) as any).moderatorMuted.length ===
 
 // ── RECONNECT MUST NOT RESURRECT CONSENT ──────
 // 🔴 these call revokeSfuLeg themselves, so they pin that retirement CLEARS everything, not that server.ts
-// retireRelayLeg REACHES it (tools/sfu-browser-smoke.mjs does). A new per-listener map: add it here AND check the live path
+// retireRelayLeg REACHES it (test/server/sfu-browser-smoke.mjs does). A new per-listener map: add it here AND check the live path
 {
   const W = "reconnect";
   const st = sfuState(W);

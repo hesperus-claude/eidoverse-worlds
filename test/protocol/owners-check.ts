@@ -122,7 +122,7 @@ const commonsShape: [string, string, any][] = [["world", "grant", { id: "antra",
     { code: u.up.code, out: u.up.code ? u.up.out.slice(-600) : undefined, roles: Object.keys(u.roles), antra: at("antra"), P: P.antra }));
   row("OB2", () => ok(at("fable").kind === "imported" && same(at("fable").subs, []) && at("mica").kind === "imported" && at("Digi_Rat").kind === "imported"
     && P.fable?.account === null && /no account/.test(P.fable?.why) && /2 accounts/.test(P.mica?.why) && P.Digi_Rat?.role === "builder"
-    && /^owner fable has no account yet \(main recorded no account for this name\): bind with bun tools\/operator-repair\.ts bind commons u-[a-z2-7]{20} <their account>$/m.test(u.dry.out) && new RegExp(`bind commons ${u.roles.fable?.[0]} <their account>`).test(u.dry.out)
+    && /^owner fable has no account yet \(main recorded no account for this name\): bind with bun tools\/operator\/operator-repair\.ts bind commons u-[a-z2-7]{20} <their account>$/m.test(u.dry.out) && new RegExp(`bind commons ${u.roles.fable?.[0]} <their account>`).test(u.dry.out)
     && /^owner mica has no account yet \(main recorded 2 accounts/m.test(u.dry.out) && /isn't one here \(service:…\)/.test(P.svc?.why) && at("svc").kind === "imported" && !/human:test:[a-z]/.test(u.dry.out),
     "OB2 an unknown name (fable, Digi_Rat), an ambiguous one (mica: two accounts) and one main paired with no account shape (svc) stay imported; the dry run lists each with why and the bind command, and prints no account", { P, fable: at("fable"), dry: u.dry.out.split("\n").filter((l) => /account/.test(l)) }));
   row("OB3", () => ok(same(u.result?.people, u.report?.people) && u.report.people.length === 7 && u.report.people[0].role === "owner",
@@ -280,7 +280,7 @@ const commonsShape: [string, string, any][] = [["world", "grant", { id: "antra",
   // BN3: the advice is pasted into a shell and names ONE person: it carries the id, never the name (Ann and ann are two)
   const odd = "$HOME `id` it's", r = { final: { translated: { "@world": { "roles:u-odd": { role: "builder" }, "imported-bans:u-odd": true } } } };
   const said = [...peopleOf("hall", r, () => ({ name: odd })), ...bansOf("hall", r, () => ({ name: odd }))].map((p) => p.bind);
-  row("BN3", () => ok(said.length === 2 && said.every((b) => b === "bun tools/operator-repair.ts bind hall u-odd <their account>"), "BN3 the bind advice names the identity by id (shell-safe, and one person even when the name is two people's)", { said }));
+  row("BN3", () => ok(said.length === 2 && said.every((b) => b === "bun tools/operator/operator-repair.ts bind hall u-odd <their account>"), "BN3 the bind advice names the identity by id (shell-safe, and one person even when the name is two people's)", { said }));
 }
 
 // ================= OR: the operator binds an imported identity to an account =================
@@ -288,7 +288,7 @@ const commonsShape: [string, string, any][] = [["world", "grant", { id: "antra",
   v1(W, "porch", [["world", "grant", { id: "fable", role: "owner" }], ["fable", "grant", { id: "janus", role: "owner", sub: "human:test:janus" }],
     ["fable", "grant", { id: "Digi_Rat", role: "builder" }], ["fable", "grant", { id: "Twin", role: "builder" }], ["fable", "grant", { id: "twin", role: "builder" }], ["Twin", "say", { text: "hi" }]]);
   const u = upgrade(root, "porch"); const file = directoryFileIn(W);
-  const bind = (...a: string[]) => { const r = Bun.spawnSync(["bun", "tools/operator-repair.ts", "bind", ...a], { cwd: ENGINE, env: { ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, timeout: 30_000 });
+  const bind = (...a: string[]) => { const r = Bun.spawnSync(["bun", "tools/operator/operator-repair.ts", "bind", ...a], { cwd: ENGINE, env: { ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, timeout: 30_000 });
     return { code: r.exitCode, out: r.stdout.toString() + r.stderr.toString() }; };
   const modOf = () => { const f = path.join(W, "porch", "world.mod.jsonl"); return fs.existsSync(f) ? fs.readFileSync(f, "utf8") : ""; };
   const held = directoryAt(file);   // as a running server holds it: read before the bind
@@ -324,7 +324,7 @@ const commonsShape: [string, string, any][] = [["world", "grant", { id: "antra",
   const u = upgrade(root, "yard"); const file = directoryFileIn(W), d0 = directoryAt(file);
   const mutey = d0.imported("Mutey"), modf = path.join(W, "yard", "world.mod.jsonl");
   fs.appendFileSync(modf, JSON.stringify({ ts: T0, actor: u.roles.fable?.[0], verb: "mute", who: mutey }) + "\n");
-  const bind = (...a: string[]) => { const r = Bun.spawnSync(["bun", "tools/operator-repair.ts", "bind", ...a], { cwd: ENGINE, env: { ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, timeout: 30_000 });
+  const bind = (...a: string[]) => { const r = Bun.spawnSync(["bun", "tools/operator/operator-repair.ts", "bind", ...a], { cwd: ENGINE, env: { ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, timeout: 30_000 });
     return { code: r.exitCode, out: r.stdout.toString() + r.stderr.toString() }; };
   const echo = Object.entries<any>(JSON.parse(fs.readFileSync(file, "utf8")).ids).find(([, e]) => e.name === "Echo")?.[0];
   const before = fs.readFileSync(file, "utf8"), mod0 = fs.readFileSync(modf, "utf8");
@@ -364,7 +364,7 @@ const commonsShape: [string, string, any][] = [["world", "grant", { id: "antra",
   const u = upgrade(root, "shed"); const file = directoryFileIn(W), modf = path.join(W, "shed", "world.mod.jsonl");
   if (!fs.existsSync(modf)) fs.writeFileSync(modf, ""); fs.chmodSync(modf, 0o444);
   let sealed = false; try { fs.accessSync(modf, fs.constants.W_OK); } catch { sealed = true; }   // the setup, asserted: a root shell writes through 0444
-  const r = Bun.spawnSync(["bun", "tools/operator-repair.ts", "bind", "shed", "fable", "human:test:fable"], { cwd: ENGINE, env: { ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, timeout: 30_000 });
+  const r = Bun.spawnSync(["bun", "tools/operator/operator-repair.ts", "bind", "shed", "fable", "human:test:fable"], { cwd: ENGINE, env: { ...process.env, WORLDS_DIR: W, OPT_DIR: path.join(root, "opt"), BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, timeout: 30_000 });
   const out = r.stdout.toString(), err = r.stderr.toString(), fableId = u.roles.fable?.[0], e = directoryAt(file).entry(fableId) ?? {};
   fs.chmodSync(modf, 0o644);
   const said = /^warning: bound, but world\.mod\.jsonl took no record \(.*add this line by hand: (\{.*\})$/m.exec(err), line = (() => { try { return JSON.parse(said?.[1] ?? ""); } catch { return null; } })();

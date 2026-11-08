@@ -11,7 +11,7 @@ has since been replaced by the current protocol (spec/PROTOCOL.md); file names a
 Found during the 2026-08-28 catch-up merge (283 commits, febba9e) and after.
 Each is red on anima/main as it stands:
 
-1. **`tools/smoke.ts` asserts rtc delivery the server deleted.** The #104
+1. **`tools/operator/smoke.ts` asserts rtc delivery the server deleted.** The #104
    SFU cutover removed the rtc lane; upstream's smoke still asserts a
    message arrives through it. Ours asserts the lane is CLOSED (be36cb0).
 2. **The mesh-fallback suite tests deleted delegation.** micstate's
@@ -39,7 +39,7 @@ Each is red on anima/main as it stands:
 - **`test/shared/flight-headless-test.ts` reads a hard-coded path on its author's
   laptop** (`/Users/lariareynolds/Documents/mythos-models/ragdoll-web/rig.json`,
   the LEAF FORCES section) — ENOENT everywhere else. Wants a fixture under
-  `tools/flightbench/` or an env override. (Found merging a678f24, 2026-09-02.)
+  `bench/flightbench/` or an env override. (Found merging a678f24, 2026-09-02.)
 - **`test/client/flight-test.ts` binds to file layout** — it greps `mcpl/net-server.ts`
   for the rehearsal gate and `client/lib/chat.js` for a `case 'flight':`; on
   rimward those live in `mcpl/tools.ts` (one table, one dispatcher, §24r) and

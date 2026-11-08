@@ -1750,7 +1750,7 @@ the phantom mantle offer, the invisible full-footprint ceiling — are all this 
 lie." The probe buckets vertices into a 24×24 grid and calls the LIE the gap
 between bbox top and the median cell top: "Surveyed against a raycast ground truth
 across the 58-model library plus 8 conjured store meshes
-(tools/collider-survey.ts): inside the floor-shaped population the gate below
+(tools/assets/collider-survey.ts): inside the floor-shaped population the gate below
 admits, the vertex version tracks raycast to 1.8cm worst case and never disagrees
 about the threshold. (Library-wide it drifts up to 2.5m on tall structured things —
 a watchtower, a perimeter wall — which is exactly why the shape gate runs before
@@ -3672,7 +3672,7 @@ same… It is worth most to framerate independence: at 1 substep the same fall l
 31mm apart at 30fps vs 120fps, at 2 it lands 1mm apart. Past 2 it stops paying — the
 fleet needs a few relaxation passes per substep to keep the braced torso rigid, and
 starving those to buy more substeps loses more than it gains. Both numbers are swept
-in tools/rag-tune.mjs; this pair settles all 14 rigs, the neighbours settle 6 to 11."
+in test/labs/rag-tune.mjs; this pair settles all 14 rigs, the neighbours settle 6 to 11."
 Lesson: SUBSTEPS 2 / ITER 3 is a measured pair, and the neighbouring values fail on
 most of the fleet.
 

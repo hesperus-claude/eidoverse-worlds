@@ -65,7 +65,7 @@ try {
   }
 } finally { rmSync(scratch, { recursive: true, force: true }); }
 { // cdp-pw (the probes' driver) gives a console message what playwright's does: type, text, location
-  const { launchCdp } = await import('../../tools/cdp-pw.mjs');
+  const { launchCdp } = await import('../harness/cdp-pw.mjs');
   const b = await launchCdp(); const msgs: any[] = [];
   try {
     const pg = await b.page();

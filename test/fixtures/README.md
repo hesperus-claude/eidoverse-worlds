@@ -13,7 +13,7 @@ Inputs the gate's suites read. `v1-worlds/` are old-protocol worlds (its README 
 - `sim-ground-assets.json` binds the ground-smoke offsets and bounds to
   measured source and KTX2 response hashes. The smoke hashes the response
   consumed by the browser, including negotiated/overlay variants. Before
-  adding another hash, run `bun tools/ground-asset-measure.ts path/to/file.glb`
+  adding another hash, run `bun tools/assets/ground-asset-measure.ts path/to/file.glb`
   and verify its measured geometry fits this fixture. Its source and KTX2
   variants both have 6,040 triangles and the same millimetre-rounded bounds
   and visual-center offset.

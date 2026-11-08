@@ -6,7 +6,7 @@
 // never read a stale value as fresh: the verdict ships pre-judged.
 //
 // Writes: HTTP proposals need a NAMED actor (never the anonymous door token); the countersign has no HTTP path
-// (tools/seat-accept.ts, noticed here by an mtime watch). Every write is provenance-first and runs whole under one
+// (tools/operator/seat-accept.ts, noticed here by an mtime watch). Every write is provenance-first and runs whole under one
 // on-disk lock shared by every process. Rationale: docs/research/seat-store-integrity.md.
 
 import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, appendFileSync, statSync, openSync, closeSync, writeSync, unlinkSync } from "node:fs";
@@ -365,7 +365,7 @@ export class SeatStore {
     });
   }
 
-  /** Operator countersign (tools/seat-accept.ts — no HTTP path reaches this).
+  /** Operator countersign (tools/operator/seat-accept.ts — no HTTP path reaches this).
    *  `expectedRev` is the revision the operator LISTED and reviewed: if the
    *  store has moved since, the acceptance refuses rather than countersign a
    *  record nobody looked at. */

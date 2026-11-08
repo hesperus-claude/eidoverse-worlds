@@ -7,7 +7,7 @@
 // gather vertices their own way and feed the same math.
 //
 // Within the floor-shaped population the gates admit, the 24×24 max-y grid
-// tracks a raycast ground truth to 1.8cm worst case (tools/collider-survey.ts),
+// tracks a raycast ground truth to 1.8cm worst case (tools/assets/collider-survey.ts),
 // which is why the same grid doubles as the headless HEIGHTFIELD for this class.
 
 export const TOPGRID_VERSION = 1;

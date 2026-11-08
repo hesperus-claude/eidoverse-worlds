@@ -547,7 +547,7 @@ const ROUTES: Route[] = [
   {
     // POST /seat-profile — the live proposal door (§24r). A NAMED actor only (tokens.json bearer or aid1 identity);
     // the anonymous door token may not write, since a seat profile moves every wearer. Writes PROPOSALS only;
-    // acceptance has no HTTP path (tools/seat-accept.ts, an operator act on the box).
+    // acceptance has no HTTP path (tools/operator/seat-accept.ts, an operator act on the box).
     match: (u, req) => u.pathname === "/seat-profile" && req.method === "POST",
     handler: async ({ req, url }) => {
       const j = (o: unknown, status = 200) => new Response(JSON.stringify(o),

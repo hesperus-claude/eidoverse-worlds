@@ -12,7 +12,7 @@
 //
 // Sections 1–3 are pure functions of shared/blueprint.js (expand/overridesOf/rebase have no runtime caller yet);
 // the v1 sections (4, 5, 8) went with protocol v1.
-import { noWorldUrl } from '../../tools/no-world.ts';
+import { noWorldUrl } from '../harness/no-world.ts';
 import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

@@ -4,7 +4,7 @@
 // 2. `ownedWorld()` spawns a child bound to a per-run nonce in scratch state and REFUSES to proceed unless the responder
 //    proves it is ours (as boot-check), never an ambient fixed port. A LIVE deployment is explicit: pass its origin,
 //    identity checks skipped.
-import { launchCdp } from '../../tools/cdp-pw.mjs';
+import { launchCdp } from './cdp-pw.mjs';
 import { freePort } from './harness.ts';
 import { suite } from '../gate/suite.ts';
 import { until, tryUntil, pause } from '../gate/wait.ts';

@@ -24,8 +24,9 @@ A file's directory says who runs it.
 |---|---|
 | `client/` `server/` `shared/` `mcpl/` `scripting/` | the product: browser, sequencer, the shared fold, the agent door, the script kit |
 | `defs/` | the server, as content an operator edits (data, not code) |
-| `test/` | the gate: `gate/` (the runner), `protocol/`, `client/`, `server/`, `shared/`, `mcpl/`, `tools/` (tests by subject), `harness/`, `stubs/`, `fixtures/`, `labs/` (run by hand) |
-| `tools/` | a person or the server, by hand: CLIs, converters, benches |
+| `test/` | the gate: `gate/` (the runner), `protocol/`, `client/`, `server/`, `shared/`, `mcpl/`, `tools/`, `water/` (tests by subject), `harness/`, `stubs/`, `fixtures/`, `labs/` (run by hand) |
+| `tools/` | a person or the server, by hand: CLIs (`world.ts`, the translator), `assets/` (converters), `operator/` (a server's operator) |
+| `bench/` | a person measuring: benches and one-off measurements, never the gate |
 | `deploy/` | the VPS: install and ops scripts |
 | `spec/` | an implementer somewhere else: the CC0 contract, and only what they need |
 | `docs/` | a reader |

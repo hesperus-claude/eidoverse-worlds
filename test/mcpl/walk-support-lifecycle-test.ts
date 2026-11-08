@@ -1,10 +1,10 @@
 // bun test/mcpl/walk-support-lifecycle-test.ts — a walk's support, from planning
 // through its last tick, and how a walk ends: arrival, stop, replacement,
 // refusal, timeout and close.
-import { noWorldUrl } from "../../tools/no-world.ts";
+import { noWorldUrl } from "../harness/no-world.ts";
 import { strict as assert } from "node:assert";
 import { WorldAgent, WALK_ARGS_REASON } from "../../mcpl/agent.ts";
-import { drive as finish, valid } from "../../tools/structure-oracle.ts";
+import { drive as finish, valid } from "../shared/structure-oracle.ts";
 import { pause } from "../gate/wait.ts";
 let checks=0;
 const check=(ok:unknown,label:string)=>{assert.ok(ok,label);checks++;console.log("✓ "+label);};

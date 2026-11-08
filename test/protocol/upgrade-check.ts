@@ -262,8 +262,8 @@ const byOwner = async (sid: string, world: string, id: string) => { const j = aw
     "UD1 the doc has 'Upgrading a main-era server': the old variable=… becomes SERVER_OPERATORS=…, /whoami finds your account, the owner is a display name, nobody is locked out", sec.slice(0, 300));
   const who = await (await fetch(`http://127.0.0.1:${port}/whoami`, { headers: { cookie: `ew_sess=${ANN}` } })).json().catch(() => ({}));
   ok(who.sub === "human:test:ann", "UD2 /whoami (signed in) answers the account to list, as its sub", who);
-  // each documented call: EIDO_SESSION=… bun tools/operator-repair.ts <server> <world> <verb> ['<args>']
-  const calls = [...sec.matchAll(/^\s*EIDO_SESSION=\S+ bun tools\/operator-repair\.ts (\S+) (\S+) (\S+)(?: '(.*)')?$/gm)].map((m) => ({ verb: m[3], args: m[4] ?? "{}" }));
+  // each documented call: EIDO_SESSION=… bun tools/operator/operator-repair.ts <server> <world> <verb> ['<args>']
+  const calls = [...sec.matchAll(/^\s*EIDO_SESSION=\S+ bun tools\/operator\/operator-repair\.ts (\S+) (\S+) (\S+)(?: '(.*)')?$/gm)].map((m) => ({ verb: m[3], args: m[4] ?? "{}" }));
   const d = path.join(W, "den"); fs.mkdirSync(d, { recursive: true });
   fs.writeFileSync(path.join(d, "log.jsonl"), [{ actor: "world", verb: "grant", args: { id: "Ann", role: "owner" } }, { actor: "Ann", verb: "say", args: { text: "mine" } }]
     .map((e, k) => JSON.stringify({ seq: k, ts: T0 + k * 1000, ...e })).join("\n") + "\n");
@@ -272,7 +272,7 @@ const byOwner = async (sid: string, world: string, id: string) => { const j = aw
   await tryUntil("Ann is in the upgraded den", () => ann.msgs.some((m) => m.type === "snapshot" || m.type === "error"), { ms: 8000, step: 50 });
   const before = ann.msgs.find((m) => m.type === "snapshot")?.yourRights?.role;
   const run = (verb: string, args: string, ids: Record<string, string>) => { let a = args; for (const [k, v] of Object.entries(ids)) a = a.split(k).join(v);
-    const r = Bun.spawnSync(["bun", "tools/operator-repair.ts", `http://127.0.0.1:${port}`, "den", verb, a], { cwd: ENGINE, env: { ...process.env, EIDO_SESSION: OP, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, timeout: 30_000 });
+    const r = Bun.spawnSync(["bun", "tools/operator/operator-repair.ts", `http://127.0.0.1:${port}`, "den", verb, a], { cwd: ENGINE, env: { ...process.env, EIDO_SESSION: OP, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, timeout: 30_000 });
     let reply: any = {}; try { reply = JSON.parse(r.stdout.toString()); } catch { reply = { raw: r.stdout.toString() + r.stderr.toString() }; } return { code: r.exitCode, reply }; };
   const shown = ann.msgs.find((m) => m.type === "snapshot")?.you ?? "?";   // her nameplate: the plain name is the imported record's
   const looks = calls.filter((c) => c.verb === "whois").map((c) => run(c.verb, c.args, { "Ann-tann": shown })), give = calls.find((c) => c.verb === "set"), drop = calls.find((c) => c.verb === "delete");

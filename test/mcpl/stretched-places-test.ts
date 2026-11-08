@@ -12,7 +12,7 @@
  * body stands in first, read the scale per axis too.
  */
 import { WorldAgent } from "../../mcpl/agent.ts";
-import { noWorldUrl } from "../../tools/no-world.ts";
+import { noWorldUrl } from "../harness/no-world.ts";
 import { toWorld, toLocal, inRegion, destinationOf } from "../../mcpl/places.ts";
 
 let failures = 0;

@@ -1,14 +1,14 @@
 // bun test/shared/structure-threshold-test.ts — the agent half of structure routing: WorldAgent ticks and the move tool over
 // real plans, renderer/server-free. The planner's own rows are test/shared/structure-route-test.ts's table; walks are checked
-// against the oracle in tools/structure-oracle.ts. Also (merged): the authored-plan cache through the agent's fold
+// against the oracle in test/shared/structure-oracle.ts. Also (merged): the authored-plan cache through the agent's fold
 // (from route-preparation-test) and real bodies over transformed structures' support (from structure-route-support-test).
-import { noWorldUrl } from "../../tools/no-world.ts";
+import { noWorldUrl } from "../harness/no-world.ts";
 import { planStructure, localizePoint, prepareRouteLocal } from "../../shared/structure.js";
 import { routeGeometryFor } from "../../shared/structure-route.js";
 import { addWall, removeWall, setAperture, setTile, removeTile, drawRoom, eraseRoom, labelCell } from "../../shared/structure_edit.js";
 import { WorldAgent, WALK_ARGS_REASON } from "../../mcpl/agent.ts";
 import { handleTool } from "../../mcpl/tools.ts";
-import { valid, walk, type P } from "../../tools/structure-oracle.ts";
+import { valid, walk, type P } from "./structure-oracle.ts";
 import { agentOnDoor } from "../harness/agent-scratch.ts";
 import { qFromYaw } from "../../shared/rot.js";
 import { suite } from "../gate/suite.ts";

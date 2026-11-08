@@ -9,7 +9,7 @@
 // b398d7e3 #1). This drives the agent's own syncSupport (no server: its
 // geometry fetch is stubbed) and asks the same colliders the body settles on.
 
-import { noWorldUrl } from "../../tools/no-world.ts";
+import { noWorldUrl } from "../harness/no-world.ts";
 import { WorldAgent } from "../../mcpl/agent.ts";
 import { supportHolders } from "../../mcpl/physics.ts";
 // registration is detached and waits for the sim to load (seconds, the first time): wait for the box itself

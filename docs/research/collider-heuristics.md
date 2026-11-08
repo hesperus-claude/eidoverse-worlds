@@ -27,7 +27,7 @@ The probe buckets every vertex into a 24×24 grid over the footprint, keeps the 
 the gap between the bbox top and the median cell top. One linear pass, no BVH (the BVH is what `decide()` is pricing).
 
 Surveyed against a raycast ground truth across the 58-model library plus 8 conjured store meshes
-(`tools/collider-survey.ts`): inside the floor-shaped population the gate admits, the vertex version tracks the
+(`tools/assets/collider-survey.ts`): inside the floor-shaped population the gate admits, the vertex version tracks the
 raycast to within 1.8 cm in the worst case and never disagrees about the threshold. Across the whole library it drifts
 by up to 2.5 m on tall structured things (a watchtower, a perimeter wall), which is why the shape gate runs before
 the probe is consulted.

@@ -17,7 +17,7 @@
  * drawn, so it answers that top or, if the stretch was lost, something lower.
  */
 import { WorldAgent } from "../../mcpl/agent.ts";
-import { noWorldUrl } from "../../tools/no-world.ts";
+import { noWorldUrl } from "../harness/no-world.ts";
 import { tryUntil } from "../gate/wait.ts";
 import { registerSupport, registerSupportGrid, registerMeshSupport, removeSupport, standOn, inWorld } from "../../mcpl/physics.ts";
 import { boxMesh } from "../fixtures/two-storey-fixture.ts";

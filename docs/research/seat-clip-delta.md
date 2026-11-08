@@ -1,6 +1,6 @@
 # The seated clip's hips offset
 
-`tools/bake-seat-clip.ts` regenerates `sitting_normal_chair.vrma` (committed under `patched/eidoverse/assets/animations/`) with the hips track lowered by
+`tools/assets/bake-seat-clip.ts` regenerates `sitting_normal_chair.vrma` (committed under `patched/eidoverse/assets/animations/`) with the hips track lowered by
 Δ (`DELTA`, 0.409 track units).
 
 ## The fault

@@ -2,7 +2,7 @@
 // nothing from the old fetch. No server: the agent's geometry and mesh fetches are stubbed and held open.
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/mcpl/support-swap-test.ts
-import { noWorldUrl } from "../../tools/no-world.ts";
+import { noWorldUrl } from "../harness/no-world.ts";
 import { WorldAgent } from "../../mcpl/agent.ts";
 import { supportHolders } from "../../mcpl/physics.ts";
 import { tryUntil, pause } from "../gate/wait.ts";

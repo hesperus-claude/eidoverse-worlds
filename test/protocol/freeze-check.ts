@@ -161,7 +161,7 @@ try {
     check("F22 tools/captionbot/world.ts sends a valid hello: it joins", !!ok); }
   { // S5: one hello helper. Every file that builds a join imports helloOf (the page's inline socket spells it, checked below;
     // this suite's own raw join is the no-hello probe; Python spells it as HELLO)
-    const own = new Set(["client/index.html", "test/protocol/freeze-check.ts", "tools/surface-test.py"]); const bad: string[] = [];
+    const own = new Set(["client/index.html", "test/protocol/freeze-check.ts", "test/labs/surface-test.py"]); const bad: string[] = [];
     const walk = (d: string) => { for (const e of fs.readdirSync(path.join(ENGINE, d), { withFileTypes: true })) { const r = path.join(d, e.name);
       if (e.isDirectory()) { if (!["node_modules", ".git", "worlds", "spec", ".siblings"].includes(e.name)) walk(r); continue; }
       if (!/\.(ts|js|mjs|html)$/.test(e.name) || own.has(r)) continue; const t = fs.readFileSync(path.join(ENGINE, r), "utf8");

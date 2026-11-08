@@ -21,7 +21,7 @@
 // authored `recipe` extra — reading the served tier with the same tierOf the
 // loader uses. The PRODUCTION-LOADER part (round three of the review) then
 // runs the real, unmodified client/lib/assets.js against that same child
-// (tools/lod-loader-child.ts: only a renderer that never draws and the frame
+// (test/client/lod-loader-child.ts: only a renderer that never draws and the frame
 // conductors injected below it, its relative fetches resolved to the child),
 // once per /version shape — the real one, one with no recipe, one with no
 // key — and asserts the URL it fetched, the cache key it chose and the

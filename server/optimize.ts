@@ -125,7 +125,7 @@ export function ktx2EncodeArgs(encoder: string, isToktx: boolean, srgb: boolean,
 }
 
 /** Stamped on every image this encoder writes since the transfer fix (ktx2EncodeArgs --assign-tf). A ktx-create
- *  KTX2 image without it, written LINEAR, had the sRGB→linear curve baked in — tools/ktx2-tf-purge.ts finds those.
+ *  KTX2 image without it, written LINEAR, had the sRGB→linear curve baked in — tools/assets/ktx2-tf-purge.ts finds those.
  *  The image's own KTX metadata can't tell them apart (same writer, same params). */
 export const KTX2_TF_MARK = "ktx2Tf";
 export type Ktx2Tally = { eligible: number; converted: number; failed: string[] };

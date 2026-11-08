@@ -921,7 +921,7 @@ fixture/tool matrix.
   its own welcome; the layout section stays code-side for its live
   reset button; KEYMAP export dead). All on the presets law — commits
   write concrete args, the log never stores a def name. NEW GATE:
-  tools/panelbench.ts (16 checks) — the panels lazy-build on open, so
+  bench/panelbench.ts (16 checks) — the panels lazy-build on open, so
   construction errors were invisible to every boot gate and the
   surfaces went their whole lives eyeball-only; now a scratch world +
   headless Chrome opens all four sections, round-trips build mode,
@@ -1256,7 +1256,7 @@ fixture/tool matrix.
   FLORA_SPECIES hydrates once before first build (createFlora +
   loadFloraModule both await; object identity preserved for
   globalThis). Adding a species = adding a JSON file — proven by
-  tools/defs-smoke.ts: a def-only burgundy species rendered opaque
+  tools/operator/defs-smoke.ts: a def-only burgundy species rendered opaque
   (drawn 6133) existing in no .js file; unknown species fails loudly,
   world stands. GRASS_COLORS stays engine-side for now (calibrated to
   Sol's atlas); candidate for defs later. NOTE: future upstream
@@ -2106,7 +2106,7 @@ fixture/tool matrix.
   models (8b: unlaned compiles, depth pre-warm) and texture-upload
   spikes (8d).
 - **2026-08-10 — step 8 opened: the rough first minute, measured and
-  designed.** New tools/bootjank.ts replays a byte-copy of commons and
+  designed.** New bench/bootjank.ts replays a byte-copy of commons and
   attributes every long frame via document-start GPU hooks: rough
   0→8.4s then flat 120fps; worst frames are draws waiting on pipeline
   bursts (641ms, 1166ms). Two extractions grounded §16: compileAsync
@@ -2147,7 +2147,7 @@ fixture/tool matrix.
   streamed residency, a culled meadow, a dissolved client, a split
   server, and 300+ wire-contract checks green around all of it.
 - **2026-08-10 — 7-prep: servergate lands, and the battery baselines
-  CLEAN.** `tools/servergate.ts` runs the step-7 gate lattice as one
+  CLEAN.** `tools/operator/servergate.ts` runs the step-7 gate lattice as one
   command: twelve suites, each external-server tool getting a fresh
   scratch sequencer with its exact env header, kill-by-child-handle +
   a post-run port sweep for the self-booting suites' leaked servers
@@ -2300,7 +2300,7 @@ fixture/tool matrix.
   density), R2 (refcounted proto eviction under the info.memory
   budget), R3 (byte LRU).
 - **2026-08-09 — STEP 5 COMPLETE — 5g: measured, reviewed, fixed.**
-  `tools/lightbench.ts` (CDP, scratch door, headless Edge) now proves what
+  `bench/lightbench.ts` (CDP, scratch door, headless Edge) now proves what
   paritybench can't see: rain folded → wet/cover targets exact and rising
   frame-over-frame; six placed lights + the adopted bolt assign exactly per
   §12.4 (keeps + mirror cast, casting = min(requests, cap)); at noon only
@@ -3271,7 +3271,7 @@ server.ts (source-text gates + it shrinks to a session-relay list once
 join internals and the verb case delegate).
 
 ### 15.3 Slices and gates
-- **7-prep: tools/servergate.ts** — one runner that boots a scratch
+- **7-prep: tools/operator/servergate.ts** — one runner that boots a scratch
   sequencer per tool with its exact env header (permtest 8991,
   modtest 8992+WORLD_ADMIN, comptest 8993, locktest 8994, compfold
   8995+FOLD_EVERY=1, leasetest 8997, behaviortest 8994+BHV_TIMER_MIN=1,
@@ -3297,7 +3297,7 @@ loads — before settling at 120fps. Measured, mapped, and designed here.
 
 ### 16.1 Ground truth (bootjank + perflogs + two extractions, 2026-08-10)
 
-`tools/bootjank.ts` (new) replays a byte-copy of worlds/commons in a
+`bench/bootjank.ts` (new) replays a byte-copy of worlds/commons in a
 scratch sequencer and records every frame from document start, with
 document-start hooks on createRenderPipeline/createShaderModule/
 writeBuffer/writeTexture/copyExternalImageToTexture, longtask spans, and

@@ -1,4 +1,4 @@
-// test/stubs/lod-loader-stub.mjs — what tools/lod-loader-child.ts injects BELOW
+// test/stubs/lod-loader-stub.mjs — what test/client/lod-loader-child.ts injects BELOW
 // the real client/lib/assets.js: a renderer that never draws, and the
 // frame-budget conductors (loadwork, warmqueue) that run their work at once.
 // Everything above — the /version handshake, resolveLoadRequest, fetchBytes,

@@ -207,7 +207,7 @@ const hostContent = (p: string) => { const h = contentAddressOf(p); return h ? `
  *  from} or {name, role, account: null, why, bind}, each with its `id` (the one the written world holds: bot #369); owners first.
  *  What the operator approves, and the upgrade's result. */
 /** The bind command for one imported identity, by its id: a name may be two people's (Ann and ann), an id is one (bot #369). */
-const bindAdvice = (world: string, id: string) => `bun tools/operator-repair.ts bind ${world} ${id} <their account>`;
+const bindAdvice = (world: string, id: string) => `bun tools/operator/operator-repair.ts bind ${world} ${id} <their account>`;
 export function peopleOf(world: string, r: Any, describe: (id: string) => Any) {
   const rank = (x: string) => ["owner", "moderator", "builder", "member"].indexOf(x) >>> 0;
   const out = Object.entries<Any>(r.final?.translated?.["@world"] ?? {}).filter(([k]) => k.startsWith("roles:")).map(([k, v]) => {
@@ -231,7 +231,7 @@ export function bansOf(world: string, r: Any, describe: (id: string) => Any) {
 export function ownerWarning(world: string, people: Any[] = []): string | null {
   const owners = people.filter((p) => p.role === "owner");
   if (owners.some((p) => p.account)) return null;
-  const how = `a server operator still enters it and can bind them (bun tools/operator-repair.ts bind ${world} <name> <their account>) or give it to someone with operator-repair set (docs/operator/TRANSLATING-OLD-WORLDS.md)`;
+  const how = `a server operator still enters it and can bind them (bun tools/operator/operator-repair.ts bind ${world} <name> <their account>) or give it to someone with operator-repair set (docs/operator/TRANSLATING-OLD-WORLDS.md)`;
   return owners.length ? `no owner of "${world}" is bound to an account: ${owners.map((p) => p.name).join(", ")}. Until one is, nobody who signs in is its owner; ${how}`
     : `"${world}" has no owner at all after the upgrade; ${how}`;
 }

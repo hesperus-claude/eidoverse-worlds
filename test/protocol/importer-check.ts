@@ -55,7 +55,7 @@ const { readLog, fold } = await import("../../shared/protocol/fold.js");
 const { custodyAt } = await import("../../server/custody.ts");
 const { custodyFileIn } = await import("../../server/keyfiles.ts");
 const { isMinted } = await import("../../server/directory.ts");
-const { bindIdentity } = await import("../../tools/operator-bind.ts");
+const { bindIdentity } = await import("../../tools/operator/operator-bind.ts");
 const { HN_ISS } = await import("../../server/auth.ts");
 const { emptyState: v1Empty, foldEntry: v1Fold } = await import("../../tools/import-v1/fold.js");
 

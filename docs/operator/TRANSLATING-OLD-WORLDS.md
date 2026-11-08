@@ -275,7 +275,7 @@ A name main recorded no account for, or several, comes over as an
 run lists every role holder, bound or not (`people` in the report), and says
 for each unbound one why and how to bind it:
 
-    owner fable has no account yet (main recorded no account for this name): bind with bun tools/operator-repair.ts bind commons u-dk5m2x7qz3hwbna4rvpc <their account>
+    owner fable has no account yet (main recorded no account for this name): bind with bun tools/operator/operator-repair.ts bind commons u-dk5m2x7qz3hwbna4rvpc <their account>
 
 Bans come over the same way: a banned name is bound to main's one account for
 it, so that account stays banned, and the report lists every ban (`bans`,
@@ -292,7 +292,7 @@ server operator enters it and can bind them (below).
 `https://<your server>/whoami` shows them when they're signed in), then, on
 the host:
 
-    WORLDS_DIR=<dir> bun tools/operator-repair.ts bind <world> <their old name, or its u- id> <their account>
+    WORLDS_DIR=<dir> bun tools/operator/operator-repair.ts bind <world> <their old name, or its u- id> <their account>
 
 From then on, signing in with that account *is* that identity, with its roles,
 in every world. The bind is recorded in the world's `world.mod.jsonl` as an
@@ -315,8 +315,8 @@ look them up and give them the world with operator-repair. Put your browser's
 `EIDO_AGENT_TOKEN` to an operator agent's token instead), your server's
 address for `https://your.server`, and the world's name for `<world>`:
 
-    EIDO_SESSION=<cookie> bun tools/operator-repair.ts https://your.server <world> whois '{"name":"Ann"}'
-    EIDO_SESSION=<cookie> bun tools/operator-repair.ts https://your.server <world> whois '{"name":"Ann-tann"}'
+    EIDO_SESSION=<cookie> bun tools/operator/operator-repair.ts https://your.server <world> whois '{"name":"Ann"}'
+    EIDO_SESSION=<cookie> bun tools/operator/operator-repair.ts https://your.server <world> whois '{"name":"Ann-tann"}'
 
 The first looks up the old owner's name: the entry marked `"imported": true`
 is the old record. The second looks up the name on the real owner's
@@ -324,8 +324,8 @@ nameplate, which may carry a suffix (here `Ann-tann`) because the imported
 record holds the plain name: the entry marked `"here": true` is the person in
 front of you. Give them the world, and clear the old record's role:
 
-    EIDO_SESSION=<cookie> bun tools/operator-repair.ts https://your.server <world> set '{"id":"@world","component":"roles:u-THEIR-ID","value":{"role":"owner"}}'
-    EIDO_SESSION=<cookie> bun tools/operator-repair.ts https://your.server <world> delete '{"id":"@world","component":"roles:u-IMPORTED-ID"}'
+    EIDO_SESSION=<cookie> bun tools/operator/operator-repair.ts https://your.server <world> set '{"id":"@world","component":"roles:u-THEIR-ID","value":{"role":"owner"}}'
+    EIDO_SESSION=<cookie> bun tools/operator/operator-repair.ts https://your.server <world> delete '{"id":"@world","component":"roles:u-IMPORTED-ID"}'
 
 (`u-THEIR-ID` and `u-IMPORTED-ID` are the two `id`s whois printed.) The
 owner's rights change at once; each repair is the operator's own recorded

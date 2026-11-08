@@ -3,7 +3,7 @@
 // three r186 keeps one render object per (object, material, render context, lights) in a chain map chosen by
 // passId. The XR stereo ArrayCamera changes a render object's dynamic cache key (`cameras.length`), so while desktop
 // and XR shared the default map every switch disposed each object and rebuilt it in the same slot: the first exit
-// recompiled every material in the world (tools/xr-switch-compile-measure.mjs), and a desktop-side pre-warm of the XR
+// recompiled every material in the world (bench/xr-switch-compile-measure.mjs), and a desktop-side pre-warm of the XR
 // variant was undone by the very next desktop frame.
 //
 // Routing stereo cameras to their own chain map ('xr', 'xr:backSide') lets both variants live side by side:

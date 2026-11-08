@@ -9,7 +9,7 @@
 //      defaults and bounds, the clock note, the description and its bound, and
 //      a `describe` that says what the author said and whether it plays.
 //   2. PERCEPTION — what look() carries for a resident who reads.
-import { noWorldUrl } from "../../tools/no-world.ts";
+import { noWorldUrl } from "../harness/no-world.ts";
 import { normalizeSound, describeSound, allowedSoundSrc, SOUND_DESCRIPTION_MAX, SOUND_DEFAULTS } from "../../shared/sound.js";
 process.env.EW_EMITTER_COALESCE_SEC = "0.25";
 const { WorldAgent } = await import("../../mcpl/agent.ts");
