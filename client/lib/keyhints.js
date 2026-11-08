@@ -1,7 +1,7 @@
 // keyhints — every modifier key and hidden gesture in build mode, said where the hand is. Two tiers:
 //   before: in the control's tooltip (what you COULD do, on hover)
 //   during: on the status line at the bottom while you're engaged (what the keys do RIGHT NOW)
-// tools/keyhints-check.ts fails the build when code reads a modifier without a `// keys: <id>` tag naming an entry here,
+// test/client/keyhints-check.ts fails the build when code reads a modifier without a `// keys: <id>` tag naming an entry here,
 // or when an entry is never shown. Two import-free imports (markup.js, base.js): panels.js and friends stay cycle-free; ui.js
 // listens on the bus. A `during` line is our own static markup, so it rides as markup (the bar shows plain text as text).
 import { markup } from './markup.js';

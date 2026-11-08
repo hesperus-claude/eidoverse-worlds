@@ -29,14 +29,14 @@ checked:
 
 | step | what it proves | where the fact comes from |
 |---|---|---|
-| browser binary | a real Chromium exists at `CHROME` or one of the paths the other probes use (and is not a shell stub: on some distros `/usr/bin/chromium-browser` is a 2 KB snap stub that *exists*) | `tools/harness.ts:15`, `tools/probe-harness.mjs:8` (Playwright's build) |
+| browser binary | a real Chromium exists at `CHROME` or one of the paths the other probes use (and is not a shell stub: on some distros `/usr/bin/chromium-browser` is a 2 KB snap stub that *exists*) | `test/harness/harness.ts:15`, `test/harness/probe-harness.mjs:8` (Playwright's build) |
 | old tree / new tree | both are checkouts; the old one is made as a detached worktree of `--old-ref` if missing; they are different commits; each has `node_modules` and `client/node_modules` (linked from a sibling checkout only when the manifests are byte-identical) | the server warns "browsers will hang at the splash" without `client/node_modules` |
 | clock pin | the old tree's commit time is readable (the default pin) | `git log -1 --format=%ct` in the old tree |
 | world copy: ‹world› | a directory was given, and it holds `world.jsonl` whose line 0 is a `{dialect:"eidoverse-log", v}` genesis with the current protocol's `v` | `server/livehost.ts:141 isWorldDir`; `server/server.ts:355-363` refuses anything else at the door, naming `server/oldworlds.ts` |
 | memory | `MemAvailable` ≥ 1200 MB (`SURFACE_MEM_FLOOR_MB`) | two sequencers + a SwiftShader Chromium; an OOM can take a small VM down with it |
 | old server / new server | each tree's `server/server.ts` answers `/health` with the nonce *we* started it with | `server/routes.ts:1209-1213` (`BENCH_NONCE`) — a stranger's sequencer on the port is refused |
 | world opens: ‹world› on ‹tree› | a spectator join gets a snapshot (not an error), its cut folds to > 0 entities, and `present[]` is empty | `server/server.ts:747` buildSnapshot; `shared/protocol/replica.js:150` clientCutOf |
-| browser page target | the Chromium we spawned exposes *our* page on *our* debug port | as `tools/harness.ts:187-203` |
+| browser page target | the Chromium we spawned exposes *our* page on *our* debug port | as `test/harness/harness.ts:187-203` |
 | client ready: ‹world› on ‹tree› | joined → loads idle → builds settled → sky not busy → **≥ 12 frames drawn after that** | `net.js replicaActive`, `assets.js loadingItems`, `world.js anyBuildsPending`, `sky.js skyBusy`, a `renderer.render` call counter the probe installs (`render.js renderCensus` ticks only in XR) |
 | camera honoured | after 6 drawn frames the camera is still where it was put (< 1 cm drift) | `controller.js:1035 updateSpectator` only moves a spectator's camera to follow a remote body |
 | frame drawn | the capture has more than a handful of distinct colours | a blank canvas is a failed capture, not a surface |

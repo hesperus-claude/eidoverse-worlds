@@ -582,7 +582,7 @@ export class WorldAgent {
    *  Frames out (server→sidecar): relay-cred · sfu-offer · sfu-ice · sfu-route
    *  Frames in  (sidecar→server): sfu-answer · sfu-ice · sfu-want-negotiate
    *  Nothing else is forwarded: a whitelist, not a pipe, so server-side
-   *  validation stays the one authority (tools/door-media-whitelist-test.mjs). */
+   *  validation stays the one authority (test/mcpl/door-media-whitelist-test.mjs). */
   onMedia: ((frame: Record<string, unknown>) => void) | null = null;
   /** Our own recent says (seq → text) and our surface generation, both needed
    *  to mint a performance receipt on a sidecar's behalf. */

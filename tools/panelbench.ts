@@ -10,7 +10,7 @@
 // groundpanel/skypanel/seatedit + rows.js): the exact change that could
 // silently break a paint is the one that finally bought it a gate.
 
-import { scratchBench, mkCheck, sleep } from './harness.ts';
+import { scratchBench, mkCheck, sleep } from '../test/harness/harness.ts';
 
 const { cdp, evalJson, cleanup, die, BASE } = await scratchBench('panelbench', { worlds: ['panelbench'], serverEnv: { SKIP_OPT_SWEEP: '1' } });   // joining never founds a world
 const { check, tally } = mkCheck();

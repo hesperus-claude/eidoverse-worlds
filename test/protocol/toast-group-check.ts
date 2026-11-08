@@ -1,6 +1,6 @@
 // test/protocol/toast-group-check.ts — load failures of one kind are ONE toast that counts the things (R 10-28), each
 // thing's line in the console; dismissing it quiets that kind for the session; any other error still toasts on its own.
-import { scratchBench, mkCheck } from "../../tools/harness.ts";
+import { scratchBench, mkCheck } from "../harness/harness.ts";
 import { until } from "../gate/wait.ts";
 
 const WORLD = "toasts";

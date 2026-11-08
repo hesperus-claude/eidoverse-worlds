@@ -1,5 +1,5 @@
 // plateanchor — WHERE a nameplate hangs: anchored to the body, following its posture. Pure, so the test drives these
-// very functions (tools/plateanchor-test.ts); avatar.js measures the body once and calls them every frame.
+// very functions (test/client/plateanchor-test.ts); avatar.js measures the body once and calls them every frame.
 //
 // WHY this shape: a plate at a fixed height is wrong for a short or a tall body and can't follow sitting or lying
 // down. Nobody tracks the live HEAD — "a plate that bobs with the wearer's neck reads as broken" (BasisVR,

@@ -25,8 +25,8 @@ Additional gates use separate fixture shapes:
 - `ammodoll-rig.json` contains node transforms, parentage and humanoid bone
   mapping extracted from the source VRM named and SHA-256-bound inside it.
   Meshes and textures are omitted. Reproduce the extraction with
-  `bun tools/extract-doll-fixture.ts path/to/mythos-wings.vrm`.
-  `bun tools/ammodoll-test.ts` uses this committed skeleton and a copy with
+  `bun test/fixtures/extract-doll-fixture.ts path/to/mythos-wings.vrm`.
+  `bun test/client/ammodoll-test.ts` uses this committed skeleton and a copy with
   digit bones removed, including every wing/hair matrix assertion. Add
   `--fleet` to also test installed local avatars; that optional extension
   reports a missing library before running it.

@@ -29,7 +29,7 @@ import { readdirSync, statSync } from 'node:fs';
 import { join, basename, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const { THREE }: any = await import('./core-stub.mjs');
+const { THREE }: any = await import('../test/stubs/core-stub.mjs');
 const { MeshBVH }: any = await import('../client/node_modules/three-mesh-bvh/src/index.js');
 
 const GRID = 24;          // columns per axis

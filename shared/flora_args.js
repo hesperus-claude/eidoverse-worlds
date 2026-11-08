@@ -1,6 +1,6 @@
 // flora_args — pure translation logic for the `grass` verb: legacy makeGrass
 // bags → createFlora options, and preset/variety stroke composition. No DOM,
-// no THREE — unit-tested in tools/flora.test.ts. Shared: the
+// no THREE — unit-tested in test/client/flora-test.ts. Shared: the
 // authority runs mapGrassArgs at write (shared/protocol/assetref.js) so a stored
 // grass holds one spelling, and checks a preset's name with presetStrokes; the
 // preset itself is stored by its name and composed here on read.

@@ -34,7 +34,7 @@
 
 import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
-const STUB = fileURLToPath(new URL('./core-stub.mjs', import.meta.url));
+const STUB = fileURLToPath(new URL('../test/stubs/core-stub.mjs', import.meta.url));
 plugin({ name: 'core-stub', setup(b) { b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB })); } });
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -543,7 +543,7 @@ await Bun.file(tmpGlb).unlink?.() ?? Bun.spawnSync(['rm', tmpGlb]);
 say(`wrote ${outPath} (${(out.length / 1048576).toFixed(1)}MB)`);
 
 // ---- 6: verify with the fleet fixtures + both engines -----------------------
-const { glbJson, humanBones: hb, worldPositions, makeAvatar, toppleLean } = await import('./rig-load.mjs');
+const { glbJson, humanBones: hb, worldPositions, makeAvatar, toppleLean } = await import('../test/harness/rig-load.mjs');
 const { AmmoRagdoll, ensureAmmo } = await import('../client/lib/ammodoll.js');
 const { Ragdoll } = await import('../client/lib/ragdoll.js');
 const g2 = glbJson(readFileSync(outPath));

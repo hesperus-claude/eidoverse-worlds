@@ -19,7 +19,7 @@ Run every suite from the repo root with `BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun
 | #241 | `buildcheck`, `buildcheck-queue`, `buildcheck-route` |
 
 Outside the gate, run on their own: #237/#242's water and heightmap tests (arrival precision is mover-check M4 and agenttools' walk_to tolerance).
-`tools/support-lifecycle-test.ts` is **not** passing: it was red on this branch before the stack merged. One cause is
+`test/server/support-lifecycle-test.ts` is **not** passing: it was red on this branch before the stack merged. One cause is
 fixed (`68993f19`: its `geom()` read an undefined name). Re-measured at `bf9bd080`: 12/22, every red a height of 0.00
 from its calibration row on (the knock-down it drives never lands; likely its bare-socket hand's `puppet` / `bodydrag`
 now meet consent and range at the server, and it doesn't read the error), so it stays out of the gate.

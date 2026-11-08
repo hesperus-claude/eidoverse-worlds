@@ -281,7 +281,7 @@ export function sendJoin() {
   // tools/access-test.ts 11b). Its id keeps the renderer- prefix.
   //
   // This reads `capture` when the join is SENT. main.js wires it before start() opens
-  // the socket (tools/renderer-join-test.ts pins that order).
+  // the socket (test/client/renderer-join-test.ts pins that order).
   const rendering = CONFIG.renderer && capture !== noRenderer;
   if (CONFIG.renderer && !rendering && !warnedNoRenderer) {
     warnedNoRenderer = true;
@@ -820,7 +820,7 @@ export function teardownParticipant(id, expected) {
  *  the noteMalformed bound. */
 let stalePresenceSeen = 0;
 export const stalePresenceCount = () => stalePresenceSeen;
-/** test seam — the wire, minus the socket (tools/remotes-lifecycle-test.ts
+/** test seam — the wire, minus the socket (test/client/remotes-lifecycle-test.ts
  *  drives the dispatch directly; the server's per-socket FIFO is the test's
  *  license to sequence messages by hand) */
 export const _dispatch = (msg) => handle(msg);

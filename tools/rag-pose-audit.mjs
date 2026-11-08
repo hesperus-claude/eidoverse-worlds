@@ -16,11 +16,11 @@
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
-const STUB = fileURLToPath(new URL('./core-stub.mjs', import.meta.url));
+const STUB = fileURLToPath(new URL('../test/stubs/core-stub.mjs', import.meta.url));
 plugin({ name: 'core-stub', setup(b) { b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB })); } });
-const { THREE } = await import('./core-stub.mjs');
+const { THREE } = await import('../test/stubs/core-stub.mjs');
 const { Ragdoll } = await import('../client/lib/ragdoll.js');
-const { rigs, makeAvatar, toppleLean } = await import('./rig-load.mjs');
+const { rigs, makeAvatar, toppleLean } = await import('../test/harness/rig-load.mjs');
 
 const DEG = 180 / Math.PI;
 const PEAK = process.argv.includes('--peak');

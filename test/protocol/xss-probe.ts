@@ -1,5 +1,5 @@
 // test/protocol/xss-probe.ts — security pass 3 (H1, and H2's client half: P) in a real browser (one headless Chromium against a scratch sequencer,
-// tools/harness.ts scratchBench; test:protocol runs it under the house guards, like the other browser suites).
+// test/harness/harness.ts scratchBench; test:protocol runs it under the house guards, like the other browser suites).
 //
 // The reviewer's exploit: a guest joins named `<img src=x onerror=…>` and knocks over / grabs / poses a visitor on
 // DEFAULT settings (pushable defaults true); the status bar rendered the name as HTML and the onerror ran.
@@ -16,7 +16,7 @@
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
-import { scratchBench, mkCheck, sleep } from "../../tools/harness.ts";
+import { scratchBench, mkCheck, sleep } from "../harness/harness.ts";
 import { pageWaiter } from "../gate/wait.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 

@@ -5,7 +5,7 @@
 // letting go brings it back up to the surface, where the float takes it again. Holding a thing afloat, C sinks and Q throws.
 // With no @world.bounds there is no edge (LD11).
 import { readFileSync, existsSync } from "node:fs";
-import { scratchBench, mkCheck } from "../harness.ts";
+import { scratchBench, mkCheck } from "../../test/harness/harness.ts";
 import { until, pause } from "../../test/gate/wait.ts";
 
 const WORLD = "level-dive";

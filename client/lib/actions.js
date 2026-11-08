@@ -6,7 +6,7 @@
 // PURE, and it must stay that way: no imports, no DOM. Definition sites all over
 // the client import this file, so a dependency here would close cycles through
 // ui.js / chat.js / controller.js. It is unit-tested headless
-// (tools/actions-test.mjs) for exactly that reason.
+// (test/client/actions-test.mjs) for exactly that reason.
 //
 //   register({ id, title, keywords?, group?, key?, run, when?, fill? }) → unregister()
 //     id       stable, unique. Registering an EXISTING id MERGES (defined fields

@@ -52,7 +52,7 @@ const ROWS = [
 
 function slider(cat, label, hint, value) {
   const row = document.createElement('div');
-  row.className = 'sp-row row wide'; // sp-row = the panel's stable markup contract (tools/xr-quad-colour-probe.mjs selects by it)
+  row.className = 'sp-row row wide'; // sp-row = the panel's stable markup contract (test/client/xr-quad-colour-probe.mjs selects by it)
   row.innerHTML =
     `<span class="nm" title="${hint}">${label}</span>` +
     `<span class="ctl">` +
@@ -70,7 +70,7 @@ function slider(cat, label, hint, value) {
 
 function checkRow(label, hint, checked, onChange) {
   const row = document.createElement('div');
-  row.className = 'sp-row row wide'; // sp-row = the panel's stable markup contract (tools/xr-quad-colour-probe.mjs selects by it)
+  row.className = 'sp-row row wide'; // sp-row = the panel's stable markup contract (test/client/xr-quad-colour-probe.mjs selects by it)
   // LABEL FIRST in the markup: the grid assigns columns by source order.
   row.innerHTML =
     `<span class="nm" title="${hint}">${label}</span>` +
@@ -93,7 +93,7 @@ const LVL_DARK = '#6b5f42';
 
 function micFloorRow() {
   const row = document.createElement('div');
-  row.className = 'sp-row row wide'; // sp-row = the panel's stable markup contract (tools/xr-quad-colour-probe.mjs selects by it)
+  row.className = 'sp-row row wide'; // sp-row = the panel's stable markup contract (test/client/xr-quad-colour-probe.mjs selects by it)
   const hint = 'mic level below the marker is treated as room noise, not speech — ' +
     'raise it if typing pings nearby agents; the bar shows your live mic level';
   const FS = 0.2;  // full-scale mic level = right edge of the meter

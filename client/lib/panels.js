@@ -254,7 +254,7 @@ function stepper(value, f, commit) {
   show(wire);
   const send = (w, o) => { cur.mixed = false; wire = hard(w); show(wire); commit(wire, o); };
   // typed: written AS TYPED. The row's min/max are the slider's, not the door's: the editor's own check (editschema
-  // editOps, D4a) refuses what the door would refuse and says why, so nothing here clamps (tools/editor-range-test.ts)
+  // editOps, D4a) refuses what the door would refuse and says why, so nothing here clamps (test/shared/editor-range-test.ts)
   const sendTyped = (w) => { cur.mixed = false; wire = w; show(wire); commit(wire); };
 
   // typed entry: relative math against the CURRENT face value, no clamp (sendTyped). ONE commit per typing: Enter

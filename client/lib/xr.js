@@ -689,7 +689,7 @@ async function enterVR({ retryOf = null } = {}) {
     scaleState.samples.length = 0; scaleState.locked = false; scaleState.firstAt = 0; scaleState.k = 1; scaleState.source = 'fallback'; loadSavedScale();
     bus.emit('xr:loop');   // frameloop.js hands the loop to three BEFORE setSession saves+wraps it (see frameloop.js)
     const tReq = performance.now();
-    // installFrameClock: the restore must register BEFORE setSession, ahead of three's 'end' (tools/xr-session-lifecycle-test.mjs)
+    // installFrameClock: the restore must register BEFORE setSession, ahead of three's 'end' (test/client/xr-session-lifecycle-test.mjs)
     // window.rAF crawls at ~2 Hz in a WebXR session, stalling all that yields on it: this clock shim reroutes it
     // saved: the page's FIRST capture, re-passed every entry; a fresh capture would save the old shim as native
     sessionEnded = false;

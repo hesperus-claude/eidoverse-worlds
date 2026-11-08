@@ -5,7 +5,7 @@
 // v1's advisory lint — so the whole of #213 that survives is: the resolver walks /library's own ladder, in its order,
 // and answers exactly what the route would serve. Upstream #220 (ported 2026-10-19): a name is read as the route reads
 // it, the lib as a client's URL carries it and each run of escapes decoded back to the disk name (libfile.ts
-// libraryRel, which the /library route calls too; tools/library-decode-test.ts holds the route's own cases).
+// libraryRel, which the /library route calls too; test/server/library-decode-test.ts holds the route's own cases).
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/protocol/libfile-check.ts
 import fs from "node:fs";
 import path from "node:path";

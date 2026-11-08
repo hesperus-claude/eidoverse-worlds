@@ -1,5 +1,5 @@
 // test/protocol/client-check.ts — slice 3b in a real browser: build mode in a world sends requests, folds the log and
-// waits for the authority. One headless Chromium against a scratch sequencer (tools/harness.ts scratchBench: scratch port,
+// waits for the authority. One headless Chromium against a scratch sequencer (test/harness/harness.ts scratchBench: scratch port,
 // scratch WORLDS_DIR, its own profile; never 8968/8970). Run it under the house guards:
 //   code/scripts/eido-probe.sh -C <worktree> -t 400 test/protocol/client-check.ts      (test:protocol's `client` suite does this)
 //
@@ -22,7 +22,7 @@
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
-import { scratchBench, mkCheck, sleep } from "../../tools/harness.ts";
+import { scratchBench, mkCheck, sleep } from "../harness/harness.ts";
 import { readLog, fold, digest } from "../../shared/protocol/fold.js";
 import { refusalText } from "../../shared/protocol/refusal.js";
 

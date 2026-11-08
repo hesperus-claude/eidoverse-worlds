@@ -743,7 +743,7 @@ export const skyForProbe = () => ({ api: skyApi, sys: skyInner });
 // sky_system keeps ONE bake graph (sys._envBake) and disposes it whenever a bake with another key arrives, which
 // evicted medium's giant bake program on every switch. three looks programs up by shader SOURCE and frees one only when
 // unused, so evicted graphs are kept (dispose deferred, one per key) and a rebuild is a program-cache hit; all go at
-// teardown. ONE BAKE AT A TIME: sky_bakelock.js (tools/sky-bakelock-test.mjs).
+// teardown. ONE BAKE AT A TIME: sky_bakelock.js (test/client/sky-bakelock-test.mjs).
 const serializeBakes = (sys) => serializeBakesWith(sys, { log: (l) => tee(l), report });
 function retainBakeGraphs(sys) {
   if (!sys || Object.getOwnPropertyDescriptor(sys, '_envBake')?.get) return;
@@ -766,7 +766,7 @@ function retainBakeGraphs(sys) {
 }
 const SAME_SYSTEM = new Set(['low', 'medium', 'high']);
 // ONE SWAP AT A TIME, LATEST CHOICE WINS: the chain and its SHOWN bookkeeping live in sky_swapchain.js (pure, tested by
-// tools/sky-swapchain-test.mjs). swapTierInner below does the screen work.
+// test/client/sky-swapchain-test.mjs). swapTierInner below does the screen work.
 const swaps = makeSwapChain({ inner: (from, to) => swapTierInner(from, to), want: () => cloudQuality, api: () => skyApi, log: (l) => tee(l) });
 function swapTier(from) {
   swapping++; announceBusy();

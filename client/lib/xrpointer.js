@@ -1,5 +1,5 @@
 // xrpointer — the VR laser's POLICY, in one place, as plain functions a test can run without a headset
-// (tools/xrpointer-test.mjs). xr.js owns the per-hand loop and the scene; this owns the decisions it makes there:
+// (test/client/xrpointer-test.mjs). xr.js owns the per-hand loop and the scene; this owns the decisions it makes there:
 //
 //   1. WHEN THE BEAM IS DRAWN — the "pointer visibility" setting (Settings › VR): always / never / contextual.
 //      Contextual (the default): the beam shows while it rests on a panel or a nameplate, or while grip or trigger

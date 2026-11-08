@@ -10,7 +10,7 @@
  * patching it gives each werift-created socket an "error" handler that swallows positively-identified benign errnos
  * (counted, in /relay-diag) and treats everything else as fatal-with-stack; `send` is wrapped for the callback path.
  * The process-global handlers are PURE fatal reporters (shape is not ownership): an unowned socket erroring with the
- * same errno/syscall must die, and does (tools/sfu-test.ts).
+ * same errno/syscall must die, and does (test/server/sfu-test.ts).
  *
  * Edges: bind-time errors stay default-fatal (the handler attaches after init resolves; EADDRINUSE is not churn).
  * MediaStreamTrackFactory.rtpSource and `werift/nonstandard` create sockets outside the seam; nothing here uses them.

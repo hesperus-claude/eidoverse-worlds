@@ -1,5 +1,5 @@
 // bodyscale — "this body": the wearer's chosen SIZE and NAMEPLATE LIFT for the body they have on (Profile › Avatar).
-// Pure: no THREE, no DOM — tools/bodyscale-test.ts drives these very functions.
+// Pure: no THREE, no DOM — test/client/bodyscale-test.ts drives these very functions.
 //
 // SIZE, Basis/VRChat semantics: one multiplier `u` grows the body, its eye height, its stride (move speed) and its
 // collider together. On an Avatar it lives on vrm.scene (never the root: the root also carries the nameplate,

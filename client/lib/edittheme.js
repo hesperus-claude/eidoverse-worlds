@@ -6,7 +6,7 @@
 //
 // Two surfaces read these values and must never drift:
 //   - the desktop CSS (client/index.html, the `--e-*` block scoped to body.edit-workspace / .frame.edit)
-//     carries them as literals — tools/edittheme-test.ts parses that block and fails on any difference;
+//     carries them as literals — test/client/edittheme-test.ts parses that block and fails on any difference;
 //   - the VR canvas painter (panels.js renderCanvas, theme 'edit') imports them directly.
 // Change a value HERE and in the CSS block together; the test tells you if you forgot one.
 

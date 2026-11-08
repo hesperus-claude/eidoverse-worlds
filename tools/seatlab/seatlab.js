@@ -15,7 +15,7 @@
 // before its Y was read — invisible at y≈0, corrupt everywhere else. The
 // seat claim is now seatcore.seatClaim (pure arguments cannot alias), the
 // registers below are single-purpose, and the nonzero-Y regression in
-// tools/seatcore-test.ts pins the function the instrument leans on.
+// test/client/seatcore-test.ts pins the function the instrument leans on.
 //
 // All quantities in WORLD metres. Signed gaps are (landmark − seat surface):
 // positive = the landmark floats above the authored seat.

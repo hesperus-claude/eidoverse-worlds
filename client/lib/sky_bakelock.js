@@ -1,5 +1,5 @@
 // sky_bakelock — ONE BAKE AT A TIME over the sky engine's bakeEnv, kept out of sky.js so a node test can drive it
-// (tools/sky-bakelock-test.mjs). No GPU, no three: it only wraps a function.
+// (test/client/sky-bakelock-test.mjs). No GPU, no three: it only wraps a function.
 export const BAKE_INTERCEPT = Symbol.for('ew.bakeIntercept');   // the same symbol sky_baked.js exports (Symbol.for)
 export const BAKE_GUARD = Symbol.for('ew.bakeGuard');
 export const BAKE_AFTER = Symbol.for('ew.bakeAfter');

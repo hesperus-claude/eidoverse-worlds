@@ -4,7 +4,7 @@
 // ORDER NAMES ARE MAYA'S (and Blender's): "XYZ" means X is applied first, then
 // Y, then Z, all about the parent's fixed axes — R = Rz · Ry · Rx, so Z is the
 // outermost gimbal ring and X the innermost. three.js spells the same rotation
-// with the letters reversed (its Euler order "ZYX"); tools/euler-test.ts pins
+// with the letters reversed (its Euler order "ZYX"); test/client/euler-test.ts pins
 // the correspondence against three for all six orders.
 //
 // `q` is what the log stores, so Euler angles here are a READING of it, never

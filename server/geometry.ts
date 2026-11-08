@@ -14,7 +14,7 @@ let bvhP: Promise<{ THREE: any; MeshBVH: any } | null> | null = null;
 async function getBVH() {
   bvhP ??= (async () => {
     try {
-      const { THREE } = await import("../tools/core-stub.mjs");
+      const { THREE } = await import("../test/stubs/core-stub.mjs");
       const { MeshBVH } = await import("../client/node_modules/three-mesh-bvh/src/index.js");
       return { THREE, MeshBVH };
     } catch (err) {

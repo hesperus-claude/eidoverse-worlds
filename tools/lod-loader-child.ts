@@ -1,7 +1,7 @@
 // lod-loader-child — runs the PRODUCTION loader (client/lib/assets.js,
 // unmodified) against an owned sequencer and reports what it did.
 //
-// Spawned by tools/lod-client-test.ts, once per /version shape:
+// Spawned by test/client/lod-client-test.ts, once per /version shape:
 //   LODC_BASE      the owned child's base URL
 //   LODC_STRIP     '' | 'lodRecipe' | 'ktx2Key' — a field removed from the
 //                  child's /version answer at the network seam, so the same
@@ -11,7 +11,7 @@
 //   LODC_AUTHORED  a light library rel whose SOURCE carries a `recipe` extra
 //
 // Only two things sit below the module: a renderer that never draws and
-// frame conductors that run at once (tools/lod-loader-stub.mjs), and a fetch
+// frame conductors that run at once (test/stubs/lod-loader-stub.mjs), and a fetch
 // shim that resolves the loader's relative URLs against the child and
 // records every URL that crossed. Review of #170, round three: a mutation at
 // the loader's decision seam — `tier = req.tier` → `tier = 'full'`, the url,
@@ -57,7 +57,7 @@ globalThis.fetch = (async (input: any, init?: any) => {
   return r;
 }) as any;
 
-const STUB = fileURLToPath(new URL('./lod-loader-stub.mjs', import.meta.url));
+const STUB = fileURLToPath(new URL('../test/stubs/lod-loader-stub.mjs', import.meta.url));
 plugin({
   name: 'lod-loader-stub',
   setup(b) {

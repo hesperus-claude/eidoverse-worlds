@@ -1,7 +1,7 @@
 // shared/joints.js — what a humanoid joint may do, as measured.
 //
 // One table, two consumers: the ragdoll's particle sim clamps to it while tumbling, the IK (shared/reach.js) while
-// reaching, so an arm can't REACH where it could never FALL. Measured against the shipped rigs (tools/ragdoll-test.ts
+// reaching, so an arm can't REACH where it could never FALL. Measured against the shipped rigs (test/client/ragdoll-test.ts
 // runs them all). Angles are DEGREES here, as authored; consumers convert. Pure data plus one derivation.
 
 // BEHIND — how far a limb may point behind the body's frontal plane: a one-sided plane, because the circular CONE

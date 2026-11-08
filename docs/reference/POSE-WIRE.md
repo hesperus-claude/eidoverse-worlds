@@ -72,8 +72,8 @@ sockets (`mcpl/agent.ts` keeps the raw pose in `people`, and `look` describes it
 - **No per-person opt-out yet.** A sharing switch (or server-scoped nearby state) would be a later change; it would
   only need to stop sending, since absence already reads as unknown.
 
-Bound by `tools/voice-wire-test.ts` (owner → fence → frame → peer, spectator, agent; latest wins; fence; unknown;
-not remembered) and `tools/voice-wire-mutation-test.ts` (sender, fence, settledPose and the look note each turn it red).
+Bound by `test/shared/voice-wire-test.ts` (owner → fence → frame → peer, spectator, agent; latest wins; fence; unknown;
+not remembered) and `test/server/voice-wire-mutation-test.ts` (sender, fence, settledPose and the look note each turn it red).
 
 ## Named poses, body-mode, anims, size and voice (moved from PROTOCOL §5, the house's view #260 10-20: one list)
 

@@ -4,7 +4,7 @@
 // @ts-nocheck
 import fs from "node:fs"; import path from "node:path";
 import { ENGINE } from "../../test/gate/common.ts";
-const { scratchBench } = await import(ENGINE + "tools/harness.ts");
+const { scratchBench } = await import(ENGINE + "test/harness/harness.ts");
 const WORLD = "fogprobe", ME = "fogger";
 const { cdp, evalJson, cleanup, BASE } = await scratchBench("fogprobe", { prepare: (scratch) => {
   const wd = path.join(scratch, "worlds"); fs.mkdirSync(wd, { recursive: true });

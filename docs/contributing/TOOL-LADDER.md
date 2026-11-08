@@ -22,7 +22,7 @@ Fails 2 or 3 but the action exists → a **mode** of a general tool (`pose {wing
 and if it had a name before, that name goes in `TOOL_FOLDS` so the old call answers with the call that does it now.
 A rename of something that stays → the old name is an **unknown tool**: it is refused with the same words as any name
 the server never served, and runs nothing (Mica 11-05: no dated education table). Add it to `OLD` in
-`mcpl/alias-test.ts`, which holds every old name to exactly those words. No argument translators: an old name never
+`test/mcpl/alias-test.ts`, which holds every old name to exactly those words. No argument translators: an old name never
 runs. (Until 2026-10-28 renames were aliases with argument translations; the worked example below is that history.)
 
 ## The checklist (each line but one is a suite that fails without it)
@@ -39,8 +39,8 @@ runs. (Until 2026-10-28 renames were aliases with argument translations; the wor
       real sequencer and checks the world, not the text. Watch it fail first (stash the handler).
 - [ ] **Its words in AGENTS.md**: the tools table (`### The tools — general shapes, with modes`), in the protocol's words.
       *No suite checks this line yet: the reviewer does.*
-- [ ] **If it replaces a name**: `OLD` in `mcpl/alias-test.ts` (a rename: refused as unknown) or `TOOL_FOLDS` (became a
-      mode); `mcpl/alias-test.ts` drives every entry. Never delete a name without one of the two.
+- [ ] **If it replaces a name**: `OLD` in `test/mcpl/alias-test.ts` (a rename: refused as unknown) or `TOOL_FOLDS` (became a
+      mode); `test/mcpl/alias-test.ts` drives every entry. Never delete a name without one of the two.
 - [ ] **Not a tool at all**: a bench or rehearsal hook (`flightBodyDown`) is called on the agent directly by its test.
 
 ## Worked example — `walk_to` (2026-10-15; history: walk_to is an unknown tool now and runs nothing)
@@ -61,7 +61,7 @@ words, and nothing had tested it. `spawn {query}` is the other case: no one-step
 refuses and names the two calls (`library {query}` then `create {model}`).
 
 (The pathfinding stack, merged 10-15, gave walk_to a named `to` and a floor-picking `y`. Since 10-28 `walk_to` is
-refused with the new call and runs nothing (`mcpl/alias-test.ts`, AT9); `move {to: [x, z], tolerance}` is covered by
+refused with the new call and runs nothing (`test/mcpl/alias-test.ts`, AT9); `move {to: [x, z], tolerance}` is covered by
 AT9, places-test and mover-check. Its `check_model` became `measure {check: true}` the same way: an alias whose
 translation adds the mode.)
 

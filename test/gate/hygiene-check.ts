@@ -33,7 +33,7 @@
 //   posix-mode    a file's mode asserted equal to an octal literal (`=== 0o600`) on a line that doesn't say what Windows does:
 //                 NTFS has no POSIX modes (stat says 666), so the row fails there or passes vacuously. Use suite.ts `mode()`,
 //                 which reports the row not applicable on Windows (CI 42190828916: native-login W10, mkconfig).
-//   ungated       a test-named file (-test, -check, -probe, .test, -bench, -mutants under tools/, test/gate/, test/protocol/, tools/water/,
+//   ungated       a test-named file (-test, -check, -probe, .test, -bench, -mutants under tools/, test/ (all of it but harness/stubs/fixtures/labs), tools/water/,
 //                 mcpl/) that no SUITES row runs or imports: every test is in the gate or gone (R 10-29). The ones still out
 //                 are listed in test/gate/ungated.json with one line why; that list only shrinks.
 //   redaction-parse  a redaction's targets read by hand (`.body.values`) outside fold.js: four parsers drifted apart when
@@ -70,7 +70,7 @@ export const RULES: Record<string, RegExp> = {
   "playwright": /\bfrom\s+["']playwright(?:-core)?["']|\b(?:require|import)\(\s*["']playwright(?:-core)?["']/g,
 };
 const SELF = "test/gate/hygiene-check.ts";   // its fixtures are the bad shapes on purpose
-const EXEMPT: Record<string, string[]> = { "chrome-flags": ["test/gate/chrome.ts"], "raw-symlink": ["test/gate/common.ts"], "bare-wait": ["test/gate/wait.ts"], "own-until": ["test/gate/wait.ts"], "lab-clock": ["test/gate/clock.ts"], "own-ok": ["test/gate/suite.ts"], "agent-url": ["tools/dummy.ts"], "redaction-parse": ["shared/protocol/fold.js"] };   // dummy is the show host's service: WORLD_URL is how it is told where to connect
+const EXEMPT: Record<string, string[]> = { "chrome-flags": ["test/gate/chrome.ts"], "raw-symlink": ["test/gate/common.ts"], "bare-wait": ["test/gate/wait.ts"], "own-until": ["test/gate/wait.ts"], "lab-clock": ["test/gate/clock.ts"], "own-ok": ["test/gate/suite.ts"], "agent-url": ["test/harness/dummy.ts"], "redaction-parse": ["shared/protocol/fold.js"] };   // dummy is the show host's service: WORLD_URL is how it is told where to connect
 const SUITE_ONLY = new Set(["bare-wait", "own-until", "playwright", "own-ok", "posix-mode"]);   // the waiting rules are about tests; server code may wait on purpose
 const ALL_TOOLS = new Set(["chrome-flags", "agent-url", "slash-path"]);   // slash-path: a --preload file is no import, so the gate set misses it
 const TOOLS_ONLY = new Set(["agent-url"]);   // mcpl/ has its own owner and its server builds its agent from the env on purpose
@@ -151,8 +151,11 @@ export function ungatedTests(): string[] {
     for (const a of file.split(" ").slice(1)) if (/\.(?:ts|mjs|js)$/.test(a)) for (const f of localImports(path.join(ENGINE, a))) gated.add(rel(f));   // a runner's file argument (bun-test.ts tools/x-test.ts)
   }
   const out: string[] = [];
-  for (const d of ["tools", "test/gate", "test/protocol", "tools/water", "mcpl"]) for (const e of fs.readdirSync(path.join(ENGINE, d), { withFileTypes: true }))
-    if (e.isFile() && TEST_NAME.test(e.name) && !gated.has(`${d}/${e.name}`)) out.push(`${d}/${e.name}`);
+  const NOT_TESTS = new Set(["harness", "stubs", "fixtures", "labs", "node_modules"]);
+  const scan = (d: string): void => { for (const e of fs.readdirSync(path.join(ENGINE, d), { withFileTypes: true }))
+    if (e.isDirectory()) { if (d.startsWith("test") && !NOT_TESTS.has(e.name)) scan(`${d}/${e.name}`); }
+    else if (e.isFile() && TEST_NAME.test(e.name) && !gated.has(`${d}/${e.name}`)) out.push(`${d}/${e.name}`); };
+  for (const d of ["tools", "tools/water", "mcpl", "test"]) scan(d);
   return out.sort();
 }
 export function compare(now: Record<string, Record<string, number>>, base: Record<string, Record<string, number>>) {

@@ -24,7 +24,7 @@
 // COST. Runs synchronously when a world's water is built (the browser's applyWater, an agent's
 // buildTerrain), so every pass is linear or N log N in the grid's cells — no per-cell neighbourhood scans.
 // Budget: the 513² maximum grid (waterGridSeg), filled wall to wall and forced to be a river (the costliest
-// case), analyses in about a third of a second on a laptop; tools/waterkind-test.ts holds it under 1.2 s.
+// case), analyses in about a third of a second on a laptop; test/shared/waterkind-test.ts holds it under 1.2 s.
 
 import { riverSpeed } from './waves.js';
 

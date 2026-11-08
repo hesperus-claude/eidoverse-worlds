@@ -59,7 +59,7 @@ const UNRELATED = [
 // the wire rules' own exceptions, each with why
 const RULES_EXEMPT: [string, RegExp, string][] = [   // (the first eidosim's entries retired 2026-10-09: it lives in the importer now)
   ["mcpl/tools.ts", /^\s*world_verb: "act \{verb, args\}/, "world_verb's TOOL_REMOVED row refuses it (R 10-27)"],
-  ["mcpl/alias-test.ts", /TOOL_REMOVED|"world_verb"|world_verb (is|was) removed/, "the alias test drives world_verb's refusal (R 10-27)"],
+  ["test/mcpl/alias-test.ts", /TOOL_REMOVED|"world_verb"|world_verb (is|was) removed/, "the alias test drives world_verb's refusal (R 10-27)"],
 ];
 const IMPORTS = [
   /(?:from\s+|import\s*\(\s*|import\s+|require\s*\(\s*)["'`](\.{1,2}\/[^"'`$]+)["'`]/g,     // static, side-effect, dynamic, template (up to a ${), require

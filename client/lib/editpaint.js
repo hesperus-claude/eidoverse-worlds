@@ -15,7 +15,7 @@
 //
 // The contract with the rest of the VR seam is panels.js's: returns hit REGIONS in canvas px, each
 // {x, y, w, h, action, payload?, slider?}, dispatching exactly what the legacy painter dispatches
-// (tools/edittheme-test.ts holds the two to the same action set). Non-edit quads never come here.
+// (test/client/edittheme-test.ts holds the two to the same action set). Non-edit quads never come here.
 
 import { EDIT as T, EDIT_VR as V, pictoRuns } from './edittheme.js';
 import { stroke as strokeIcon, has as hasIcon, fillPath } from './icons.js';

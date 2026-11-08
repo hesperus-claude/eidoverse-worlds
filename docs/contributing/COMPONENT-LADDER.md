@@ -108,7 +108,7 @@ A draft needs:
 - **its offer**: Add Component lists it under a **"drafts"** heading, amber chip, with the hint "unproven: this client
   reads it; the engine doesn't" — ONLY on a client that registered a reader for it (a server, or an agent's `inspect`,
   has none and never offers it);
-- **tests**: the card's edits (`tools/editschema-test.ts`) and the reader in a browser (`test/protocol/shiplist-probe.ts`);
+- **tests**: the card's edits (`test/shared/editschema-test.ts`) and the reader in a browser (`test/protocol/shiplist-probe.ts`);
 - **a page**: what each field means, its units, and **what its absence means**, written now (see rung 3).
 
 A draft can't change a rule: the authority doesn't read it. Anything that needs the authority (a check, an effect on

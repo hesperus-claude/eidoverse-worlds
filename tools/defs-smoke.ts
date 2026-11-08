@@ -10,12 +10,12 @@
 // under a live client, a def-only species rendering, the def-composed
 // mojave biome, and unknown-species failing loudly while the boot stands.
 //
-// Scaffolding: tools/harness.ts (R2 — the shared scratch bench).
+// Scaffolding: test/harness/harness.ts (R2 — the shared scratch bench).
 
 import { mkdtempSync, readFileSync, readdirSync, copyFileSync, mkdirSync, writeFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scratchBench, readSequencerLog, mkCheck, bold, dim, sleep, ROOT, foundWorlds } from "./harness.ts";
+import { scratchBench, readSequencerLog, mkCheck, bold, dim, sleep, ROOT, foundWorlds } from "../test/harness/harness.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 
 const HEADED = process.argv.includes("--headed");

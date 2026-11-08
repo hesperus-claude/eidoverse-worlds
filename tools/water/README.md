@@ -166,9 +166,9 @@ WebGL. The rest require Chrome with WebGPU and a preview (`WATER_PREVIEW_URL`):
 bun test/protocol/zone-water-check.ts
 bun tools/water/import-golden-check.ts
 bun tools/water/fog-mask-check.ts
-bun tools/models-field-test.ts
-bun tools/underwater-presence-test.ts
-UNDERWATER_TEST_PORT=19348 bun tools/underwater-wire-test.ts
+bun test/client/models-field-test.ts
+bun test/server/underwater-presence-test.ts
+UNDERWATER_TEST_PORT=19348 bun test/server/underwater-wire-test.ts
 bun tools/water/gpu-test.ts
 ```
 

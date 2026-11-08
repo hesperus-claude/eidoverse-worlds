@@ -39,7 +39,7 @@ import os from "node:os";
 import crypto from "node:crypto";
 import { ENGINE, scratch } from "../gate/common.ts";
 import { tryUntil, pause } from "../gate/wait.ts";
-import { freePort } from "../../tools/harness.ts";
+import { freePort } from "../harness/harness.ts";
 import { suite } from "../gate/suite.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 

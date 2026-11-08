@@ -61,7 +61,7 @@ for (let i = 0; i < N_SLOTS; i++) {
   const pl = new THREE.PointLight(0xffffff, 0, 10, 1.7);
   pl.name = `slot${i}`;
   // Born casting only if the resident wants shadows at all, so the boot state agrees with the switch. Reads the
-  // preference DIRECTLY: shadowsOn() is declared below this loop (TDZ; tools/shadow-fade-test.mjs).
+  // preference DIRECTLY: shadowsOn() is declared below this loop (TDZ; test/client/shadow-fade-test.mjs).
   pl.castShadow = i === SHADOW_SLOT;   // pipeline shape: fixed at birth; the preference is uniform-level (applyShadowPref)
   // The shadow CONFIG is written for the shadow slot whether or not it is
   // casting right now, so a later setShadows(true) flips one boolean onto an
@@ -718,7 +718,7 @@ export const rigDebug = () => ({
   slotState: slots.map((pl, i) => ({
     i, casting: pl.castShadow, intensity: +pl.intensity.toFixed(3),
   })),
-  // the live lights, for probes and tools/shadow-fade-test.mjs's mutation controls. Underscored: the fields above
+  // the live lights, for probes and test/client/shadow-fade-test.mjs's mutation controls. Underscored: the fields above
   // are the stable surface.
   _slots: slots,
   casters: casters.size, casterBudget,

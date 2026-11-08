@@ -4,7 +4,7 @@
 import { chromium } from 'playwright';
 import { existsSync } from 'node:fs';
 import { PNG } from 'pngjs';
-import { ownedWorld } from './probe-harness.mjs';
+import { ownedWorld } from '../test/harness/probe-harness.mjs';
 import { qFromYaw } from '../shared/rot.js';
 import { helloOf } from '../shared/protocol/hello.js';
 

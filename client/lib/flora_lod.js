@@ -1,5 +1,5 @@
 // flora_lod — blade-level LOD index subsets for tiled 'blades' strokes,
-// DOM-free (unit-tested in tools/flora.test.ts). §17b.
+// DOM-free (unit-tested in test/client/flora-test.ts). §17b.
 //
 // The upstream tuft (vegetation.js bunchGeometry) builds each blade as a CONTIGUOUS run: 10 vertices, then 24 index
 // entries referencing only its own 10. A far-LOD index keeps whole runs, still pointing into the SHARED vertex

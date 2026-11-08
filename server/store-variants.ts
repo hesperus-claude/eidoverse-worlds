@@ -24,7 +24,7 @@
 // through to the webp shadow is PROVISIONAL for that URL (no-cache, never immutable): the variant may still be
 // encoding. Content-addressed makes the ADDRESS immutable, not the flagged answer.
 //
-// DOM-free and side-effect-free: unit-tested in tools/store-variants-test.ts.
+// DOM-free and side-effect-free: unit-tested in test/server/store-variants-test.ts.
 
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { join, basename } from "node:path";

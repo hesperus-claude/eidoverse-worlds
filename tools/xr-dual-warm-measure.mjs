@@ -16,7 +16,7 @@
 // target leak (xrwarm.js: an in-VR compileAsync built into a context the headset's frames never use).
 //
 // Run: node tools/xr-dual-warm-measure.mjs   (~40 s; run it under a memory guard)
-import { raw3Page, RAW3_IMPORTMAP } from './probe-harness.mjs';
+import { raw3Page, RAW3_IMPORTMAP } from '../test/harness/probe-harness.mjs';
 
 const N = 30, M = 20;
 const PAGE = `<!doctype html><html><body>${RAW3_IMPORTMAP}

@@ -1,7 +1,7 @@
 // LAB (not in the suite): measure the palm frame (thingphysics palmOf) against the avatar's own hand bones, both sides,
 // so the grip editor's ghost hand and its mirror are drawn from the real thing, not from my reading of palmOf.
 // @ts-nocheck
-import { scratchBench, sleep } from "../../tools/harness.ts";
+import { scratchBench, sleep } from "../harness/harness.ts";
 process.env.TRUST_NAMES = "1";
 const { cdp, evalJson, cleanup, BASE } = await scratchBench("palmframe", {});
 const page = (js: string) => evalJson(`(async () => { ${js} })()`);

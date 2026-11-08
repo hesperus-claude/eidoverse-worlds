@@ -15,7 +15,7 @@
 // Its own browser on purpose: headless leaks heap with time (a dead WebGPU device; HEAD idles at ~50 MB/s,
 // measured 09-30), so a long bench sharing one renderer OOMed it.
 
-import { scratchBench, mkCheck, sleep } from './harness.ts';
+import { scratchBench, mkCheck, sleep } from '../test/harness/harness.ts';
 
 const { cdp, evalJson, cleanup, die, BASE } = await scratchBench('editworkspace', { worlds: ['wsbench'], serverEnv: { SKIP_OPT_SWEEP: '1' } });   // joining never founds a world
 const { check, tally } = mkCheck();

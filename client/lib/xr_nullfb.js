@@ -1,4 +1,4 @@
-// A NULL EYE FRAMEBUFFER IS THE DEFAULT FRAMEBUFFER (tools/xr-render-errors-probe.mjs).
+// A NULL EYE FRAMEBUFFER IS THE DEFAULT FRAMEBUFFER (test/client/xr-render-errors-probe.mjs).
 //
 // three r186, WebGL backend: XRManager hands the session layer's framebuffer to backend.setXRTarget, and
 // _setFramebuffer then calls WebGLState.drawBuffers(renderContext, fb), which caches per framebuffer in a WeakMap —

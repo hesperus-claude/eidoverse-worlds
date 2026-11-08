@@ -13,7 +13,7 @@
 // the importer rewrites it to comp.light.) `componentsOf` reads any folded entity as a component list,
 // and `entityOf` writes a component list back to those bytes; an instance's `key` says which comp-bag key it came from. Nothing in an existing
 // world is rewritten (RFC: updates are offered, never applied);
-// tools/components-corpus-test.ts proves the round trip on the conformance fixtures and every dir in COMPONENTS_CORPUS.
+// test/shared/components-corpus-test.ts proves the round trip on the conformance fixtures and every dir in COMPONENTS_CORPUS.
 //
 // Pure: no DOM, no three, no I/O. Server, browser, mcpl and tests import it.
 
@@ -59,7 +59,7 @@ export { sha256hex, sha256hexBytes };
 // What a record may still say by hand is the ALIAS LAYER's own: a param the wire doesn't spell as a field (Transform's
 // yaw, a Model's lib, Sockets' slots, a card's whole-value json), and READS — the value a reader uses when
 // the key is absent and the registry writes nothing (a pendulum's pivot, a path's points): the descriptor's `absent` prose
-// says the same in words (tools/descriptor-defaults-test.ts), and `partDefault` where a part's reading differs.
+// says the same in words (test/shared/descriptor-defaults-test.ts), and `partDefault` where a part's reading differs.
 const UNIT_OF = { vec3: 'vec3', bool: 'bool', number: 'num', int: 'num', string: 'text', array: 'json', object: 'json', ref: 'ref', refs: 'list', target: 'ref', axis: 'choice', any: 'json', people: 'list', person: 'ref' };
 const WIDGET_OF = { color: 'color', check: 'bool', enum: 'choice', ref: 'ref', text: 'text', num: 'num' };
 const AXIS_LETTERS = Object.keys(AXES);
@@ -304,7 +304,7 @@ function compBag(inst) {
  *  Every key of the record lands in exactly one place: a component instance
  *  (`{ type, key?, params, extra? }`, `key` = the comp-bag key it came from),
  *  or `stamps`. `extra` holds a bag's keys the record has no parameter for, so
- *  nothing is dropped; tools/components-corpus-test.ts counts them. */
+ *  nothing is dropped; test/shared/components-corpus-test.ts counts them. */
 export function componentsOf(ent) {
   if (!ent || typeof ent !== 'object') return { components: [], stamps: {} };
   ent = recordOf(ent);

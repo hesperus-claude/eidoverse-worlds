@@ -1,5 +1,5 @@
 // test/protocol/build-probe.ts — ship-list group B (10-07) in a real browser: one headless Chromium against a scratch
-// sequencer (tools/harness.ts scratchBench), run under the house guards like client-check:
+// sequencer (test/harness/harness.ts scratchBench), run under the house guards like client-check:
 //   code/scripts/eido-probe.sh -C <worktree> -t 400 test/protocol/build-probe.ts      (test:protocol's `build-client` does, when the host sets PROTOCOL_HEADLESS_LOCK and PROTOCOL_PERF_GUARD: run.ts:27)
 //   ST  a building edit lands on the SELECTED building (not the world's first), as ONE act with expect; Ctrl+Z (the
 //       editor's one undo) puts it back; after someone else changes it, Ctrl+Z writes nothing over their work; the
@@ -13,7 +13,7 @@
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
-import { scratchBench, mkCheck, sleep } from "../../tools/harness.ts";
+import { scratchBench, mkCheck, sleep } from "../harness/harness.ts";
 import { readLog, fold } from "../../shared/protocol/fold.js";
 import { emptyStructure, drawRoom } from "../../shared/structure_edit.js";
 

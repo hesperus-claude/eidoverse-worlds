@@ -50,9 +50,9 @@ const reap = killChild;
 type Row = { name: string; tool: string; server?: boolean; serverEnv?: Record<string, string>; env?: Record<string, string>; timeoutMs?: number };
 const BATTERY: Row[] = [
   { name: "smoke", tool: "tools/smoke.ts" },   // its own free port (8987 is a live sequencer here)
-  { name: "authtest", tool: "tools/authtest.ts" },   // its own free port
-  { name: "support-lifecycle", tool: "tools/support-lifecycle-test.ts", timeoutMs: 420_000 },   // its own free port (freePort): nothing to sweep
-  { name: "permtest", tool: "tools/permtest.ts" },
+  { name: "authtest", tool: "test/server/authtest.ts" },   // its own free port
+  { name: "support-lifecycle", tool: "test/server/support-lifecycle-test.ts", timeoutMs: 420_000 },   // its own free port (freePort): nothing to sweep
+  { name: "permtest", tool: "test/server/permtest.ts" },
 ];
 
 const LOGDIR = mkdtempSync(join(tmpdir(), "ew-servergate-"));

@@ -4,7 +4,7 @@
 // stub) and can take seconds; the sequencer spawns it (server/buildcheck-queue.ts).
 import { plugin } from "bun";
 import { fileURLToPath } from "node:url";
-const STUB = fileURLToPath(new URL("../tools/core-stub.mjs", import.meta.url));
+const STUB = fileURLToPath(new URL("../test/stubs/core-stub.mjs", import.meta.url));
 plugin({ name: "core-stub", setup(b) { b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB })); } });
 const { THREE } = await import(STUB);
 const C = await import("../client/lib/colliders.js");

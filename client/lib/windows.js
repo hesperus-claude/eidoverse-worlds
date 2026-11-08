@@ -84,7 +84,7 @@ function _zoneFor(f, e) {
 function _contentClaims(e) {
   // whatever really sits under the pointer: a scrollbar strip, a button, an input — interactive content beats the
   // grab; bare frame chrome does not. Walk Element, not HTMLElement: over a glyph button the topmost thing is its SVG
-  // <path> (tools/frames-resize-test.ts).
+  // <path> (test/client/frames-resize-test.ts).
   for (let t = document.elementFromPoint(e.clientX, e.clientY); t instanceof Element; t = t.parentElement) {
     if (['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT', 'A'].includes(t.tagName)) return true;
     if (!(t instanceof HTMLElement)) continue;   // an SVG part has no scrollbars of its own

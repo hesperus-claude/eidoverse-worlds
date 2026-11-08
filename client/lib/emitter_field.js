@@ -1,4 +1,4 @@
-// emitter_field — the `particles` component's lifecycle, DOM- and THREE-free (tools/particles-test.ts).
+// emitter_field — the `particles` component's lifecycle, DOM- and THREE-free (test/client/particles-test.ts).
 //
 // The upstream builder (`eidoverse/particles.js`) adds a mesh to the scene and a hook to the global
 // `_autoParticleSystems` array with no way to undo either; this registry owns every emitter so a

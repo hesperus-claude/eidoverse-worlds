@@ -40,7 +40,7 @@ const ROOT = resolve('.');
 const DT = 1 / FPS;
 
 // The rig the bench flies. Derived from the shipped asset by
-// tools/flight-fixture.ts -- a hand-typed list could not go stale against the
+// test/fixtures/flight-fixture.ts -- a hand-typed list could not go stale against the
 // file, so it would prove nothing about the file.
 const FIX = JSON.parse(readFileSync('spec/fixtures/mythos-wings-rig.json', 'utf8'));
 

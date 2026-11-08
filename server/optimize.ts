@@ -45,7 +45,7 @@ export async function pickSharp(
 }
 
 let sharpP: Promise<{ sharp: any; from: string }> | null = null;
-/** Exported for tools/one-libvips-test.ts: `from` is the copy gltf-transform's own ndarray-pixels resolves, nested or the root's. */
+/** Exported for test/server/one-libvips-test.ts: `from` is the copy gltf-transform's own ndarray-pixels resolves, nested or the root's. */
 export function getSharp(): Promise<{ sharp: any; from: string }> {
   sharpP ??= pickSharp(resolveNestedSharp, (s) => import(s));
   return sharpP;
@@ -140,7 +140,7 @@ async function ktx2CompressTextures(doc: Document, encoder: string, caps?: Map<T
   // KHR_texture_basisu (and WebGPU BC upload) wants width/height % 4 == 0.
   // sharp is optional today: without it, only already-aligned PNGs encode.
   let sharp: any = null;
-  // KTX2_NO_SHARP=1 behaves as a host without sharp (tools/ktx2-resize-test.ts drives it)
+  // KTX2_NO_SHARP=1 behaves as a host without sharp (test/server/ktx2-resize-test.ts drives it)
   try { sharp = process.env.KTX2_NO_SHARP === "1" ? null : (await getSharp()).sharp; } catch { /* PNG-only pass below */ }
   const tmp = mkdtempSync(join(tmpdir(), "ew-ktx2-"));
   let converted = 0, eligible = 0;

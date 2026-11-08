@@ -4,7 +4,7 @@
 //
 // In VR the key is what the laser HOLDS (xr.js), so the pointer's stickiness carries through: a drift within the stay
 // margin keeps the same key and the dwell keeps counting; a hand that moves on to the next button starts it again.
-// Pure (no DOM, no THREE): tools/dwell-test.mjs runs it.
+// Pure (no DOM, no THREE): test/client/dwell-test.mjs runs it.
 
 export const DWELL_MS = 300;   // the nameplate card's long-standing hover delay, now everyone's
 

@@ -22,7 +22,7 @@ fs.writeFileSync(path.join(dir, "b-holds-pipes-hangs-test.ts"), fixture("setInte
 fs.writeFileSync(path.join(dir, "c-browser-test.ts"), `// ${"pup" + "peteer"}: the mark suites.ts reads as "launches a browser" (bot #412: the report counts it after its lane drained the queue)\nconsole.log("fixture ran"); process.exit(0);\n`);
 
 const t0 = performance.now();
-const rc = spawn(process.execPath, [path.join(ENGINE, "tools/run-client.ts"), "--dir", dir, "--jobs", "1", "--timeout", "3"],
+const rc = spawn(process.execPath, [path.join(ENGINE, "test/harness/run-client.ts"), "--dir", dir, "--jobs", "1", "--timeout", "3"],
   { cwd: ENGINE, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, stdio: ["ignore", "pipe", "pipe"] });
 let out = ""; rc.stdout.on("data", (d) => { out += d; }); rc.stderr.on("data", (d) => { out += d; });
 const finished = await new Promise<boolean>((res) => { const t = setTimeout(() => res(false), 45_000); rc.on("exit", () => { clearTimeout(t); res(true); }); });
@@ -44,7 +44,7 @@ ok(/^ok\s+\S*c-browser-test\.ts \[browser, alone\]/m.test(out) && /; 1 launch a 
 const dir2 = path.join(root, "imports"); fs.mkdirSync(dir2);
 fs.writeFileSync(path.join(dir2, "c-hangs-at-import-test.ts"), `await new Promise(() => {});\n`);
 fs.writeFileSync(path.join(dir2, "d-missing-package-test.ts"), `import "no-such-package-zz-${Date.now()}";\n`);
-const rc2 = Bun.spawnSync([process.execPath, path.join(ENGINE, "tools/run-client.ts"), "--dir", dir2, "--jobs", "1", "--timeout", "3", "--import-only", "--strict-env"],
+const rc2 = Bun.spawnSync([process.execPath, path.join(ENGINE, "test/harness/run-client.ts"), "--dir", dir2, "--jobs", "1", "--timeout", "3", "--import-only", "--strict-env"],
   { cwd: ENGINE, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, timeout: 45_000 });
 const out2 = rc2.stdout.toString() + rc2.stderr.toString();
 ok(/^SLOW\s+\S*c-hangs-at-import-test\.ts/m.test(out2), "--import-only: a hung top-level await is a timeout, not loaded", out2.slice(-400));
@@ -52,7 +52,7 @@ ok(/^RED\s+\S*d-missing-package-test\.ts/m.test(out2), "--strict-env: a missing 
 ok(rc2.exitCode === 1, "…and the import-only run exits 1 on the missing package", { code: rc2.exitCode });
 const dir3 = path.join(root, "slowonly"); fs.mkdirSync(dir3);
 fs.writeFileSync(path.join(dir3, "e-slow-test.ts"), `await new Promise(() => {});\n`);
-const rc3 = Bun.spawnSync([process.execPath, path.join(ENGINE, "tools/run-client.ts"), "--dir", dir3, "--jobs", "1", "--timeout", "3", "--import-only", "--strict-env"],
+const rc3 = Bun.spawnSync([process.execPath, path.join(ENGINE, "test/harness/run-client.ts"), "--dir", dir3, "--jobs", "1", "--timeout", "3", "--import-only", "--strict-env"],
   { cwd: ENGINE, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, timeout: 45_000 });
 ok(rc3.exitCode === 0 && /^SLOW\s+\S*e-slow-test\.ts/m.test(rc3.stdout.toString()), "--import-only: a file still running is reported SLOW but doesn't fail the run (it can't tell a long test from a hang)", { code: rc3.exitCode });
 done();

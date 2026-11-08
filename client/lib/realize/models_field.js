@@ -1,6 +1,6 @@
 // models_field — the models realizer's pure half (TEL0S_NOTES §11.4): diff the
 // folded entities against what is realized and decide what to create, retire or
-// rebuild. No THREE, no DOM; models.js executes the plan, tools/models-field-test.ts
+// rebuild. No THREE, no DOM; models.js executes the plan, test/client/models-field-test.ts
 // holds this half to the light (same split as flora_field.js / emitter_field.js).
 
 import { P } from '../scheduler.js';

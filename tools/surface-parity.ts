@@ -50,13 +50,13 @@
 // Browser hygiene it leans on: teardown in finally and on signals; every gate prints
 // its stage on green and red; waits are on conditions (frames drawn, loads idle) not clocks; evaluate is raced against
 // a clock (harness.ts cdpOn: 60 s); frames are PROVED (a renderer.render call counter advances) not assumed; the sky guard
-// (ew-cloud-quality=off) and the GPU-loss guard (sessionStorage ew-gpu-lost) from tools/harness.ts:220-226 are applied
+// (ew-cloud-quality=off) and the GPU-loss guard (sessionStorage ew-gpu-lost) from test/harness/harness.ts:220-226 are applied
 // to every page. Run one headless browser at a time: the script checks memory but takes no lock.
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, cpSync, copyFileSync, mkdtempSync, rmSync, symlinkSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, basename, dirname } from "node:path";
 import { PNG } from "pngjs";
-import { cdpOn, freePort, sleep, bold, dim } from "./harness.ts";
+import { cdpOn, freePort, sleep, bold, dim } from "../test/harness/harness.ts";
 import { chromeArgs, chromeCandidates, isBrowser } from "../test/gate/chrome.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 
@@ -290,7 +290,7 @@ const pageErrors: string[] = [];
 cws.addEventListener("message", (ev) => { const m = JSON.parse(String(ev.data)); if (m.method === "Runtime.exceptionThrown") pageErrors.push(String(m.params?.exceptionDetails?.exception?.description ?? m.params?.exceptionDetails?.text ?? "").slice(0, 200)); });
 await Promise.all([cdp.send("Runtime.enable"), cdp.send("Page.enable"), cdp.send("Log.enable")]);
 await cdp.send("Emulation.setDeviceMetricsOverride", { ...VIEW, deviceScaleFactor: 1, mobile: false });
-// the sky guard and the GPU-loss guard every bench applies (tools/harness.ts:220-226)
+// the sky guard and the GPU-loss guard every bench applies (test/harness/harness.ts:220-226)
 await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: "try { localStorage.setItem('ew-cloud-quality', 'off'); } catch {}" });
 await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: "try { if (!sessionStorage.getItem('ew-gpu-lost')) sessionStorage.setItem('ew-gpu-lost', JSON.stringify([Date.now()])); } catch {}" });
 // the clock pin (probe hook): the sun and the forecast read Date.now() (sky.js:385, :416)

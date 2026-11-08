@@ -1,5 +1,5 @@
 // What "a headset was seen here" actually means, as pure functions. core.js owns the storage read;
-// this owns the meaning. tools/headset-seen-test.mjs drives it directly. No imports on purpose.
+// this owns the meaning. test/client/headset-seen-test.mjs drives it directly. No imports on purpose.
 //
 // The stored value is HISTORY, not presence: nothing clears it when a headset is unplugged, and
 // `isSessionSupported` stays optimistic after one is switched off. It lets the next boot pick WebGL up

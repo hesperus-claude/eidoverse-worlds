@@ -20,7 +20,7 @@
 // Hysteresis: a placement at the band edge must not flip tiers every sweep.
 // The upgrade edge sits inside the downgrade edge by LOD_HYST on each side.
 //
-// DOM-free and side-effect-free: unit-tested in tools/lod-policy-test.ts.
+// DOM-free and side-effect-free: unit-tested in test/client/lod-policy-test.ts.
 
 import { negotiate, withLod } from '../../shared/ktx2.js';
 

@@ -1,5 +1,5 @@
 // ping-wire — the two renderings of a ping, kept out of net-server.ts (which listens at module load) so
-// mcpl/door-unit-test.ts can import them. Both servers consume these.
+// test/mcpl/door-unit-test.ts can import them. Both servers consume these.
 //
 //  - pingLine:     the pending_pings queue line (plain-MCP hosts, server.ts)
 //  - pingDelivery: the channel frame (MCPL hosts, net-server.ts deliver())

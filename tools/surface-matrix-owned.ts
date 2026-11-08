@@ -11,7 +11,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { foundWorlds } from "./harness.ts";
+import { foundWorlds } from "../test/harness/harness.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 
 const PORT = 8420 + (process.pid % 150);

@@ -1,5 +1,5 @@
 // Who owns window.requestAnimationFrame while a session presents — as pure state. xr.js installs and
-// restores it; this owns the rules. tools/xr-frame-clock-test.mjs drives them. No imports on purpose.
+// restores it; this owns the rules. test/client/xr-frame-clock-test.mjs drives them. No imports on purpose.
 //
 // While presenting, frames must come from the SESSION's clock, not the window's: a headset runs at its
 // own rate and the window clock is throttled or stopped behind it. So window.rAF is shimmed onto the
@@ -54,7 +54,7 @@ export function clockIsRestored(win, native) {
 }
 
 /** INSTALL AND TEAR DOWN, as one owned sequence: capture, register the restore listener BEFORE
- *  setSession, then shim. Driven by tools/xr-session-lifecycle-test.mjs.
+ *  setSession, then shim. Driven by test/client/xr-session-lifecycle-test.mjs.
  *
  *  @param win     the window whose clock is being taken over
  *  @param session the XRSession (or anything with addEventListener/requestAnimationFrame)

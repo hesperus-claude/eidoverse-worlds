@@ -14,7 +14,7 @@
 // compiled the mono variant under a stereo name).
 //
 // Run: node tools/xr-switch-compile-measure.mjs   (~30 s; run it under a memory guard)
-import { raw3Page, RAW3_IMPORTMAP } from './probe-harness.mjs';
+import { raw3Page, RAW3_IMPORTMAP } from '../test/harness/probe-harness.mjs';
 
 const N = Number(process.env.N ?? 60);
 const PAGE = `<!doctype html><html><body>${RAW3_IMPORTMAP}

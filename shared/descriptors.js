@@ -13,7 +13,7 @@
 // k the inspector's address inside its group, param the record's parameter name (k when they agree), t the registry's
 // field type, path the key inside the wire value (null = the whole value), wire the translation (to: editor → wire,
 // from: wire → editor; both take (value, bag)). materialize(key, {type}) through `from` is what a field's default IS;
-// tools/descriptor-defaults-test.ts holds RECORDS and editschema to it.
+// test/shared/descriptor-defaults-test.ts holds RECORDS and editschema to it.
 //
 // `ui` is the row's widget facts (C8): t the widget (num, check, enum, color, text), step/dp/softMin/softMax/deg as
 // panels.js reads them. A row's HARD limits (min, max) and its unit are never written here: build() reads them from the
@@ -25,7 +25,7 @@
 // own code writes it (an axis: validated against the letters the authority takes, written as a letter). The prose
 // (labels, hints, option words) stays in shared/editschema.js, which builds every engine card's rows from this table
 // (rowOf) and claims a card's addresses from it (claims): a row no descriptor names is in no card, which
-// tools/components-inspector-test.ts reports. `extra` names the card's own derived rows (openable's `by`, text's `plate`).
+// test/shared/components-inspector-test.ts reports. `extra` names the card's own derived rows (openable's `by`, text's `plate`).
 //
 // The seven fields where RECORDS states a default the registry never writes (C5's yellows) are decided here, per field,
 // as `absent` on the descriptor (`absentMeans` prose: the record's `default` is a READING of absence, to become prose when

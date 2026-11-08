@@ -69,7 +69,7 @@ decades. Therefore, inside the sim:
 two-word reduction, fixed-order polynomials, explicit-endian bit assembly).
 Its coefficients are its version. It is proven bit-identical across
 JavaScriptCore, node-V8 and deno-V8 on a 48,000-point sweep with a committed
-golden digest (tools/simmath-test.ts); accuracy ≤ 2 ulp on sin/cos/exp over
+golden digest (test/shared/simmath-test.ts); accuracy ≤ 2 ulp on sin/cos/exp over
 the working domain. `shared/terrainmath.js` is the terrain height law
 re-expressed in the same exact-op set (`pow(0.5, n)` → accumulated halving;
 `hypot` → `sqrt`, since hypot is implementation-approximated).
@@ -406,7 +406,7 @@ the log stays exact for everyone.
 - **Rests**: every rest in a log MUST equal the carried engine's result for
   its launch (the sim layer's `checks.disagree` is empty).
 - **Cross-engine**: results MUST be bit-identical across JavaScript
-  engines (tools/simmath-test.ts for the kernel, bun only; the `browser` suite
+  engines (test/shared/simmath-test.ts for the kernel, bun only; the `browser` suite
   runs the fold/authority core in headless Chromium byte for byte against bun,
   not the kernel).
 - `bun test/gate/run.ts phys physlive physseeds` runs the physics suites:

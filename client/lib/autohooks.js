@@ -6,7 +6,7 @@
 // else registered meanwhile. Rule: a host subsystem marks the per-frame hooks it keeps, and a
 // claim-by-diff skips marked hooks.
 //
-// DOM-free and THREE-free; unit-tested in tools/particles-test.ts.
+// DOM-free and THREE-free; unit-tested in test/client/particles-test.ts.
 
 /** The engine's hook array, created on demand. Never captured in a module
  *  const — the toolkit makes it lazily and this file may load first. */

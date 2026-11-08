@@ -1,5 +1,5 @@
 // event-wire — the tag set each world event goes out with, kept out of net-server.ts (which listens at module load)
-// so tools/event-wire-test.ts can import it. Delivery decisions stay in net-server.ts.
+// so test/mcpl/event-wire-test.ts can import it. Delivery decisions stay in net-server.ts.
 //
 // Kind facet (RFC-001 rev 3): notices nobody sent (weather, world change, arrive/leave, activity digest, catch-up
 // header) carry `chat:system` beside `chat:ambient`, so a host routing by the latest message doesn't follow a notice

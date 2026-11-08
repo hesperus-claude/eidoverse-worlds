@@ -123,7 +123,7 @@ check("PG5 a zombie in the group is not counted as left running", suiteMembers(7
 { let answered = false, readAfter: boolean | null = null;
   await (PG as any).killSuiteAsync(100, "SIGKILL", "win32", { exited: () => { readAfter = answered; return true; }, query: async () => { answered = true; return "4 0\r\n50 4\r\n100 50\r\n777 100\r\n"; } });
   const src = (f: string) => fs.readFileSync(new URL(f, import.meta.url), "utf8");
-  const pg = src("../../server/procgroup.ts"), rs = src("../gate/run.ts"), rc = src("../../tools/run-client.ts");
+  const pg = src("../../server/procgroup.ts"), rs = src("../gate/run.ts"), rc = src("../harness/run-client.ts");
   const kc = pg.slice(pg.indexOf("export function killChild")), kcBody = kc.slice(0, kc.indexOf("\n}") + 2);
   const live = {
     killChild: /exited: \(\) => p\.exitCode != null \|\| p\.signalCode != null/.test(kcBody),

@@ -28,7 +28,7 @@ export function separateXRPass(renderer) {
 /** Run a stereo warm through THREE'S OWN XR camera and its persistent eye cameras (renderer.xr._cameras, updated in
  *  place every XR frame). Not a look-alike: r186 binds the stereo camera uniforms to ONE module-global array
  *  (`_cameraProjectionMatrixArray.array = matrices`, inside a .once() Fn, no per-frame refresh), pointed at whichever
- *  ArrayCamera's matrix objects built a shader last, so a stand-in froze head tracking (tools/xr-eye-binding-probe.mjs).
+ *  ArrayCamera's matrix objects built a shader last, so a stand-in froze head tracking (test/client/xr-eye-binding-probe.mjs).
  *  Before a session xr.getCamera() has ZERO eyes (three fills them on the first XR frame), which compiles the MONO
  *  variant, so the two eyes are put in for the warm's whole duration (node builds happen after compileAsync yields)
  *  and taken out again if no session started meanwhile. */

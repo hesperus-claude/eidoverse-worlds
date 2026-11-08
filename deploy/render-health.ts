@@ -1,6 +1,6 @@
 // render-health — the verdict render-watchdog.ts passes on a renderer page, apart from the
 // devtools plumbing that asks the questions, so it can be tested without a browser
-// (tools/render-health-test.ts).
+// (test/server/render-health-test.ts).
 //
 // The verdict is the watchdog's whole job, and it has been wrong before. It scraped "NNfps" from
 // #hud, and when the client moved fps into the debug panel it read 0 forever: every healthy
@@ -53,7 +53,7 @@ export async function judge(evaluate: Evaluate): Promise<Health> {
 export const rendererPage = (url: string) => url.includes("renderer");
 
 /** Attach to a page in the Chrome whose devtools listen on `port`, and judge it. This is the
- *  watchdog's whole check. tools/roaming-renderer-check.ts runs it over real devtools against a real
+ *  watchdog's whole check. test/client/roaming-renderer-check.ts runs it over real devtools against a real
  *  renderer page, so the probes and this plumbing are tested together. */
 export async function health(port: number, match: (url: string) => boolean = rendererPage): Promise<Health> {
   let list: any;

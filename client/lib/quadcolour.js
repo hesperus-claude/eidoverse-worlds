@@ -5,7 +5,7 @@
 // what Chromium runs, desktop and headset) IGNORES material.toneMapped: tone mapping and the sRGB encode happen in ONE
 // output pass over the whole frame (Renderer._renderOutput; `toneMapped` is read only by the classic WebGLRenderer).
 // So every panel pixel went through ACES Filmic at the world's exposure: measured on the real renderer, --brand
-// #8fe8c8 left as #b4dbce, --attn #ffc46b as #e6cc8a, the panel #051414 as #000404 (tools/xr-quad-colour-probe.mjs).
+// #8fe8c8 left as #b4dbce, --attn #ffc46b as #e6cc8a, the panel #051414 as #000404 (test/client/xr-quad-colour-probe.mjs).
 //
 // The cure without a second pass (the XR frame has one output pass, per eye, and panels are in the scene): the quad's
 // colour node applies the EXACT INVERSE of three's acesFilmicToneMapping at the live toneMappingExposure, so the
@@ -13,7 +13,7 @@
 //
 // Then the VR-only look (colours read less vibrant in a headset): saturation and contrast in
 // display (sRGB-encoded) space, applied to the quads only — never the design tokens, never the desktop.
-// `gradeSRGB` (quadgrade.js) is the JS twin of the shader's grade; tools/quadcolour-test.mjs holds both to the same numbers.
+// `gradeSRGB` (quadgrade.js) is the JS twin of the shader's grade; test/client/quadcolour-test.mjs holds both to the same numbers.
 import * as THREE from 'three';
 import { GRADE_DEFAULT, GRADE_RANGE, LUMA, loadGrade, clampTo, storeGrade, ACES_IN_INV, ACES_OUT_INV, ACES_FIT } from './quadgrade.js';
 import { Fn, vec3, vec4, mat3, texture, uniform, toneMappingExposure, sRGBTransferOETF, sRGBTransferEOTF, dot, mix, clamp, sqrt, max } from 'three/tsl';

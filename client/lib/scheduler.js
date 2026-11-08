@@ -8,7 +8,7 @@
 // nothing anywhere waits on a timeout.
 //
 // DOM-free and THREE-free on purpose (headless-tested in
-// tools/scheduler-test.ts): pumping rides queueMicrotask, which Bun and
+// test/client/scheduler-test.ts): pumping rides queueMicrotask, which Bun and
 // the browser both have, so correctness never depends on a renderer.
 // Budget slicing inside a job stays loadwork's business (work records,
 // tick/yield); this module replaces only the LANES.

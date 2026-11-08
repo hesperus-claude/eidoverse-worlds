@@ -5,7 +5,7 @@ export { ROUTE_STEP_METRES };
 //
 // Given one `structure` component's data, decide EVERYTHING the world needs to know about that building: the boxes to
 // draw, the boxes to collide, the rooms the walls enclose, the doorways that join them, and routes through them. No THREE,
-// no DOM: the hosted half (realize/structure.js) executes this plan (tools/structure-field-test.ts holds it).
+// no DOM: the hosted half (realize/structure.js) executes this plan (test/shared/structure-field-test.ts holds it).
 // Walls live on grid EDGES, not in cells (§2).
 //
 // COORDINATES. Cell (x, z) covers grid-local [x, x+1) × [z, z+1) on the ground plane. Edges are canonical by construction:

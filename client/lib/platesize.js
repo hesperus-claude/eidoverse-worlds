@@ -1,5 +1,5 @@
 // platesize — how big a nameplate is and how visible, as a function of WORLD distance from the eye. Pure, so the
-// test drives this very function (tools/plateanchor-test.ts); avatar.js applies it every frame.
+// test drives this very function (test/client/plateanchor-test.ts); avatar.js applies it every frame.
 //
 // WHY this shape: nobody publishes a nameplate curve (BasisVR and Hubs keep plates world-fixed; VRChat hides names
 // past 30 m), so the anchor is legibility. Microsoft's mixed-reality typography guidance puts the legible floor at

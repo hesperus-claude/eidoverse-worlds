@@ -1,5 +1,5 @@
 // grass_quality — the resident's local meadow budget, DOM-free (unit-tested
-// in tools/grass-quality-test.ts).
+// in test/client/grass-quality-test.ts).
 //
 // Two dials own the meadow's draw cost: the CAP is the resident's chosen ceiling (full/medium/low/off, persisted per
 // browser); the SHED is the frame governor's session-only dial. The field draws min(cap, shed). Neither is ever a

@@ -14,7 +14,7 @@
 // the legacy one, editpaint.js the edit one). paintFields(fields, S) is the one canvas walk both share: the layout
 // (folds, deskOnly, a list's rows), the per-row label the surface paints, the disabled rule (a disabled field paints
 // but takes no hits) and the lookup. A type dropped from this table is gone from every surface at once, which is what
-// tools/panels-schema-test.ts and tools/edittheme-test.ts go red on together.
+// test/client/panels-schema-test.ts and test/client/edittheme-test.ts go red on together.
 //
 // The two canvas looks still differ in places (see layout() below); those differences are kept, not reconciled. The
 // facts a widget reads (step, dp, unit, deg, min, max, options, def) are the descriptor's `ui` facts

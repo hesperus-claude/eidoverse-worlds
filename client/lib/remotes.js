@@ -39,7 +39,7 @@ import { DEFAULT_BODY } from '../../shared/avatardefs.js';
  *  successor. Session-lifetime, monotonic. */
 const gens = new Map();
 
-/** The capsule is a FLOOR, not a verdict (tools/capsule-recovery-test.mjs): a
+/** The capsule is a FLOOR, not a verdict (test/client/capsule-recovery-test.mjs): a
  *  body that failed to load once must be retryable. A record wearing the
  *  capsule carries `capsuleFor` = the path it still owes; this is the ONE owner
  *  that pays that debt. Guarded by RECORD IDENTITY (the record we started on
@@ -279,7 +279,7 @@ function planPoseBlend(r, pa, pb) {
 
 /** A remote's chosen size and plate lift (shared/presencewire.js bodyWire: clamped, absence = default). Written onto
  *  the record every sample and onto the Avatar — idempotent, and a body swap (a fresh Avatar at 1) picks it up on the
- *  very next sample. Exported for tools/bodyscale-test.ts (a stand-in avatar). */
+ *  very next sample. Exported for test/client/bodyscale-test.ts (a stand-in avatar). */
 export function applyRemoteBody(r, s) {
   applyBodyWire(r, s);
   r.avatar?.setUserScale?.(r.scale);

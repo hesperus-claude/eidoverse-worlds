@@ -231,7 +231,7 @@ const BUILD = (() => {
   return { sha: sha || "unknown", commitTime: commitTime || "unknown",
     dirty: dirtyRaw === "true" ? true : dirtyRaw === "false" ? false : "unknown",
     startedAt: new Date().toISOString(),
-    // EIDO_BOOT_NONCE echo: lets a spawning probe (tools/probe-harness.mjs) prove the responder is its own child.
+    // EIDO_BOOT_NONCE echo: lets a spawning probe (test/harness/probe-harness.mjs) prove the responder is its own child.
     ...(process.env.EIDO_BOOT_NONCE ? { nonce: process.env.EIDO_BOOT_NONCE } : {}) };
 })();
 

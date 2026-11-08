@@ -69,7 +69,7 @@ export const headsetSeenRecently = () => {
 // adapter was requested xrCompatible, read off renderer.xr.enabled at init(), so the flag sets it BEFORE init below.
 // The backend is a CONSTRUCTION choice: an XR boot rides WebGPU-XR when the browser exposes XRGPUBinding and takes
 // WebGL otherwise (on WebGPU without it the xrCompatible request can hang, and three does not fall back on its own).
-// The decision is a pure function, decideBackend in backend_choice.js, tested headless (tools/backend-choice-test.mjs).
+// The decision is a pure function, decideBackend in backend_choice.js, tested headless (test/client/backend-choice-test.mjs).
 // ?xr is value-parsed: `?xr=1` boots XR, `?xr=0` and absence do not.
 export const WEBGPU_XR = 'XRGPUBinding' in globalThis;               // WebGPU can present VR here (Chrome flags)
 export const WEBGPU_POSSIBLE = typeof navigator !== 'undefined' && !!navigator.gpu;   // WebGPU API exists at all
@@ -119,7 +119,7 @@ renderer.setSize(innerWidth, innerHeight);
 // SHADOWS FROM THE SUN, NOT THE HEAD: while presenting, Renderer.render() swaps in xr.getCamera() for EVERY render
 // call, the shadow pass included, so the map would be drawn from the eyes. Same cure as render.js renderAside: xr off
 // around the pass, so the sun camera is honoured (the way Unity renders its map once per frame from the light).
-globalThis.__xrShadowPatched = patchShadowNodeForXR(THREE.ShadowNode?.prototype);   // xrshadow.js — importable, so the patch is TESTED (tools/xrshadow-test.mjs); the global lets boot-check assert it was APPLIED
+globalThis.__xrShadowPatched = patchShadowNodeForXR(THREE.ShadowNode?.prototype);   // xrshadow.js — importable, so the patch is TESTED (test/client/xrshadow-test.mjs); the global lets boot-check assert it was APPLIED
 // Spectators start a notch lower — an audience laptop's job is 30fps for an
 // hour, not maximum sharpness. Adaptive scaling adjusts from here.
 export const BASE_PIXEL_RATIO = Math.min(devicePixelRatio, CONFIG.spectate ? 1.5 : 2);

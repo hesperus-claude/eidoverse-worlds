@@ -880,7 +880,7 @@ fixture/tool matrix.
   travel as a session-only hook). net-server 1981→1445; the stdio
   server 258→82 — a pure transport now, 16→34 tools (pose, reach,
   animate, measure, world_history, sheets… free forever). NEW
-  tools/stdio-door-test.ts 13/0 — that door's first test EVER, real
+  test/mcpl/stdio-door-test.ts 13/0 — that door's first test EVER, real
   JSON-RPC over stdin/stdout. Gates: seat-lifecycle 37/37,
   seats-store, seatcore, smoke 85/85, typing-mcpl, whisper-disable
   5/5 (regexes retargeted to the table), join-rfc005 59/0,
@@ -955,7 +955,7 @@ fixture/tool matrix.
   promised "the same derivation the ragdoll uses"). RAPIERDOLL
   RECOVERY: ammodoll's static build asks nearColliders (the §14.2
   service query) instead of scanning the whole colliders map. NEW
-  tools/bodysim-test.ts, 20 checks: the makeRagdoll seam had ZERO
+  test/client/bodysim-test.ts, 20 checks: the makeRagdoll seam had ZERO
   coverage (how dropped-seedVel lived a month) — now asserted: verlet
   floor while wasm warms, loaded engine answers, stored choice,
   unknown-name fallback, interface parity, single ownership of the
@@ -1071,7 +1071,7 @@ fixture/tool matrix.
   only answer and refuse — never touches the roster) / installJoin
   (the only roster mutator) / buildSnapshot (pure read, finally
   testable without a socket) — ADMISSION BEFORE TAKEOVER is structural
-  now, not a comment. (5) tools/harness.ts (4be976d): the scratch
+  now, not a comment. (5) test/harness/harness.ts (4be976d): the scratch
   bench, one copy; both §24 smokes converted (~180 lines gone);
   lightbench/paritybench keep bespoke scaffolds until next touched
   (their Windows/Edge lessons live there). Deferred with §C: handleTool
@@ -2181,7 +2181,7 @@ fixture/tool matrix.
   deriving autocomplete from it (the hand-kept copy and its duplicate
   /kick row die; chat→handlers→net→chat never closes), handlers.js
   preserving the kick/push disambiguator fallthrough, the dead /rename
-  answering honestly at last. tools/voice-wiring-test.ts followed its
+  answering honestly at last. test/client/voice-wiring-test.ts followed its
   code (35/35). Executed by a directed Fable subagent against the §14
   map; module-graph claims audited before commit (registry imports
   nothing ✓, localbody never imports chat ✓, chat imports only the
@@ -2655,7 +2655,7 @@ fixture/tool matrix.
   loader: keys/owners/lanes with the measured caps, band priorities
   re-read at dequeue, cancellation, `onIdle` — no timeouts), both DOM-free
   and headless-tested (`tools/state-test.ts` 19/19,
-  `tools/scheduler-test.ts` 9/9). `net.js` now folds every snapshot and
+  `test/client/scheduler-test.ts` 9/9). `net.js` now folds every snapshot and
   live entry into the shadow alongside the legacy path — adopting today's
   live-folded server state without double-folding the overlap tail — and
   `EW.foldParity()` (`client/lib/parity.js`) prints drift between the
@@ -2719,7 +2719,7 @@ client/lib/systems.js     the frame loop's explicit list      (step 6)
 
 `state.js` and `scheduler.js` are DOM-free and THREE-free on purpose — the
 `_field.js` discipline — so both are headless-testable (`tools/state-test.ts`,
-`tools/scheduler-test.ts`).
+`test/client/scheduler-test.ts`).
 
 ### 11.2 state.js — the world as data
 

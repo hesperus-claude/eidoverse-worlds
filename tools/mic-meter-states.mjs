@@ -12,7 +12,7 @@
 // (must drop).
 //
 //   node tools/mic-meter-states.mjs [origin]
-import { launchBrowser, ownedWorld } from './probe-harness.mjs';
+import { launchBrowser, ownedWorld } from '../test/harness/probe-harness.mjs';
 
 const world = await ownedWorld({ live: process.argv[2] || null });
 const ORIGIN = world.origin;

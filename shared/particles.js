@@ -1,7 +1,7 @@
 // particles — how a `particles` component READS: the one prose line a text-tier resident gets for an emitter, and the
 // begin / change / end narration of a live change. What a value MEANS is shared/particle_effects.js; the simulation is
 // shared/particlesim.js. Pure; shared by mcpl/agent.ts and shared/a11y.js so every reader agrees on what is burning.
-// Tests: tools/particles-test.ts.
+// Tests: test/client/particles-test.ts.
 import { ESSENTIALS, ESSENTIAL_NAMES, instanceOf, effectBlobName, effectFor, hashSeed, QUALITY_TIERS, essentialNameOf } from './particle_effects.js';
 import { quoted } from './text.js';
 

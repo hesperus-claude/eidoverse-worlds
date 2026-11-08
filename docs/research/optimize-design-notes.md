@@ -27,7 +27,7 @@ it by that path). A nested copy that
 resolves but fails to import (ABI mismatch, missing dylib, damaged install) must not fall back: that would recreate
 the two-libvips condition in the one situation where things are already going wrong. `pickSharp` fails closed, both
 callers skip the texture pass, and a draco-only result ships. Less compression is a cost; an image that is not an
-image is a lie. Test: tools/one-libvips-test.ts.
+image is a lie. Test: test/server/one-libvips-test.ts.
 
 Because the failure produces intact-looking bytes, every container output is also checked by `findImageLies`
 (declared mimeType vs. magic bytes) before it is written; a mismatch exits 4 (retryable, not a failed marker).

@@ -1,4 +1,4 @@
-// test/protocol/batch2-probe.ts — batch 2 in a real browser: one headless Chromium against a scratch sequencer (tools/harness.ts
+// test/protocol/batch2-probe.ts — batch 2 in a real browser: one headless Chromium against a scratch sequencer (test/harness/harness.ts
 // scratchBench), one stage per visible component, plus the privacy proof for media links. Run it under the house guards
 // (test:protocol's `client-b2` suite does: flock on the headless lock, perf-guard).
 //
@@ -18,7 +18,7 @@
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
-import { scratchBench, mkCheck, sleep } from "../../tools/harness.ts";
+import { scratchBench, mkCheck, sleep } from "../harness/harness.ts";
 import { readLog, fold } from "../../shared/protocol/fold.js";
 
 const ENGINE = path.resolve(import.meta.dir, "../..");

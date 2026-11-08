@@ -168,7 +168,7 @@ async function pumpOptimize() {
       // signal, exit ≥128). Not RLIMIT_AS: bun reserves far more address space than it touches. The wrapper's own
       // failures (126: limit not set; 127: exec failed) never read as a content verdict.
       const capped = OPT_MEM_BUDGET_MB > 0 && process.platform === "linux";
-      // OPT_CMD: a harness may own the child (tools/optimize-pump-test.ts) — the real optimizer otherwise (logged at boot)
+      // OPT_CMD: a harness may own the child (test/server/optimize-pump-test.ts) — the real optimizer otherwise (logged at boot)
       // a .js/.ts OPT_CMD runs under this bun: a shebang script is no executable on Windows (EFTYPE)
       const opt = process.env.OPT_CMD, viaBun = !!opt && /\.(m?js|ts)$/.test(opt);
       const cmd = [...(opt && !viaBun ? [opt] : [process.execPath, "run", opt || join(ROOT, "server", "optimize.ts")]), ...(mode ? [mode] : []), src, dest];
@@ -183,7 +183,7 @@ async function pumpOptimize() {
         console.error(`[optimize] cannot spawn the optimizer (${String(e).split("\n")[0]}) — nothing marked; set OPT_MEM_BUDGET_MB=0 if /bin/sh is the problem`);
         optQueue.length = 0; break;
       }
-      // never wait forever on a child: one that never answers is killed and deferred (tools/optimize-pump-test.ts 6b)
+      // never wait forever on a child: one that never answers is killed and deferred (test/server/optimize-pump-test.ts 6b)
       const stderr = drain(proc.stderr as ReadableStream<Uint8Array>), limitMs = Number(process.env.OPT_CHILD_TIMEOUT_MS ?? 1_800_000);
       let timedOut = false;
       const killer = limitMs > 0 ? setTimeout(() => { timedOut = true; proc.kill("SIGKILL"); }, limitMs) : null;

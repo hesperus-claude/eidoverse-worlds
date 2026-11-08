@@ -60,7 +60,7 @@ function loadSim(): Promise<typeof simMods> {
       const rig = await import("./rig.ts");
       const terrain = await import("../client/lib/terrain.js");
       const colliders = await import("../client/lib/colliders.js");
-      // the reach solver's frame algebra, same adapter (tools/reachlive-test.ts proves it runs headless)
+      // the reach solver's frame algebra, same adapter (test/client/reachlive-test.ts proves it runs headless)
       const reachbone = await import("../client/lib/reachbone.js");
       // Bullet (ammo), the browser's default engine (bodysim.js), so a drag release hands over to the same solver;
       // Verlet is the fallback.

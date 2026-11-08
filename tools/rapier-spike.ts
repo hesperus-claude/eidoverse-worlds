@@ -14,13 +14,13 @@
 
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
-const STUB = fileURLToPath(new URL("./core-stub.mjs", import.meta.url));
+const STUB = fileURLToPath(new URL("../test/stubs/core-stub.mjs", import.meta.url));
 plugin({ name: "core-stub", setup(b) { b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB })); } });
 
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "../client/node_modules/three/build/three.module.js";
 const { Ragdoll } = await import("../client/lib/ragdoll.js");
-const { rigs, makeAvatar, toppleLean, segDist } = await import("./rig-load.mjs");
+const { rigs, makeAvatar, toppleLean, segDist } = await import("../test/harness/rig-load.mjs");
 
 await RAPIER.init();
 

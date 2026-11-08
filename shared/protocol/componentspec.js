@@ -10,7 +10,7 @@
 // limits (`ranges`), unit (`units`) and one-line doc (`docs`) are written HERE and nowhere else. shared/descriptors.js
 // derives the inspector's rows from them (keeping only widget facts: step, decimals, soft maxima, which rows a card shows),
 // shared/components.js derives its records' params, shared/editschema.js and shared/worldentity.js read limits from here, and
-// the agent's `schema` request returns this table. tools/schema-layers-test.ts holds every reader to it. `units` and `docs`
+// the agent's `schema` request returns this table. test/shared/schema-layers-test.ts holds every reader to it. `units` and `docs`
 // are prose about a field, pinned with it since #260 10-20: a reworded doc is a meaning break to acknowledge (--ack), not a new version.
 
 // how two touching surfaces' coefficients combine: the modes PhysX, Unity and Rapier name (Jolt and Box2D take any rule as a

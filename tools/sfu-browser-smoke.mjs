@@ -20,7 +20,7 @@ import { chromium } from 'playwright';
 // No BASE ⇒ own a scratch child (VOICE_TRANSPORT=sfu, nonce identity) rather
 // than trusting whatever answers an ambient port — the review's standing
 // objection to probes whose subject is unverified.
-import { ownedWorld } from './probe-harness.mjs';
+import { ownedWorld } from '../test/harness/probe-harness.mjs';
 const world = process.env.BASE ? null
   : await ownedWorld({ env: { VOICE_TRANSPORT: 'sfu' } });
 const BASE = process.env.BASE ?? world.origin;

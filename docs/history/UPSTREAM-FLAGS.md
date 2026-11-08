@@ -17,15 +17,15 @@ Each is red on anima/main as it stands:
 2. **The mesh-fallback suite tests deleted delegation.** micstate's
    delegation back to voice.js was removed by the cutover; the suite still
    exercises it. Ours was rewritten post-cutover
-   (tools/micstate-test.mjs, rows T1-T15).
+   (test/client/micstate-test.mjs, rows T1-T15).
 3. **`mcpl/agent.ts` imports `three/webgpu` with no `three` in any root
    lockfile** — the agent door cannot boot clean from a fresh clone. Root
    package.json needs `three` (we pinned ^0.184.0).
 4. **The typing suite can never pass against the hardened token registry.**
    The registry rejects any key that appears in the tracked example file,
    and `dev-token` is in the example. Ours uses a scratch registry
-   (tools/typing-mcpl-test.ts writes its own tokens.json).
-5. **`tools/avatar-test.ts` is red at HEAD**: the reach integration calls
+   (test/server/typing-mcpl-test.ts writes its own tokens.json).
+5. **`test/client/avatar-test.ts` is red at HEAD**: the reach integration calls
    `avatar._reachOwned()` on the test's stand-in avatar, which doesn't
    define it. The stand-in needs the method (or the call needs a `?.`).
 6. **The seat-lifecycle clip sha must resolve the serve ladder.** The suite
@@ -36,17 +36,17 @@ Each is red on anima/main as it stands:
    in 3a5d93d: hash the first existing of [patched, opt, library] + rel —
    the same order the store judges.
 
-- **`tools/flight-headless-test.ts` reads a hard-coded path on its author's
+- **`test/shared/flight-headless-test.ts` reads a hard-coded path on its author's
   laptop** (`/Users/lariareynolds/Documents/mythos-models/ragdoll-web/rig.json`,
   the LEAF FORCES section) — ENOENT everywhere else. Wants a fixture under
   `tools/flightbench/` or an env override. (Found merging a678f24, 2026-09-02.)
-- **`tools/flight-test.ts` binds to file layout** — it greps `mcpl/net-server.ts`
+- **`test/client/flight-test.ts` binds to file layout** — it greps `mcpl/net-server.ts`
   for the rehearsal gate and `client/lib/chat.js` for a `case 'flight':`; on
   rimward those live in `mcpl/tools.ts` (one table, one dispatcher, §24r) and
   the command registry. Retargeted here; upstream will meet the same when it
   takes the unification. Its bench world also needs `commit` (rimward's
   `runVerb` commits through the entry bus; `append` alone throws) — added.
-- **`tools/wing-owner-wire-test.ts` (now `tools/named-pose-test.ts --part browser-owner`) mocks `core.js` for `bus`/`CONFIG`/`report`**
+- **`tools/wing-owner-wire-test.ts` (now `test/client/named-pose-test.ts --part browser-owner`) mocks `core.js` for `bus`/`CONFIG`/`report`**
   — on rimward those live in `client/lib/base.js` (the renderer-free
   substrate, seam move 2), so the controller listened on a bus the bench
   never emitted on and a pressed G reached nobody (4/6 red). The bench now
@@ -60,14 +60,14 @@ Each is red on anima/main as it stands:
   anonymous door token is 401; proposals only, 4KB cap), verdicts ride
   `/avatars` as `seat` with the `x-profiles-rev` header, a live proposal
   announces immediately. Countersign remains operator-only (no HTTP path),
-  exactly per the #101 B4 design. `tools/seat-lifecycle-test.ts` — which
+  exactly per the #101 B4 design. `test/server/seat-lifecycle-test.ts` — which
   was authored to fail until these routes exist — passes 37/37.
 - **The stdio MCP door registers from the shared tool table** (d44dc02):
   `mcpl/tools.ts` holds ONE `TOOLS` schema table + ONE `HANDLERS`
   dispatcher (load-time advertise⇔handle assertion), `mcpl/server.ts` is a
   pure transport (16 → 34 tools), and `net-server.ts`'s 460-line switch is
   gone. Host differences ride a small `ToolCtx`. First-ever stdio door
-  test: `tools/stdio-door-test.ts` (13 checks, real JSON-RPC over stdio).
+  test: `test/mcpl/stdio-door-test.ts` (13 checks, real JSON-RPC over stdio).
 
 ## 3. Physics: instrument fixes upstream's fleet may want (253bf10)
 
@@ -94,7 +94,7 @@ our 2-rig local fleet tripped; prod's 14-rig fleet may trip them too:
   collected. Note the coupling since the reach merge: shared/joints.js's
   tables now serve BOTH the tumble clamps and the reach IK — widening a
   limit moves what an arm can reach, not just how a body falls.
-- **`tools/rig-load.mjs` excludes `.ktx2.vrm` from the fleet** (3b8e67a):
+- **`test/harness/rig-load.mjs` excludes `.ktx2.vrm` from the fleet** (3b8e67a):
   texture serving-variants were being tumbled as bodies, and one
   long-standing "8.6cm handover" red was an artifact rig all along.
 

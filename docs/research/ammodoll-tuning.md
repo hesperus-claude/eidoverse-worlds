@@ -67,4 +67,4 @@ the wrong side. Range-centering (rotate the parent frame by the range midpoint, 
 the narrow row holds: every leg joint stays within limits through a full topple on both fleet rigs (worst
 constraint-frame excursion 6°, the ERP slack). The 125°-signature reads that remained were the tumble suite's
 positional instrument misreading a legal fetal fold; it now predicts the legal fold direction from the thigh's own
-swing (tools/ammodoll-test.ts).
+swing (test/client/ammodoll-test.ts).

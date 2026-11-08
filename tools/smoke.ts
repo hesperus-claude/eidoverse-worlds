@@ -26,7 +26,7 @@ import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { foundWorlds, freePort } from "./harness.ts";
+import { foundWorlds, freePort } from "../test/harness/harness.ts";
 import { idAliases } from "../test/protocol/idalias.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 const IDS = idAliases();

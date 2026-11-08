@@ -1,7 +1,7 @@
 // WHO ACTS ON AN ENTRY FAILURE — the effect owner for the busy/absent/reload verdicts.
 //
 // xr_entry_policy.js decides what a failure MEANS; this acts on it, behind injected dependencies, so
-// tools/xr-entry-effects-test.mjs executes the same module xr.js imports rather than source-checking it.
+// test/client/xr-entry-effects-test.mjs executes the same module xr.js imports rather than source-checking it.
 // State is per-owner rather than module-global, so a test can hold two independent entry owners and
 // nothing leaks between page sessions.
 

@@ -21,11 +21,11 @@
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
-const STUB = fileURLToPath(new URL('./core-stub.mjs', import.meta.url));
+const STUB = fileURLToPath(new URL('../test/stubs/core-stub.mjs', import.meta.url));
 plugin({ name: 'core-stub', setup(b) { b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB })); } });
-const { THREE } = await import('./core-stub.mjs');
+const { THREE } = await import('../test/stubs/core-stub.mjs');
 const { Ragdoll, TUNING } = await import('../client/lib/ragdoll.js');
-const { rigs, makeAvatar, worstOverlap, toppleLean } = await import('./rig-load.mjs');
+const { rigs, makeAvatar, worstOverlap, toppleLean } = await import('../test/harness/rig-load.mjs');
 
 const FLEET = rigs().filter((r) => !r.err);
 const BASE = { ...TUNING };

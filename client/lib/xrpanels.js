@@ -33,7 +33,7 @@ export function registerXRPanel(def) {
 }
 export const xrPanelIds = () => registry.map((d) => d.id);
 
-/** exported for tools/xr-quad-colour-probe.mjs (the fallback quad's material, measured) */
+/** exported for test/client/xr-quad-colour-probe.mjs (the fallback quad's material, measured) */
 export function makePanel(def, i, n) {
   const canvas = document.createElement('canvas');
   const tex = new THREE.CanvasTexture(canvas);

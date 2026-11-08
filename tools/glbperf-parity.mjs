@@ -3,7 +3,7 @@
 // loupe's (client perfscope.statsOf on the model the CLIENT's own loader builds from the same bytes). Ten library
 // originals chosen for spread: the Commons palm (alpha), the excavator (tris), a crate (textures), and sizes across the
 // range. Per model: tris, draws, mats, alpha, bones exact; texMB within 1%; rank and worst category equal.
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
+import { launchBrowser, ownedWorld, checker } from '../test/harness/probe-harness.mjs';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { glbPerf } from '../server/glbperf.ts';
 

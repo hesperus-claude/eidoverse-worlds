@@ -6,7 +6,7 @@
 //            normal render of that grass covers. A clone that lost positionNode piles every tuft at its local origin.
 //   live   — a heat PNG + the by-category table for the staging view (written to the dir given in OUT).
 // Usage: OUT=<dir> bun tools/overdraw-measure.mjs   (run under a memory guard: headless Chromium renders on the CPU)
-import { launchBrowser, ownedWorld, checker } from './probe-harness.mjs';
+import { launchBrowser, ownedWorld, checker } from '../test/harness/probe-harness.mjs';
 import { writeFileSync } from 'node:fs';
 
 const { check, done } = checker();

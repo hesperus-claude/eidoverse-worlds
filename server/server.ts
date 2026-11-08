@@ -852,7 +852,7 @@ const server = Bun.serve({
         case "sfu-answer": {
           if (!c.world || !relayEnabled()) return;
           // 🔴 THE SAME GATE relay-cred uses: a spectator or aux leg keeps the PRIMARY'S `c.id`, so ungated it would reach
-          // a real participant's SFU leg (tools/sfu-verb-gate-test.mjs)
+          // a real participant's SFU leg (test/server/sfu-verb-gate-test.mjs)
           if (c.spectator || (c.surface ?? "world") !== "world") return;
           // 🔴 AMENDMENT 1's REFUSALS run here, at the first authenticated act after the credential is issued: the answer
           // must prove it is the leg the credential was minted for (admitSfuLeg)
@@ -889,7 +889,7 @@ const server = Bun.serve({
         case "sfu-ice": {
           if (!c.world || !relayEnabled()) return;
           // 🔴 THE SAME GATE relay-cred uses: a spectator or aux leg keeps the PRIMARY'S `c.id`, so ungated it would reach
-          // a real participant's SFU leg (tools/sfu-verb-gate-test.mjs)
+          // a real participant's SFU leg (test/server/sfu-verb-gate-test.mjs)
           if (c.spectator || (c.surface ?? "world") !== "world") return;
           // gen required end-to-end: the adapter refuses
           // missing or stale generations, mirroring sfu-answer.
@@ -900,7 +900,7 @@ const server = Bun.serve({
           // position feed for the proximity gate, OPTIONAL (it fails open): withholding yours silences nobody
           if (!c.world || !relayEnabled()) return;
           // 🔴 THE SAME GATE relay-cred uses: a spectator or aux leg keeps the PRIMARY'S `c.id`, so ungated it would reach
-          // a real participant's SFU leg (tools/sfu-verb-gate-test.mjs)
+          // a real participant's SFU leg (test/server/sfu-verb-gate-test.mjs)
           if (c.spectator || (c.surface ?? "world") !== "world") return;
           const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
           sfuSetPosition(c.world.name, c.id, n(msg.x), n(msg.y), n(msg.z));
@@ -910,7 +910,7 @@ const server = Bun.serve({
           // the client added a track and needs an offer: it ASKS, since the server owns every offer (glare)
           if (!c.world || !relayEnabled()) return;
           // 🔴 THE SAME GATE relay-cred uses: a spectator or aux leg keeps the PRIMARY'S `c.id`, so ungated it would reach
-          // a real participant's SFU leg (tools/sfu-verb-gate-test.mjs)
+          // a real participant's SFU leg (test/server/sfu-verb-gate-test.mjs)
           if (c.spectator || (c.surface ?? "world") !== "world") return;
           sfuNegotiate(c.world.name, c.id, (payload) => ws.send(JSON.stringify(payload)));
           return;

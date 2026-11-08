@@ -1778,7 +1778,7 @@ body.touch #touch { display: block; }
    Blender/Maya"). The chrome is grey; the WORLD is the only colour. Colour in the chrome means one of:
    selection/focus (accent), an axis (x/y/z), danger, or a driven value.
    The --e-* values have ONE source: client/lib/edittheme.js (the VR painter imports it). They are
-   literals here so first paint needs no script; tools/edittheme-test.ts fails if the two differ.
+   literals here so first paint needs no script; test/client/edittheme-test.ts fails if the two differ.
    Scoped to the edit workspace / edit frames only — the HUD outside build mode never sees them. */
 body.edit-workspace, .frame.edit {
   --e-bg0: #161618; --e-bg1: #1e1e21; --e-bg2: #26262a; --e-well: #121214; --e-line: #2f2f35;

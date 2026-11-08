@@ -3,7 +3,7 @@
 // no message — though the server had refused the join in 13 ms with the old-format sentence and close 4005. The page
 // lost it: the inline boot script's early socket caught the refusal, and connect() threw that socket away (and with it
 // the refusal) and dialled again.
-// One headless Chromium against a scratch sequencer (tools/harness.ts scratchBench) whose worlds dir holds:
+// One headless Chromium against a scratch sequencer (test/harness/harness.ts scratchBench) whose worlds dir holds:
 //   old-x   a first-protocol log.jsonl (an old-format world: the server answers the operator with the "translate" visitor
 //           sentence, a guest with world-unavailable, as nope: F23, Mica 11-05)
 //   (nope)  nothing at all: world-unavailable, the same bytes a world this visitor may not discover gets (§F F-3)
@@ -31,7 +31,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { OLD_FORMAT_SPLASH } from "../../shared/oldformat.js";
-import { scratchBench, mkCheck, sleep } from "../../tools/harness.ts";
+import { scratchBench, mkCheck, sleep } from "../harness/harness.ts";
 import { tryUntil } from "../gate/wait.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 

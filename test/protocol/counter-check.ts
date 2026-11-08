@@ -10,7 +10,7 @@
 // {kind: 'script'}}). With no script the thing is a static labelled box showing the count: the `text` component IS the
 // fallback (C10, C11 assert it).
 //
-// Harness: tools/blueprint-test.ts's pattern (a scratch world dir, identities with roles, requests through request(), the
+// Harness: test/shared/blueprint-test.ts's pattern (a scratch world dir, identities with roles, requests through request(), the
 // fold read back), over server/livehost.ts openLive rather than test/protocol/scratchworld.ts's filehost, for two reasons
 // the list needs: scripts run only with a sandbox (openLive's default is QuickJS, SANDBOX), and blobs are PER WORLD DIR
 // there (<dir>/blobs, livehost.ts:52) where filehost's store is per ROOT (filehost.ts:26) — C2 is a test of exactly that.

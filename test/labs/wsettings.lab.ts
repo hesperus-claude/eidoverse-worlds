@@ -1,6 +1,6 @@
 // LAB: World Settings' tabs and Settings' safety tab, rendered, for a look (R 10-10: "a bunch of stuff that looks a bit broken in every tab").
 // @ts-nocheck
-import { scratchBench, sleep } from "../../tools/harness.ts";
+import { scratchBench, sleep } from "../harness/harness.ts";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 process.env.TRUST_NAMES = "1";

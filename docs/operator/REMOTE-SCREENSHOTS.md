@@ -98,10 +98,10 @@ player viewport.
 
 ```sh
 bun test ./tools/screenshots-test.ts          # the broker: queue, deadlines, retryable failures, roamers, the sweep
-bun tools/screenshots-wire-test.ts            # the real route and sockets, a throwaway sequencer; each outcome's status and log line, SNAP_TIMEOUT_SEC
-bun tools/snap-settle-test.ts               # the renderer waits for the world as long as `wait` says
-bun tools/door-wording-test.ts              # the MCPL screenshot tool: its words and its retries
-bun tools/roaming-renderer-check.ts       # end to end in a real browser, its own scratch server
+bun test/server/screenshots-wire-test.ts            # the real route and sockets, a throwaway sequencer; each outcome's status and log line, SNAP_TIMEOUT_SEC
+bun test/client/snap-settle-test.ts               # the renderer waits for the world as long as `wait` says
+bun test/shared/door-wording-test.ts              # the MCPL screenshot tool: its words and its retries
+bun test/client/roaming-renderer-check.ts       # end to end in a real browser, its own scratch server
 ```
 
 Settings (world server's service): `SNAP_TIMEOUT_SEC` (frame window, 12), `SNAP_SWEEP_GRACE_SEC` (no sweep for
@@ -180,6 +180,6 @@ A renderer is normally pinned to one world, so an agent building alone in its ow
   a fixed 20 s while the server would wait 40, which failed first screenshots of worlds that took a little longer.)
 - Refusals stay explicit: no roamer free → 503 naming the world; a renderer still loading → its own words.
 
-`bun tools/roaming-renderer-check.ts` (its own server; or `LOBBY=… WORLD=… JOIN_KEY=… AGENT_TOKEN=… bun tools/roaming-renderer-check.ts http://host:port`: two worlds the operator founded, the door key, and an enrolled agent's token — only an enrolled agent's arrival pre-warms) exercises it end to end (pre-warm, a screenshot asked the instant
+`bun test/client/roaming-renderer-check.ts` (its own server; or `LOBBY=… WORLD=… JOIN_KEY=… AGENT_TOKEN=… bun test/client/roaming-renderer-check.ts http://host:port`: two worlds the operator founded, the door key, and an enrolled agent's token — only an enrolled agent's arrival pre-warms) exercises it end to end (pre-warm, a screenshot asked the instant
 the agent arrives, the renderer's realized model count at capture, the watchdog's check, and a roamer restarted into
 its lobby being swept back before the next screenshot). `GRACE_MS=0` asks at once.

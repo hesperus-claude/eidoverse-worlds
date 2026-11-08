@@ -19,7 +19,7 @@
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
-import { scratchBench, mkCheck, sleep } from "../../tools/harness.ts";
+import { scratchBench, mkCheck, sleep } from "../harness/harness.ts";
 import { readLog, fold } from "../../shared/protocol/fold.js";
 
 const ENGINE = path.resolve(import.meta.dir, "../..");

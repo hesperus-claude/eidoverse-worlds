@@ -56,15 +56,15 @@ a code received from someone else (standard device-pairing phishing risk).
 
 ## Verification
 
-- `bun tools/native-login-test.ts`: isolated handler safety/expiry/replay/rate tests;
+- `bun test/server/native-login-test.ts`: isolated handler safety/expiry/replay/rate tests;
   no session/world files or production traffic.
-- `bun tools/native-login-test.ts`: scratch issuer, real HTTP and WS on
+- `bun test/server/native-login-test.ts`: scratch issuer, real HTTP and WS on
   loopback :18997, scratch worlds/session/optimizer/relay state. Verifies independent
   sessions, verified joins in three worlds, a session paired before this flow joining
   another world and answered there over HTTP as the browser's session is, no
   re-delegation, replay and browser/native logout isolation. Refuses an occupied
   test port.
-- `bun tools/native-login-fixture.ts`: loopback :18996, memory-only fake identity.
+- `bun test/fixtures/native-login-fixture.ts`: loopback :18996, memory-only fake identity.
   In Unreal PIE use `Eidoverse.TestDiscordPairing` (development builds only).
   `POST /fixture/approve` or `/fixture/deny` simulates browser consent. The actual
   native start/poll/cancel/logout requests run; this fixture can never join production.

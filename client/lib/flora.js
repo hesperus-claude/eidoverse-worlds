@@ -7,7 +7,7 @@
 //   flora_args.js  — legacy makeGrass-bag mapping + preset/variety strokes
 //   flora_field.js — field composition + retirement lifecycle
 //   flora_lod.js   — blade-LOD index subsets for tiled strokes (§17b)
-// All are covered by tools/flora.test.ts.
+// All are covered by test/client/flora-test.ts.
 import { THREE, TSL, camera, renderer } from './core.js';
 import { bus, CONFIG } from './base.js';
 import { primeFiles } from './assets.js';

@@ -3,7 +3,7 @@
 // differ in the last bit. This scans shared/protocol/fold.js, shared/eidosim.js, the sim layer (simlayer.js, replica.js) and
 // every module they reach by static relative import, and fails on a call of Math.sin/cos/tan/atan2/exp/log/pow/random,
 // Date.now or performance.now (comments stripped). Lines where such a call is legitimate are allowed by name in ALLOWED,
-// each with why; rot.js has its own row (tools/rot-test.ts). The authority (shared/protocol/authority/) is not scanned: it
+// each with why; rot.js has its own row (test/shared/rot-test.ts). The authority (shared/protocol/authority/) is not scanned: it
 // computes once and writes rounded results into the log (TEACHING-FINDINGS 11-02); replicas fold the stored numbers.
 // usage: bun test/protocol/determinism-check.ts     (prints each offence as file:line; exit 1 if any)
 // @ts-nocheck

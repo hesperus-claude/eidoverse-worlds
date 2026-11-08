@@ -2,7 +2,7 @@
 //
 // One module owns the snapshot renderer's answer to "where is this avatar's eye and what must be hidden so it can
 // see"; other first-person render paths should reuse it rather than guess a head height. DOM- and import-free:
-// callers hand in live world-space numbers and callbacks (tools/fp-view-test.ts pins them).
+// callers hand in live world-space numbers and callbacks (test/client/fp-view-test.ts pins them).
 //
 // The contract:
 //   - the eye anchors on the LIVE rig (head bone, else mesh bounds), so it follows whatever drives the root,

@@ -89,7 +89,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { ENGINE, scratch } from "../gate/common.ts";
-import { freePort } from "../../tools/harness.ts";
+import { freePort } from "../harness/harness.ts";
 import { runOneShot, FORCED, type OneShotEnd } from "../../server/oneshot.ts";
 import { tryUntil } from "../gate/wait.ts";
 import { emptyState as v1Empty, foldEntry as v1Fold } from "../../tools/import-v1/fold.js";

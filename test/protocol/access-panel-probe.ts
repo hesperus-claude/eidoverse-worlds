@@ -1,5 +1,5 @@
 // test/protocol/access-panel-probe.ts — World Settings › Who may come in › Listed here, in headless Chromium against a scratch
-// sequencer (tools/harness.ts scratchBench). The panel reads @world's roles:* from the page's own fold and edits them with
+// sequencer (test/harness/harness.ts scratchBench). The panel reads @world's roles:* from the page's own fold and edits them with
 // ordinary requests; the authority judges, and its refusal is shown in words (R 10-27; docs/decisions/WORLD-ACCESS.md § UX).
 //   AP1  an unlisted person here is a chip; adding them writes roles:<their identity>; the row then shows them listed, here now
 //   AP2  a name search covers only people this world has seen: someone known elsewhere on the server isn't found by name
@@ -11,7 +11,7 @@
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
-import { scratchBench, mkCheck } from "../../tools/harness.ts";
+import { scratchBench, mkCheck } from "../harness/harness.ts";
 import { readLog, fold } from "../../shared/protocol/fold.js";
 import { pageWaiter, tryUntil } from "../gate/wait.ts";
 import { helloOf } from "../../shared/protocol/hello.js";

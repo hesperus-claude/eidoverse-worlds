@@ -19,7 +19,7 @@ import { generateKeyPairSync, sign as cryptoSign } from "node:crypto";
 import http from "node:http";
 import { ENGINE, scratch, linkFile, canLinkFiles } from "../gate/common.ts";
 import { tryUntil } from "../gate/wait.ts";
-import { freePort } from "../../tools/harness.ts";
+import { freePort } from "../harness/harness.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 
 const root = scratch("setup");

@@ -34,7 +34,7 @@ export const bus = {
 // world this browser was last in as a person (localStorage); else the commons. Both memories are
 // written by net.js rememberWorld. Spectators, renderers and the thumbnail minter ignore the memory.
 // index.html's early-socket script makes the same choice first and publishes it as __ewWorld, which
-// CONFIG takes when present (tools/last-world-test.ts holds the two copies in agreement).
+// CONFIG takes when present (test/client/last-world-test.ts holds the two copies in agreement).
 export const LAST_WORLD_KEY = 'ew-world';      // localStorage: the browser's last world
 export const TAB_WORLD_KEY = 'ew-world-tab';   // sessionStorage: this tab's
 /** A name a world can have — the client's copy of server.ts admitJoin's rule
