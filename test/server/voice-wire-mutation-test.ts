@@ -23,7 +23,7 @@ const cases = [
     witness: "the agent's look says it in words" },
 ];
 async function run(m?: object) {
-  const p = Bun.spawn([process.execPath, ...(m ? ["--preload", join(import.meta.dir, "../harness/contact-mutation-preload.ts")] : []), join(import.meta.dir, TEST)],
+  const p = Bun.spawn([process.execPath, ...(m ? ["--preload", join(import.meta.dir, "../harness/contact-mutation-preload.ts")] : []), join(import.meta.dir, "../shared", TEST)],
     { cwd: join(import.meta.dir, "..", ".."), env: { ...process.env, ...(m ? { CONTACT_MUTATION: JSON.stringify(m) } : {}) }, stdout: "pipe", stderr: "pipe" });
   const [code, out, err] = await Promise.all([p.exited, new Response(p.stdout).text(), new Response(p.stderr).text()]);
   return { code, out, err };

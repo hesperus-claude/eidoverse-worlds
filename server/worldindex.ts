@@ -125,7 +125,7 @@ function readDoor(d: string): DoorRead | null {
 async function ownersOf(name: string): Promise<Owners | null> {
   accessTrace("owners", name);
   try {
-    const r = await runOneShot([process.execPath, path.join(ROOT, "tools", "protocol", "world.ts"), "owners-of", "--", name],
+    const r = await runOneShot([process.execPath, path.join(ROOT, "tools", "world.ts"), "owners-of", "--", name],
       { cwd: ROOT, env: { ...process.env, WORLDS_DIR, BACKUPS_DIR, OPT_DIR }, guardMs: 120_000, label: `owners-of ${name}` });
     if (!r.accepted || r.code !== 0) return null;
     const l = r.out.split("\n").find((x) => x.startsWith("owners-json "));

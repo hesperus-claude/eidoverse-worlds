@@ -400,7 +400,7 @@ try {
     // owned child. A mutation at the decision seam (tier / url / glbKey / the stamps) fails here.
     console.log('\n  the production loader — real assets.js against the owned child\n');
     const probe = async (strip: string) => {
-      const p = Bun.spawn([process.execPath, join(ROOT, 'tools', 'lod-loader-child.ts')], {
+      const p = Bun.spawn([process.execPath, join(ROOT, 'test', 'client', 'lod-loader-child.ts')], {
         env: { ...process.env, LODC_BASE: C.base, LODC_STRIP: strip, LODC_HEAVY: HEAVY, LODC_AUTHORED: AUTHORED },
         stdout: 'pipe', stderr: 'pipe',
       });

@@ -25,7 +25,7 @@ const W = path.join(root, "worlds"), B = path.join(root, "backups"), OPT = path.
 for (const d of [W, B, OPT, PIDS]) fs.mkdirSync(d, { recursive: true });
 const OPS = Array.from({ length: 16 }, (_, i) => `human:test:op${i}`);
 Object.assign(process.env, { WORLDS_DIR: W, BACKUPS_DIR: B, OPT_DIR: OPT, SERVER_OPERATORS: OPS.join(","), TRUST_NAMES: "1",
-  BUN_OPTIONS: `--preload ${path.join(ENGINE, "tools", "protocol", "oneshot-sim.ts").replaceAll("\\", "/")}` });   // the children's, never this process's (a backslash there is an escape)
+  BUN_OPTIONS: `--preload ${path.join(ENGINE, "test", "protocol", "oneshot-sim.ts").replaceAll("\\", "/")}` });   // the children's, never this process's (a backslash there is an escape)
 const { lookup } = await import("../../server/worldindex.ts");
 const { UPGRADE_MESSAGES } = await import("../../server/upgrade.ts");
 const { runOneShot, FORCED } = await import("../../server/oneshot.ts");
@@ -120,7 +120,7 @@ for (const m of ["partial", "nonce"]) { await ready(`up-${m}`);
 // ================= the helper itself, where a product guard would make the row minutes long =================
 const direct = async (mode: string, guardMs: number) => {
   v1(`h-${mode}`); sim(mode, `h-${mode}`);
-  const r = await runOneShot([process.execPath, path.join(ENGINE, "tools", "protocol", "world.ts"), "owners-of", "--", `h-${mode}`], { cwd: ENGINE, env: { ...process.env }, guardMs, label: `oneshot-check ${mode}` });
+  const r = await runOneShot([process.execPath, path.join(ENGINE, "tools", "world.ts"), "owners-of", "--", `h-${mode}`], { cwd: ENGINE, env: { ...process.env }, guardMs, label: `oneshot-check ${mode}` });
   sim(""); return { ...r, out: r.out.slice(-200), kid: grandchild(`h-${mode}`) };
 };
 { const r = await direct("partial-hang", 9_000);

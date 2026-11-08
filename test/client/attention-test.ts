@@ -88,7 +88,7 @@ check('new utterance immediately eligible after silent notice', silentGate.say(s
 plugin({ name: 'attention-chat-stubs', setup(b) {
   for (const name of ['core', 'base', 'frames', 'net'])
     b.onResolve({ filter: new RegExp('^\\./' + name + '\\.js$') },
-      () => ({ path: fileURLToPath(new URL('./chat-' + name + '-stub.mjs', import.meta.url)) }));
+      () => ({ path: fileURLToPath(new URL('../stubs/chat-' + name + '-stub.mjs', import.meta.url)) }));
 } });
 const { GlobalRegistrator } = await import('@happy-dom/global-registrator');
 GlobalRegistrator.register();

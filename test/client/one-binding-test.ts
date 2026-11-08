@@ -36,7 +36,7 @@ const ROWS: Row[] = [
   { name: "a 3-place rounding or −0 scrub is round.js's", owner: [ROUND], forbidden: [/\bconst r3\s*=\s*\(/, /\bnoNeg0\s*=\s*\(/, /\bunNegZero\s*=\s*\(/, /\bconst r9\s*=\s*\(/],
     requires: [["shared/protocol/authority.js", /from "\.\/round\.js"/], ["client/lib/thingphysics.js", /from '\.\.\/\.\.\/shared\/protocol\/round\.js'/],
       ["shared/protocol/launchplan.js", /from "\.\/round\.js"/], ["shared/protocol/simlayer.js", /from "\.\/round\.js"/], ["shared/hierarchy.js", /from '\.\/protocol\/round\.js'/],
-      ["tools/import-v1/translate-v1.js", /from "\.\.\/\.\.\/\.\.\/shared\/protocol\/round\.js"/], ["mcpl/agent.ts", /from "\.\.\/shared\/protocol\/round\.js"/],
+      ["tools/import-v1/translate-v1.js", /from "\.\.\/\.\.\/shared\/protocol\/round\.js"/], ["mcpl/agent.ts", /from "\.\.\/shared\/protocol\/round\.js"/],
       ["server/modelcatalogue.ts", /from "\.\.\/shared\/protocol\/round\.js"/], ["shared/blueprint.js", /from '\.\/protocol\/round\.js'/]] },
   { name: "the importers of round.js carry no hand-rolled rounding of their own", owner: [ROUND],
     scope: ["shared/protocol/simlayer.js", "shared/hierarchy.js", "tools/import-v1/translate-v1.js"],
