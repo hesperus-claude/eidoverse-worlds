@@ -60,9 +60,9 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["drive", "protocol/drive-check.ts", 1], // a hull driven from its helm: drive + station.input at the door, one driver, plausibility, the hull's own collision, the lease's commits and end (shared/drive.js, authority/drive.js)
   ["physics-area", "protocol/physics-area-check.ts", 1], // physics-area {kind: speed} on a zone (R 10-28 item 50): the door, shared/zone.js's reader, the one mover (walk, wade, swim, 3D stroke), the authority's track agreeing with it
   ["water-vectors", "../tools/water-vectors.ts --check", 1], // shared/conformance/water.json still what shared/water.js computes (waterParams, waveHeight, swimStep)
-  ["water-import", "../tools/water/import-golden-check.ts", 1], // upstream #248's manifest through tools/water/import.ts --dry: its zone/water/water-exclusion things, taken by a real authority, and mediumOf = main's mediumAt
-  ["water-preview", "../tools/water/preview-check.ts", 1], // preview.ts uploads the manifest's effects before its batch, as import.ts --apply does
-  ["level-dive", "../tools/water/level-dive-check.ts", 1], // a real browser in the lake: C dives, looking down with W dives (R 10-28), surfacing hands back to the float
+  ["water-import", "water/import-golden-check.ts", 1], // upstream #248's manifest through tools/water/import.ts --dry: its zone/water/water-exclusion things, taken by a real authority, and mediumOf = main's mediumAt
+  ["water-preview", "water/preview-check.ts", 1], // preview.ts uploads the manifest's effects before its batch, as import.ts --apply does
+  ["level-dive", "water/level-dive-check.ts", 1], // a real browser in the lake: C dives, looking down with W dives (R 10-28), surfacing hands back to the float
   ["toast-group", "protocol/toast-group-check.ts", 1],   // load failures of one kind are one toast counting the things; dismissed, that kind stays quiet (R 10-28)
   ["avatar", "client/avatar-test.ts", 1], // the avatar rig: clip timing, seat-blend slot, a lowering clip under a limp body (upstream #282/#283)
   ["locomotion-clip", "client/locomotion-clip-test.mjs", 1], // the controller's clip-selection policy (#196), on the real module

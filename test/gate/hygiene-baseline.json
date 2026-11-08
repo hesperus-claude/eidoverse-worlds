@@ -383,7 +383,7 @@
   "bare-wait": 2,
   "own-ok": 1
  },
- "tools/water/import-golden-check.ts": {
+ "test/water/import-golden-check.ts": {
   "own-ok": 1
  },
  "test/client/windows-guard-test.ts": {

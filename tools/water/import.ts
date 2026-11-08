@@ -1,6 +1,6 @@
 // bun tools/water/import.ts MANIFEST --dry                         print the requests, nothing sent (no server needed)
 // bun tools/water/import.ts MANIFEST SERVER WORLD [--apply]        preflight (read-only), or upload the files and send them
-// A manifest carries its `requests` (prepare.ts writes them), or main's `verbs` (world-data/water/manifest.json), which
+// A manifest carries its `requests` (prepare.ts writes them), or main's `verbs` (tools/water/data/manifest.json), which
 // requests.js maps (the old-world translator's own mapping). Features this protocol doesn't carry yet (none in #248's world
 // now) are listed and never sent; --apply refuses while any remain. Credentials come only from EIDO_TOKEN.
 // @ts-nocheck

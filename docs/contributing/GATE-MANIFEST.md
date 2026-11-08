@@ -230,8 +230,8 @@ time.
 | 58 | drive | main | `test/protocol/drive-check.ts` | bun | 0.6 s | 180 s |
 | 59 | physics-area | main | `test/protocol/physics-area-check.ts` | bun | 0.5 s | 180 s |
 | 60 | water-vectors | main | `tools/water-vectors.ts --check` | bun | 0.2 s | 180 s |
-| 61 | water-import | main | `tools/water/import-golden-check.ts` | bun | ? | 300 s |
-| 62 | water-preview | main | `tools/water/preview-check.ts` | bun | 3 s | 180 s |
+| 61 | water-import | main | `test/water/import-golden-check.ts` | bun | ? | 300 s |
+| 62 | water-preview | main | `test/water/preview-check.ts` | bun | 3 s | 180 s |
 | 63 | avatar | main | `test/client/avatar-test.ts` | bun | 1 s | 180 s |
 | 64 | locomotion-clip | main | `test/client/locomotion-clip-test.mjs` | bun | 0.2 s | 180 s |
 | 65 | fp-view | main | `test/client/fp-view-test.ts` | bun | 0.2 s | 180 s |
@@ -545,7 +545,7 @@ time.
 | 373 | killz-slumped | main | `test/server/killz-slumped-test.ts` | bun | 32 s | 180 s |
 | 374 | consent-scripts-list | main | `test/server/consent-scripts-list-test.ts` | bun | 2 s | 180 s |
 | 375 | custody-save | main | `test/server/custody-save-test.ts` | bun | 0.1 s | 180 s |
-| 376 | level-dive | browser | `tools/water/level-dive-check.ts` | Chromium | ? | 300 s |
+| 376 | level-dive | browser | `test/water/level-dive-check.ts` | Chromium | ? | 300 s |
 | 377 | toast-group | browser | `test/protocol/toast-group-check.ts` | Chromium | ? | 300 s |
 | 378 | browser | browser | `test/protocol/browser-check.ts` | Chromium | 1.5 s | 180 s |
 | 379 | client | browser | `test/protocol/client-check.ts` | Chromium | 60 s | 300 s |

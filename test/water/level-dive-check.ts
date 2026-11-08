@@ -1,12 +1,12 @@
 // Diving in the world's water LEVEL (lakes, rivers, the sea), as a player in a real browser.
-//   bun tools/water/level-dive-check.ts   (its own scratch server and world; ENGINE_LIB=<dir> serves upstream's real modules)
+//   bun test/water/level-dive-check.ts   (its own scratch server and world; ENGINE_LIB=<dir> serves upstream's real modules)
 // A terrain with a deep lake is built (the ground from this repo's height law); the body is put afloat in the lake;
 // holding C dives it under (the 3D swim takes over from the float), looking down with W held dives too (R 10-28), and
 // letting go brings it back up to the surface, where the float takes it again. Holding a thing afloat, C sinks and Q throws.
 // With no @world.bounds there is no edge (LD11).
 import { readFileSync, existsSync } from "node:fs";
-import { scratchBench, mkCheck } from "../../test/harness/harness.ts";
-import { until, pause } from "../../test/gate/wait.ts";
+import { scratchBench, mkCheck } from "../harness/harness.ts";
+import { until, pause } from "../gate/wait.ts";
 
 const WORLD = "level-dive";
 const engine = process.env.ENGINE_LIB;

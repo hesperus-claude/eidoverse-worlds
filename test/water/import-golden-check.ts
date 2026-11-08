@@ -1,24 +1,24 @@
-// tools/water/import-golden-check.ts — upstream's public #248 world (world-data/water/manifest.json) through tools/water/import.ts
+// test/water/import-golden-check.ts — upstream's public #248 world (tools/water/data/manifest.json) through tools/water/import.ts
 // --dry: the zone / water / water-exclusion things it asks for, their parents and priorities, the features it holds back (none now)
 // its vehicle (drive + a helm), climb routes, collision toggle and environment as mapped, the batch taken by a real authority, and shared/zone.js mediumOf on the result agreeing
 // with main's own mediumAt (main's shared/water.js at MAIN, from git) on main's reading of the same records.
-//   bun tools/water/import-golden-check.ts
+//   bun test/water/import-golden-check.ts
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
-import { ENGINE, scratch } from "../../test/gate/common.ts";
+import { ENGINE, scratch } from "../gate/common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
-import { labClock, pinned } from "../../test/gate/clock.ts";
-import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "../../test/protocol/labmodels.js";
+import { labClock, pinned } from "../gate/clock.ts";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "../protocol/labmodels.js";
 
 const MAIN = "ccd5c53fa";   // upstream main (#281's merge): its shared/water.js is the reference reader
 let pass = 0, fail = 0;
 const C = (id, what, good, info) => { if (good) { pass++; console.log(`ok   ${id} ${what}`); } else { fail++; console.log(`FAIL ${id} ${what}`); if (info !== undefined) console.log("     ", JSON.stringify(info).slice(0, 900)); } };
 
-const manifestPath = path.join(ENGINE, "world-data/water/manifest.json"), manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+const manifestPath = path.join(ENGINE, "tools/water/data/manifest.json"), manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 const run = Bun.spawnSync(["bun", path.join(ENGINE, "tools/water/import.ts"), manifestPath, "--dry"], { cwd: ENGINE, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } });
 let dry = null; try { dry = JSON.parse(run.stdout.toString()); } catch {}
 C("G0", "import.ts --dry prints its requests (exit 0)", run.exitCode === 0 && dry?.requests?.length === 1, { code: run.exitCode, err: run.stderr.toString().slice(-400) });

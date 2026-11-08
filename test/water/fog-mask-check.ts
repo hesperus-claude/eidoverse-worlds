@@ -1,9 +1,9 @@
-// tools/water/fog-mask-check.ts — the GPU fog keeps the combine law (shared/zone.js fogSlots' masks): in headless Chromium on
+// test/water/fog-mask-check.ts — the GPU fog keeps the combine law (shared/zone.js fogSlots' masks): in headless Chromium on
 // WebGL, a pocket at or above the body's priority clears its fog, one below it or naming another body doesn't, one naming it does.
-//   bun tools/water/fog-mask-check.ts        (BACKENDS=webgl,webgpu to try both; this host's headless shell has no WebGPU device)
+//   bun test/water/fog-mask-check.ts        (BACKENDS=webgl,webgpu to try both; this host's headless shell has no WebGPU device)
 // @ts-nocheck
 import fs from "node:fs"; import path from "node:path";
-import { ENGINE } from "../../test/gate/common.ts";
+import { ENGINE } from "../gate/common.ts";
 const { scratchBench } = await import(ENGINE + "test/harness/harness.ts");
 const WORLD = "fogprobe", ME = "fogger";
 const { cdp, evalJson, cleanup, BASE } = await scratchBench("fogprobe", { prepare: (scratch) => {

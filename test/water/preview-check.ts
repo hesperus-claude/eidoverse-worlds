@@ -1,16 +1,16 @@
-// tools/water/preview-check.ts — preview.ts sends the manifest's effect uploads before its batch, as import.ts --apply does
+// test/water/preview-check.ts — preview.ts sends the manifest's effect uploads before its batch, as import.ts --apply does
 // (the dust effect was never uploaded, so the scratch world's emitters drew nothing). The public #248 manifest
 // through import.ts --dry is the bundle (no GLBs: the batch names models the preview copies only when present).
-//   bun tools/water/preview-check.ts
+//   bun test/water/preview-check.ts
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
-import { ENGINE, scratch } from "../../test/gate/common.ts";
+import { ENGINE, scratch } from "../gate/common.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
-import { tryUntil } from "../../test/gate/wait.ts";
+import { tryUntil } from "../gate/wait.ts";
 let fail = 0;
 const C = (id, what, good, info) => { console.log(`${good ? "ok  " : "FAIL"} ${id} ${what}`); if (!good) { fail++; if (info !== undefined) console.log("     ", JSON.stringify(info).slice(0, 600)); } };
-const dry = JSON.parse(Bun.spawnSync(["bun", path.join(ENGINE, "tools/water/import.ts"), path.join(ENGINE, "world-data/water/manifest.json"), "--dry"], { cwd: ENGINE, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } }).stdout.toString());
+const dry = JSON.parse(Bun.spawnSync(["bun", path.join(ENGINE, "tools/water/import.ts"), path.join(ENGINE, "tools/water/data/manifest.json"), "--dry"], { cwd: ENGINE, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } }).stdout.toString());
 const bundle = scratch("wprev"); fs.mkdirSync(bundle, { recursive: true });
 fs.writeFileSync(path.join(bundle, "manifest.json"), JSON.stringify({ version: 2, files: [], requests: dry.requests, uploads: dry.uploads }));
 const name = dry.uploads?.[0]?.args?.effect?.name;

@@ -12,7 +12,7 @@ const [source,output]=process.argv.slice(2,4).map(p=>resolve(p));
 if(!source||!output)throw Error('usage: prepare.ts EXPORT_DIR OUTPUT_DIR');
 mkdirSync(join(output,'models'),{recursive:true});
 const meta=JSON.parse(readFileSync(join(source,'export.json'),'utf8'));
-const vessels=JSON.parse(readFileSync(new URL('../../world-data/water/vessels.json',import.meta.url),'utf8'));
+const vessels=JSON.parse(readFileSync(new URL('./data/vessels.json',import.meta.url),'utf8'));
 const ueLocal=(p:number[])=>convert([p[1]/100,p[2]/100,p[0]/100]);
 const corrected=process.argv.includes('--right-handed');
 const convert=(p:number[])=>corrected?[-p[0],p[1],p[2]]:p;

@@ -1,4 +1,4 @@
-// tools/water/requests.js — main's water-world records (asset/spawn/comp, as world-data/water/manifest.json holds them) as one
+// tools/water/requests.js — main's water-world records (asset/spawn/comp, as tools/water/data/manifest.json holds them) as one
 // `batch` of create/set requests, through the old-world translator's own mapping (import-v1/translate-v1.js project:
 // water → zone + water, air boxes → zone + water-exclusion children, climb routes, collision, environment). Read by import.ts and prepare.ts.
 import { emptyState, foldEntry } from '../import-v1/fold.js';

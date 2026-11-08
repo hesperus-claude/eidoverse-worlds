@@ -2,7 +2,7 @@
 
 The Three.js client consumes ordinary component data. There are no world-name
 checks, scene coordinates, model paths, or submarine classes in the renderer.
-The reference scene is authored separately: `world-data/water/manifest.json` holds
+The reference scene is authored separately: `tools/water/data/manifest.json` holds
 upstream's records for it (main's `asset`/`spawn`/`comp`), and `requests.js` turns
 them into this protocol's `create`/`set` requests through the old-world translator's
 own mapping (`tools/import-v1/translate-v1.js`, `VOLUMES`).
@@ -69,7 +69,7 @@ dive (watervolumes `levelAt`).
 
 Source: Unreal `/Game/Underwater/SpectralPrototype/L_SpectralOcean_Prototype` in
 `Test1`. Five content-addressed GLBs contain terrain, habitat, submarine, platform,
-and scenery. `world-data/water/manifest.json` (upstream's) has twenty records and
+and scenery. `tools/water/data/manifest.json` (upstream's) has twenty records and
 fifteen dry volumes; they become twenty-nine `create`s (five models, one water body,
 fifteen pockets, three climb routes, the submarine's helm, its two vehicle-band walls, a
 sun and a dust effect) and nine `@world` sets (five asset entries, spawn, bounds, terrain,
@@ -87,7 +87,7 @@ exec(open('/absolute/path/eidoverse-worlds/tools/water/export-unreal.py').read()
 
 The reference submarine's hidden pawn hierarchy did not export its geometry.
 Export its five replacement meshes from the original Blender source. The exporter
-also restores the four Blueprint floor slabs from `world-data/water/vessels.json`
+also restores the four Blueprint floor slabs from `tools/water/data/vessels.json`
 and substitutes transparent glass for Blender's opaque placeholder material:
 
 ```sh
@@ -164,12 +164,12 @@ WebGL. The rest require Chrome with WebGPU and a preview (`WATER_PREVIEW_URL`):
 
 ```sh
 bun test/protocol/zone-water-check.ts
-bun tools/water/import-golden-check.ts
-bun tools/water/fog-mask-check.ts
+bun test/water/import-golden-check.ts
+bun test/water/fog-mask-check.ts
 bun test/client/models-field-test.ts
 bun test/server/underwater-presence-test.ts
 UNDERWATER_TEST_PORT=19348 bun test/server/underwater-wire-test.ts
-bun tools/water/gpu-test.ts
+bun test/water/gpu-test.ts
 ```
 
 Set `WATER_PREVIEW_URL` to an isolated preview when changing the port or world. GPU checks read back rendered pixels for
@@ -181,6 +181,6 @@ movement staying off the persistent log. Vehicle lease claim/state/release is th
 
 Always prepare with `--right-handed`. Wire space is right-handed (`-UE.Y, UE.Z, UE.X`);
 the earlier legacy mapping (`UE.Y, UE.Z, UE.X`) mirrored the whole scene, visible as
-reversed lettering on the habitat, in every client. `world-data/water/manifest.json` is
+reversed lettering on the habitat, in every client. `tools/water/data/manifest.json` is
 the right-handed export. Renderers must honour mirrored glTF node transforms (the
 wire-coordinate frame is one when composed with the exporter's own basis).
