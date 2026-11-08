@@ -28,7 +28,7 @@
 
 import { plugin } from "bun";
 import { fileURLToPath } from "node:url";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 // URL.pathname yields "/D:/…" on Windows, which nothing can open —
 // fileURLToPath is the portable spelling
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));

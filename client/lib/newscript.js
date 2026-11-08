@@ -5,7 +5,7 @@
 //   2. one batch (one act, one Ctrl+Z):
 //        set {id, component: 'script:<name>', value: {src, scope, on, every?}}
 //        set {id, component: 'reactions', value: {<action>: {kind: 'script', script: <name>}}, merge: true}   (on use)
-// Pure: no DOM, no network (client/lib/scriptnew.js draws the card and sends; tools/protocol/build-check.ts K runs these
+// Pure: no DOM, no network (client/lib/scriptnew.js draws the card and sends; test/protocol/build-check.ts K runs these
 // requests through the real authority and sandbox).
 import { set } from "../../shared/requests.js";
 

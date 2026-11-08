@@ -4,8 +4,8 @@
 // "policy sky seq N by <who>", as skywatch-test requires of the serverless path.
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/skystamp-test.ts
-import "./protocol/fixture-ids.ts";
-import { scratchWorld } from "./protocol/scratchworld.ts";
+import "../test/protocol/fixture-ids.ts";
+import { scratchWorld } from "../test/protocol/scratchworld.ts";
 import { makeReplica, wireState } from "../shared/protocol/replica.js";
 import { effectiveSky } from "../shared/forecast.js";
 

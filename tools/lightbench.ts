@@ -24,8 +24,8 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromeArgs, findChrome } from "./protocol/chrome.ts";
-import { killChild } from "./protocol/procgroup.ts";
+import { chromeArgs, findChrome } from "../test/gate/chrome.ts";
+import { killChild } from "../test/gate/procgroup.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 
 const args = process.argv.slice(2);

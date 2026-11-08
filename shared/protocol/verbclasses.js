@@ -1,6 +1,6 @@
 // shared/protocol/verbclasses.js — the verb classes the authority and the wire agree on. Pure data, no imports: the
 // authority (shared/protocol/authority.js) admits by them, the server's ws door (server/requestwire.ts) gates a spectator
-// and meters reads by them. The pin is tools/protocol/verbclasses-check.ts. Changing a class is a decision.
+// and meters reads by them. The pin is test/protocol/verbclasses-check.ts. Changing a class is a decision.
 
 // verbs that write nothing to the log (the custody guard lets them through: a world you can't sign for can still be read)
 export const READ_ONLY = new Set(["help", "look", "inspect", "measure", "find", "lint", "history", "schema", "scripts", "modlog", "bans", "effect"]);

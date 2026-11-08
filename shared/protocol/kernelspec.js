@@ -15,10 +15,10 @@
 //              what the fold reads; the ladder is read by the authority, and a registry break still needs --ack)
 //   access     who may come in (§7, access.js): the component's shape (the four doors are client presets that write it)
 // Each has status `trial-kernel`: like trial it may still change during the alpha, but a change is never a re-pin with an
-// acknowledgement. spec/kernel-pin.json holds the pin; tools/protocol/kernel-check.ts (the gate's CORE lane) is red the moment
+// acknowledgement. spec/kernel-pin.json holds the pin; test/protocol/kernel-check.ts (the gate's CORE lane) is red the moment
 // the code's kernel differs from the pin, and `kernel-check.ts --pin` re-pins ONLY when the same change brings its three
 // companions, which the pin then records and the gate verifies until the next re-pin replaces them:
-//   (a) a translator change: the translator's name moved (tools/protocol/import-v1/translate-v1.js TRANSLATOR @N → @N+1, or a
+//   (a) a translator change: the translator's name moved (tools/import-v1/translate-v1.js TRANSLATOR @N → @N+1, or a
 //       new translate step named with --translator), so a stored log has a path forward;
 //   (b) a REGISTRY-CHANGELOG.md line (--ack "<why>"), prefixed `kernel:`, naming what changed and why;
 //   (c) vectors (--vectors <dir>): spec/kernel-vectors/<dir>/vectors.json, entries the OLD reader refuses (a snapshot of the
@@ -124,7 +124,7 @@ export function kernelVerdict(pin, now = kernelPinOf(), companions = null, date 
   }
   const tFrom = translatorN(c.translator?.from), tTo = translatorN(c.translator?.to);
   if (!(tFrom !== null && tTo !== null && tTo > tFrom) && !(typeof c.translator?.step === "string" && c.translator.step))
-    missing.push(`a translator change: translate-v1's TRANSLATOR moved @N → @N+1 (is ${c.translator?.to ?? "unknown"}, pinned ${c.translator?.from ?? "unknown"}), or --translator <a new translate step under tools/protocol/>`);
+    missing.push(`a translator change: translate-v1's TRANSLATOR moved @N → @N+1 (is ${c.translator?.to ?? "unknown"}, pinned ${c.translator?.from ?? "unknown"}), or --translator <a new translate step, beside translate-v1.js>`);
   const v = c.vectors;
   const ran = Array.isArray(v?.ran) ? v.ran : null;
   if (!v?.dir || !ran || !ran.length) missing.push(`vectors: --vectors <dir> (spec/kernel-vectors/<dir>/vectors.json with at least one entry the old reader refuses and the new reader folds)`);

@@ -13,7 +13,7 @@ plugin({
 });
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 GlobalRegistrator.register();
 
 // happy-dom has no pointer capture: modelled on ELEMENTS only, never `document`, tracking who holds what so the

@@ -20,8 +20,8 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { foundWorlds, freePort, readSequencerLog, ROOT, scratchSequencer } from "./harness.ts";
-import { pause, tryUntil, until } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { pause, tryUntil, until } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 
 const S = suite("snapframe");

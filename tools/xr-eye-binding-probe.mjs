@@ -15,7 +15,7 @@
 //
 // Run: node tools/xr-eye-binding-probe.mjs   (~30 s; run it under a memory guard)
 import { raw3Page, RAW3_IMPORTMAP } from './probe-harness.mjs';
-import { suite } from './protocol/suite.ts';
+import { suite } from '../test/gate/suite.ts';
 
 const PAGE = `<!doctype html><html><body>${RAW3_IMPORTMAP}
 <script type="module">

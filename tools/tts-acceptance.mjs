@@ -57,7 +57,7 @@ copyFileSync(VOICE_ONNX, join(REPO, 'client', `${NONCE}.onnx`));
 copyFileSync(VOICE_CFG, join(REPO, 'client', `${NONCE}.onnx.json`));
 const worldDir = mkdtempSync(join(os.tmpdir(), 'tts-accept-'));
 // joining never founds a world: found 'accept' first (the operator's door)
-{ const f = spawnSync('bun', [join(REPO, 'tools', 'protocol', 'world.ts'), 'found', 'accept', '--owner', 'owner'], { env: { ...process.env, WORLDS_DIR: worldDir }, encoding: 'utf8' });
+{ const f = spawnSync('bun', [join(REPO, 'tools', 'world.ts'), 'found', 'accept', '--owner', 'owner'], { env: { ...process.env, WORLDS_DIR: worldDir }, encoding: 'utf8' });
   if (f.status !== 0) { console.error(`founding the world failed: ${f.stdout}${f.stderr}`); process.exit(2); } }
 const server = spawn('bun', [join(REPO, 'server', 'server.ts')],
   { env: { ...process.env, PORT: String(PORT), WORLDS_DIR: worldDir }, stdio: 'ignore' });

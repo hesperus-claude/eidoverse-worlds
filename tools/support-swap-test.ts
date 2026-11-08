@@ -5,7 +5,7 @@
 import { noWorldUrl } from "./no-world.ts";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { supportHolders } from "../mcpl/physics.ts";
-import { tryUntil, pause } from "./protocol/wait.ts";
+import { tryUntil, pause } from "../test/gate/wait.ts";
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail = "") => {

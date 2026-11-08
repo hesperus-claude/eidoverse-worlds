@@ -120,7 +120,7 @@ export function directoryAt(file: string, now: () => number = Date.now, existing
       for (const [id, e] of Object.entries(entries)) { d.ids[id] = e; index(id, e); } save(); }); },
     /** a person changed the name they type (not a collision suffix, not a sign-in's name): starts the rename cooldown */
     markRenamed(id: string) { const e = d.ids[id]; if (e) { e.renamedAt = now(); save(); } },
-    /** Forget identities a translation minted, when it is rolled back (tools/protocol/world.ts rollback): only those still
+    /** Forget identities a translation minted, when it is rolled back (tools/world.ts rollback): only those still
      *  EXACTLY as the translation wrote them (`planned`: nobody has bound an account or renamed them since) are removed;
      *  the rest are returned as kept, and said. Saved only if something was removed. */
     forgetPlanned(planned: Record<string, Entry>): { removed: string[]; kept: string[] } {

@@ -4,7 +4,7 @@
 // heard its own name again, for the life of the process, with a single log
 // line and no other symptom.
 import { mentionRegexFor } from '../mcpl/mention.ts';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const S = suite("mention-regex");
 const check = (n, c) => S.check(n, c);
 

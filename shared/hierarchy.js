@@ -29,7 +29,7 @@ import { modelWord } from './eido.js';
 const upright = (q) => Math.abs(q[0]) < 1e-9 && Math.abs(q[2]) < 1e-9;
 
 /** The socket a mount names, resolved on its carrier — or null. Only a record in the old spelling has one: an imported old-protocol fold's
- *  (tools/protocol/import-v1/fold.js, which authority-check's M checks draw old-protocol logs by) and a blueprint's own published parts
+ *  (tools/import-v1/fold.js, which authority-check's M checks draw old-protocol logs by) and a blueprint's own published parts
  *  (blueprint.js). A live record's socket is a child entity, and its mount names that entity (PLAN-sockets-entities). */
 export function socketOf(world, rel) {
   if (!rel?.socket) return null;

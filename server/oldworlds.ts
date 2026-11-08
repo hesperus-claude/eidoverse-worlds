@@ -3,7 +3,7 @@
 //   - the OPERATOR is told at boot, one block per world, with the exact command (bootNotice);
 //   - a VISITOR is told in plain words that the world is safe and needs a one-time conversion (visitorText).
 // Two kinds, never confused:
-//   translatable  a log.jsonl of the first protocol's verbs: tools/protocol/world.ts translate <name> translates it in
+//   translatable  a log.jsonl of the first protocol's verbs: tools/world.ts translate <name> translates it in
 //                 place (the world keeps its name; the old log is renamed log.original.jsonl beside it, never written);
 //   pre-names     a log of this protocol's family saved before the names pass (livehost isPreNamesDir): it
 //                 can't be translated as it stands; it's re-translated from its ORIGINAL old log, or refounded.
@@ -42,7 +42,7 @@ export function noFoldRefusal(world: string, native: boolean): string {
 }
 
 const NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/i;   // stricter than WORLD_NAME_RE: a letter or digit first ("-x" would read as a flag to the CLI)
-const TOOL = "bun tools/protocol/world.ts";
+const TOOL = "bun tools/world.ts";
 export const HASH_PLACEHOLDER = "<the report hash the dry run printed>";
 /** Who claims a world with no owner (world.ts --claim): the operator running the commands, as the browser path's upgrader does. */
 export const CLAIMER = "EIDO_UPGRADER_ACCOUNT=<your-account>";

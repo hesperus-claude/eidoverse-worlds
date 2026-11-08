@@ -9,7 +9,7 @@
 // a socket is a child entity: the host's Sockets card lists them, del deletes one), honours relative math on the face
 // scale (degrees), the door's ranges (a value it takes is written as typed), read-only fields, and never mutates the record
 // it reads. Where the old test checked what an edit DOES (a pose, a lock), the
-// ops go through the real door on a scratch world (tools/protocol/scratchworld.ts)
+// ops go through the real door on a scratch world (test/protocol/scratchworld.ts)
 // and the state is read back as the view.
 //
 // the protocol port (2026-10-06): light-verb lights (kind:'light') and guard/placer are gone — a lamp is a thing
@@ -17,7 +17,7 @@
 // door refuses the move (code `locked`), so that is now checked at the door.
 
 import { inspectSchema, channels, editOps, describeSchema, fieldAt, parseEntry } from "../shared/editschema.js";
-import { scratchWorld, flat, foldRecordOf } from "./protocol/scratchworld.ts";
+import { scratchWorld, flat, foldRecordOf } from "../test/protocol/scratchworld.ts";
 import { qHeading } from "../shared/rot.js";
 import { registerDraft } from "../shared/drafts.js";
 import { worldSchema, worldEditOps } from "../shared/worldentity.js";

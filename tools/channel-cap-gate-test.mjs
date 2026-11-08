@@ -3,7 +3,7 @@
 // Absence is denial (declaration.ts §5.4); a peer with no declaration at all keeps everything.
 
 import { capabilityMatches, CAP } from '../mcpl/declaration.ts';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("channel-cap-gate");
 const ok = (name, cond, detail) => S.check(name, cond, detail);

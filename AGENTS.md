@@ -390,7 +390,7 @@ are fixed (pinned in the registry):
 
 Anything else is a script.
 
-The swing, as a recipe (`tools/protocol/authority-check.ts`, the HG checks,
+The swing, as a recipe (`test/protocol/authority-check.ts`, the HG checks,
 holds the hang). Ids are the authority's: each `create` answers with the id
 it minted, and `<frame>` / `<seat>` below stand for those ids.
 
@@ -733,7 +733,7 @@ House rules, learned the hard way (each one is a past incident):
 1. **The fold is sacred.** `shared/protocol/fold.js` is the one fold: the
    server, the browser (`shared/protocol/replica.js`) and the agent library all
    run it, and a Python reader written from the spec gets the same digest
-   (`spec/conformance/`, run by `bun tools/protocol/run.ts conformance`). It
+   (`spec/conformance/`, run by `bun test/gate/run.ts conformance`). It
    must stay a pure function of the log. Views project state; they never
    invent it.
 2. **Mirrored math stays mirrored.** The authority's pendulum push and
@@ -761,7 +761,7 @@ House rules, learned the hard way (each one is a past incident):
 ```bash
 # a scratch server — NEVER develop against a port someone lives on
 export WORLDS_DIR=$(mktemp -d)
-bun tools/protocol/world.ts found devtest --owner you      # a world, owned by the name you'll join with
+bun tools/world.ts found devtest --owner you      # a world, owned by the name you'll join with
 JOIN_TOKEN=test-key PORT=8993 bun run server/server.ts &
 # SKIP_OPT_SWEEP=1 — skip both boot optimize sweeps (encode pump + ktx2/lod) on a memory-tight host
 
@@ -770,10 +770,10 @@ JOIN_TOKEN=test-key PORT=8993 bun run server/server.ts &
 
 # every protocol suite (authority, fold, scripts, grab, physics, server, client…)
 bun run test:protocol
-bun tools/protocol/run.ts authority scripts              # only the named suites
+bun test/gate/run.ts authority scripts              # only the named suites
 ```
 
-`tools/protocol/authority-check.ts` runs the authority in process against scratch worlds
+`test/protocol/authority-check.ts` runs the authority in process against scratch worlds
 (`request(openWorld(root, name), actor, verb, args)`); extend it, or the
 suite closest to your change, when you add vocabulary — a request without
 a check doesn't exist yet. Run suites with
@@ -786,7 +786,7 @@ ripple every resident's reconnect.
 
 **Old worlds.** A world written in the retired first protocol is
 translated once, by an operator, in place:
-`WORLDS_DIR=… bun tools/protocol/world.ts translate <world> --dry-run --no-founder-key`,
+`WORLDS_DIR=… bun tools/world.ts translate <world> --dry-run --no-founder-key`,
 then `translate <world> --no-founder-key --approved <hash> --operator-only-no-owner`
 (a translation names no founder: nothing can yet bind a key to the old
 world's owner, so tier 0 stays empty; spec/PROTOCOL.md §14). The world keeps its name, so links to it keep working;
@@ -1048,7 +1048,7 @@ Routes use the structures known when the walk begins, where they are then. A flo
   happening around you.
 - Server-side (operators): the server's stdout; each world's
   `worlds/<name>/world.jsonl` is plain JSONL you can grep, and
-  `bun tools/protocol/world.ts info <name>` summarizes it (entries, roles,
+  `bun tools/world.ts info <name>` summarizes it (entries, roles,
   digest).
 
 The debugging stance this platform takes: your *first* question is

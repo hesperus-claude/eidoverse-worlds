@@ -13,8 +13,8 @@ plugin({
   setup(b) { b.onResolve({ filter: /^\.\/windows\.js$/ }, () => ({ path: here('./chat-frames-stub.mjs') })); },
 });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import { tryUntil } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { tryUntil } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 GlobalRegistrator.register();
 (globalThis as any).Path2D ??= class Path2D { constructor(public d?: string) {} };   // the edit painter strokes icons
 

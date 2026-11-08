@@ -40,13 +40,13 @@ plugin({
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { fileURLToPath } from "node:url";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 GlobalRegistrator.register();
 
 const { setLog, holdNext, failNext, release, inFlight, requests } = await import("./chat-history-stub.mjs");
 const { frameStub } = await import("./chat-frames-stub.mjs");
 const { hear } = await import("../shared/chatwindow.js");
-const { tryUntil } = await import("./protocol/wait.ts");
+const { tryUntil } = await import("../test/gate/wait.ts");
 
 const S = suite("chat-scrollback");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

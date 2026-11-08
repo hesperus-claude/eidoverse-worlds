@@ -18,7 +18,7 @@
 //      recomposes to itself.
 import * as THREE from '../client/node_modules/three/build/three.module.js';
 import { qFromEuler, eulerFromQ, setEulerChannel, sameRotation, ROT_ORDERS, LOCK_EPS } from '../shared/euler.js';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("euler", { quiet: true });   // thousands of rows: only the fails print
 const ok = (name: string, cond: boolean, detail = '') => S.check(name, cond, detail);

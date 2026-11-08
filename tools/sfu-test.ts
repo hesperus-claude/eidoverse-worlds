@@ -7,8 +7,8 @@
 import { RTCPeerConnection, MediaStreamTrack, RTCRtpCodecParameters, RtpPacket, RtpHeader } from "werift";
 import { Sfu } from "../server/sfu.ts";
 import { installSfuTransportGuard } from "../server/sfuguard.ts";
-import { suite } from "./protocol/suite.ts";
-import { until, tryUntil, pause } from "./protocol/wait.ts";
+import { suite } from "../test/gate/suite.ts";
+import { until, tryUntil, pause } from "../test/gate/wait.ts";
 
 // Run the ENTIRE suite guarded (review 2026-08-18): the negotiation vectors
 // below are the receipt that the ownership patch is transparent under real

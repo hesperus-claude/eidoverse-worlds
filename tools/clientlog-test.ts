@@ -4,7 +4,7 @@
 import { mkdtempSync, existsSync, readFileSync, utimesSync, readdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { tryUntil } from "./protocol/wait.ts";
+import { tryUntil } from "../test/gate/wait.ts";
 const wd = mkdtempSync(join(tmpdir(), "clientlog-worlds-")); const ld = join(wd, ".clientlogs");
 process.env.WORLDS_DIR = wd; process.env.CLIENTLOG_DIR = ld; process.env.JOIN_TOKEN = "test-door";
 const { foundWorlds } = await import("./harness.ts");

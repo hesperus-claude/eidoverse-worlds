@@ -13,7 +13,7 @@
 //      end clears). `gen` is the sequencer's stamp: the live leg.
 // What's tested: shared/captions.js's pure functions (describeCaptions is what the agent's look() calls).
 import { normalizeCaptions, describeCaptions, captionsDetail, clock, normalizeCaptionArgs, captionRefusal, foldCaption, mintSession, CAPTIONS_MAX_LINES, CAPTION_TEXT_MAX } from "../shared/captions.js";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("captions");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

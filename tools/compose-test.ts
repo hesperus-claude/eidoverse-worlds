@@ -5,7 +5,7 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/compose-test.ts
 //
 // The realizer is the real client/lib/realize/models.js over tools/lod-client-stub.mjs (as components-wire-test runs it).
-import "./protocol/fixture-ids.ts";
+import "../test/protocol/fixture-ids.ts";
 import { plugin } from "bun";
 import { fileURLToPath } from "node:url";
 import { mkdtempSync } from "node:fs";
@@ -34,7 +34,7 @@ const M: any = await import("../client/lib/realize/models.js");
 const S: any = await import("../client/lib/state.js");
 const spy: any = await import("./unknown-comp-report-spy.mjs");
 const { kindHint } = await import("../shared/hierarchy.js");
-const { tryUntil } = await import("./protocol/wait.ts");
+const { tryUntil } = await import("../test/gate/wait.ts");
 // every load landed and every promote tail drained
 const settle = () => tryUntil("the realizer settles", () => { M.residencySweep(); M.drainPromoteTail(); return M.residencyDebug().loading === 0 && M.promoteTailPending() === 0; }, { ms: 5000, step: 15 });
 const part = (o: any) => o?.children?.find((c: any) => c.userData?.meshPart);
@@ -72,7 +72,7 @@ check("the realizer reported nothing", spy.reports.length === 0, spy.reports);
 
 console.log("\nthe door, capacity, delete and a late join agree (a scratch world behind the real authority)");
 {
-  const { scratchWorld } = await import("./protocol/scratchworld.ts");
+  const { scratchWorld } = await import("../test/protocol/scratchworld.ts");
   const { openWorld } = await import("../server/filehost.ts");
   const { viewState } = await import("../shared/protocol/view.js");
   const { SOCKETS_PER_HOST } = await import("../shared/protocol/authority/sockets.js");

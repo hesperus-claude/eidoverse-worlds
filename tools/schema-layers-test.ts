@@ -16,7 +16,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { COMPONENTS, materialize } from "../shared/protocol/componentspec.js";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("schema-layers");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

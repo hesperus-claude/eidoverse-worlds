@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { scratchBench, scratchSequencer, mkCheck, ROOT } from './harness.ts';
-import { until } from './protocol/wait.ts';
+import { until } from '../test/gate/wait.ts';
 const mode = process.argv[2];
 if (mode === 'assertion') {
   const { evalJson, cleanup, SCRATCH } = await scratchBench('harness-assertion', { portFrom: 9010 });

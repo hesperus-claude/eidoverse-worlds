@@ -1,4 +1,4 @@
-// tools/run-client.ts — every tools/*-{test,check} and tools/protocol/*-{test,check}, one command (refactor plan 2, D5).
+// tools/run-client.ts — every tools/*-{test,check} and test/{gate,protocol}/*-{test,check}, one command (refactor plan 2, D5).
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/run-client.ts --import-only    each file loads: no SyntaxError, no
 //                                                                                 "Export named … not found", no missing module
@@ -10,16 +10,16 @@
 // export X" commits on 10-12 alone; settings-panels-test was dead for a day). Bun fails the import loudly, so loading each
 // file is the whole stub-contract test. Exit 1 on any dead-at-import file (and, in the full mode, on any red or timed-out one:
 // a hang is usually a broken feature, #260 review I65; a file that is merely long belongs in the SLOW table).
-// Every run lists the files no other runner reaches (tools/protocol/run.ts, package.json scripts): this one is theirs.
+// Every run lists the files no other runner reaches (test/gate/run.ts, package.json scripts): this one is theirs.
 // gate: launches a browser — even --import-only RUNS each file (up to 15 s), and some tools/*-test files start a headless
 // Chromium at their top level. So the files that launch one (the file or a local module it imports calls scratchBench,
 // playwright, puppeteer, a --remote-debugging-port Chrome) run one at a time in their own lane, beside the --jobs others:
-// never two Chromiums at once from here. tools/protocol/run.ts keeps this runner in its browser lane.
+// never two Chromiums at once from here. test/gate/run.ts keeps this runner in its browser lane.
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, relative, basename } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { SUITES, browserLauncher } from "./protocol/suites.ts";
-import { killSuiteAsync, killSuiteAtExit } from "./protocol/procgroup.ts";
+import { SUITES, browserLauncher, suitePath } from "../test/gate/suites.ts";
+import { killSuiteAsync, killSuiteAtExit } from "../test/gate/procgroup.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const args = process.argv.slice(2);
@@ -31,7 +31,7 @@ const strictEnv = flag("--strict-env");   // a dependency missing here is a red,
 const JOBS = opt("--jobs", importOnly ? 6 : 2);
 const TIMEOUT_S = opt("--timeout", importOnly ? 15 : 90);
 const only = args.filter((a, i) => !a.startsWith("--") && !["--jobs", "--timeout", "--dir"].includes(args[i - 1]));
-const DIR = args.includes("--dir") ? args[args.indexOf("--dir") + 1] : null;   // test files from this dir alone (tools/protocol/run-client-settle-check.ts)
+const DIR = args.includes("--dir") ? args[args.indexOf("--dir") + 1] : null;   // test files from this dir alone (test/protocol/run-client-settle-check.ts)
 
 // longer than any sane per-file budget on this box (the 10-12 sweep: still running at 40 s); run with --slow
 const SLOW: Record<string, string> = {
@@ -47,23 +47,23 @@ const SLOW: Record<string, string> = {
 };
 
 const isTest = (n: string) => /-(test|check)\.(ts|mjs|js)$/.test(n);
-const files = (DIR ? [DIR] : [join(ROOT, "tools"), join(ROOT, "tools/protocol")]).flatMap((d) => readdirSync(d).filter(isTest).map((n) => join(d, n))).sort();
+const files = (DIR ? [DIR] : [join(ROOT, "tools"), join(ROOT, "test/gate"), join(ROOT, "test/protocol")]).flatMap((d) => readdirSync(d).filter(isTest).map((n) => join(d, n))).sort();
 const rel = (p: string) => relative(ROOT, p);
 const launchesBrowser = (f: string) => browserLauncher(f) !== null;
 
 // what the other runners reach
 const reached = new Set<string>();
-for (const [, file] of SUITES) reached.add(rel(join(ROOT, "tools/protocol", file.split(" ")[0])));
+for (const [, file] of SUITES) reached.add(rel(suitePath(file)));
 const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
-for (const s of Object.values(pkg.scripts ?? {}) as string[]) for (const m of s.matchAll(/tools\/[\w./-]+/g)) reached.add(m[0]);
+for (const s of Object.values(pkg.scripts ?? {}) as string[]) for (const m of s.matchAll(/(?:tools|test)\/[\w./-]+/g)) reached.add(m[0]);
 const unreached = files.map(rel).filter((p) => !reached.has(p));
 // --skip-suites: the gate runs each of its own suites in full (a load error fails that suite), so loading them here
 // again is the same check twice; on windows-latest those 26 files, each run to the 15 s cap, were what pushed the lane
 // past its budget (358 s, 478 s, then >1010 s on three runs, 10-23)
-const gateSuite = new Map<string, string>(); for (const [n, file] of SUITES) gateSuite.set(rel(join(ROOT, "tools/protocol", file.split(" ")[0])), n);
+const gateSuite = new Map<string, string>(); for (const [n, file] of SUITES) gateSuite.set(rel(suitePath(file)), n);
 
 if (flag("--unreached")) {
-  console.log(`${unreached.length} of ${files.length} test files are reached by no other runner (tools/protocol/run.ts, package.json):`);
+  console.log(`${unreached.length} of ${files.length} test files are reached by no other runner (test/gate/run.ts, package.json):`);
   for (const p of unreached) console.log(`  ${p}`);
   process.exit(0);
 }

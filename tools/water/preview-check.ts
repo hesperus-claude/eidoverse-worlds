@@ -5,9 +5,9 @@
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
-import { ENGINE, scratch } from "../protocol/common.ts";
+import { ENGINE, scratch } from "../../test/gate/common.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
-import { tryUntil } from "../protocol/wait.ts";
+import { tryUntil } from "../../test/gate/wait.ts";
 let fail = 0;
 const C = (id, what, good, info) => { console.log(`${good ? "ok  " : "FAIL"} ${id} ${what}`); if (!good) { fail++; if (info !== undefined) console.log("     ", JSON.stringify(info).slice(0, 600)); } };
 const dry = JSON.parse(Bun.spawnSync(["bun", path.join(ENGINE, "tools/water/import.ts"), path.join(ENGINE, "world-data/water/manifest.json"), "--dry"], { cwd: ENGINE, env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } }).stdout.toString());

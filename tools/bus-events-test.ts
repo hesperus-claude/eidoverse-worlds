@@ -1,4 +1,4 @@
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 // bus-events-test: the dock's move, the lantern's open/close and a gesture's key hint ride the module bus (base.js), so a
 // mod or probe listening there hears them; no window CustomEvent carries them (one-binding-test's row holds the class).
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/bus-events-test.ts

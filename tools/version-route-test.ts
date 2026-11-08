@@ -10,7 +10,7 @@
 import { join } from "node:path";
 import { mkdtempSync, writeFileSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { pause } from "./protocol/wait.ts";
+import { pause } from "../test/gate/wait.ts";
 import { mkCheck, scratchSequencer, ROOT as REPO } from "./harness.ts";
 
 const { check, tally } = mkCheck();

@@ -1,10 +1,10 @@
 // The door's typing relay (mcpl/typing-relay.ts) on a short clock: signals at `start`, keeps on while the host re-says
 // `start`, stops at `stop` or when the refresh is overdue (a lost `stop` can't leave the dots up), and only through the
-// body the latest `start` named. The wire is typing-mcpl-test.ts. Waits: tools/protocol/wait.ts.
+// body the latest `start` named. The wire is typing-mcpl-test.ts. Waits: test/gate/wait.ts.
 
 import { TypingRelay, TYPING_REASSERT_MS, TYPING_OVERDUE_MS } from "../mcpl/typing-relay.ts";
-import { suite } from "./protocol/suite.ts";
-import { tryUntil, pause } from "./protocol/wait.ts";
+import { suite } from "../test/gate/suite.ts";
+import { tryUntil, pause } from "../test/gate/wait.ts";
 
 const came = async (what: string, pred: () => boolean, ms: number) => (await tryUntil(what, pred, { ms, step: 5 })) !== undefined;
 const S = suite("typing-relay");

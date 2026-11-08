@@ -2,11 +2,11 @@
 // A socket is a named attachment point with a WHOLE rotation (Unreal sockets); with a `station` beside it a person
 // attaches by using it (VRChat Station, Roblox Seat). A socket is a child entity of its host, edited as itself (its
 // transform, its socket, its station). usage: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/sockets-test.ts
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../test/protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { inspectSchema, editOps } from '../shared/editschema.js';
 import { bodyOf, socketQ } from '../shared/components.js';
 import { localOf, kindHint } from '../shared/hierarchy.js';
-import { scratchWorld } from './protocol/scratchworld.ts';
+import { scratchWorld } from '../test/protocol/scratchworld.ts';
 import * as OP from '../shared/requests.js';
 import { checkStation, evalPose, choosePose, mayLeave, reachWins, describeBody, NEAR_M, resolveSeat, socketsIn } from '../shared/sockbody.js';
 import { socketSignals, cycleOf, travelOf } from '../client/lib/socksignals.js';

@@ -24,8 +24,8 @@ const { NoiseGate, APPROACH_DWELL_MS, APPROACH_MAX_WAIT_MS, APPROACH_SAFE_WAIT_M
   await import("./denoise.ts");
 const { WorldAgent } = await import("./agent.ts");
 const { noWorldUrl } = await import("../tools/no-world.ts");
-const { suite } = await import("../tools/protocol/suite.ts");
-const { tryUntil, pause } = await import("../tools/protocol/wait.ts");
+const { suite } = await import("../test/gate/suite.ts");
+const { tryUntil, pause } = await import("../test/gate/wait.ts");
 const { spawnSync } = await import("node:child_process");
 
 // ---- 5 (child). one hostile env, the slowest straight pass-through that never counts as still ----------------

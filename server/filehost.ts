@@ -12,10 +12,10 @@ import { readLogBytes, appendDurable, putBlobFile } from "./durable.ts";
 import { custodyAt, modLogAt } from "./custody.ts";
 import { SANDBOX } from "../shared/protocol/sandbox.js";
 import { now as hostNow } from "./clock.ts";
-import { LAB_CATALOGUE, MODELS } from "../tools/protocol/labmodels.js";   // this file is the suites' host (slice 1): never the server's
+import { LAB_CATALOGUE, MODELS } from "../test/protocol/labmodels.js";   // this file is the suites' host (slice 1): never the server's
 
 /** scripts: the sandbox (default: QuickJS, shared/protocol/sandbox.js); null = an authority with none (activations say unavailable).
- *  catalogue / simModels: the models it knows (a suite's world: the lab table, tools/protocol/labmodels.js, unless it names another). */
+ *  catalogue / simModels: the models it knows (a suite's world: the lab table, test/protocol/labmodels.js, unless it names another). */
 export type OpenOpts = { now?: () => number; scripts?: unknown; present?: () => { id: string; at: number[] | null }[]; catalogue?: unknown; simModels?: Record<string, unknown> };
 
 export function openWorld(root: string, name: string, opts: OpenOpts = {}) {

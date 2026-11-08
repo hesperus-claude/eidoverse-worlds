@@ -120,7 +120,7 @@ function readDoor(d: string): DoorRead | null {
   return { wc, mod };
 }
 
-// An old world's owners: tools/protocol/world.ts owners-of, once per change of the world (the translator stays out of the server
+// An old world's owners: tools/world.ts owners-of, once per change of the world (the translator stays out of the server
 // process), one-shot and framed (server/oneshot.ts): an answer it doesn't accept reads as no owners known.
 async function ownersOf(name: string): Promise<Owners | null> {
   accessTrace("owners", name);

@@ -7,9 +7,9 @@ acceptance packet its reviewer wrote for the root-first restack: a list of suite
 proves the test can see the thing it claims to guard. Each control below was run once, seen red, and restored.
 The red lines are copied from those runs.
 
-Run every suite from the repo root with `BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/run.ts <suite>`.
+Run every suite from the repo root with `BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/gate/run.ts <suite>`.
 
-## The suites (all in `tools/protocol/run.ts`)
+## The suites (all in `test/gate/run.ts`)
 
 | PR | suite(s) |
 |---|---|

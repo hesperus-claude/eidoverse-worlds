@@ -15,7 +15,7 @@
  */
 import { WorldAgent } from "./agent.ts";
 import { noWorldUrl } from "../tools/no-world.ts";
-import { tryUntil, pause } from "../tools/protocol/wait.ts";
+import { tryUntil, pause } from "../test/gate/wait.ts";
 import { describeHere, planStructure } from "../shared/structure.js";
 import { NAV_STEP } from "./navgrid.ts";
 import { destinationOf } from "./places.ts";

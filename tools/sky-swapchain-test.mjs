@@ -3,7 +3,7 @@
 // The screen work (swapTierInner) is a scripted fake here: each call waits for the test to answer it with what the real
 // one would return. What's bound is the SHOWN bookkeeping — which tier the next run swaps FROM, and whether it acts.
 import { makeSwapChain, SHOWN_UNKNOWN } from '../client/lib/sky_swapchain.js';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const S = suite("sky-swapchain");
 const ok = (n, c, d) => S.check(n, c, d);
 const tick = () => new Promise((r) => setImmediate(r));

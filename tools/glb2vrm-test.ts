@@ -13,7 +13,7 @@
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const { check, done } = suite("glb2vrm");
 

@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { mock } from "bun:test";
-import { pause, tryUntil } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { pause, tryUntil } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 GlobalRegistrator.register({ url: "http://localhost/?world=t&name=p" });
 const lib = (f) => fileURLToPath(new URL(`../client/lib/${f}`, import.meta.url));
 

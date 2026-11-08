@@ -3,7 +3,7 @@
 // run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun mcpl/tool-replies-test.ts
 import { WorldAgent } from "./agent.ts";
 import { handleTool } from "./tools.ts";
-import { tryUntil } from "../tools/protocol/wait.ts";
+import { tryUntil } from "../test/gate/wait.ts";
 let fails = 0; const ok = (c: boolean, what: string, d?: unknown) => { if (c) console.log("  ok", what); else { fails++; console.log("  FAIL", what, d === undefined ? "" : JSON.stringify(d).slice(0, 600)); } };
 const textOf = (r: any) => String(r?.content?.[0]?.text ?? "");
 const ctxOf = (agent: any): any => ({ agent, canPush: () => false, heldActivity: [], cursor: { caughtUpTo: null } });

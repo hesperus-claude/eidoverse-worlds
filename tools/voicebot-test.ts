@@ -7,8 +7,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ROOT, foundWorlds, freePort } from "./harness.ts";
-import { tryUntil, pause } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { tryUntil, pause } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 
 const BOT = process.env.VOICEBOT ?? "tools/voicebot/index.ts";   // another build, for a red-first control

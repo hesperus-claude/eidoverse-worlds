@@ -57,7 +57,7 @@ function openCustody(file: string) {
      *  stolen writing key isn't also the only override. */
     operator(): string { minting(() => !c.operator, () => { c.operator = mk(); }); return c.operator!.pub; },
     /** The OPERATOR's signature over msg (base64url Ed25519 by the operator key above, never the sequencer's): the host's
-     *  COUNTERSIGNATURE on a translation approval (tools/protocol/world.ts approvalFor; PROTOCOL §14). */
+     *  COUNTERSIGNATURE on a translation approval (tools/world.ts approvalFor; PROTOCOL §14). */
     signOperator(msg: string): string {
       minting(() => !c.operator, () => { c.operator = mk(); });
       const key = crypto.createPrivateKey({ key: Buffer.from(c.operator!.priv, "base64"), format: "der", type: "pkcs8" });

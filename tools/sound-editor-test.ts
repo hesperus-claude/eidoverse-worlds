@@ -4,7 +4,7 @@
 //   bun tools/sound-editor-test.ts
 //
 // The seek reads the server clock: Date.now() is skewed from it by a known amount, and a seek on Date.now() goes red.
-// Play sends no `t0`: the authority stamps it (shared/sound.js THE CLOCK). tools/protocol/soundclock-check.ts holds
+// Play sends no `t0`: the authority stamps it (shared/sound.js THE CLOCK). test/protocol/soundclock-check.ts holds
 // the playhead arithmetic.
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';

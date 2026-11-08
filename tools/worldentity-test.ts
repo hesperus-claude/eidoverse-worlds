@@ -17,9 +17,9 @@
 // 5. the text tier: inspect / edit / hierarchy speak @world (the agent's edit sent to a real door)
 //
 // the world is read from the view (shared/protocol/view.js viewState); results and `undo` are the door's
-// (tools/protocol/scratchworld.ts).
+// (test/protocol/scratchworld.ts).
 import { noWorldUrl } from './no-world.ts';
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
+import "../test/protocol/fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { canon, RECORDS, addable, componentsOf } from '../shared/components.js';
@@ -28,13 +28,13 @@ import { terrainArgs, grassArgs, paletteDefaults } from '../shared/grounddefs.js
 import { WORLD_ID, worldComponents, worldOf, worldState, worldSchema, worldEditOps, worldPick, worldChoice, skyPresetOf, pickSky } from '../shared/worldentity.js';
 import { TABS, openingTab, useTab, TAB_V } from '../client/lib/edittabs.js';
 import { viewState, emptyView } from '../shared/protocol/view.js';
-import { translate } from './protocol/import-v1/translate-v1.js';
+import { translate } from './import-v1/translate-v1.js';
 import { emptyState, applyInPlace, opsOf } from '../shared/protocol/fold.js';
-import { v1FoldBuild } from './protocol/import-v1/build.ts';
-import { scratchWorld, flat } from './protocol/scratchworld.ts';
+import { v1FoldBuild } from './import-v1/build.ts';
+import { scratchWorld, flat } from '../test/protocol/scratchworld.ts';
 import { COMPONENTS as SPEC } from '../shared/protocol/componentspec.js';
-import { pinned } from "./protocol/clock.ts";
-import { suite } from "./protocol/suite.ts";
+import { pinned } from "../test/gate/clock.ts";
+import { suite } from "../test/gate/suite.ts";
 const SKY_DEFAULTS = SPEC.sky.defaults;
 const hexInt = (x: any) => (typeof x === 'string' && /^#[0-9a-f]{6}$/i.test(x) ? parseInt(x.slice(1), 16) : x);   // a layer colour is stored as an int (shape audit 10-16)
 
@@ -94,7 +94,7 @@ console.log('1. the alias both ways, through the real door:');
     ['Sky', 'Weather', 'Terrain', 'Grass'].every((t) => /^[0-9a-f]{64}$/.test((RECORDS as any)[t]?.hash ?? '') && (RECORDS as any)[t].category === 'World')
     && !addable(componentsOf({ pos: [0, 0, 0] }).components).some((a: any) => (RECORDS as any)[a.name]?.world));
 
-  // every spec fixture, translated (tools/protocol/import-v1/translate-v1.js, as a world is migrated), state by state
+  // every spec fixture, translated (tools/import-v1/translate-v1.js, as a world is migrated), state by state
   const logs: string[] = [];
   const walk = (d: string) => { if (!existsSync(d)) return; for (const x of readdirSync(d)) { const p = join(d, x); if (statSync(p).isDirectory()) walk(p); else if (x === 'log.jsonl') logs.push(p); } };
   walk(join(ROOT, 'spec/fixtures'));

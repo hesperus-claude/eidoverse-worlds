@@ -9,8 +9,8 @@ import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { foundWorlds, freePort, ROOT } from "./harness.ts";
-import { suite } from "./protocol/suite.ts";
-import { tryUntil } from "./protocol/wait.ts";
+import { suite } from "../test/gate/suite.ts";
+import { tryUntil } from "../test/gate/wait.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 
 const PORT = freePort(8600);

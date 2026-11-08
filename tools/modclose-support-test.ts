@@ -17,8 +17,8 @@
 import { scratchSequencer, requester } from "./harness.ts";
 import { WorldAgent } from "../mcpl/agent.ts";
 import { supportHolders } from "../mcpl/physics.ts";
-import { until, tryUntil } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { until, tryUntil } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 
 const WORLD = "modtest";

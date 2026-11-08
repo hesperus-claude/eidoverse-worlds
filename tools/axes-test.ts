@@ -2,7 +2,7 @@
 // it was one: motion, its reader, the editor and look-at's reader take all six; look-at's door and turn take x, y, z only.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/axes-test.ts
 // @ts-nocheck
-import "./protocol/fixture-ids.ts";
+import "../test/protocol/fixture-ids.ts";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { AXES, POSITIVE_AXES } from "../shared/axes.js";
@@ -10,8 +10,8 @@ import * as D from "../shared/descriptors.js";
 import * as ES from "../shared/editschema.js";
 import * as LA from "../shared/lookat.js";
 import * as ME from "../client/lib/motioneval.js";
-import * as SH from "./protocol/import-v1/shapes.js";
-import { scratchWorld } from "./protocol/scratchworld.ts";
+import * as SH from "./import-v1/shapes.js";
+import { scratchWorld } from "../test/protocol/scratchworld.ts";
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail: unknown = "") => { if (ok) pass++; else fail++; console.log(`${ok ? "✓" : "✗"} ${name}${!ok && detail !== "" ? `  — ${JSON.stringify(detail).slice(0, 300)}` : ""}`); };

@@ -22,8 +22,8 @@ plugin({
   },
 });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import { suite } from "./protocol/suite.ts";
-import { tryUntil } from "./protocol/wait.ts";
+import { suite } from "../test/gate/suite.ts";
+import { tryUntil } from "../test/gate/wait.ts";
 GlobalRegistrator.register({ width: 1024, height: 768 });
 
 // emojiRenders paints on a scratch canvas: coloured pixels = a real glyph

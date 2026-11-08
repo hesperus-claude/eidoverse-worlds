@@ -25,7 +25,7 @@ const { Document, NodeIO } = await import("@gltf-transform/core");
 const { ALL_EXTENSIONS } = await import("@gltf-transform/extensions");
 type Box = [number, number, number, number, number, number];
 const { scratchSequencer, mkCheck, sleep, legacyVerb, sceneId, trackTicks } = await import("./harness.ts");
-const { tryUntil, pause } = await import("./protocol/wait.ts");
+const { tryUntil, pause } = await import("../test/gate/wait.ts");
 const { check, tally } = mkCheck();
 
 const bounds = (p: Float32Array) => {

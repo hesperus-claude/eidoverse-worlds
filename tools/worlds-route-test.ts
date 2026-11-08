@@ -11,7 +11,7 @@
 import { join } from "node:path";
 import { mkdirSync, writeFileSync, readdirSync } from "node:fs";
 import { mkCheck, scratchSequencer } from "./harness.ts";
-import { tryUntil, pause } from "./protocol/wait.ts";
+import { tryUntil, pause } from "../test/gate/wait.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 
 const { check, tally } = mkCheck();

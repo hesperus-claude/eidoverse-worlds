@@ -17,7 +17,7 @@
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({
   name: 'client-stubs',

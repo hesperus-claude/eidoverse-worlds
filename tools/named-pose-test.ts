@@ -7,7 +7,7 @@ import { helloOf } from "../shared/protocol/hello.js";
 
 const part = process.argv.includes("--part") ? process.argv[process.argv.indexOf("--part") + 1] : "wire";
 const { mkCheck } = await import("./harness.ts");
-const { until: waitUntil } = await import("./protocol/wait.ts");
+const { until: waitUntil } = await import("../test/gate/wait.ts");
 const { check, tally } = mkCheck();
 const WP: any = await import("../shared/wingpresence.js");
 const { WINGS_FOLDED, MAX_NAMED_POSES, POSE_NAME_RE, cleanPoses, foldedIn, wingFoldPresence, applyWingFoldPresence, applyOwnedWingFold } = WP;

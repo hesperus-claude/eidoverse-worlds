@@ -8,8 +8,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { foundWorlds, freePort, saysIn } from "./harness.ts";
-import { suite } from "./protocol/suite.ts";
-import { until } from "./protocol/wait.ts";
+import { suite } from "../test/gate/suite.ts";
+import { until } from "../test/gate/wait.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 
 const WPORT = freePort(8800), MPORT = freePort(11800);

@@ -9,7 +9,7 @@
 // Same stub set as remotes-lifecycle-test; snapshots go in through _dispatch.
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 import { DIALECT, VERSION } from "../shared/protocol/fold.js";
 GlobalRegistrator.register();
 

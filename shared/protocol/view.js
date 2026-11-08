@@ -12,7 +12,7 @@
 //   - imported:<field> (a field an imported world's translation carried) → that field;
 //   - @world: roles:<id> → roles, default-role → roles['*'], imported-bans:<id> → bans, assets:<k> → assets,
 //     sky/terrain/grass → themselves, imported:<k> → st[k]. Not shown: physics-engine, about, bounds, spawn, imported-behavior:<k>.
-// The old protocol's record names (model as `lib`, components in a `comp` bag) stay out: tools/protocol/vocab-check.ts.
+// The old protocol's record names (model as `lib`, components in a `comp` bag) stay out: test/protocol/vocab-check.ts.
 import { dec } from "./names.js";
 import { qNorm, qHeading } from "../rot.js";
 

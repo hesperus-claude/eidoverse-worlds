@@ -3,7 +3,7 @@
 `01-build` … `06-components` are worlds in the retired first protocol (`spec/history/PROTOCOL-v1.md`): each holds
 a `log.jsonl` (the whole log, genesis included) and `folded.json` (the state v1's reference fold gave it). They are
 old-world inputs, not conformance vectors for this protocol: the importer's gates translate them
-(`tools/protocol/sweep.ts`, `tools/protocol/import-v1/snapshot-oracle.ts`, `pretrans-check.ts`) and the setup and
+(`test/protocol/sweep.ts`, `tools/import-v1/snapshot-oracle.ts`, `pretrans-check.ts`) and the setup and
 refused-join suites boot from `01-build`. What each exercised, in v1's words:
 
 - `01-build`: creation, transforms, lights, a mount, and removing a parent.

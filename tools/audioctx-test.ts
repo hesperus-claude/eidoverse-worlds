@@ -1,4 +1,4 @@
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 /** audioctx: one AudioContext for the page, proven rather than asserted.
  *
  *  Mica's review of #86 asked for a focused executable receipt for the

@@ -2,7 +2,7 @@
 // ask it whether the pointer has rested on something for a beat.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/dwell-test.mjs
 import { makeDwell, DWELL_MS } from '../client/lib/dwell.js';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const S = suite("dwell");
 const check = (name, ok, note) => S.check(name, ok, note);
 console.log('DWELL');

@@ -3,7 +3,7 @@
 // It is total: a malformed entry shapes nothing and is named in diagnostics, never in the world. A version it
 // doesn't implement gives "unknown version" and no world.
 // sha256 comes from ./hash.js (sync, no node: imports) so the browser imports this file as-is. The conformance suite
-// (Python reference reader vs this file) is tools/protocol/compare.ts.
+// (Python reference reader vs this file) is test/protocol/compare.ts.
 import { sha256 } from "./hash.js";
 import { checkRequires, featureDecision, KNOWN_FEATURES } from "./features.js";
 import { checkProvenance } from "./provenance.js";
@@ -17,7 +17,7 @@ const MAX_LINE = 1 << 20, MAX_DEPTH = 64, BIG = 2 ** 53;
 // §2.1 + §2.4: `ts` is the authority's admission time; `head`/`sig` mark chain points (§2.1 still says `prev`; §2.4 and the reference reader say `head`)
 // The KERNEL (trial-kernel, PROTOCOL §4; shared/protocol/kernelspec.js pins these): the envelope, the kinds, the identity
 // grammar, the ops, genesis. A change to any of them is refused by the gate unless the same commit carries a translator,
-// a changelog line and old-reader/new-reader vectors (tools/protocol/kernel-check.ts)
+// a changelog line and old-reader/new-reader vectors (test/protocol/kernel-check.ts)
 export const ENVELOPE = new Set(["world", "kind", "ts", "actor", "cause", "op", "verb", "body", "head", "sig"]);
 export const KINDS = new Set(["genesis", "change", "request", "physics", "say", "redaction", "governance"]);
 // `op` on a change (the storage operation), `verb` on a request or physics entry (what was asked / the engine event), neither elsewhere (D3)

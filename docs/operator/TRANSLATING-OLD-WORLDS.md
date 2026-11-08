@@ -8,7 +8,7 @@ only what a translated log must be. Where this and §14 disagree, §14 wins.
 
 The first protocol (an untyped verb log) is retired. An old world's log can
 be translated once, one way, into a world of this protocol, in two steps.
-`bun tools/protocol/world.ts translate <world> --dry-run --no-founder-key`
+`bun tools/world.ts translate <world> --dry-run --no-founder-key`
 writes nothing and prints the **dry-run report** — the old log's size and
 sha256, the translator and fold build, `founderKey: null`, the counts
 (entries, changes, guards that become locks, models without bytes here),
@@ -129,7 +129,7 @@ The swap also writes `translation.json`: every file it renamed, every file
 it made (`world.jsonl`, `poses.json`, `world.mod.jsonl` for imported bans,
 `blobs/` for derived particle effects)
 with its sha256, the identities it minted, the report hash and the approval.
-`bun tools/protocol/world.ts rollback <world>` undoes the whole swap from
+`bun tools/world.ts rollback <world>` undoes the whole swap from
 it: the made files removed, the originals renamed back (the same files: bytes,
 inode, mtime), the minted identities forgotten (those nobody has bound or
 renamed since), the manifest removed — the world directory byte-identical to

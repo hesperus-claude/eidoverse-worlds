@@ -35,8 +35,8 @@ import { WorldAgent } from "../mcpl/agent.ts";
 import { SeatStore } from "../server/seats.ts";
 import { HANDLERS } from "../mcpl/tools.ts";
 import { foundWorlds, freePort } from "./harness.ts";
-import { suite } from "./protocol/suite.ts";
-import { until, tryUntil } from "./protocol/wait.ts";
+import { suite } from "../test/gate/suite.ts";
+import { until, tryUntil } from "../test/gate/wait.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -182,7 +182,7 @@ try {
     avatar: "eidoverse/assets/vrms/claude.vrm", agentToken: namedToken });
   await ag.connect();
   // R 10-17: the suite's names ride as placeholders (and the crate is labelled crate1: the tools take a label as an id)
-  const { idAliases } = await import("./protocol/idalias.ts"); const IDS = idAliases();
+  const { idAliases } = await import("../test/protocol/idalias.ts"); const IDS = idAliases();
   const areq = async (verb: string, args: any) => IDS.back(await ag!.request(verb, IDS.out(verb, args)));
   // building is door requests (the agent waits for each answer); sitting is presence (the sit tool, nothing logged)
   const built = await areq("create", { id: "crate1", model: "eidoverse/assets/models/crate_large_blue.glb", components: { transform: { pos: [0, 0, 0] }, label: "crate1" } });

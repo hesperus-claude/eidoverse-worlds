@@ -21,7 +21,7 @@
 // see a marker the branch sees. (Sky-contract review N2 case law.)
 
 import * as fp from "../client/lib/fp_view.js";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("fp-view");
 const check = (name: string, cond: unknown, detail?: unknown) => S.check(name, cond, detail);

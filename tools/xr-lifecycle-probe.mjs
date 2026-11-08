@@ -7,7 +7,7 @@
 // → ?webgl=1) isn't bound here: ?xr=1 without XRGPUBinding boots WebGL (backend_choice.js decideBackend).
 // Usage: bun tools/xr-lifecycle-probe.mjs [origin]
 import { launchBrowser, ownedWorld, checker, iwerInit, enterVR } from './probe-harness.mjs';
-import { pause } from './protocol/wait.ts';
+import { pause } from '../test/gate/wait.ts';
 
 const { check, done } = checker();
 // IWER's device loop rides the NATIVE clock, as a headset runtime does (probe-harness iwerSource). Both clocks run at

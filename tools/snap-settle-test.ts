@@ -11,7 +11,7 @@
 // capture.js, world.js) stubbed and the readiness probe scripted: the world becomes ready after `readyAt` ms.
 
 import { join } from "node:path";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("snap-settle");
 const check = (name: string, cond: unknown, detail?: unknown) => S.check(name, cond, detail);

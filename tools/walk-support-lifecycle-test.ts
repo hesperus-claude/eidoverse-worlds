@@ -5,7 +5,7 @@ import { noWorldUrl } from "./no-world.ts";
 import { strict as assert } from "node:assert";
 import { WorldAgent, WALK_ARGS_REASON } from "../mcpl/agent.ts";
 import { drive as finish, valid } from "./structure-oracle.ts";
-import { pause } from "./protocol/wait.ts";
+import { pause } from "../test/gate/wait.ts";
 let checks=0;
 const check=(ok:unknown,label:string)=>{assert.ok(ok,label);checks++;console.log("✓ "+label);};
 const agents:WorldAgent[]=[];

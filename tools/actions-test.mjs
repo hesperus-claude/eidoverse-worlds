@@ -8,7 +8,7 @@
 // registration of an id MERGES (the key table adds a key to the dock's entry), and that grouping keeps
 // the best row first.
 import * as A from '../client/lib/actions.js';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("actions");
 const check = (name, ok, extra) => S.check(name, ok, extra);

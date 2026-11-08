@@ -9,7 +9,7 @@
 //   headset_seen.js: an unmigrated legacy '1' reads as recent again (the permanence defect)
 //   (core.js, videopanel.js and xr.js mutations go red in tools/wiring-check.ts)
 import { headsetSeenAt, migrateHeadsetSeen, headsetSeenRecently, HEADSET_SEEN_TTL_MS } from '../client/lib/headset_seen.js';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 
 const S = suite("headset-seen");

@@ -1,13 +1,13 @@
 // shape-render-test — the shape audit's wave 2, render-media-env family (notes/eidoverse/shape-audit/render-media-env.md;
 // PLAN.md "Wave 2" + LOCKED). Each row is a behaviour the audit changes, through the real door (a scratch world), the pure
-// reader that carries it, or the v1 importer's rules (tools/protocol/import-v1/shapes.js). Written red first, against the tree before
+// reader that carries it, or the v1 importer's rules (tools/import-v1/shapes.js). Written red first, against the tree before
 // the change (wt/w2-physics, ec535895).
 //   usage: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/shape-render-test.ts
 // @ts-nocheck
 import { fileURLToPath } from "node:url";
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../test/protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from 'node:fs';
-import { scratchWorld } from './protocol/scratchworld.ts';
+import { scratchWorld } from '../test/protocol/scratchworld.ts';
 import { COMPONENTS, statusOf, pinOf, materialize } from '../shared/protocol/componentspec.js';
 import { lightOf } from '../shared/components.js';
 import { isMeshBag } from '../shared/components.js';
@@ -15,7 +15,7 @@ import * as PE from '../shared/particle_effects.js';
 import { foldCaption, describeCaptions, captionsDetail } from '../shared/captions.js';
 import { terrainParams } from '../shared/terrainmath.js';
 import { hoursAt, effectiveSky, foldSkyEntry } from '../shared/forecast.js';
-import { translate } from './protocol/import-v1/translate-v1.js';
+import { translate } from './import-v1/translate-v1.js';
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail: any = '') => { if (ok) pass++; else fail++; console.log(`${ok ? '✓' : '✗'} ${name}${!ok && detail !== '' ? `  — ${JSON.stringify(detail).slice(0, 300)}` : ''}`); };
@@ -26,7 +26,7 @@ const read = (p: string) => fs.readFileSync(ENGINE + p, 'utf8');
 // the authority is authority.js and its leaves under authority/ (refactor split, 2026-10-17): a source check reads them all
 const readAuthority = () => ['shared/protocol/authority.js', ...fs.readdirSync(ENGINE + 'shared/protocol/authority').filter((f) => f.endsWith('.js')).sort().map((f) => 'shared/protocol/authority/' + f)].map(read).join('\n');
 const keys = (o: any) => JSON.stringify(Object.keys(o ?? {}).sort());
-const repairMod = async () => await import('./protocol/import-v1/shapes.js');
+const repairMod = async () => await import('./import-v1/shapes.js');
 const v1 = (...rest: any[]) => [{ seq: 0, ts: 1, actor: 'world', verb: 'genesis', args: { v: 2, dialect: 'eidoverse-log', roles: { ann: { role: 'owner' } } } },
   ...rest.map((e, i) => ({ seq: i + 1, ts: i + 2, actor: 'ann', ...e }))];
 
@@ -138,11 +138,11 @@ await tryRow('AD', async () => {
   check('AD7 every client and agent reader that names a thing by its model goes through the shared word', stale.length === 0, stale);
   // the sim (shiplist FL1, 10-16): an addressed dynamic thing is stamped, punted, and flies in the authority and in a client's fold
   {
-    const { request } = await import('../shared/protocol/authority.js'); const { LAB_CATALOGUE } = await import('./protocol/labmodels.js');
+    const { request } = await import('../shared/protocol/authority.js'); const { LAB_CATALOGUE } = await import('../test/protocol/labmodels.js');
     const { readLog } = await import('../shared/protocol/fold.js');
-    const { openLive } = await import('./protocol/labhost.ts');
+    const { openLive } = await import('../test/protocol/labhost.ts');
     const { makeReplica, clientSnapshotOf } = await import('../shared/protocol/replica.js');
-    const { scratch } = await import('./protocol/common.ts');
+    const { scratch } = await import('../test/gate/common.ts');
     const CA = `eido:sha256/${'5'.repeat(64)}`;
     const cat = { get: (n: string) => LAB_CATALOGUE.get(n === CA ? 'crate' : n), list: (q: string) => LAB_CATALOGUE.list(q) };
     const dir = `${scratch('w2r-addr-fly')}w/`; fs.mkdirSync(dir, { recursive: true }); let now = 1800000000000;
@@ -233,7 +233,7 @@ await tryRow('DS', async () => {
   const r1 = W.call('set', { id: 'frame', component: 'picture', value: { src: 'store/images/0123456789abcdef.png', description: 'a print' } });
   const r2 = W.call('set', { id: 'radio', component: 'sound', value: { src: 'store/audio/0123456789abcdef.ogg', alt: 'rain' } });
   check('DS4 the door takes description and refuses alt', r1.ok && W.state().entities.frame.c.picture.description === 'a print' && code(r2) === 'schema', [r1.refused, r2.refused]);
-  const { renameFields } = await import('./protocol/import-v1/shapes.js');
+  const { renameFields } = await import('./import-v1/shapes.js');
   const rp = renameFields('picture', { src: 'store/images/a.png', alt: 'a print' }), rs = renameFields('sound', { src: 'store/audio/a.ogg', alt: 'rain', description: 'kept' }), rl = renameFields('picture', { src: 'store/images/a.png', look: 'older' });
   check('DS5 repair: a stored alt (or the look before it) is description (one time); description already there wins', rp.value.description === 'a print' && !('alt' in rp.value) && rs.value.description === 'kept' && !('alt' in rs.value) && rl.value.description === 'older' && !('look' in rl.value), [rp, rs, rl]);
   const src = ['shared/descriptors.js', 'shared/editschema.js', 'shared/components.js', 'client/lib/pictures.js', 'client/lib/sounds.js'].map(read).join('\n');

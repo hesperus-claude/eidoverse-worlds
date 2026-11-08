@@ -1,10 +1,10 @@
 // server-clock-readers-test: a server stamp (a sky's ts, a role's until) is read on the authority's clock
 // (client/lib/serverclock.js serverNow), never this machine's wall clock, so a skewed client sees everyone's sun and expiry.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/server-clock-readers-test.ts
-// inspect.js runs in the inspect harness (tools/protocol/inspectharness.ts); the other readers are held by one-binding-test's
+// inspect.js runs in the inspect harness (test/protocol/inspectharness.ts); the other readers are held by one-binding-test's
 // "a server stamp is read on serverNow" row.
 // @ts-nocheck
-import { inspectHarness } from "./protocol/inspectharness.ts";
+import { inspectHarness } from "../test/protocol/inspectharness.ts";
 inspectHarness("server-clock-readers");
 const { worldLive } = await import("../client/lib/inspect.js");
 const { serverNow, noteRoundTrip, localNow } = await import("../client/lib/serverclock.js");

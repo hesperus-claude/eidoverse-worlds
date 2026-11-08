@@ -10,8 +10,8 @@ import { join } from "node:path";
 import { createNativeLogin } from "../server/native-login.ts";
 import type { HnSession } from "../server/auth.ts";
 import { foundWorlds, freePort, ROOT } from "./harness.ts";
-import { pause, until } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { pause, until } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 
 const S = suite("native-login");

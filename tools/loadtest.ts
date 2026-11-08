@@ -11,7 +11,7 @@ import { helloOf } from "../shared/protocol/hello.js";
 //
 // Exit 0 = all gates pass. Gates are printed at the end.
 //
-// The world must exist (a world is founded by its operator: bun tools/protocol/world.ts found loadtest --owner <you>;
+// The world must exist (a world is founded by its operator: bun tools/world.ts found loadtest --owner <you>;
 // joining never founds one). Every connection joins with replica (the world speaks the protocol): chat is read from
 // the log stream's `say` entries, and a say is a door request. Speech is arrival-only, so a spectator that joined after
 // the burst (the churn's) isn't counted against it.

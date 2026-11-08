@@ -21,7 +21,7 @@ import {
   SEAT_METHOD, MIN_PATCH_VERTS, MAX_PATCH_SPREAD_Y,
 } from "../client/lib/seatcore.js";
 import { qAxisAngle } from "../client/lib/motioneval.js";
-import { pause } from "./protocol/wait.ts";
+import { pause } from "../test/gate/wait.ts";
 
 let failures = 0;
 const check = (label: string, ok: boolean, detail?: string) => {

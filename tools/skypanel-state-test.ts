@@ -6,7 +6,7 @@
 // by sky, clock and headset. The sky is tools/skypanel-stub.mjs.
 
 import { fileURLToPath } from "node:url";
-import { tryUntil } from "./protocol/wait.ts";
+import { tryUntil } from "../test/gate/wait.ts";
 import { plugin } from "bun";
 const stub = fileURLToPath(new URL("./skypanel-stub.mjs", import.meta.url));
 plugin({

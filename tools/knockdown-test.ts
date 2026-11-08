@@ -30,7 +30,7 @@ if (process.env.__EIDO_TEST_CACHE_OFF !== '1') {
 }
 
 const { WorldAgent } = await import("../mcpl/agent.ts");
-const { tryUntil, pause } = await import("./protocol/wait.ts");
+const { tryUntil, pause } = await import("../test/gate/wait.ts");
 
 const W = process.env.WORLD ?? `kd-${Math.random().toString(36).slice(2, 8)}`;   // WORLD: the door's own world (bot #318)
 console.log(`[knockdown] world ${W}${process.env.WORLD_URL ? ` at ${process.env.WORLD_URL}` : " (scratch sequencer)"}`);

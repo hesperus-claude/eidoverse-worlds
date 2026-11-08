@@ -5,7 +5,7 @@ checks, scene coordinates, model paths, or submarine classes in the renderer.
 The reference scene is authored separately: `world-data/water/manifest.json` holds
 upstream's records for it (main's `asset`/`spawn`/`comp`), and `requests.js` turns
 them into this protocol's `create`/`set` requests through the old-world translator's
-own mapping (`tools/protocol/import-v1/translate-v1.js`, `VOLUMES`).
+own mapping (`tools/import-v1/translate-v1.js`, `VOLUMES`).
 
 ## Components
 
@@ -163,7 +163,7 @@ against main's `mediumAt`). `fog-mask-check.ts` runs the fog in headless Chromiu
 WebGL. The rest require Chrome with WebGPU and a preview (`WATER_PREVIEW_URL`):
 
 ```sh
-bun tools/protocol/zone-water-check.ts
+bun test/protocol/zone-water-check.ts
 bun tools/water/import-golden-check.ts
 bun tools/water/fog-mask-check.ts
 bun tools/models-field-test.ts

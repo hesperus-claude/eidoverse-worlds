@@ -8,8 +8,8 @@ import { generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { scratchSequencer, freePort, ROOT } from "./harness.ts";
-import { until } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { until } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const pair = generateKeyPairSync("ed25519");
 const publicKey = pair.publicKey.export({ type: "spki", format: "der" });

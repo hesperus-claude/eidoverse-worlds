@@ -5,8 +5,8 @@
 import { mkdtempSync, writeFileSync, readFileSync, statSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { suite } from "./protocol/suite.ts";
-import { until } from "./protocol/wait.ts";
+import { suite } from "../test/gate/suite.ts";
+import { until } from "../test/gate/wait.ts";
 const { glbPerf, glbPerfOfFile, glbPerfIo } = await import("../server/glbperf.ts");
 const S = suite("glbperf-file");
 const check = (n: string, ok: unknown, d?: unknown) => S.check(n, ok, d);

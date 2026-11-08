@@ -13,7 +13,7 @@
 // and the entry point imports what it calls. Source-level, no browser.
 
 import { readFileSync } from "node:fs";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("voice-wiring");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

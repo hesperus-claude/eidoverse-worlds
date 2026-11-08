@@ -18,13 +18,13 @@
 //    structure keeps its `hidden`, its collider off, and the collider preference it asked for; and a building whose
 //    structure is removed has its anchor back as hidden as it says, with the collider preference it asks for;
 //  - controls beside each: the same thing with collision on has its collider, and a walker stepping into it is pushed out.
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../test/protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { suite } from './protocol/suite.ts';
+import { suite } from '../test/gate/suite.ts';
 
 const STUB = fileURLToPath(new URL('./collider-off-stub.mjs', import.meta.url));
 plugin({
@@ -47,8 +47,8 @@ const C: any = await import('../client/lib/colliders.js');
 const M: any = await import('../client/lib/realize/models.js');
 const ST: any = await import('../client/lib/realize/structure.js');
 const S: any = await import('../client/lib/state.js');
-const { scratchWorld } = await import('./protocol/scratchworld.ts');
-const { until } = await import('./protocol/wait.ts');
+const { scratchWorld } = await import('../test/protocol/scratchworld.ts');
+const { until } = await import('../test/gate/wait.ts');
 
 const MESH = { shape: 'box', size: [2, 2, 2] };
 // a two-cell room with its north wall, no doorway (structure-collider-test's house, without its door)

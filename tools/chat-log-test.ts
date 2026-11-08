@@ -29,7 +29,7 @@ plugin({
 });
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 GlobalRegistrator.register();
 
 // seeded BEFORE the import: chat.js reads ew-chat-fs at module load, so the boot-moment row below can see it

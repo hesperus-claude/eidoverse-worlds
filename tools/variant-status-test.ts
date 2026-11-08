@@ -5,7 +5,7 @@
 // filename, so an older generation's marker is simply never looked up here; there is no per-kind re-opening any more.
 import { classifyVariant, variantStatus, lodVariantPath, ktx2VariantPath, lodRecipeFor, LOD_RECIPE, LOD_MIN_VERTS, KTX2_RECIPE, recipeStamp, sourceSidecar, sourceToken, freshOver, variantSource, verdictMarker, verdictLine, readVerdict, lodVerdictKind, lodVerdictFinal, verdictStands } from "../server/store-variants.ts";
 import { toolsStamp, toolsDigest, toolVersions } from "../server/tools-stamp.ts";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 import { join, resolve } from "node:path";
 
 const T = suite("variant-status");

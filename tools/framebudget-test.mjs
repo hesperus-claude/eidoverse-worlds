@@ -2,8 +2,8 @@
 // starved lane is granted anyway, one gpu unit per frame, busy() from reported loading, the loop is the clock (with a
 // fallback that still rolls the books). `node tools/framebudget-test.mjs`
 import * as fb from '../client/lib/framebudget.js';
-import { pause } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { pause } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 const S = suite("framebudget");
 const ok = (n, c, d) => S.check(n, c, d);
 const near = (a, b, e = 0.05) => Math.abs(a - b) <= e;

@@ -19,7 +19,7 @@ process.env.WORLD_TOKEN = "";
 const { FLOOR, UPPER, boxes, building, buildGlb } = await import("./two-storey-fixture.ts");
 const P = await import("../mcpl/places.ts");
 const { scratchSequencer, mkCheck, sleep, legacyVerb, sceneId } = await import("./harness.ts");
-const { tryUntil } = await import("./protocol/wait.ts");
+const { tryUntil } = await import("../test/gate/wait.ts");
 const { check, tally } = mkCheck();
 
 console.log("places.ts (pure):");

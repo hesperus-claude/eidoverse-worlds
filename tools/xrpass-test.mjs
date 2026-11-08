@@ -3,7 +3,7 @@
 // tools/xr-switch-compile-measure.mjs is the real-three half (both variants live side by side; the switch builds nothing).
 import * as THREE from '../client/node_modules/three/build/three.webgpu.js';
 import { separateXRPass, withXREyes } from '../client/lib/xrpass.js';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const S = suite("xrpass");
 const check = (name, ok, note) => S.check(name, ok, note);
 class FakeObjects { constructor() { this.seen = []; } get(o, m, s, cam, l, rc, cc, passId) { this.seen.push(passId); if (o === 'rebuild' && this.seen.length === 1) return this.get('again', m, s, cam, l, rc, cc, passId); return passId; } }

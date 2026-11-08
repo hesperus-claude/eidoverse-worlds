@@ -8,11 +8,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
-import { ENGINE, scratch } from "../protocol/common.ts";
+import { ENGINE, scratch } from "../../test/gate/common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
-import { labClock, pinned } from "../protocol/clock.ts";
-import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "../protocol/labmodels.js";
+import { labClock, pinned } from "../../test/gate/clock.ts";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "../../test/protocol/labmodels.js";
 
 const MAIN = "ccd5c53fa";   // upstream main (#281's merge): its shared/water.js is the reference reader
 let pass = 0, fail = 0;
@@ -108,7 +108,7 @@ C("G4", "a real authority takes the whole batch: every create and set, its place
     shape && steps.useLow.ok && steps.useHigh.ok && steps.down.ok && steps.under.refused?.code === "solid" && steps.under.refused.blocker === id(floor.id.slice(1)) && steps.up.ok && steps.over.refused?.code === "solid" && steps.over.refused.blocker === id(ceil.id.slice(1)),
     { shape, walls: walls.map((a) => [a.components.label, at(a)]), said, H, rise }); }
 // with the hull measured (the host's catalogue: translate's boxOf), the walls are set off by its reach, so the ORIGIN keeps main's band exactly
-{ const TV1 = await import(ENGINE + "tools/protocol/import-v1/translate-v1.js"), m = manifest.verbs.find((v) => v.verb === "comp" && v.args.type === "vehicle").args.data;
+{ const TV1 = await import(ENGINE + "tools/import-v1/translate-v1.js"), m = manifest.verbs.find((v) => v.verb === "comp" && v.args.type === "vehicle").args.data;
   const MATH = await import(ENGINE + "shared/protocol/authority/math.js");
   const band = (q) => { const o = openWorld(`water-o${q[0] ? "f" : "u"}`), go = (verb, args) => { clock.advance(1000); return D.request(o, "olive", verb, args); };
     go("create-world", { title: "o" }); const pos = [26, -100, 60];
@@ -135,7 +135,7 @@ const mainWater = () => mainWaterP ??= (async () => { const ref = path.join(root
   if (g.status !== 0) { C("G5", `main's shared/water.js at ${MAIN} (git show)`, false, g.stderr); console.log(`[import-golden-check] ${pass} passed, ${fail} failed`); process.exit(1); }
   fs.writeFileSync(ref, g.stdout); return import(ref); })();
 // main's swim speed: a translated pond (volumePartsOf) swum as the client swims it (zone.js's water, physics-area's factor at the swimmer, the mover) vs main's swimStep
-{ const TV1 = await import(ENGINE + "tools/protocol/import-v1/translate-v1.js"), WJ = await import(ENGINE + "shared/water.js"), Mw = await mainWater();
+{ const TV1 = await import(ENGINE + "tools/import-v1/translate-v1.js"), WJ = await import(ENGINE + "shared/water.js"), Mw = await mainWater();
   const stroke = (step, water, input, factorAt = null) => { let p = [-150, 0, 0], v = [0, 0, 0];
     for (let i = 0; i < 400; i++) { const n = step(p, v, factorAt ? { ...input, factor: factorAt(p) } : input, water, 0.05, 0); p = n.pos; v = n.velocity; } return Math.hypot(...v); };
   const rows = [2.4, 2.45, 1.2, 6, 0.5].flatMap((speed) => [false, true].map((fast) => {
@@ -176,11 +176,11 @@ for (const t of [0, 7.3]) for (let i = 0; i < 4000; i++) {
   if (ours !== theirs) diff.push({ p, t, ours, theirs });
 }
 C("G6", `${n} seeded points around the habitat, the submarine and the waves (t 0 and 7.3 s): mediumOf and main's mediumAt agree on every one`, diff.length === 0 && wet > 1000 && pocketed > 500, { count: diff.length, first: diff.slice(0, 3), wet, pocketed });
-// G7: the same world as upstream main itself saved it (tools/protocol/fixtures/water-old-v1: main's server, the manifest's verbs,
+// G7: the same world as upstream main itself saved it (test/fixtures/water-old-v1: main's server, the manifest's verbs,
 // its own snapshot.json) agrees with the old engine under the translator's last check, the one an upgrade must pass
-{ const fx = path.join(ENGINE, "tools/protocol/fixtures/water-old-v1"), dir = fs.mkdtempSync(path.join(os.tmpdir(), "water-old-"));
+{ const fx = path.join(ENGINE, "test/fixtures/water-old-v1"), dir = fs.mkdtempSync(path.join(os.tmpdir(), "water-old-"));
   fs.cpSync(fx, path.join(dir, "water-old"), { recursive: true });
-  const o = Bun.spawnSync(["bun", path.join(ENGINE, "tools/protocol/import-v1/snapshot-oracle.ts")], { cwd: ENGINE, env: { ...process.env, ORACLE_WORLDS: dir, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } });
+  const o = Bun.spawnSync(["bun", path.join(ENGINE, "tools/import-v1/snapshot-oracle.ts")], { cwd: ENGINE, env: { ...process.env, ORACLE_WORLDS: dir, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } });
   const out = o.stdout.toString() + o.stderr.toString(), line = out.split("\n").find((l) => /water-old/.test(l) && /(FAIL|agree|OK|ok)/.test(l)) ?? "";
   C("G7", "main's own saved water world (log + snapshot.json) translates with no unexplained difference from the old engine", /-- water-old\b[^\n]*— (ok|agrees|0 unexplained)/i.test(out) || (o.exitCode === 0 && !/FAIL water-old/.test(out)), { exit: o.exitCode, line, tail: out.split("\n").filter((l) => /DIFF|FAIL/.test(l)).slice(0, 4) }); }
 console.log(`[import-golden-check] ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);

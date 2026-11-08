@@ -11,8 +11,8 @@
 // never needs a timeout.
 
 import { schedule, cancelOwner, pending, onIdle, laneStats, P } from "../client/lib/scheduler.js";
-import { pause, tryUntil } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { pause, tryUntil } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("scheduler");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

@@ -3,7 +3,7 @@
 // client + IWER: the desktop view's own killswitch (30 frames over 30 ms) trips on headless frames once released.
 //   bun tools/xr-desktop-banner-probe.mjs
 import { launchBrowser, ownedWorld, checker, iwerInit, visorShown, enterVR } from './probe-harness.mjs';
-import { pause } from './protocol/wait.ts';
+import { pause } from '../test/gate/wait.ts';
 const { check, done } = checker();
 const world = await ownedWorld({});
 const { browser, page } = await launchBrowser(); const pg = await page();

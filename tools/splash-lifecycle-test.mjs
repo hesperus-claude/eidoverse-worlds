@@ -9,7 +9,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 const RAYS0 = process.env.SPLASH_RAYS0 === '1';
 GlobalRegistrator.register({ url: RAYS0 ? 'http://localhost/?rays=0' : 'http://localhost/' });
 import { plugin } from 'bun';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
 plugin({ name: 'core-stub', setup(build) {
   build.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here('./core-stub.mjs') }));

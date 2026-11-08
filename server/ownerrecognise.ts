@@ -1,5 +1,5 @@
 // server/ownerrecognise.ts — is this signed-in account one of an old-format world's owners (R 10-28)? One pure rule over the
-// owners the old log names (tools/protocol/import-v1/world.ts oldOwners), read by the translation's --claim and by the
+// owners the old log names (tools/import-v1/world.ts oldOwners), read by the translation's --claim and by the
 // access index (worldindex.ts), so a join, /access or upgrade request never reads the old log to answer it.
 // Watch for deletion: operators usually choose which engine is served; see WISHLIST 'Owner self-upgrade of old worlds'.
 import { foldName } from "./directory.ts";

@@ -43,7 +43,7 @@ export function encName(s) {
   s = String(s);
   return HASHED.test(s) || (isComponent(s) && !ESC.test(s)) ? s : escape(s);
 }
-/** enc and encName for a name that was never an id: an old log's (the translator's, tools/protocol/import-v1). Old logs
+/** enc and encName for a name that was never an id: an old log's (the translator's, tools/import-v1). Old logs
  *  never held a hashed id, so a name already in that form is escaped like any other, never kept: a raw name equal to a long
  *  name's hashed form would otherwise be that long name's id.
  *  @param {unknown} s @returns {string} */

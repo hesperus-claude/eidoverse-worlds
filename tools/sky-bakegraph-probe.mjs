@@ -5,7 +5,7 @@
 // so this can't show the program-cache hit itself (that needs the cloud march): it checks the retention the hit rests on.
 //   bun tools/sky-bakegraph-probe.mjs
 import { launchBrowser, ownedWorld, checker, skyBoot } from './probe-harness.mjs';
-import { tryUntil } from './protocol/wait.ts';
+import { tryUntil } from '../test/gate/wait.ts';
 const { check, done } = checker();
 const world = await ownedWorld({ owner: 'bakegraph', env: { TRUST_NAMES: '1' } });   // the page owns staging, so its @world writes are admitted
 const { browser, page } = await launchBrowser(); const pg = await page();

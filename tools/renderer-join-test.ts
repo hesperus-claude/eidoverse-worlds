@@ -17,7 +17,7 @@
 
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("renderer-join");
 const check = (name: string, cond: unknown, detail?: unknown) => S.check(name, cond, detail);

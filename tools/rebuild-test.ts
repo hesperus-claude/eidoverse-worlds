@@ -7,7 +7,7 @@
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, statSync, utimesSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const S = suite("rebuild");
 const check = (n: string, ok: unknown, d?: unknown) => S.check(n, ok, d);
 const root = mkdtempSync(join(tmpdir(), "rebuild-"));

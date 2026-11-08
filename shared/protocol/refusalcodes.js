@@ -2,7 +2,7 @@
 // Pure data, no imports. A code is written into signed log entries (a refused write's act carries `refused: {code}`), so a
 // code is one-way: clients branch on it, old logs hold it forever. Like HTTP's status codes or gRPC's closed `Code` enum:
 // a fixed, registered set, with free-text `reason` and `fix` beside it. A new code is a new row here, with what it means
-// and when it is given; tools/protocol/scars-check.ts G1 fails if the authority can refuse with a code that has no row, if
+// and when it is given; test/protocol/scars-check.ts G1 fails if the authority can refuse with a code that has no row, if
 // a row names a code nothing gives (unless it is `reserved`), and if a request in that suite met an unregistered code.
 //
 // Each row: { meaning, when, reserved? }. `meaning` is what the asker should understand; `when` is what triggers it.

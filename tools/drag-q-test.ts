@@ -1,4 +1,4 @@
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 // drag-q-test — the rotate gizmo's live drag carries the full orientation
 // (design §5, step 3): the REAL "drag" message handler (server/messages.ts)
 // relays a usable q (normalized) alongside the yaw older peers read, and

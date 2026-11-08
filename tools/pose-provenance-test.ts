@@ -20,7 +20,7 @@ import { WorldAgent } from "../mcpl/agent.ts";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const { ok, done } = suite("pose-provenance");
 

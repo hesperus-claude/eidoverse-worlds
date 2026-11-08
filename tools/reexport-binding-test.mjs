@@ -11,7 +11,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
-import { suite } from './protocol/suite.ts';
+import { suite } from '../test/gate/suite.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SCAN = [join(ROOT, 'client')];

@@ -29,7 +29,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { foundWorlds, freePort } from "./harness.ts";
 import { qFromYaw } from "../shared/rot.js";
-import { idAliases } from "./protocol/idalias.ts";
+import { idAliases } from "../test/protocol/idalias.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 const IDS = idAliases();
 
@@ -135,7 +135,7 @@ function hand(world: string, name: string) {
   return new Promise<any>((res) => {
     const ws = new WebSocket(`${URL_}?name=${name}`);
     let n = 0;
-    // R 10-17: the scene's names ride as placeholders and minted ids (tools/protocol/idalias.ts). Each request waits for the
+    // R 10-17: the scene's names ride as placeholders and minted ids (test/protocol/idalias.ts). Each request waits for the
     // one before it to be answered (its reply carries the ids a later request names); a verb's promise may be ignored, the
     // order holds
     const waiting = new Map<string, (r: any) => void>(); let chain: Promise<any> = Promise.resolve();

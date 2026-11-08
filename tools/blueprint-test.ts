@@ -7,20 +7,20 @@
 // 2. the shape     blueprintRefusal's rules, each refused by name
 // 3. the link      expand / overridesOf / rebase, a conflict included
 // 6. the door's publish (@world blueprints:<hash>) and create {from: <hash>, at} on a scratch world
-//    (tools/protocol/scratchworld.ts): the record, the copy's tree, its local poses, one act, the door's undo
+//    (test/protocol/scratchworld.ts): the record, the copy's tree, its local poses, one act, the door's undo
 // 7. the agent's blueprints / create {from} / look() over the library, its door the scratch door
 //
 // Sections 1–3 are pure functions of shared/blueprint.js (expand/overridesOf/rebase have no runtime caller yet);
 // the v1 sections (4, 5, 8) went with protocol v1.
 import { noWorldUrl } from './no-world.ts';
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../test/protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { recordComponents } from "../shared/protocol/view.js";
 import { inspectSchema, fieldAt } from "../shared/editschema.js";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 // config.ts makes WORLDS_DIR at import: keep the bench out of the repo's worlds/
 const SCRATCH = mkdtempSync(join(tmpdir(), 'ew-blueprint-'));
 process.env.WORLDS_DIR = join(SCRATCH, 'worlds');
@@ -197,7 +197,7 @@ const copyOf = (rec: any, at: number[]) => {
 
 // ---- 6. the door's publish and create {from} ------------------------------------------
 console.log('\n6. publish → @world blueprints:<hash>; create {from: hash, at} → the copy (the real door, a scratch world)');
-const { scratchWorld } = await import('./protocol/scratchworld.ts');
+const { scratchWorld } = await import('../test/protocol/scratchworld.ts');
 const { worldPose } = await import('../shared/hierarchy.js');
 const { qFromYaw, qNorm } = await import('../shared/rot.js');
 const near = (a: number[], b: number[], e = 2e-3) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= e);

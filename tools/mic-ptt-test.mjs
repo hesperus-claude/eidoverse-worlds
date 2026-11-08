@@ -13,7 +13,7 @@
 import { fileURLToPath } from "node:url";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { mock } from "bun:test";
-import { pause } from "./protocol/wait.ts";
+import { pause } from "../test/gate/wait.ts";
 GlobalRegistrator.register({ url: "http://localhost/?world=t&name=p" });
 
 // The bus is the REAL one (base.js), deliberately: micstate subscribes to

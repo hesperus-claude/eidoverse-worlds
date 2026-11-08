@@ -17,7 +17,7 @@ import {
   edgeCells, edgeBetween, edgeKey, cellKey, APERTURES, GRID_DEFAULTS,
   describeHere, describeStructure, localizePoint, levelParts, TRIM, cornerFills, wallRuns, wallPolylines, sweepProfile, wallProfile, levelSweeps, capProfile, clipProfileV, refineProfile, makeShader, diagOf, halfTriangle, triPrism, halfFloored, segmentEnds, nodeAtPoint, nodeGraph, cellNodes, routeCells, routeLocal, passable,
 } from "../shared/structure.js";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("structure-field");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

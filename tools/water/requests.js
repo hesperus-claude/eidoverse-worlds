@@ -1,11 +1,11 @@
 // tools/water/requests.js — main's water-world records (asset/spawn/comp, as world-data/water/manifest.json holds them) as one
 // `batch` of create/set requests, through the old-world translator's own mapping (import-v1/translate-v1.js project:
 // water → zone + water, air boxes → zone + water-exclusion children, climb routes, collision, environment). Read by import.ts and prepare.ts.
-import { emptyState, foldEntry } from '../protocol/import-v1/fold.js';
+import { emptyState, foldEntry } from '../import-v1/fold.js';
 import { addSocket } from '../../shared/requests.js';
 import { socketQ } from '../../shared/components.js';
-import { stationOfBody } from '../protocol/import-v1/sockets.js';
-import { project, deferredFeatures, volumeMappings, carriedMappings, unmappedOf, namespaceOf } from '../protocol/import-v1/translate-v1.js';
+import { stationOfBody } from '../import-v1/sockets.js';
+import { project, deferredFeatures, volumeMappings, carriedMappings, unmappedOf, namespaceOf } from '../import-v1/translate-v1.js';
 
 export const RECORD_VERBS = ['asset', 'spawn', 'comp', 'light', 'mount', 'motion'];
 /** records → {batch, uploads, deferred, mapped, unmapped}: deferred (none in #248's world now) are listed and left out of the batch; unmapped is what rides imported.

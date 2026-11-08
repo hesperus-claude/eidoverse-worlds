@@ -15,19 +15,19 @@
 // the snapshot carries the authority's cut (`cut`) and the chat window (`state`), every
 // write is a request {type: "request", id, verb, args} answered by `reply`,
 // and what the door wrote reaches every client as `log` entries. A world is
-// founded by its operator (bun tools/protocol/world.ts found); joining never founds one.
+// founded by its operator (bun tools/world.ts found); joining never founds one.
 // Against a running server, the worlds WORLD, WORLD-hist, WORLD-noise,
 // WORLD-ground, WORLD-light and WORLD-pose must exist, owned by the names this
 // suite joins as (alice, groundskeeper, lampsmith; on a TRUST_NAMES=1 server). The checks that read world.jsonl off this
 // disk run only against the throwaway server: an external server's log isn't here, so they pass there unread.
 
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../test/protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { foundWorlds, freePort } from "./harness.ts";
-import { idAliases } from "./protocol/idalias.ts";
+import { idAliases } from "../test/protocol/idalias.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 const IDS = idAliases();
 

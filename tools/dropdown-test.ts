@@ -11,7 +11,7 @@
 // skins selects that land later inside chrome, and only inside chrome.
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 GlobalRegistrator.register({ width: 1000, height: 700 });
 
 // happy-dom caches `selectedOptions` and does not refresh it after `sel.value = x` followed by

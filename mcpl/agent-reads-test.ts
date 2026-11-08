@@ -2,7 +2,7 @@
 // that failed or timed out isn't cached, so the next walk near that model asks again; an answer is kept.
 //   bun mcpl/agent-reads-test.ts
 process.env.WORLD_TOKEN = "";
-import { suite } from "../tools/protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const { WorldAgent } = await import("./agent.ts");
 
 const { check, done } = suite("agent-reads");

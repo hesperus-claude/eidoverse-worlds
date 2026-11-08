@@ -13,7 +13,7 @@
 // through handleLiveCause exactly as net.js's 'live-entry' does.
 import { plugin } from "bun";
 import { fileURLToPath } from "node:url";
-import { tryUntil, pause } from "./protocol/wait.ts";
+import { tryUntil, pause } from "../test/gate/wait.ts";
 
 const STUB = fileURLToPath(new URL("./world-hold-stub.mjs", import.meta.url));
 plugin({

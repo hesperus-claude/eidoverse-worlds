@@ -7,7 +7,7 @@
 // B  one binding: the shared values are the ones the design states (the imports and the no-copy scan over every file
 //    are tools/one-binding-test.ts's).
 // @ts-nocheck
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../test/protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import path from "node:path";
 import { request } from "../shared/protocol/authority.js";
@@ -15,8 +15,8 @@ import { openWorld } from "../server/filehost.ts";
 import { ENGINES } from "../shared/protocol/simlayer.js";
 import { grabOf } from "../shared/grab.js";
 import { planLaunch } from "../shared/protocol/launchplan.js";
-import { ENGINE, scratch } from "./protocol/common.ts";
-import { labClock } from "./protocol/clock.ts";
+import { ENGINE, scratch } from "../test/gate/common.ts";
+import { labClock } from "../test/gate/clock.ts";
 
 let fails = 0, passes = 0;
 function ok(cond, what, detail) { if (cond) passes++; else { fails++; console.log("FAIL", what, detail !== undefined ? JSON.stringify(detail).slice(0, 600) : ""); } }

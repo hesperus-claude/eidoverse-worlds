@@ -8,8 +8,8 @@ import { join } from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
-import { tryUntil } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { tryUntil } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 import { freePort } from "./harness.ts";
 
 const S = suite("served-routes");

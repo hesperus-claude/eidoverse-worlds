@@ -11,7 +11,7 @@ import {
   setAperture, setTile, removeTile, drawRoom, eraseRoom, labelCell, pickWalledEdge,
 } from "../shared/structure_edit.js";
 import { planStructure, normalize, edgeKey } from "../shared/structure.js";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("structure-edit");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

@@ -8,8 +8,8 @@
 //               serves exactly tickStats()).
 
 import { registerSystem, startTick, tickStats } from "../server/tick.ts";
-import { pause } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { pause } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("tick");
 const check = (name: string, ok: unknown, extra?: unknown) => S.check(name, ok, extra);

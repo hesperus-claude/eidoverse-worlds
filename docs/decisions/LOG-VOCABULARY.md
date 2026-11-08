@@ -96,7 +96,7 @@ A legacy alias of `actor` the lab wrote. It is not in `ENVELOPE`; a line carryin
 - **Referent.** The fold handed to a joiner at seq N; never logged, verified by folding forward.
 - **Shape.** Flat: `{dialect, v, requires, world, name, you, actor, gen, seq, state, physics, names, holds, mine, chat, …}`. `world` is the world id; `name` the directory name. `actor` is the joiner's log id (the one entries carry); `you` is the connection's id. `chat` is `{recentChat, chatTotal}`. `physics` was `cut.sim`; `seq` was `cut.head`.
 - **Version gate.** `replica.adopt` checks `{dialect, v}` first and refuses an unknown pair whole: status `unknown-version`, no state, nothing folded (F7). Without it a client would adopt a foreign snapshot and drop every following `log` entry as malformed with status `ok`.
-- **Checkpoint blobs.** The one writer (`scriptrun.js`) writes `snapshotJson`; the readers (`livehost.ts`, `tools/protocol/simckpt-check.ts`) read `snapshotJson` only. A blob keyed `cutJson` is skipped and the boot falls back to an earlier checkpoint or genesis (F12).
+- **Checkpoint blobs.** The one writer (`scriptrun.js`) writes `snapshotJson`; the readers (`livehost.ts`, `test/protocol/simckpt-check.ts`) read `snapshotJson` only. A blob keyed `cutJson` is skipped and the boot falls back to an earlier checkpoint or genesis (F12).
 - **Hash.** None: nothing logged.
 
 ### 1.9 `rewind_window` → `rewindWindow`
@@ -195,7 +195,7 @@ Gone with §1.14: readers read components.
 
 ## 5. Conformance fixtures and mutations (D10)
 
-Each fixture is guarded by a mutation that proves it exercises what it names. Where the test lives: F1–F3, F8, F14 in `spec/conformance/test_reader.py`; F6, F9 in `test_story.py`; F4, F5, F7, F10, F12, F20 in `tools/protocol/vocab-fixtures-check.ts`; F19 in `tools/protocol/importer-check.ts`; F22–F31 in `tools/protocol/freeze-check.ts` (F23 also across the access, setup, upgrade and join checks). F11, F13 and F15–F18 were migration fixtures and are retired with it; their ids are not reused.
+Each fixture is guarded by a mutation that proves it exercises what it names. Where the test lives: F1–F3, F8, F14 in `spec/conformance/test_reader.py`; F6, F9 in `test_story.py`; F4, F5, F7, F10, F12, F20 in `test/protocol/vocab-fixtures-check.ts`; F19 in `test/protocol/importer-check.ts`; F22–F31 in `test/protocol/freeze-check.ts` (F23 also across the access, setup, upgrade and join checks). F11, F13 and F15–F18 were migration fixtures and are retired with it; their ids are not reused.
 
 | # | fixture | proves | mutation that must go red |
 |---|---|---|---|
@@ -272,7 +272,7 @@ Fixtures F22–F31 in §5, except F25 (deferred, §5).
                  "dirty": false}
   }
   ```
-  Every field is required; `sourceTreeSha256` is always written. `name` is a bounded identifier, so a new writer needs no protocol change. A world's founding provenance lives in `genesis.body.provenance`: genesis is in the world id and never redactable, so it stays readable. The v1 translator writes it there as writer `eidoverse-translate-v1` at version `<translator number>.0.0`. The `translated` request after genesis repeats it in its body, and the in-place translation's rollback manifest repeats it (`tools/protocol/world.ts`). `translated.body.from` names the parent and the v1 fold build, never the translator. Provenance in a repair request body is deferred (F25).
+  Every field is required; `sourceTreeSha256` is always written. `name` is a bounded identifier, so a new writer needs no protocol change. A world's founding provenance lives in `genesis.body.provenance`: genesis is in the world id and never redactable, so it stays readable. The v1 translator writes it there as writer `eidoverse-translate-v1` at version `<translator number>.0.0`. The `translated` request after genesis repeats it in its body, and the in-place translation's rollback manifest repeats it (`tools/world.ts`). `translated.body.from` names the parent and the v1 fold build, never the translator. Provenance in a repair request body is deferred (F25).
 - **F-3 Join contract.** Internal order:
   ```text
   1. authenticate the principal

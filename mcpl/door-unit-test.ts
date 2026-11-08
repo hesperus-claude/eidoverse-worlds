@@ -233,7 +233,7 @@ for (const [status, err] of [["ran", false], ["nothing", false], ["would-run", f
 
 // a world server that takes the request and never answers: the door's read is bounded (tools.ts HTTP_READ_MS), and the
 // tool answers as a failed call instead of hanging the agent's turn
-{ const { HTTP_READ_MS } = await import("./tools.ts"); const { pause } = await import("../tools/protocol/wait.ts");
+{ const { HTTP_READ_MS } = await import("./tools.ts"); const { pause } = await import("../test/gate/wait.ts");
   const hung = Bun.serve({ port: 0, fetch: () => new Promise<Response>(() => {}) });
   const ag: any = { httpBase: `http://127.0.0.1:${hung.port}`, readHeaders: {} };
   const t0 = Date.now();

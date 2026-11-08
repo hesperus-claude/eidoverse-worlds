@@ -9,8 +9,8 @@
 //   bodies.js: flushBodyPrefs drops the captured name (`setMyBodyPref(p.patch)`)
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
-import { pause } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { pause } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 const here = (f) => fileURLToPath(new URL(f, import.meta.url));
 
 // the body state the Profile reads: `me` is what's ACTUALLY on screen; `name` is what we intended

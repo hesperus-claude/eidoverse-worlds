@@ -4,7 +4,7 @@
 // equals its name, so a revert of either half is invisible to the rest of the
 // suite; these cases go red on their own.
 import { displayNameIndex, wireAuthors } from '../mcpl/token-registry.ts';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const S = suite("author-wire");
 const check = (n, c) => S.check(n, c);
 

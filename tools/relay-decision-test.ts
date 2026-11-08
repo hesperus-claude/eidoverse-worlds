@@ -3,7 +3,7 @@
 import { relayIdentity, parseRelayIdentity, nextIncarnation,
   subscriptionActive, applyConsentUpdate,
 } from "../server/relaydecision.ts";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("relay-decision");
 const t = (name: string, got: unknown, want: unknown) => S.check(name, JSON.stringify(got) === JSON.stringify(want), `got ${JSON.stringify(got)} want ${JSON.stringify(want)}`);

@@ -11,7 +11,7 @@
 import { makeEntryEffects, handleEntryFailure } from '../client/lib/xr_entry_effects.js';
 import { decideEntryFailure, retryIsCurrent, BUSY_RETRY_MS } from '../client/lib/xr_entry_policy.js';
 import { readFileSync } from 'node:fs';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("xr-entry-effects");
 const check = (n, ok, extra) => S.check(n, ok, extra);

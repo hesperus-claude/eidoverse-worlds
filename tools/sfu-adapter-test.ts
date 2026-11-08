@@ -3,8 +3,8 @@
 import { admitParticipant } from "../server/relaydecision.ts";
 import { mintSfuCredential, admitSfuLeg, setSfuConsent, setSfuModeratorMute,
   revokeSfuLeg, sfuDiag, sfuState, registerSfuSender } from "../server/sfuadapter.ts";
-import { tryUntil, pause } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { tryUntil, pause } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("sfu-adapter");
 const check = (n: string, c: unknown, d?: unknown) => S.check(n, c, d);

@@ -18,8 +18,8 @@ import { mkdtempSync, writeFileSync, existsSync, rmSync, statSync, readFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { foundWorlds, freePort } from "./harness.ts";
-import { suite } from "./protocol/suite.ts";
-import { until, tryUntil, pause } from "./protocol/wait.ts";
+import { suite } from "../test/gate/suite.ts";
+import { until, tryUntil, pause } from "../test/gate/wait.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 
 // probe-then-release is racy, which is why readiness below verifies ownership rather than trusting whatever answers

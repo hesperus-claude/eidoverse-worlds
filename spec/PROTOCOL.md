@@ -422,7 +422,7 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
   change, not a part that cannot. Like trial they may still change during the
   alpha, but never by an acknowledgement alone. Their shapes are pinned in `spec/kernel-pin.json`
   (shared/protocol/kernelspec.js), and the gate's core lane
-  (tools/protocol/kernel-check.ts) is red the moment the code's kernel differs
+  (test/protocol/kernel-check.ts) is red the moment the code's kernel differs
   from the pin. A re-pin is refused unless the **same change** carries (a) a
   translator change (translate-v1's name moved, or a new translate step), (b) a
   `REGISTRY-CHANGELOG.md` line prefixed `kernel:`, and (c) vectors under
@@ -443,7 +443,7 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
   entry, so nothing repairs it. One write does happen when a server OPENS a world, and it is not a shape rewrite:
   holds left from before a restart are set down (`return-held`, the system's request; `settleOrphans`), the same
   request a leave writes. A v1 world comes forward through the translator (`translate-v1@50`, §14), which writes today's spelling
-  (the shape audit's rules, `tools/protocol/import-v1/shapes.js`) and lifts v1's `sockets` maps into socket
+  (the shape audit's rules, `tools/import-v1/shapes.js`) and lifts v1's `sockets` maps into socket
   children with its own `lift-sockets {id, made, moved}` requests. The door takes a write in a spelling renamed
   before release (`grabbable.pose`/`station.pose` → `anim`, a grip's `fingers` → `grasp`, a motion's old type
   word → `oscillate`, a picture's or sound's `alt`/`look` → `description`: shared/protocol/names.js `renameFields`) and stores
@@ -1286,7 +1286,7 @@ the thing's (or part's) own frame before scale; `motion.center` and
   `test_reader.py` its tests. `chain.py` and `test_chain.py` — the chain,
   signatures and redaction (§12). `ed25519/` — the key vectors (§13).
 
-`bun tools/protocol/run.ts conformance` folds every log with the JavaScript fold
+`bun test/gate/run.ts conformance` folds every log with the JavaScript fold
 and the Python reader and fails on any difference in status, digest or
 diagnostics. **The prose wins; the vectors are its tests**: where they
 disagree, the vector has the bug, and it is fixed to match the prose. A

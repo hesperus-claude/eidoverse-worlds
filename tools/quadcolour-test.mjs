@@ -7,7 +7,7 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/quadcolour-test.mjs
 import { gradeSRGB, GRADE_DEFAULT, GRADE_RANGE, loadGrade, LUMA, acesFilmicInverseJS } from '../client/lib/quadgrade.js';
 import { readFileSync } from 'node:fs';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const S = suite("quadcolour");
 const check = (name, ok, note) => S.check(name, ok, note);
 const near = (a, b, e = 1e-9) => a.every((v, i) => Math.abs(v - b[i]) <= e);

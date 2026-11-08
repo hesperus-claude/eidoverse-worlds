@@ -55,5 +55,5 @@ Start with [README](../README.md) (what this is, how to run it), [AGENTS](../AGE
 ## Local READMEs
 
 [shared](../shared/README.md) · [defs](../defs/README.md) · [patched](../patched/README.md) ·
-[import-v1](../tools/protocol/import-v1/README.md) · [water](../tools/water/README.md) · [seatlab](../tools/seatlab/README.md) ·
+[import-v1](../tools/import-v1/README.md) · [water](../tools/water/README.md) · [seatlab](../tools/seatlab/README.md) ·
 [projector](../deploy/projector/README.md) · [spec fixtures](../spec/fixtures/README.md)

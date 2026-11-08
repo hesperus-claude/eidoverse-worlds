@@ -6,7 +6,7 @@
  */
 import { canonicalManifestJson, manifestRevision, ManifestDigestError, MANIFEST_WITH_REVISION } from "./manifest.ts";
 import vectors from "./vectors/manifest-digest-vectors.json";
-import { suite } from "../tools/protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("manifest", { quiet: true });
 const bad = (name: string, msg: string) => S.check(name, false, msg);

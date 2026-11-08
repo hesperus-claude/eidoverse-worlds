@@ -6,7 +6,7 @@ import { findKtx2Encoder, ktx2EncodeArgs } from "../server/optimize.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const S = suite("ktx2-transfer");
 const check = (n: string, ok: unknown, d?: unknown) => S.check(n, ok, d);
 const enc = findKtx2Encoder();

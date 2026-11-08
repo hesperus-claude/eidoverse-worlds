@@ -3,7 +3,7 @@
 // A World is one world as this server holds it: its log (server/worldlog.ts WorldLog: the authority over the world's
 // directory) and the embodied plane in flight (connected clients, the dirty-pose batch, stage-frame bookkeeping, never
 // persisted). Every world this server serves speaks the current protocol: a directory that holds only an old log (the first
-// protocol's log.jsonl) is refused at open, with the command that translates it (tools/protocol/import-v1/, run once by the
+// protocol's log.jsonl) is refused at open, with the command that translates it (tools/import-v1/, run once by the
 // operator).
 // The registry (getWorld/worldExists/worlds) lives here too; the boot sweep that wakes scripted worlds stays in
 // server.ts — waking scripted worlds with the server is boot policy, not world mechanics.
@@ -158,7 +158,7 @@ export class World {
 
   constructor(name: string) {
     this.name = name;
-    if (!isWorldSaved(name)) throw new Error(`world "${name}" holds no log here (a world saved by the old protocol is translated once, in place: bun tools/protocol/world.ts translate <its name>)`);
+    if (!isWorldSaved(name)) throw new Error(`world "${name}" holds no log here (a world saved by the old protocol is translated once, in place: bun tools/world.ts translate <its name>)`);
     this.log = this.openLog();
     this.openSeq = this.log.snapSeq + 1;   // past every chat line this world has numbered (seq × 1000)
     // Runtime scripts wake with the world — a timer keeps running with nobody connected, which is the point of running

@@ -9,8 +9,8 @@
 // no network, no real OPFS/worker — each fault is injected, not awaited.
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { tryUntil, pause } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { tryUntil, pause } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 GlobalRegistrator.register();
 
 const S = suite("tts-fault");

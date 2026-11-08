@@ -12,7 +12,7 @@
 import { join } from "node:path";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { pinned } from "./protocol/clock.ts";
+import { pinned } from "../test/gate/clock.ts";
 
 process.env.WORLDS_DIR = join(mkdtempSync(join(tmpdir(), "ew-grant-until-")), "worlds");
 let passed = 0, failed = 0;
@@ -22,7 +22,7 @@ const check = (name, ok, detail = "") => {
 };
 
 // 1. the door
-const { scratchWorld } = await import("./protocol/scratchworld.ts");
+const { scratchWorld } = await import("../test/protocol/scratchworld.ts");
 const W = scratchWorld("grant-until");
 const now = pinned();
 const frac = W.call("set", { id: "@world", component: "roles:u-pip", value: { role: "builder", until: now + 7_200_000.37 } });

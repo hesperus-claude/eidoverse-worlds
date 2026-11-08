@@ -15,7 +15,7 @@
 // is that the PRODUCT'S install sequence runs. Removing the install turns this red.
 import { installFrameClock, installEntryClock, clockIsRestored } from '../client/lib/xr_frame_clock.js';
 import { readFileSync } from 'node:fs';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("xr-session-lifecycle");
 const check = (n, ok, extra) => S.check(n, ok, extra);

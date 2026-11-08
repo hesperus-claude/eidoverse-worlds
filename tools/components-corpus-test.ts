@@ -17,8 +17,8 @@ import { componentsOf, entityOf, canon, sha256hex, RECORDS, addable, lightOf, co
 import { worldComponents, worldOf, worldState } from '../shared/worldentity.js';
 import { blueprintRefusal, blueprintHash, expand, overridesOf, placeVerbs, placeRefusal, copyTree, modernize, localComponents, LINK_KEY } from '../shared/blueprint.js';
 import { treeOf } from '../shared/hierarchy.js';
-import { pathList } from "./protocol/common.ts";
-import { suite } from "./protocol/suite.ts";
+import { pathList } from "../test/gate/common.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const J = JSON.stringify;
 const S = suite("components-corpus");

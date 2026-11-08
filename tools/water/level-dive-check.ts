@@ -6,7 +6,7 @@
 // With no @world.bounds there is no edge (LD11).
 import { readFileSync, existsSync } from "node:fs";
 import { scratchBench, mkCheck } from "../harness.ts";
-import { until, pause } from "../protocol/wait.ts";
+import { until, pause } from "../../test/gate/wait.ts";
 
 const WORLD = "level-dive";
 const engine = process.env.ENGINE_LIB;

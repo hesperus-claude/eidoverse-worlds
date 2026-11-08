@@ -409,7 +409,7 @@ the log stays exact for everyone.
   engines (tools/simmath-test.ts for the kernel, bun only; the `browser` suite
   runs the fold/authority core in headless Chromium byte for byte against bun,
   not the kernel).
-- `bun tools/protocol/run.ts phys physlive physseeds` runs the physics suites:
+- `bun test/gate/run.ts phys physlive physseeds` runs the physics suites:
   launches, rests by cause, carriers, the running server and a client's fold,
   and the reserved seeds (the shape grammar, physical properties, releases
   with spin, the state sample, one clock).

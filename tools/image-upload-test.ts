@@ -40,14 +40,14 @@ function check(name: string, ok: boolean, detail = "") {
 }
 
 // A real 1×1 PNG (the smallest well-formed one), a JPEG whose header gives its
-// size (1024×512, tools/protocol/fixtures), and a WebP RIFF header with a VP8
+// size (1024×512, test/fixtures), and a WebP RIFF header with a VP8
 // frame header that gives its size — the sniffer reads magic and the door reads
 // the size (the pixel cap), the store does not decode, so headers are enough.
 // (house 6340433633: the WebP read 0×0, and the door took that as a size; a zero
 // side is now an unknown size, refused 415 like any unreadable one: WEBP0. The
 // JPEG had no SOF, so the size check refused it since that check landed.)
 const PNG = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
-const JPG = new Uint8Array(readFileSync(new URL("./protocol/fixtures/dims-1024x512.jpg", import.meta.url)));
+const JPG = new Uint8Array(readFileSync(new URL("../test/fixtures/dims-1024x512.jpg", import.meta.url)));
 const vp8 = (w: number, h: number) => new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x20, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20, 0x14, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x9d, 0x01, 0x2a, w & 0xff, (w >> 8) & 0x3f, h & 0xff, (h >> 8) & 0x3f, ...new Array(10).fill(0)]);
 // the WebP that lands is at the pixel cap, 8192 on each side, so landing pins the cap from below too

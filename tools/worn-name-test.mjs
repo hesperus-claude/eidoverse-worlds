@@ -2,7 +2,7 @@
 // listener that keys storage by body name must see the same name. Round-1 B2: xr.js keyed a per-body scale by
 // '[object Object]'.
 import { wornNameOf } from '../client/lib/base.js';
-import { suite } from './protocol/suite.ts';
+import { suite } from '../test/gate/suite.ts';
 const S = suite('worn-name'); const ok = (c, n) => S.check(n, c);
 ok(wornNameOf('aporia') === 'aporia', 'a string is its own name');
 ok(wornNameOf({ name: 'tigerbee', path: 'eidoverse/assets/vrms/tigerbee.vrm' }) === 'tigerbee', '{ name, path } yields the name');

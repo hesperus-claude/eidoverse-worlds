@@ -6,8 +6,8 @@
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/lantern-test.ts
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import { pause } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { pause } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 GlobalRegistrator.register();
 
 const A = await import('../client/lib/actions.js');

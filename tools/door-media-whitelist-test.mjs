@@ -9,7 +9,7 @@
 // Source-level, because the door needs a live world websocket to run. It reads
 // the shipped file, so it cannot pass against a copy.
 import { readFileSync } from 'fs';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const src = readFileSync(new URL('../mcpl/agent.ts', import.meta.url), 'utf8');
 
 const S = suite("door-media-whitelist");

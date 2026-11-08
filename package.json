@@ -31,7 +31,7 @@
     "test:flight": "bun tools/flight-test.ts",
     "test:flight:headless": "bun tools/flight-headless-test.ts",
     "test:namedpose": "bun tools/named-pose-test.ts",
-    "test:protocol": "BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/run.ts",
+    "test:protocol": "BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/gate/run.ts",
     "test:shadows": "bun tools/shadow-fade-test.mjs && bun tools/shadow-fade-test.mjs --mutants && bun tools/xrshadow-test.mjs && bun tools/lamp-skin-test.mjs && bun tools/body-shadow-gate-test.mjs && bun tools/lamp-slot-policy-test.mjs"
   }
 }

@@ -145,7 +145,7 @@ export default ({ EW, ui, onTick }) => {
  *  put and run need YOUR hand: transient user activation, so code that merely holds EW (a mod
  *  autorunning at load, or anything injected into the page) can't plant another that outlives it.
  *  Defence in depth, not a wall: the walls are that nothing a world sends runs as code here
- *  (tools/protocol/modhole-check.ts) and the page's CSP. */
+ *  (test/protocol/modhole-check.ts) and the page's CSP. */
 const byHand = (what) => {
   if (globalThis.navigator?.userActivation && !navigator.userActivation.isActive) throw new Error(`EW.mods.${what} needs a click or key press from you (installing or running a mod is your decision)`);
 };

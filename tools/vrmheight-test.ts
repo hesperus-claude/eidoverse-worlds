@@ -12,7 +12,7 @@
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("vrmheight");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

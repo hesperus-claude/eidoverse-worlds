@@ -6,7 +6,7 @@
 // same drives with the switch off DO shed, so every "nothing moved" has a subject.
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const STUB = fileURLToPath(new URL('./full-detail-stub.mjs', import.meta.url));
 plugin({ name: 'full-detail-stub', setup(b) {
   for (const f of ['^\\./core\\.js$', '^\\./warmqueue\\.js$', '^\\./loadwork\\.js$', '^\\./lightrig\\.js$', '^\\./emitters\\.js$',

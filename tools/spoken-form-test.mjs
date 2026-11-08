@@ -1,6 +1,6 @@
 // spoken-form — what the larynx gets. Table-driven, executable.
 import { spokenForm, ttsChunks } from '../client/lib/tts-chunk.js';
-import { suite } from './protocol/suite.ts';
+import { suite } from '../test/gate/suite.ts';
 const S = suite('spoken-form');
 const t = (name, got, want) => S.check(name, got === want, `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
 t('fenced code never speaks', spokenForm('before ```js\nconst x = 1;\n``` after'), 'before after');

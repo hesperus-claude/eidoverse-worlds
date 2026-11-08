@@ -4,7 +4,7 @@
 // boot cases each run as a child (`--case <name>`); `--mutants` runs the child mutation controls, each must go red.
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { plugin } from 'bun';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 GlobalRegistrator.register();
 HTMLCanvasElement.prototype.getContext = function () { const a = new Proxy(function () {}, { get: (_t, k) => (k === 'width' ? 100 : a), apply: () => a, set: () => true }); return new Proxy({}, { get: (_t, k) => (k === 'measureText' ? () => ({ width: 100 }) : a), set: () => true }); };
 const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;

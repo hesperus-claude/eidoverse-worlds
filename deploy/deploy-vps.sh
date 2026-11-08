@@ -28,7 +28,7 @@ fi
 # tools/captionbot/ with --frozen-lockfile; at the pin it only re-checks. Every deploy, since a pin can move in run.ts alone. A
 # plain `bun install` in mcpl/ dropped a missing optional sibling without a word and the door stopped on restart; this
 # fails here instead, under set -e, before the restarts.
-"$BUN" tools/protocol/run.ts --siblings
+"$BUN" test/gate/run.ts --siblings
 # root deps power server/optimize.ts (the store's GLB diet); the sequencer
 # itself stays dependency-free. Under set -e a failed install stops this
 # script here, before the chat bridge's install and the restarts.

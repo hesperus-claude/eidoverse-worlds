@@ -18,7 +18,7 @@
 //   the collider sits out the ease and comes back at the end; whereIs (what a request reads) is the truth throughout
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 const STUB = here('./put-settle-stub.mjs');
 plugin({

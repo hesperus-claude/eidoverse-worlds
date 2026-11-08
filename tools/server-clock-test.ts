@@ -46,8 +46,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { foundWorlds, freePort } from "./harness.ts";
-import { until, tryUntil } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { until, tryUntil } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 
 const PORT = Number(process.env.PORT ?? freePort(20000));   // a free port unless PORT names one

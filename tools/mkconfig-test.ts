@@ -31,7 +31,7 @@ import { fileURLToPath } from "node:url";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("mkconfig");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

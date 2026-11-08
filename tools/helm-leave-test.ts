@@ -9,7 +9,7 @@
 // Mutation (must go red): drop vehicles.js's bus.on('mount', …) line (rows HL1, HL2).
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
-import { suite } from './protocol/suite.ts';
+import { suite } from '../test/gate/suite.ts';
 const THREE_PATH = fileURLToPath(new URL('../client/node_modules/three/build/three.module.js', import.meta.url));
 const STUBS: Record<string, string> = {
   base: `const on = new Map(); export const CONFIG = { name: 'me' };

@@ -20,7 +20,7 @@
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 // Same Bun transpiler-cache guard as the rest of the suite (see support-test).
 if (process.env.__EIDO_TEST_CACHE_OFF !== '1') {

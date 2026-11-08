@@ -5,7 +5,7 @@
 // On release it writes the whole grabbable once. Mirror writes the other hand's grip; Try it puts the thing in my hand.
 //
 // The palm frame is shared/grab.js's (+Z out of the palm, +Y little→index). Its X differs by side, MEASURED on a real
-// avatar (tools/protocol/palm-frame.lab.ts): the right palm's +X points to the wrist, the left's along the
+// avatar (test/labs/palm-frame.lab.ts): the right palm's +X points to the wrist, the left's along the
 // fingers. So the ghost's points below are the right hand's, and the left's are the same with x negated; and a grip
 // mirrored across the thing's X plane is M·R·diag(-1, 1, 1) (M the reflection), which keeps the palm out and the index up.
 

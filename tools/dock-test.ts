@@ -22,8 +22,8 @@ plugin({
 });
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { pause } from "./protocol/wait.ts";
-import { suite } from "./protocol/suite.ts";
+import { pause } from "../test/gate/wait.ts";
+import { suite } from "../test/gate/suite.ts";
 GlobalRegistrator.register({ width: 1000, height: 700 });
 
 // the chrome ui.js reaches for at import (index.html's ids)

@@ -44,7 +44,7 @@ HTMLCanvasElement.prototype.getContext = function () {
 };
 
 import { plugin } from 'bun';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 // import.meta.dir is a plain filesystem path; a `file:` URL string reaches
 // readFile as a literal name and ENOENTs on a stub that is right there. This
 // showed up only on a COLD module cache (i.e. right after editing a client

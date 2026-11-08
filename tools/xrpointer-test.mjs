@@ -4,7 +4,7 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/xrpointer-test.mjs
 import * as P from '../client/lib/xrpointer.js';
 import * as THREE from 'three';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const S = suite("xrpointer");
 const check = (name, ok, note) => S.check(name, ok, note);
 

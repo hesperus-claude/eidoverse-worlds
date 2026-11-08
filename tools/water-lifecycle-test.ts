@@ -1,4 +1,4 @@
-import { tryUntil, pause } from "./protocol/wait.ts";
+import { tryUntil, pause } from "../test/gate/wait.ts";
 // water lifecycle — an agent's stature and its float belong to the CURRENT body and the CURRENT water.
 // A body swap re-measures (and a late answer for the old body cannot land); draining, refilling or moving
 // the water ends the float, so no position or velocity crosses from one water to the next.

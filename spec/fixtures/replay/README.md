@@ -15,7 +15,7 @@ boxed epoch, two boxed spawns, punts, a wall moved during flight, and a
 terrain change releasing bodies and rebuilding statics. The order fixture
 adds a final punt so two bodies survive into the settled snapshot.
 
-The `sweep` suite (`bun tools/protocol/run.ts sweep`, `tools/protocol/sweep.ts`) replays each fixture here against
+The `sweep` suite (`bun test/gate/run.ts sweep`, `test/protocol/sweep.ts`) replays each fixture here against
 its golden in `.replaybench.json` (`tools/replaybench.ts` and `replaybench-test.ts`, which once held this, are gone);
 committed fixtures fail if their sim golden is missing.
 

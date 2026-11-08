@@ -727,7 +727,7 @@ const WIRE_BLOCKED = {
     return ent?.physics?.kind === 'dynamic' ? 'physics turns it (it is dynamic): make it static, or add LookAt to a part' : null; },
 };
 const MOTION_GROUP = { Pendulum: 1, Spin: 1, Orbit: 1, Oscillate: 1, Path: 1 };
-// not offered by Add Component: what the authority refuses today (none). tools/protocol/shiplist-check.ts R1 sends
+// not offered by Add Component: what the authority refuses today (none). test/protocol/shiplist-check.ts R1 sends
 // every offered entry to the real door: all must be accepted.
 const NOT_OFFERED = new Set();
 /** The words people search Add Component with that aren't in a component's name or summary (review 10-07 S9: "seat"

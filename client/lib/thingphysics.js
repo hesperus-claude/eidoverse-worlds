@@ -13,7 +13,7 @@
 //   flights    a launch (throw, drop, punt, a grab that let what rested on it fall) is a `sim` entry in the log. This
 //              client folds it with the SAME engine the authority runs (shared/protocol/replica.js: simFolder + eidosim, no
 //              catalogue of its own: shapes are the log's physics.shape), so a flight on screen is the engine's
-//              flight, and it rests bit for bit where the authority logs the rest (tools/protocol/physlive-check.ts F4/F6).
+//              flight, and it rests bit for bit where the authority logs the rest (test/protocol/physlive-check.ts F4/F6).
 //              The screen shows a COPY of the canonical sim advanced to the server's clock (serverNow), interpolated
 //              between ticks: the canonical fold advances only by the entries' own ts.
 //   the body   the authority measures reach from its own track of your body (L6). A person's client keeps that

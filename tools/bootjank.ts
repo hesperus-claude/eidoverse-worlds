@@ -27,8 +27,8 @@ import { existsSync, mkdtempSync, rmSync, mkdirSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromeArgs, findChrome } from "./protocol/chrome.ts";
-import { killChild } from "./protocol/procgroup.ts";
+import { chromeArgs, findChrome } from "../test/gate/chrome.ts";
+import { killChild } from "../test/gate/procgroup.ts";
 import { helloOf } from "../shared/protocol/hello.js";
 
 const args = process.argv.slice(2);
@@ -131,7 +131,7 @@ const WORLD = WIDE ? `wide-${Math.random().toString(36).slice(2, 7)}` : "commons
 const SEQ_ENV = { ...process.env, PORT: String(PORT), JOIN_TOKEN: "", EIDOVERSE_DIR, WORLDS_DIR: WORLDS, ...(WIDE ? { HOST: "127.0.0.1", TRUST_NAMES: "1", SERVER_OPERATORS: "" } : {}) };
 // --wide: a founded world its driver owns (a typed name is an account on this loopback-only server)
 if (WIDE) {
-  const r = Bun.spawnSync([process.execPath, "tools/protocol/world.ts", "found", WORLD, "--owner", "widedriver"], { cwd: ROOT, env: SEQ_ENV });
+  const r = Bun.spawnSync([process.execPath, "tools/world.ts", "found", WORLD, "--owner", "widedriver"], { cwd: ROOT, env: SEQ_ENV });
   if (r.exitCode !== 0) await die(2, `✗ founding ${WORLD} failed: ${r.stderr.toString().slice(-300)}`);
 }
 

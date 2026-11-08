@@ -585,7 +585,7 @@ function installJoin(c: Client, w: World) {
         id: c.id, surface: c.surface, gen: c.gen, retired: retiredGen ?? null });
       for (const t of w.clients) if (t !== c) t.ws.send(transition);
     }
-    // (a world's owner is named when it is FOUNDED — tools/protocol/world.ts found, or the translator — never by being first in)
+    // (a world's owner is named when it is FOUNDED — tools/world.ts found, or the translator — never by being first in)
 }
 
 /** What a client is told it may do: the role the authority gives it (the authority admits every write), and the body and spend

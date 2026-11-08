@@ -5,12 +5,12 @@
 //
 // Each tier is the REAL module; no server process, no browser:
 //   3. the browser   client/lib/realize/models.js over tools/lod-client-stub.mjs, fed the views a client folds
-//                    from a scratch world behind the real door (tools/protocol/scratchworld.ts)
+//                    from a scratch world behind the real door (test/protocol/scratchworld.ts)
 //   5. inspector     shared/editschema.js — reads either spelling, writes new on edit, through the authority
 // (Protocol v1 removed, 2026-10-07: tiers 1 (the v1 fold), 2 (server/verbs.ts) and 4 (the agent's v1 applyEntry
 //  reader) went with it; tier 3 was ported to the protocol's feed. Its v1-only checks were dropped: the spawn verb's legacy
 //  `collide`, light-verb lights, a re-spawn over an id as a wholesale replace, and cargo mount/dismount verbs.)
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../test/protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { COMPONENTS } from '../shared/protocol/componentspec.js';
 const LD = COMPONENTS.light.defaults;   // the registry's light defaults (spec/registry-pin.json pins the numbers)
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 // the realizer's renderer/network cone, stubbed exactly as unknown-comp-test does
 // (tools/lod-client-stub.mjs records light requests and collider fits)
@@ -45,7 +45,7 @@ const jeq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const entScaleOf = (e: any) => { const s = e?.scale3 ?? e?.scale ?? 1; return Array.isArray(s) && s.every((x: number) => x === s[0]) ? s[0] : s; };
 
 const LAMP = 'eidoverse/assets/models/lamp.glb';
-const { scratchWorld } = await import('./protocol/scratchworld.ts');
+const { scratchWorld } = await import('../test/protocol/scratchworld.ts');
 
 // ---- 3. the browser realizer --------------------------------------------------
 console.log('\n3. the browser (client/lib/realize/models.js, real bus + state, stubbed renderer)');
@@ -241,12 +241,12 @@ const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.();
 
 // ---- 5. the inspector ----------------------------------------------------------
 // the protocol port (2026-10-06): editOps plans door requests; what an edit DOES is checked through the real authority on a
-// scratch world (tools/protocol/scratchworld.ts). Light-verb lights are gone from the planner (a lamp is a thing with a
+// scratch world (test/protocol/scratchworld.ts). Light-verb lights are gone from the planner (a lamp is a thing with a
 // light component), so the "old light-verb light keeps the light verb" checks are dropped.
 console.log('\n5. the inspector (shared/editschema.js: reads either spelling, writes new on edit, through the authority)');
 {
   const { inspectSchema, editOps, fieldAt } = await import('../shared/editschema.js');
-  const { scratchWorld } = await import('./protocol/scratchworld.ts');
+  const { scratchWorld } = await import('../test/protocol/scratchworld.ts');
   const ed = (ent: any, set: Record<string, unknown>) => editOps(ent, 'x', set);
   const opsOf = (r: any) => JSON.stringify(r.ops);
   // the edit through the door: `x` seeded as `ent`, the ops sent as one request, the view read back
@@ -272,7 +272,7 @@ console.log('\n5. the inspector (shared/editschema.js: reads either spelling, wr
   const odd = { ...lamp, light: { ...lamp.light, flicker: 1 } };
   const oe = ed(odd, { 'light.intensity': 24 });
   check('…unknown keys in the bag are kept by the planner (flicker rides along)', JSON.parse(opsOf(oe))[0]?.args.value.flicker === 1, opsOf(oe));
-  { const { translate } = await import('./protocol/import-v1/translate-v1.js'); const { v1FoldBuild } = await import('./protocol/import-v1/build.ts');
+  { const { translate } = await import('./import-v1/translate-v1.js'); const { v1FoldBuild } = await import('./import-v1/build.ts');
     const tr = translate([{ seq: 0, ts: 1, actor: 'world', verb: 'genesis', args: { v: 2, dialect: 'eidoverse-log' } }, { seq: 1, ts: 2, actor: 'r', verb: 'spawn', args: { id: 'x', lib: LAMP } },
       { seq: 2, ts: 3, actor: 'r', verb: 'comp', args: { id: 'x', type: 'light', data: odd.light } }], { foldBuild: v1FoldBuild() });
     // the translator now carries a key the component doesn't define BESIDE it (imported:light {flicker}), so the lamp

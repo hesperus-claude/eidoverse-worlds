@@ -6,7 +6,7 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/clickuse-test.ts
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const THREE_PATH = fileURLToPath(new URL('../client/node_modules/three/build/three.module.js', import.meta.url));
 const STUBS: Record<string, string> = {
   core: `import * as THREE from ${JSON.stringify(THREE_PATH)}; export { THREE };

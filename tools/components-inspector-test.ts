@@ -7,22 +7,22 @@
 // lower to door requests, checked through the real door.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/components-inspector-test.ts
 //
-// the corpus is the spec fixtures (and COMPONENTS_CORPUS) translated (tools/protocol/import-v1/translate-v1.js) and
+// the corpus is the spec fixtures (and COMPONENTS_CORPUS) translated (tools/import-v1/translate-v1.js) and
 // read as the view (shared/protocol/view.js); a translated light is a thing with a light component.
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { inspectSchema, fieldAt, editOps, partLabel, libLabel } from '../shared/editschema.js';
 import { componentsOf } from '../shared/components.js';
-import { translate } from './protocol/import-v1/translate-v1.js';
+import { translate } from './import-v1/translate-v1.js';
 import { viewState } from '../shared/protocol/view.js';
 import { enc } from '../shared/protocol/names.js';
 import { emptyState, applyInPlace, opsOf } from '../shared/protocol/fold.js';
-import { v1FoldBuild } from './protocol/import-v1/build.ts';
-import { scratchWorld, flat } from './protocol/scratchworld.ts';
+import { v1FoldBuild } from './import-v1/build.ts';
+import { scratchWorld, flat } from '../test/protocol/scratchworld.ts';
 import { registerDraft, trustedOf } from '../shared/drafts.js';
 import { materialize, COMPONENTS } from '../shared/protocol/componentspec.js';
-import { pathList } from "./protocol/common.ts";
-import { suite } from "./protocol/suite.ts";
+import { pathList } from "../test/gate/common.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("components-inspector");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

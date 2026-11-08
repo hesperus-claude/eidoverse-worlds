@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { custodyAt } from "../server/custody.ts";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const { check, done } = suite("custody-save-test");
 const attempt = (f: () => string | null) => { try { return { key: f() }; } catch (e) { return { threw: (e as Error).message }; } };

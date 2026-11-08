@@ -5,8 +5,8 @@
 // started BEFORE the awaiting caller's continuation, so the baked dome attached to the temporary. The fix runs the
 // post-bake work inside the lock (BAKE_AFTER); a queued bake re-checks whether it's still wanted at its turn (BAKE_GUARD).
 import { serializeBakes, BAKE_AFTER, BAKE_GUARD, BAKE_HELD, BAKE_INTERCEPT } from '../client/lib/sky_bakelock.js';
-import { pause } from './protocol/wait.ts';
-import { suite } from "./protocol/suite.ts";
+import { pause } from '../test/gate/wait.ts';
+import { suite } from "../test/gate/suite.ts";
 const S = suite("sky-bakelock");
 const ok = (n, c, d) => S.check(n, c, d);
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };

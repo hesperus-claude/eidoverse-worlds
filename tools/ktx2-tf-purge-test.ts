@@ -4,7 +4,7 @@
 import { fileURLToPath } from "node:url";
 import { convertedLinear, overCap, staleOversize } from "./ktx2-tf-purge.ts";
 import { KTX2_TEXEL_CAP } from "../server/store-variants.ts";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const S = suite("ktx2-tf-purge");
 const check = (n: string, ok: unknown, got?: unknown) => S.check(n, ok, got);
 function ktx2({ w, h, tf, writer }: { w: number; h: number; tf: number; writer: string }): Uint8Array {

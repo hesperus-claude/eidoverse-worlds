@@ -9,7 +9,7 @@
 //   no sharp — on a ktx-create host without sharp, an over-cap texture is skipped, not shipped full-size    [mutate: revert → 2048]
 import { Document, NodeIO } from "@gltf-transform/core";
 import { optimizeGlbKtx2, findKtx2Encoder, getSharp } from "../server/optimize.ts";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("ktx2-resize");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

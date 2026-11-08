@@ -14,7 +14,7 @@ mkdirSync(join(scratch,'opt'),{recursive:true});
 for(const f of manifest.files){const dest=join(scratch,'opt',f.path);mkdirSync(dirname(dest),{recursive:true});copyFileSync(join(bundle,f.file),dest);}
 const env={...process.env,HOST:'127.0.0.1',PORT:port,WORLDS_DIR:join(scratch,'worlds'),OPT_DIR:join(scratch,'opt'),RELAY_STATE_DIR:join(scratch,'opt'),
  SESSIONS_PATH:join(scratch,'sessions.json'),SKIP_OPT_SWEEP:'1',OPT_MEM_BUDGET_MB:'64',JOIN_TOKEN:'',SERVER_OPERATORS:'',TRUST_NAMES:'1',RECORD_FRAMES:'0'};
-const found=Bun.spawnSync([process.execPath,'tools/protocol/world.ts','found','water-preview','--owner','water-author'],{cwd:engine,env});
+const found=Bun.spawnSync([process.execPath,'tools/world.ts','found','water-preview','--owner','water-author'],{cwd:engine,env});
 if(found.exitCode!==0)throw Error(`found failed: ${found.stderr.toString().slice(-400)}`);
 const server=Bun.spawn([process.execPath,'server/server.ts'],{cwd:engine,env,stdout:'inherit',stderr:'inherit'});
 for(const signal of ['SIGINT','SIGTERM'] as const)process.on(signal,()=>server.kill(signal));

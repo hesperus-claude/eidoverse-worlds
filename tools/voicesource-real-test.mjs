@@ -11,7 +11,7 @@
 // this (tools/tts-fault-test.ts, tools/chat-log-test.ts).
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { mock } from "bun:test";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 GlobalRegistrator.register({ url: "http://localhost/?world=test&name=probe" });
 
 // voicesource.js needs exactly ONE thing from core.js — `report` — but core.js

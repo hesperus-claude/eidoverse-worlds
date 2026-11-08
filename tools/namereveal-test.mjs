@@ -1,4 +1,4 @@
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 // namereveal — hold-to-reveal's input side (client/lib/namereveal.js), driven directly: the module the client loads.
 //
 //   bun tools/namereveal-test.mjs

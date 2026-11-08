@@ -2,7 +2,7 @@
 // runs with xr.enabled=false and it is restored on every exit; not presenting, the original runs untouched.
 // Third independent review 2026-09-10: removing the patch in core.js was green everywhere — nothing imported it.
 import { patchShadowNodeForXR } from '../client/lib/xrshadow.js';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const S = suite("xrshadow");
 const check = (name, ok, note) => S.check(name, ok, note);
 const seen = []; let throwNext = false;

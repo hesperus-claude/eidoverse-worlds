@@ -16,7 +16,7 @@ plugin({ name: 'settings-stubs', setup(b) {
 } });
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 GlobalRegistrator.register();
 // happy-dom's global registrar ships no `Option`; videopanel builds its selects with `new Option(text, value)`
 (globalThis as any).Option = function (text: string, value?: string) { const o = document.createElement('option'); o.text = text; if (value !== undefined) o.value = value; return o; };

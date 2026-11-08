@@ -4,16 +4,16 @@
 //   usage: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/shape-physics-test.ts
 // @ts-nocheck
 import { fileURLToPath } from "node:url";
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../test/protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from 'node:fs';
 import { addSocket } from '../shared/requests.js';
-import { scratchWorld } from './protocol/scratchworld.ts';
+import { scratchWorld } from '../test/protocol/scratchworld.ts';
 import { COMPONENTS, statusOf, pinOf, materialize } from '../shared/protocol/componentspec.js';
 import { evalWholeMotion } from '../client/lib/motioneval.js';
 import { worldPose, TICK_MS } from '../shared/protocol/simlayer.js';
 import { GRID_DEFAULTS, APERTURES } from '../shared/structure.js';
 import { colliderOf } from '../shared/components.js';
-import { translate } from './protocol/import-v1/translate-v1.js';
+import { translate } from './import-v1/translate-v1.js';
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail: any = '') => { if (ok) pass++; else fail++; console.log(`${ok ? '✓' : '✗'} ${name}${!ok && detail !== '' ? `  — ${JSON.stringify(detail).slice(0, 300)}` : ''}`); };
@@ -90,7 +90,7 @@ await tryRow('MO', async () => {
   const a = evalWholeMotion(base, m, 300), b = evalWholeMotion({ ...base, pivot: [0, 0, 0] }, m, 300);
   check('MO7 a whole pendulum with no pivot component swings about its origin', a.ok && near(a.pos, b.pos) && near(a.pos, [0, 0, 0]), [a.pos, b.pos]);
 
-  const { repairComps } = await import('./protocol/import-v1/shapes.js');
+  const { repairComps } = await import('./import-v1/shapes.js');
   const R = repairComps({ motion: { type: 'pendulum', amplitude: 0.4, axis: 'z' }, collider: { shape: 'exact' } }).c;
   check('MO8 repair: amplitude → amp, a letter axis → its vector, the old period/damp/maxAmp readings written, the old swing point a pivot', JSON.stringify(R.motion) === '{"type":"pendulum","axis":[0,0,1],"amp":0.4,"period":3.5,"damp":0,"maxAmp":1.1}' && JSON.stringify(R.pivot) === '{"pos":[0,2,0]}', R);
   check('MO8 …collider exact → mesh', R.collider?.shape === 'mesh', R.collider);

@@ -1,7 +1,7 @@
 // component-needs-test — Add Component with needs, and Remove with dependants
 // (design §3, step 3): shared/editschema.js addOps / removeOps / editOps
 // and the Add Component list, through the real door (a scratch world,
-// tools/protocol/scratchworld.ts).
+// test/protocol/scratchworld.ts).
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/component-needs-test.ts
 //
@@ -12,11 +12,11 @@
 //
 // the protocol port (2026-10-06): ops are door requests; "folded" means "sent to the door and read back". v1's
 // server/reactions.ts pendulumImpulse is replaced by the door's own `use {action: 'push'}`. Light-verb lights are gone.
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../test/protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { inspectSchema, editOps, addOps, removeOps, needMet } from '../shared/editschema.js';
 import { RECORDS, addable, componentsOf } from '../shared/components.js';
-import { scratchWorld, flat } from './protocol/scratchworld.ts';
-import { suite } from "./protocol/suite.ts";
+import { scratchWorld, flat } from '../test/protocol/scratchworld.ts';
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("component-needs");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

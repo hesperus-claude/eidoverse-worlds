@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { scratchSequencer, mkCheck } from './harness.ts';
-import { until as waitUntil } from './protocol/wait.ts';
+import { until as waitUntil } from '../test/gate/wait.ts';
 import { helloOf } from '../shared/protocol/hello.js';
 const { check, tally } = mkCheck();
 const data = mkdtempSync(join(tmpdir(), 'presence-data-'));

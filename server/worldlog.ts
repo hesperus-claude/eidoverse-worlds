@@ -419,7 +419,7 @@ export class WorldLog {
   info() { return { name: this.name, verbs: "send {type: 'request', id, verb, args}; reply {type: 'reply', id, …}" }; }
 }
 
-// ---- founding and translating (tools/protocol/world.ts is the command line) ----
+// ---- founding and translating (tools/world.ts is the command line) ----
 import { opsOf } from "../shared/protocol/fold.js";
 import { isOwner } from "../shared/protocol/roles.js";
 import { envNumber, WORLD_NAME_RE } from "./limits.ts";

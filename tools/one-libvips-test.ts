@@ -36,7 +36,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { Document, NodeIO } from "@gltf-transform/core";
 import { optimizeGlb } from "../server/optimize.ts";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 // getSharp doesn't exist on a tree from before this fix — pull it dynamically
 // so this file still RUNS there and demonstrates the failure, rather than

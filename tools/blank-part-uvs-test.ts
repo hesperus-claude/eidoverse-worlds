@@ -14,7 +14,7 @@
 import { Document, NodeIO } from "@gltf-transform/core";
 import { PNG } from "pngjs";
 import { optimizeGlb } from "../server/optimize.ts";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("blank-part-uvs");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

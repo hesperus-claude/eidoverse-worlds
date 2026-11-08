@@ -13,7 +13,7 @@ import { noWorldUrl } from "../tools/no-world.ts";
 import { pointClass } from "../shared/protocol/consent.js";
 import { wireState } from "../shared/protocol/replica.js";
 import { emptyState } from "../shared/protocol/fold.js";
-import { tryUntil } from "../tools/protocol/wait.ts";
+import { tryUntil } from "../test/gate/wait.ts";
 
 let failures = 0;
 const check = (label: string, ok: boolean, detail?: string) => {

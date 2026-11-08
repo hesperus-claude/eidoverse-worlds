@@ -3,7 +3,7 @@
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/swim-lists-test.ts
 import { scratchBench, mkCheck } from './harness.ts';
-import { pageWaiter, tryUntil } from './protocol/wait.ts';
+import { pageWaiter, tryUntil } from '../test/gate/wait.ts';
 
 const WORLD = 'swim';
 const { cdp, evalJson, cleanup, die, BASE } = await scratchBench('swim-lists', { worlds: [WORLD], owner: 'swimmer', serverEnv: { TRUST_NAMES: '1' } });

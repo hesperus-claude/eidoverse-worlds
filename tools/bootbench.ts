@@ -10,7 +10,7 @@
 // disabled and the link throttled, and reads the client's own `[boot]` line, so
 // the phases it reports are the ones a person actually waits through.
 
-import { chromeArgs, findChrome } from "./protocol/chrome.ts";
+import { chromeArgs, findChrome } from "../test/gate/chrome.ts";
 
 const args = process.argv.slice(2);
 const flag = (n: string, d: number) => {

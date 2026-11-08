@@ -14,7 +14,7 @@ import { Document, NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import draco3d from "draco3dgltf";
 import { optimizeGlbLod } from "../server/optimize.ts";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 // these tests exercise the REDUCER's mechanics on fixtures sized around a 1,000-vertex floor; the production floor
 // (LOD_MIN_VERTS, a policy) is pinned in store-variants-test
 const lodAtTestFloor = (b: Uint8Array, e: string | null, m?: (d: any) => void) => optimizeGlbLod(b, e, m, { minVerts: 1_000 });

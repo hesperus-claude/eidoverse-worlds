@@ -9,7 +9,7 @@
 //   drop the dt clamp                                    → the stall check
 //   widen CURL_TAU_S past ~0.12                          → the responsiveness check
 import { readFileSync } from 'node:fs';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("finger-curl");
 const check = (name, ok, extra) => S.check(name, ok, extra);

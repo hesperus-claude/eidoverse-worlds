@@ -1,4 +1,4 @@
-// server/oneshot.ts — a one-shot child (tools/protocol/world.ts) run to its answer and ended the same way wherever it runs:
+// server/oneshot.ts — a one-shot child (tools/world.ts) run to its answer and ended the same way wherever it runs:
 // server/upgrade.ts, server/worldindex.ts ownersOf, and inplace-check (Mica 11-05; notes WINDOWS-STALL-2026-11-05: Bun 1.3.14 on
 // Windows can sit in ExitProcess after a complete answer). This bounds the consequence; it doesn't make the stall rarer.
 //   The child frames its answer (frameAtExit, only when EIDO_ONESHOT_FRAME=<nonce>, which only runOneShot sets): at exit, the last

@@ -14,7 +14,7 @@
 // This repo's suite stays browser-free, so the registry contract lives here.)
 
 import * as I from "../client/lib/icons.js";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const { has, svg } = I as any;
 
 const S = suite("icons");

@@ -6,9 +6,9 @@ import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import { spawn } from 'node:child_process';
-import { findChrome, chromeArgs } from './protocol/chrome.ts';
-import { killChild } from './protocol/procgroup.ts';
-import { until, tryUntil } from './protocol/wait.ts';
+import { findChrome, chromeArgs } from '../test/gate/chrome.ts';
+import { killChild } from '../test/gate/procgroup.ts';
+import { until, tryUntil } from '../test/gate/wait.ts';
 
 const KEYS = {
   Enter: [13, 'Enter', '\r'], Escape: [27, 'Escape'], Tab: [9, 'Tab'], Backspace: [8, 'Backspace'], Delete: [46, 'Delete'],

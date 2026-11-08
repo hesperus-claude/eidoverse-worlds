@@ -24,7 +24,7 @@
 //     instead, which is what the product promises.
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
-import { tryUntil, pause } from './protocol/wait.ts';
+import { tryUntil, pause } from '../test/gate/wait.ts';
 const here = (f) => fileURLToPath(new URL(f, import.meta.url));
 
 // One shared control object with the avatar stub (see recovery-avatar-stub.mjs):

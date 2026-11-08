@@ -6,7 +6,7 @@ process.env.AGENT_BODY_ENGINE = "verlet";
 process.env.WORLD_TOKEN = "";
 const { boxes, buildGlb } = await import("./two-storey-fixture.ts");
 const { scratchSequencer, mkCheck, sleep, legacyVerb, sceneId } = await import("./harness.ts");
-const { tryUntil } = await import("./protocol/wait.ts");
+const { tryUntil } = await import("../test/gate/wait.ts");
 const { check, tally } = mkCheck();
 
 const ROOF = [-3.2, 6.3, -3.2, 3.2, 6.5, 3.2];

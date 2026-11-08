@@ -41,8 +41,8 @@ import { inspectBody, describeBody } from '../shared/flightbody.js';
 import { denyAllFlight, devFlightProvider, worldFlightProvider, resolveFlight, rigProfile, revoked }
   from '../shared/flightcap.js';
 import { readFileSync } from 'node:fs';
-import { suite } from "./protocol/suite.ts";
-import { slashed } from "./protocol/common.ts";
+import { suite } from "../test/gate/suite.ts";
+import { slashed } from "../test/gate/common.ts";
 
 const S = suite("flight");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
@@ -1258,7 +1258,7 @@ console.log('\nFLOWN -- four faults a human found that no assertion had');
 
 // LIVE RIGHTS: the sequencer sends each client its effective rights (`your-rights`) whenever a role changes
 // (server.ts rightsFor over the door's roles record; that the answer reaches a client after a role write through the
-// door is tools/protocol/server-check.ts S1). Here: the agent and the browser consume that answer, and a midair withdrawal
+// door is test/protocol/server-check.ts S1). Here: the agent and the browser consume that answer, and a midair withdrawal
 // hands the agent to the leaf.
 {
   const live = { type: 'your-rights', rights: { role: 'builder', gen: false, fly: false } };

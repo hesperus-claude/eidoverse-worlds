@@ -18,7 +18,7 @@ definition in `shared/protocol/componentspec.js`; `schema` returns it, and the I
   --ack; the four doors are client presets that write `access`), and
   shared/protocol/kernelspec.js extends it below the registry to the log envelope and its kinds, the fold's operations and
   batch body, the identity grammar and the version (PROTOCOL §1–§3, §13). The shapes are pinned in `spec/kernel-pin.json`;
-  tools/protocol/kernel-check.ts (the gate's core lane) is red the moment the code differs from the pin, and
+  test/protocol/kernel-check.ts (the gate's core lane) is red the moment the code differs from the pin, and
   `kernel-check.ts --pin` refuses to re-pin unless the same change carries all three companions: a translator change
   (translate-v1's `TRANSLATOR` moved `@N → @N+1`, or `--translator <a new translate step>`), a `REGISTRY-CHANGELOG.md` line
   (`--ack "<why>"`, written as `kernel: <why>` with the diff beneath), and vectors (`--vectors <dir>`:
@@ -50,7 +50,7 @@ definition in `shared/protocol/componentspec.js`; `schema` returns it, and the I
     `density` stay open: the body shove reads them.
     `layers`, `mask`, `ccd` are cut, not held.
 - **cut fields that say where they went** (the registry's `dropped`): a write of one is refused with a pointer, a
-  v1 one is written in today's spelling by translate-v1@12 and later (tools/protocol/import-v1/shapes.js): `motion.amplitude`
+  v1 one is written in today's spelling by translate-v1@12 and later (tools/import-v1/shapes.js): `motion.amplitude`
   (→ `amp`), `motion.part` (→ `motion:<slot> {node: <part>}`: a node's name from a model file is data in the value, never part of a key; readers find the part by `node`), `physics.material` (→ `surface`), `sky.weatherSeconds` (→
   `transition`; the sky act still takes it), `sky.clock` (→ `tz`; likewise), `terrain.water` (→ the `water` component).
   Some are taken at the door instead and stored in today's spelling: `parent.order` (dropped), `light.day` (→
@@ -76,9 +76,9 @@ So a draft is not trial: a draft isn't admitted at all, and a trial component is
 ranges, required fields, meanings of absence and grammars. `test:protocol` (pretrans D8) goes red when any of them is
 removed, changed or narrowed. Then:
 - an **addition** (a new name, field, default, enum member or widened range) re-pins with a plain
-  `bun tools/protocol/pretrans-check.ts --pin`;
+  `bun test/protocol/pretrans-check.ts --pin`;
 - a **break on a trial or reserved name** re-pins only with an acknowledgement:
-  `bun tools/protocol/pretrans-check.ts --pin --ack "<why>"`. That appends a line to `spec/REGISTRY-CHANGELOG.md`
+  `bun test/protocol/pretrans-check.ts --pin --ack "<why>"`. That appends a line to `spec/REGISTRY-CHANGELOG.md`
   naming every break and why, in the same commit as the pin;
 - a **break on a stable name** never re-pins, acknowledged or not.
 
@@ -108,7 +108,7 @@ A draft needs:
 - **its offer**: Add Component lists it under a **"drafts"** heading, amber chip, with the hint "unproven: this client
   reads it; the engine doesn't" — ONLY on a client that registered a reader for it (a server, or an agent's `inspect`,
   has none and never offers it);
-- **tests**: the card's edits (`tools/editschema-test.ts`) and the reader in a browser (`tools/protocol/shiplist-probe.ts`);
+- **tests**: the card's edits (`tools/editschema-test.ts`) and the reader in a browser (`test/protocol/shiplist-probe.ts`);
 - **a page**: what each field means, its units, and **what its absence means**, written now (see rung 3).
 
 A draft can't change a rule: the authority doesn't read it. Anything that needs the authority (a check, an effect on
@@ -146,7 +146,7 @@ One commit, reviewed by a second agent before it ships:
    `help` line, and `aliases: ["<handle>/<name>"]` so every draft value already in a world keeps working.
 2. **Decide every field now.** A field added after registration must say what its absence means, and that meaning is
    frozen. If today's behaviour wouldn't be acceptable forever as "absent", the field is added at promotion or not at all.
-3. **The pin**: `bun tools/protocol/pretrans-check.ts --pin` (additions re-pin freely; a change, removal or narrowing of a
+3. **The pin**: `bun test/protocol/pretrans-check.ts --pin` (additions re-pin freely; a change, removal or narrowing of a
    trial name needs `--ack "<why>"` and leaves a REGISTRY-CHANGELOG line; a stable name's never re-pins). A promoted
    name is `trial` until it is promised (`stable`).
 4. **The authority's checks** for anything a reader can't be trusted to check (ranges that matter to everyone, refs).
@@ -190,6 +190,6 @@ of the four needs above, promote it to a child entity, and write the promotion h
 
 ## Who checks what
 
-- The conformance suite (`tools/protocol/run.ts`) fails on a changed pin, a v1 word, an unregistered refusal code (scars G1).
+- The conformance suite (`test/gate/run.ts`) fails on a changed pin, a v1 word, an unregistered refusal code (scars G1).
 - A second agent reviews every promotion against this page and §4 before it merges.
 - A world's owner decides what that world trusts (`@world.trusted-components`); R decides when a draft is proven.

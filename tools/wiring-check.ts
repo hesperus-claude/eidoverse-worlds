@@ -5,7 +5,7 @@
 // (the door-media-whitelist idiom). A row with a `not` needs a positive sibling: an absent subject is not clean.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const read = (f: string) => readFileSync(join(ROOT, f), "utf8");

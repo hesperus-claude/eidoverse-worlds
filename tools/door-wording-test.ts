@@ -7,7 +7,7 @@
 // a seat is left with detach, a reach is released with reach {release: true}.
 import { noWorldUrl } from "./no-world.ts";
 import { mkCheck } from "./harness.ts";
-import { tryUntil } from "./protocol/wait.ts";
+import { tryUntil } from "../test/gate/wait.ts";
 import { handleTool, screenshotTool, snapCallBudgetMs, TOOLS } from "../mcpl/tools.ts";
 import { shown } from "../shared/shown.js";
 import { WorldAgent } from "../mcpl/agent.ts";

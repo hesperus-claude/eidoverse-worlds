@@ -1,6 +1,6 @@
 import {plugin} from 'bun';
 import {readFileSync} from 'node:fs';
-import {pathEnd} from './protocol/common.ts';
+import {pathEnd} from '../test/gate/common.ts';
 const m=JSON.parse(process.env.CONTACT_MUTATION!);
 // the filter sees the native path (backslashes on Windows): pathEnd matches either separator
 plugin({name:'contact-mutation',setup(b){b.onLoad({filter:new RegExp(pathEnd(m.file))},args=>{

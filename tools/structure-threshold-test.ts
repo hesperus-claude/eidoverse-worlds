@@ -11,7 +11,7 @@ import { handleTool } from "../mcpl/tools.ts";
 import { valid, walk, type P } from "./structure-oracle.ts";
 import { agentOnDoor } from "./agent-scratch.ts";
 import { qFromYaw } from "../shared/rot.js";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 process.env.AGENT_BODY_ENGINE = "verlet";
 const S = suite("structure-threshold");
 const check = (ok: unknown, name: string, detail?: unknown) => S.check(name, ok, detail);

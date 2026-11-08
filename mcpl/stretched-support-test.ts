@@ -18,7 +18,7 @@
  */
 import { WorldAgent } from "./agent.ts";
 import { noWorldUrl } from "../tools/no-world.ts";
-import { tryUntil } from "../tools/protocol/wait.ts";
+import { tryUntil } from "../test/gate/wait.ts";
 import { registerSupport, registerSupportGrid, registerMeshSupport, removeSupport, standOn, inWorld } from "./physics.ts";
 import { boxMesh } from "../tools/two-storey-fixture.ts";
 import { LIE_GRID, TOPGRID_VERSION } from "../client/lib/supportclass.js";

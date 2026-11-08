@@ -3,7 +3,7 @@
 // twice, a few seconds apart.
 //   bun tools/xr-debug-live-probe.mjs
 import { launchBrowser, ownedWorld, checker, iwerInit, visorShown, enterVR, drawn } from './probe-harness.mjs';
-import { pause, until } from './protocol/wait.ts';
+import { pause, until } from '../test/gate/wait.ts';
 const { check, done } = checker();
 const world = await ownedWorld({});
 const { browser, page } = await launchBrowser(); const pg = await page();

@@ -653,7 +653,7 @@ COMPONENTS["avatar-deny"] = { status: "reserved", on: "world", instead: "nothing
 
 export const STATUSES = {
   trial: "admitted, but its shape may still change during the alpha (about a year); stored values are translated or repaired where they can be",
-  "trial-kernel": "the kernel (the log envelope and kinds, the fold's operations, the identity grammar, the version, and the two components every reader rests on: roles and access, each as its field shape only): it may still change during the alpha, but never by a re-pin with an acknowledgement alone: the same change must carry a translator, a changelog line and vectors an old reader refuses and a new one folds (shared/protocol/kernelspec.js; tools/protocol/kernel-check.ts)",
+  "trial-kernel": "the kernel (the log envelope and kinds, the fold's operations, the identity grammar, the version, and the two components every reader rests on: roles and access, each as its field shape only): it may still change during the alpha, but never by a re-pin with an acknowledgement alone: the same change must carry a translator, a changelog line and vectors an old reader refuses and a new one folds (shared/protocol/kernelspec.js; test/protocol/kernel-check.ts)",
   reserved: "the name is held for a shape that isn't settled: every write of it is refused",
   stable: "promised: its meaning never changes; it only grows by additions",
 };
@@ -788,7 +788,7 @@ export const defaultsOf = (name) => { const d = COMPONENTS[name]; return Object.
 // widened range or name is an addition and is fine. A field added to a name after its first registration must say what an
 // older value without it means (`absentMeans`, PROTOCOL §4; D11).
 // During the alpha every registered name is `trial` (or `reserved`), so a break is ALLOWED, but never silently: re-pinning
-// over one needs an acknowledgement, `bun tools/protocol/pretrans-check.ts --pin --ack "<why>"`, which writes a line to
+// over one needs an acknowledgement, `bun test/protocol/pretrans-check.ts --pin --ack "<why>"`, which writes a line to
 // spec/REGISTRY-CHANGELOG.md naming what changed and why (pinVerdict). A `stable` name's breaks are never re-pinned: a
 // changed meaning of a stable name is a new versioned name (PROTOCOL §4). Additions re-pin with a plain --pin.
 export function pinOf() {

@@ -8,7 +8,7 @@
 // Recipe: `bun tools/armsolve-test.ts`
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 plugin({
   name: "armsolve-stubs",

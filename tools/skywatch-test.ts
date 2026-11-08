@@ -9,7 +9,7 @@ import { WorldAgent } from "../mcpl/agent.ts";
 import { normalizePolicy, segmentAt } from "../shared/forecast.js";
 import { agentOnDoor } from "./agent-scratch.ts";
 import { makeReplica, wireState } from "../shared/protocol/replica.js";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("skywatch");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

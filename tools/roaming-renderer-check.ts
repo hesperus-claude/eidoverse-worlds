@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { health } from '../deploy/render-health.ts';
 import { ownedWorld } from './probe-harness.mjs';
-import { playwrightArgs } from './protocol/chrome.ts';
+import { playwrightArgs } from '../test/gate/chrome.ts';
 import { helloOf } from '../shared/protocol/hello.js';
 const live = process.argv[2] ?? null;
 const shot = process.env.SHOT;

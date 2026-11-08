@@ -7,8 +7,8 @@ process.env.AGENT_BODY_ENGINE = "verlet";
 const { WorldAgent } = await import("../mcpl/agent.ts");
 const { encodeGrid, shapeReady, shapeParams } = await import("../shared/terrainshape.js");
 const { collidersReady } = await import("../mcpl/physics.ts");
-const { suite } = await import("./protocol/suite.ts");
-const { until, tryUntil, pause } = await import("./protocol/wait.ts");
+const { suite } = await import("../test/gate/suite.ts");
+const { until, tryUntil, pause } = await import("../test/gate/wait.ts");
 
 const S = suite("heightmap-readiness");
 const check = (label: string, ok: unknown, detail = "") => S.check(label, ok, detail);

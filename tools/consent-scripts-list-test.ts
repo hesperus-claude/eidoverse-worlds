@@ -11,8 +11,8 @@ if (process.env.__EIDO_TEST_CACHE_OFF !== "1") {
 process.env.WORLD_TOKEN = "";
 const { WorldAgent } = await import("../mcpl/agent.ts");
 const { scratchSequencer } = await import("./harness.ts");
-const { until } = await import("./protocol/wait.ts");
-const { suite } = await import("./protocol/suite.ts");
+const { until } = await import("../test/gate/wait.ts");
+const { suite } = await import("../test/gate/suite.ts");
 
 const W = "consent-scripts";
 const H = await scratchSequencer(W, { worlds: [W], serverEnv: { SKIP_OPT_SWEEP: "1" } });

@@ -16,7 +16,7 @@ plugin({ name: 'perfscope-stubs', setup(b) {
   b.onResolve({ filter: /^\.\/loadwork\.js$/ }, () => ({ path: here('./loadwork-stub.mjs') }));
 } });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 GlobalRegistrator.register();
 
 const stub = await import('./perfscope-stub.mjs');

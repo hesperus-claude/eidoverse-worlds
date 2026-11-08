@@ -17,7 +17,7 @@
 
 import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const STUB = fileURLToPath(new URL('./core-stub.mjs', import.meta.url));
 plugin({
   name: 'core-stub',

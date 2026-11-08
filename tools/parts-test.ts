@@ -11,7 +11,7 @@
 
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 // Bun 1.3.x caches transpiled module graphs globally by content. A failed
 // plugin-resolved path can therefore survive into a later checkout and bypass

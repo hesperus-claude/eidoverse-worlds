@@ -1,7 +1,7 @@
 # Registry changelog
 
 Every re-pin of spec/registry-pin.json that changed, removed or narrowed a trial or reserved component (PROTOCOL §4 Status;
-docs/contributing/COMPONENT-LADDER.md). Written by `bun tools/protocol/pretrans-check.ts --pin --ack "<why>"`, newest last.
+docs/contributing/COMPONENT-LADDER.md). Written by `bun test/protocol/pretrans-check.ts --pin --ack "<why>"`, newest last.
 
 - 2026-10-16: shape audit wave 1 (R 10-16): training-consent removed (a server's terms); imported-epoch merged into imported:epoch; roles.sub dropped (no person data); capacity and script-settings are policy numbers with no pinned defaults (absent = this server's default), script-settings trimmed to {run, max, budget, cpu}. First pin with status, ranges, required, keyPattern/maxKeys, itemEnums, scopeFields and writtenBy.
   - imported-epoch: the name is gone (a registered name is read forever)

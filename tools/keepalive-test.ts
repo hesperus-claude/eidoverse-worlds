@@ -8,8 +8,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { foundWorlds, freePort } from "./harness.ts";
-import { suite } from "./protocol/suite.ts";
-import { until, tryUntil, pause } from "./protocol/wait.ts";
+import { suite } from "../test/gate/suite.ts";
+import { until, tryUntil, pause } from "../test/gate/wait.ts";
 
 const WPORT = freePort(8957), MPORT = freePort(WPORT + 1);
 // MISSES is overridable so the suite can prove this test has teeth: run it

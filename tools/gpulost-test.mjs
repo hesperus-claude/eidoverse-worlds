@@ -3,7 +3,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { plugin } from 'bun';
 import { gpuLostAction, recoveryUrl, recentGpuLosses, installGpuLostRecovery, GPU_LOST_KEY, GPU_LOST_WINDOW_MS, GPU_LOST_LONG_MS } from '../client/lib/gpulost.js';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const S = suite("gpulost");
 const ok = (n, c, d) => S.check(n, c, d);
 const now = 1_000_000;

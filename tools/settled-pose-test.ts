@@ -19,7 +19,7 @@
 // solver, not for this).
 
 import { withoutOnceAnim, ONCE_KEYS } from "../shared/onceanim.js";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 // Mirror of server.ts's settledPose. Kept in sync by the assertions below —
 // if the server's version changes shape, these fail loudly rather than

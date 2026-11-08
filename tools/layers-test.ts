@@ -2,7 +2,7 @@
 // shared/layers.js: a thing's selection layer, by default and by a builder's word.   bun tools/layers-test.ts
 import { layerOf, defaultLayer } from "../shared/layers.js";
 import { inspectSchema, editOps } from "../shared/editschema.js";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const S = suite("layers", { quiet: true }); const check = (n, ok, d = "") => S.check(n, ok, d);
 const W = {
   floor: { model: "m/floor.glb", physics: { kind: "static", shape: [[-1, 0, -1], [1, 0.1, 1]] }, transform: { pos: [0, 0, 0], scale: [30, 1, 30] } },

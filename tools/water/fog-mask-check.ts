@@ -3,12 +3,12 @@
 //   bun tools/water/fog-mask-check.ts        (BACKENDS=webgl,webgpu to try both; this host's headless shell has no WebGPU device)
 // @ts-nocheck
 import fs from "node:fs"; import path from "node:path";
-import { ENGINE } from "../protocol/common.ts";
+import { ENGINE } from "../../test/gate/common.ts";
 const { scratchBench } = await import(ENGINE + "tools/harness.ts");
 const WORLD = "fogprobe", ME = "fogger";
 const { cdp, evalJson, cleanup, BASE } = await scratchBench("fogprobe", { prepare: (scratch) => {
   const wd = path.join(scratch, "worlds"); fs.mkdirSync(wd, { recursive: true });
-  const r = Bun.spawnSync(["bun", "tools/protocol/world.ts", "found", WORLD, "--owner", ME, "--title", "fog"], { cwd: ENGINE, env: { ...process.env, WORLDS_DIR: wd, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } });
+  const r = Bun.spawnSync(["bun", "tools/world.ts", "found", WORLD, "--owner", ME, "--title", "fog"], { cwd: ENGINE, env: { ...process.env, WORLDS_DIR: wd, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } });
   if (r.exitCode !== 0) throw new Error(r.stderr.toString()); } });
 const errs = [];
 cdp.on?.("Runtime.exceptionThrown", (m) => errs.push(JSON.stringify(m).slice(0, 400)));

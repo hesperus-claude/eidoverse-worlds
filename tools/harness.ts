@@ -2,9 +2,9 @@
 import { existsSync, mkdtempSync, rmSync, appendFileSync, readFileSync, renameSync } from "node:fs";
 import { tmpdir, loadavg, cpus } from "node:os";
 import { join, resolve } from "node:path";
-import { chromeArgs, findChrome, cdpOn, type Cdp } from "./protocol/chrome.ts";
+import { chromeArgs, findChrome, cdpOn, type Cdp } from "../test/gate/chrome.ts";
 import { MOVER, TRACK } from "../shared/mover.js";
-import { idAliases } from "./protocol/idalias.ts";
+import { idAliases } from "../test/protocol/idalias.ts";
 export { cdpOn, type Cdp };
 
 export const ROOT = resolve(import.meta.dir, "..");
@@ -38,11 +38,11 @@ export function freePort(from: number, tries = 40, start = from + Math.floor(Mat
 
 /** Found worlds in a scratch WORLDS_DIR before a server serves it. The server never founds a world on join (RFC-005
  *  §3.2.7, security review 10-06 H3: a name with no world behind it is refused), so a test that joins one founds it
- *  first, the way an operator does: `bun tools/protocol/world.ts found <name> --owner <who>`. `owner` is the name the owner
+ *  first, the way an operator does: `bun tools/world.ts found <name> --owner <who>`. `owner` is the name the owner
  *  joins with (on a TRUST_NAMES=1 server that typed name IS the founder's account local:<name>). */
 export function foundWorlds(worldsDir: string, names: string[], owner = "owner") {
   for (const name of names) {
-    const r = Bun.spawnSync([process.execPath, join(ROOT, "tools/protocol/world.ts"), "found", name, "--owner", owner], {
+    const r = Bun.spawnSync([process.execPath, join(ROOT, "tools/world.ts"), "found", name, "--owner", owner], {
       cwd: ROOT, env: { ...process.env, WORLDS_DIR: worldsDir, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" } });
     if (r.exitCode !== 0) throw new Error(`founding "${name}" in ${worldsDir} failed: ${r.stdout.toString()}${r.stderr.toString()}`);
   }

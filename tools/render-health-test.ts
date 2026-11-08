@@ -10,7 +10,7 @@
 // the same check over real devtools against a real renderer page.
 
 import { judge, tally, PROBES, TIMEOUT, type Evaluate } from "../deploy/render-health.ts";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("render-health");
 const check = (name: string, cond: unknown, detail?: unknown) => S.check(name, cond, detail);

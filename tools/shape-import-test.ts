@@ -1,18 +1,18 @@
-// shape-import-test — the shape audit's rules live in the v1 importer, their one real user (tools/protocol/import-v1/shapes.js):
+// shape-import-test — the shape audit's rules live in the v1 importer, their one real user (tools/import-v1/shapes.js):
 // a v1 world comes out in today's spelling and with its socket maps lifted, and a world founded today needs nothing, so no
 // marker, maintenance command, write gate or rollback exists. (shape-repair-test's rows that pinned the rules are here,
 // pointed at the importer; the ones that pinned the command went with it.)
 //   usage: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/shape-import-test.ts
 // @ts-nocheck
-import "./protocol/fixture-ids.ts";
+import "../test/protocol/fixture-ids.ts";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { scratchWorld } from "./protocol/scratchworld.ts";
+import { scratchWorld } from "../test/protocol/scratchworld.ts";
 import { isComponent } from "../shared/protocol/fold.js";
 import { partSlot } from "../shared/protocol/names.js";
-import { repairComps, repairWorld, repairMotion } from "./protocol/import-v1/shapes.js";
-import { translate } from "./protocol/import-v1/translate-v1.js";
+import { repairComps, repairWorld, repairMotion } from "./import-v1/shapes.js";
+import { translate } from "./import-v1/translate-v1.js";
 import * as A from "../shared/protocol/authority.js";
 import { REFUSAL_CODES } from "../shared/protocol/refusalcodes.js";
 
@@ -65,7 +65,7 @@ const genesis = { seq: 0, ts: 1, actor: "world", verb: "genesis", args: { v: 2, 
   check("SI9 the maintenance machinery is gone: no maintain, repairShapes, liftWorld or maintenanceNeeds export; operator repair has no repair verb; no repair-needed code",
     !("maintain" in A) && !("repairShapes" in A) && !("liftWorld" in A) && !("maintenanceNeeds" in A) && !Object.hasOwn(REFUSAL_CODES, "repair-needed")
     && A.operatorRepair(W.world(), "olive", "repair", {})?.refused?.code === "rights", Object.keys(A).filter((k) => /repair|maintain|lift/i.test(k)));
-  check("SI10 no runtime file names the shape repair (shaperepair.js is gone; the world CLI has no repair command)", !fs.existsSync(path.join(ENGINE, "shared/protocol/shaperepair.js")) && !/cmd === "repair"/.test(fs.readFileSync(path.join(ENGINE, "tools/protocol/world.ts"), "utf8")), ""); }
+  check("SI10 no runtime file names the shape repair (shaperepair.js is gone; the world CLI has no repair command)", !fs.existsSync(path.join(ENGINE, "shared/protocol/shaperepair.js")) && !/cmd === "repair"/.test(fs.readFileSync(path.join(ENGINE, "tools/world.ts"), "utf8")), ""); }
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

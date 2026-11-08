@@ -20,7 +20,7 @@ import { mapGrassArgs, presetStrokes, hexToMultiplier, isLegacyArgs } from "../c
 import { composeField, retireField } from "../client/lib/flora_field.js";
 import { bladeLodIndex, bladeCoarseIndex, BLADE_VERTS, BLADE_INDICES,
   BLADE_COARSE_INDICES } from "../client/lib/flora_lod.js";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("flora");
 const check = (name: string, ok: unknown, extra?: unknown) => S.check(name, ok, extra);

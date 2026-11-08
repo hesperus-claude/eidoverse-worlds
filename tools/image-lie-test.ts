@@ -9,7 +9,7 @@
 //   bun run tools/image-lie-test.ts
 
 import { findImageLies } from "../server/optimize.ts";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("image-lie");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

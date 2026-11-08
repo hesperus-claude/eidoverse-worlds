@@ -5,11 +5,11 @@
 //
 // Why: the realizer's `comps` clone (models.js syncComps, gone in C7c) was the only thing between an evaluator's stray
 // `bag.x = …` and this client's fold. With every reader on replica.st, the guard has to be the record itself.
-import "./protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
-import { scratchWorld } from "./protocol/scratchworld.ts";
+import "../test/protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import { scratchWorld } from "../test/protocol/scratchworld.ts";
 import { makeReplica, wireState } from "../shared/protocol/replica.js";
 import { digest } from "../shared/protocol/fold.js";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("replica-freeze");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

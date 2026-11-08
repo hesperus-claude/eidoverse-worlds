@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { validateAvatarDef, validateBodyRuntime } from "../shared/avatardefs.js";
 import { makeBodyRuntime, writeAll, defForBody } from "../client/lib/bodyruntime_core.js";
 import { bodyRuntimeFor } from "../client/lib/bodyruntime.js";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const { check, na, done } = suite("body-runtime");
 const ROOT = join(import.meta.dir, "..");
 const BODY_SHA: Record<string, string> = {

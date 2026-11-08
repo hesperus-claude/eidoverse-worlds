@@ -12,7 +12,7 @@ process.env.WORLD_TOKEN = "";
 const { MOVER } = await import("../shared/mover.js");
 const { FLOOR, UPPER, RISE, GOING, STAIR_FOOT, boxes, buildGlb } = await import("./two-storey-fixture.ts");
 const { scratchSequencer, mkCheck, sleep, legacyVerb, sceneId, trackTicks } = await import("./harness.ts");
-const { tryUntil } = await import("./protocol/wait.ts");
+const { tryUntil } = await import("../test/gate/wait.ts");
 const { check, tally } = mkCheck();
 
 const h = await scratchSequencer("navgrid", { serverEnv: { SKIP_OPT_SWEEP: "1", TRUST_NAMES: "1" }, worlds: ["navgrid"], owner: "router", portFrom: 9460 });

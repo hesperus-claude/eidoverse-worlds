@@ -1,13 +1,13 @@
 # Surface parity — does the world look the same?
 
-`tools/protocol/surface-parity.ts` is a visual-regression check between two trees of this repo. It serves both
+`tools/surface-parity.ts` is a visual-regression check between two trees of this repo. It serves both
 checkouts (by default `main` and your current checkout), opens scratch copies of the same worlds on each, photographs
 them from fixed cameras in a headless Chromium, and pixel-diffs old against new. A change that alters what anyone sees
 in a world is meant to be caught here, not by the first person who logs in.
 
 ```
-BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/surface-parity.ts --check --commons <dir> --gym <dir>   # prerequisites only, no frames
-BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/surface-parity.ts --commons <dir> --gym <dir>           # the run
+BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/surface-parity.ts --check --commons <dir> --gym <dir>   # prerequisites only, no frames
+BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/surface-parity.ts --commons <dir> --gym <dir>           # the run
 ```
 
 Each world is a directory holding a current-format `world.jsonl`. Both `--commons` and `--gym` are required unless
@@ -110,7 +110,7 @@ The script is Bun + CDP only — no Playwright, no Linux paths it cannot do with
    ```
    set BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
    set CHROME=C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
-   bun tools/protocol/surface-parity.ts --check --commons D:\path\to\commons --gym D:\path\to\gym --old-ref main --old D:\eido-old
+   bun tools/surface-parity.ts --check --commons D:\path\to\commons --gym D:\path\to\gym --old-ref main --old D:\eido-old
    ```
    `--old` is where the old worktree goes (it is created from `--old-ref` if missing; it needs `node_modules` and
    `client/node_modules` — the script links them from the new tree when the manifests match, else says

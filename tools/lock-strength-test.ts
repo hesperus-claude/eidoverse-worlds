@@ -2,8 +2,8 @@
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/lock-strength-test.ts
 import { scratchBench, mkCheck } from './harness.ts';
-import { pagedEval } from './protocol/idalias.ts';
-import { pageWaiter, tryUntil } from './protocol/wait.ts';
+import { pagedEval } from '../test/protocol/idalias.ts';
+import { pageWaiter, tryUntil } from '../test/gate/wait.ts';
 import { helloOf } from '../shared/protocol/hello.js';
 
 const WORLD = 'locks';

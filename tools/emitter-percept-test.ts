@@ -12,8 +12,8 @@
 // agent.ts reads the coalescing window from env at module load, set SHORT (folding is under test, not duration):
 // the import must come AFTER this line, which a hoisted static import wouldn't
 import { noWorldUrl } from "./no-world.ts";
-import { suite } from "./protocol/suite.ts";
-import { until, tryUntil } from "./protocol/wait.ts";
+import { suite } from "../test/gate/suite.ts";
+import { until, tryUntil } from "../test/gate/wait.ts";
 process.env.EW_EMITTER_COALESCE_SEC = "0.25";
 const { WorldAgent } = await import("../mcpl/agent.ts");
 const { agentOnDoor } = await import("./agent-scratch.ts");

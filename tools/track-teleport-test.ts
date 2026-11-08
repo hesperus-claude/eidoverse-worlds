@@ -4,7 +4,7 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/track-teleport-test.ts
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 const STUB = here('./put-settle-stub.mjs');
 plugin({

@@ -468,7 +468,7 @@ export function updateBuild() {
 }
 
 const _w = new THREE.Vector3();
-globalThis.__buildDrag = () => (dragging ? { id: dragging.id, armed: dragging.armed, world: !!dragging.world, tool } : null);   // harness window (tools/protocol/client-check.ts F)
+globalThis.__buildDrag = () => (dragging ? { id: dragging.id, armed: dragging.armed, world: !!dragging.world, tool } : null);   // harness window (test/protocol/client-check.ts F)
 /** Put an object at a WORLD position, whatever frame it is drawn in (a mounted child sits in its parent's). */
 function setWorldPosition(obj, w) {
   const p = obj.parent;

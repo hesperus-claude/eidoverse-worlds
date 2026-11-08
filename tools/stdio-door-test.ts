@@ -12,7 +12,7 @@
 // door before the unification.
 
 import { scratchSequencer, mkCheck, ROOT } from './harness.ts';
-import { tryUntil } from './protocol/wait.ts';
+import { tryUntil } from '../test/gate/wait.ts';
 import { join } from 'node:path';
 
 // a scratch sequencer with the door's world founded by the agent itself (TRUST_NAMES: its typed name is its account,

@@ -20,7 +20,7 @@ plugin({
   },
 });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 GlobalRegistrator.register();
 globalThis.fetch = (() => new Promise(() => {})) as any;   // avatar.js's gesture defs ask the server; there is none here
 

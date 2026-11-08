@@ -1,7 +1,7 @@
 // Renderer selection is a pure function (client/lib/backend_choice.js) so the matrix core.js acts on at
 // import can be checked without a GPU. Review 2026-09-10 #6: `?xr=0` used to boot XR (presence-only flag).
 import { decideBackend } from '../client/lib/backend_choice.js';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("backend-choice");
 const check = (name, ok, note) => S.check(name, ok, note);

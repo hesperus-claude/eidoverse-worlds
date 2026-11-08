@@ -17,7 +17,7 @@
 import { mock } from 'bun:test';
 // three by explicit client path (tools/core-stub.mjs's convention): the SAME module instance the client modules resolve.
 import * as THREE from '../client/node_modules/three/build/three.module.js';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("particles-host");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

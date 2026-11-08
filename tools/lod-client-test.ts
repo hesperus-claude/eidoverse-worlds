@@ -68,7 +68,7 @@ const store = new Map<string, string>();
 const stub: any = await import('./lod-client-stub.mjs');
 const M: any = await import('../client/lib/realize/models.js');
 const S: any = await import('../client/lib/state.js');
-const { scratchWorld } = await import('./protocol/scratchworld.ts');
+const { scratchWorld } = await import('../test/protocol/scratchworld.ts');
 const { emptyView } = await import('../shared/protocol/view.js');
 const { bus } = await import('../client/lib/base.js');
 const { makeModelQuality, askFor, tierOf } = await import('../client/lib/lod_policy.js');
@@ -84,7 +84,7 @@ const check = (label: string, ok: boolean, detail?: string) => {
 };
 /** Let the scheduler's microtask pump and the stub loader run out (both are microtasks: a few loop turns, no timer). */
 const settle = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
-const { tryUntil } = await import('./protocol/wait.ts');
+const { tryUntil } = await import('../test/gate/wait.ts');
 
 // ============================================================================
 console.log('\nlod-client — the realizer half (real models.js over a held loader)\n');

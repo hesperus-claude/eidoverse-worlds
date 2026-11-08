@@ -5,7 +5,7 @@
 // presentation, never logged: a late joiner draws it as it is, with no swing. A part (`part`) moves instead of the whole
 // thing, about the part's own origin (motion.js's part convention).
 //
-// The pure halves (openFraction, openPose) live in motioneval.js (no THREE, no DOM: tools/protocol/shiplist-check.ts and an
+// The pure halves (openFraction, openPose) live in motioneval.js (no THREE, no DOM: test/protocol/shiplist-check.ts and an
 // agent can read them); tickOpenables applies them.
 import { entities, bags, bagOf, findPart } from './world.js';
 import { reindexCollider } from './colliders.js';

@@ -13,7 +13,7 @@ import { noWorldUrl } from './no-world.ts';
 import { WorldAgent } from '../mcpl/agent.ts';
 import { devFlightProvider } from '../shared/flightcap.js';
 import { rigBonesFor, bodyHeightFor } from '../mcpl/rigbones.ts';
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 
 const S = suite("door-bone-list");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

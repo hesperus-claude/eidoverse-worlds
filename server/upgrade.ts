@@ -1,7 +1,7 @@
 // server/upgrade.ts — opening a world saved in an older format: the join's structured refusal, and the operator's upgrade.
 // world-upgrade-review {id, world} → {type, id, ok, world, report, hash, warning?}: the CLI's dry run (nothing written).
 // world-upgrade {id, world, approved} → {type, id, ok, world, backup, report, rollback, people, warning?}: the CLI's in-place translation, bound to
-// that hash (a verified backup first: server/backups.ts). Both run tools/protocol/world.ts itself: the translation has one code path.
+// that hash (a verified backup first: server/backups.ts). Both run tools/world.ts itself: the translation has one code path.
 // A server operator (SERVER_OPERATORS) or the world's owner, by a proven account: an owner main's records bind to
 // that account ("bound"), or one main recorded no account for whose name the account's is ("name", provisional):
 // the access index (worldindex.ts ownerIn, server/ownerrecognise.ts). An ownerless world's upgrader becomes its owner (--claim); a recognised owner is bound to them (report.claim). The translation binds an owner to the account main
@@ -35,7 +35,7 @@ export function oldFormatRefused(kind: OldWorldKind, reason: string, operator: b
 }
 
 
-const CLI = path.join(ROOT, "tools", "protocol", "world.ts");
+const CLI = path.join(ROOT, "tools", "world.ts");
 const CLI_MS = 10 * 60_000;
 // one-shot, framed, its group checked (server/oneshot.ts); `stopped`: it gave no complete framed answer within CLI_MS
 async function runCli(args: string[], extra: Record<string, string> = {}, label = "") {

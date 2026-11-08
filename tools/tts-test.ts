@@ -11,8 +11,8 @@
 // invisible to the bundler, in exactly the recovery this suite pins.
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { suite } from "./protocol/suite.ts";
-import { until, tryUntil, pause } from "./protocol/wait.ts";
+import { suite } from "../test/gate/suite.ts";
+import { until, tryUntil, pause } from "../test/gate/wait.ts";
 GlobalRegistrator.register();
 
 const S = suite("tts");

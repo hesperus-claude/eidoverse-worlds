@@ -182,7 +182,7 @@ compensates.
   client code (`client/lib/vegetation/`) precisely so a merge cannot do
   this again; the `patched/` directory is an ASSET overlay only.
 - `mcpl-core-ts` is a sibling `file:` dependency in
-  `tools/protocol/.siblings/`: `bun tools/protocol/run.ts --siblings`
+  `tools/protocol/.siblings/`: `bun test/gate/run.ts --siblings`
   clones, pins and builds it BEFORE installing mcpl/, or the copy under
   node_modules is missing its dist.
 

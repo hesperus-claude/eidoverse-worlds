@@ -6,8 +6,8 @@
 //    identity checks skipped.
 import { launchCdp } from './cdp-pw.mjs';
 import { freePort } from './harness.ts';
-import { suite } from './protocol/suite.ts';
-import { until, tryUntil, pause } from './protocol/wait.ts';
+import { suite } from '../test/gate/suite.ts';
+import { until, tryUntil, pause } from '../test/gate/wait.ts';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -67,7 +67,7 @@ export async function ownedWorld({ live = null, key = process.env.JOIN_KEY || 'd
   const BUN = process.execPath.includes('bun') ? process.execPath
     : (process.env.BUN_PATH || 'bun');
   for (const name of new Set(['staging', 'commons', ...worlds])) {
-    const r = spawnSync(BUN, ['tools/protocol/world.ts', 'found', name, '--owner', owner], { env: { ...process.env, WORLDS_DIR: scratch, BUN_RUNTIME_TRANSPILER_CACHE_PATH: '0' }, encoding: 'utf8' });
+    const r = spawnSync(BUN, ['tools/world.ts', 'found', name, '--owner', owner], { env: { ...process.env, WORLDS_DIR: scratch, BUN_RUNTIME_TRANSPILER_CACHE_PATH: '0' }, encoding: 'utf8' });
     if (r.status !== 0) { try { rmSync(scratch, { recursive: true, force: true }); } catch {} throw new Error(`ownedWorld: founding "${name}" failed: ${r.stdout}${r.stderr}`); }
   }
   const srv = spawn(BUN, ['server/server.ts'], {

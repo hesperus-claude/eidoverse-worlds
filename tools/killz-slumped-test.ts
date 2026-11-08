@@ -10,7 +10,7 @@ if (process.env.__EIDO_TEST_CACHE_OFF !== "1") {
 }
 process.env.WORLD_TOKEN = "";
 const { WorldAgent } = await import("../mcpl/agent.ts");
-const { until, tryUntil } = await import("./protocol/wait.ts");
+const { until, tryUntil } = await import("../test/gate/wait.ts");
 const { scratchSequencer } = await import("./harness.ts");
 const { fixture } = await import("./body-fixture.ts");
 const { KILL_MARGIN } = await import("../shared/protocol/physconst.js");
@@ -24,7 +24,7 @@ const lib = fs.mkdtempSync(path.join(os.tmpdir(), "killz-slumped-library-"));
 fs.mkdirSync(path.join(lib, "fixtures")); fs.writeFileSync(path.join(lib, "fixtures/body.vrm"), fixture());
 const H = await scratchSequencer(W, { worlds: [W], owner: "keeper", serverEnv: { EIDOVERSE_DIR: lib, SKIP_OPT_SWEEP: "1", TRUST_NAMES: "1" } });
 const URL = `ws://127.0.0.1:${H.PORT}/ws`;
-const { suite } = await import("./protocol/suite.ts");
+const { suite } = await import("../test/gate/suite.ts");
 const S = suite("killz-slumped-test"), { check } = S;
 const agents: any[] = [];
 const agent = async (name: string, avatar = "fixtures/body.vrm") => { const a: any = new WorldAgent({ url: URL, name, world: W, avatar }); agents.push(a); await a.connect(); return a; };

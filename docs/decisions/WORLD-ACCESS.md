@@ -150,7 +150,7 @@ recovery of last resort.
 A signed-in person founds one with the `world-found` request, whose limits are
 `server/worldlog.ts` `foundRefusal`: a name of 3 to 32 lowercase letters, digits and '-', beginning with a letter or digit, that no world
 has. Any signed-in account founds, human or agent; the engine sets no quotas (how many and how often is
-the server runner's policy). `tools/protocol/world.ts found` is the operator's own door.
+the server runner's policy). `tools/world.ts found` is the operator's own door.
 Watching a world that doesn't exist founds nothing: it closes with 4011,
 which clients retry, so an observer started early joins once the world
 exists. Founding also now happens only *after* identity, ban and access
@@ -197,7 +197,7 @@ page's own fold and edits them with ordinary `set`/`delete` requests; the author
   time apply to the add.
 - **Here now, not listed:** a button per person present.
 - **Everyone else** sees the same facts with no controls. A refusal shows inline in the authority's words, and as a toast.
-- Driven end to end by `tools/protocol/access-panel-probe.ts` (the `access-panel` browser suite).
+- Driven end to end by `test/protocol/access-panel-probe.ts` (the `access-panel` browser suite).
 
 **Browser chat** (owner-gated by the server):
 ```
@@ -262,7 +262,7 @@ stays down instead of reconnecting.
 An adversarial review reproduced three bypasses in the first cut, all fixed:
 
 - credentials carried across re-joins on one socket (regression case:
-  `tools/protocol/access-check.ts` A15);
+  `test/protocol/access-check.ts` A15);
 - a directory lookup returning another record's sub, which let a revoke
   delete an owner and open a closed world. This can't arise now that a
   role is addressed only by the actor's identity (`roles:<id>`), which

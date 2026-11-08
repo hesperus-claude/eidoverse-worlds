@@ -21,7 +21,7 @@
 // both-tree behavioral controls run on any tree; only the canonical-clock
 // checks gate on the export existing (labeled as novelty when absent).
 import * as F from "../shared/forecast.js";
-import { suite } from "./protocol/suite.ts";
+import { suite } from "../test/gate/suite.ts";
 const { WEATHERS, normalizePolicy, segmentAt, effectiveSky, foldSkyEntry, hoursAt, describeSky } = F as any;
 const effectiveClock = (F as any).effectiveClock;
 

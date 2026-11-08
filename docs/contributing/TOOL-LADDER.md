@@ -35,7 +35,7 @@ runs. (Until 2026-10-28 renames were aliases with argument translations; the wor
       check throws if a row has no handler or a handler no row.
 - [ ] **One body**: a tool that moves, holds or places walks the AUTHORITY's body through the same shared code the
       browser uses (`shared/mover.js`, `shared/grab.js`) — `agenttools-check` AT1 is the "two bodies" guard.
-- [ ] **Its live row**: an `AT` row in `tools/protocol/agenttools-check.ts` that calls it on a real `WorldAgent` against a
+- [ ] **Its live row**: an `AT` row in `test/protocol/agenttools-check.ts` that calls it on a real `WorldAgent` against a
       real sequencer and checks the world, not the text. Watch it fail first (stash the handler).
 - [ ] **Its words in AGENTS.md**: the tools table (`### The tools — general shapes, with modes`), in the protocol's words.
       *No suite checks this line yet: the reviewer does.*

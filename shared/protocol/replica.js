@@ -1,5 +1,5 @@
 // shared/protocol/replica.js — a world as a CLIENT holds it. Pure; the browser (client/lib/net.js) and the
-// suites (tools/protocol/authority-check.ts) run the same code.
+// suites (test/protocol/authority-check.ts) run the same code.
 //
 // The client folds the log itself, from the server's own log stream:
 //   adopt(snap)        the join snapshot: {dialect, v, world, seq, state: wireState(fold), physics, mine?}, the fold as the
