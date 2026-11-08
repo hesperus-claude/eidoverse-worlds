@@ -251,10 +251,11 @@ await C("G2", "at runtime, loading the server's and the agent door's own code ne
   const v = line ? JSON.parse(line.slice(3)) : null;
   return [v && v.ok === false && v.code === "shape" && v.minted, line ?? out.stderr.toString().slice(-600)]; });
 
-await C("W4", "no demo or probe in tools/ sends a create with a chosen id (a bare word, not a '$placeholder'): the authority refuses it", () => {
-  const files = fs.readdirSync(path.join(T, "tools")).filter((f) => /\.(ts|mjs|js)$/.test(f));
+await C("W4", "no demo, probe or bench (tools/, test/labs/, bench/) sends a create with a chosen id (a bare word, not a '$placeholder'): the authority refuses it", () => {
+  const files = ["tools", "test/labs", "bench"].flatMap((d) => fs.readdirSync(path.join(T, d), { recursive: true })
+    .filter((f) => /\.(ts|mjs|js)$/.test(f) && !/node_modules|\.siblings/.test(f)).map((f) => path.join(d, f)));
   const RX = /verb:\s*['"]create['"],\s*args:\s*\{\s*id:\s*['"](?!\$)/;
-  const hits = files.filter((f) => RX.test(read(path.join("tools", f))));
-  return [files.length > 20 && files.includes("structure-demo.ts") && !hits.length, { files: files.length, hits }]; });
+  const hits = files.filter((f) => RX.test(read(f)));
+  return [files.length > 20 && files.includes(path.join("test/labs", "structure-demo.ts")) && !hits.length, { files: files.length, hits }]; });
 
 S.done();
