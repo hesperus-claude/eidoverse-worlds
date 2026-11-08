@@ -131,7 +131,7 @@ Every message belongs to exactly one plane:
   folds on from `seq + 1`; one that doesn't know `{dialect, v}` refuses
   it whole with `unknown-version` (shared/protocol/replica.js `adopt`), never
   a half-view. Cost scales with the world, not its history. (`cut` was the
-  old nested payload: docs/DESIGN-log-vocabulary.md §1.8.)
+  old nested payload: docs/decisions/LOG-VOCABULARY.md §1.8.)
 - `geom` — async join follow-up: `{geom: {lib: {bbox}}}` placeholders.
 - `log` — `{world, from, entries, names?}`: the raw entries the authority just
   appended, starting at seq `from`, fanned to everyone; `names` maps new

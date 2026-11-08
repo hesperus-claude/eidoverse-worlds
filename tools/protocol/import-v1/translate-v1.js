@@ -132,7 +132,7 @@ export const TRANSLATOR = "eidoverse/translate-v1@50";   // @50: an account's st
 // @47: an entity id in the reserved person shape u-[a-z2-7]{24} refuses the translation (F19, P3). Output otherwise unchanged
 // @46: no repair-shapes marker; a stored sockets map is lifted here (lift-sockets acts at the end). Output differs there
 // @45: a minor-1 genesis may carry requires and provenance (§F); output unchanged
-// @44: minor 1, the log vocabulary (docs/DESIGN-log-vocabulary.md)
+// @44: minor 1, the log vocabulary (docs/decisions/LOG-VOCABULARY.md)
 // @43 (bot review 440, 441): a valid exit with no helm child rides imported:vehicle; a model with its own light still gets main's inferred lamps. Output differs there.
 // @42 (bot review 58): where any water writes a speed area, every other water gets physics-area {factor: 1, modes: [swim]}, so the water a body is in sets its stroke (main read the selected volume's own speed). Output differs there.
 // @41 (bot review 59): what main's air held beyond its boxes' centre, size and q (another key, a box's other keys, an entry that is no box) rides imported:air, listed. Output differs there.

@@ -1,4 +1,4 @@
-// server/provenance.ts — the writer's side of §F F-2 (docs/DESIGN-log-vocabulary.md): the exact source tree a writer runs, as
+// server/provenance.ts — the writer's side of §F F-2 (docs/decisions/LOG-VOCABULARY.md): the exact source tree a writer runs, as
 // shared/protocol/provenance.js's object records it. Node only; the server, the migration tool and their checks call it.
 // @ts-nocheck
 import fs from "node:fs";

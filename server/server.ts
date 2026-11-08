@@ -788,7 +788,7 @@ const server = Bun.serve({
               return;
             }
           }
-          // F-3 step 2 (docs/DESIGN-log-vocabulary.md §F): the global hello, before any world lookup; the refusal names no world
+          // F-3 step 2 (docs/decisions/LOG-VOCABULARY.md §F): the global hello, before any world lookup; the refusal names no world
           { const r = checkHello(msg.hello);   // always: a join with no hello is a client this server doesn't speak to
             if (r) { ws.send(JSON.stringify(r)); c.ws.close?.(4005, "update-required"); return; } }
           // leave previous world (travel is: leave A, join B). Review finding

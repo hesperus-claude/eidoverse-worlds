@@ -141,7 +141,7 @@ for (const rel of PERSON_DOCS) { const p = path.join(ROOT, rel); if (fs.existsSy
 { const bad = ["a person or agent", "people and agents", "agent or person", "person (or agent)"], good = ["People Here", "a person may", "refuses \"person or agent\" and its kin", "a human or agent"];
   const wrong = [...bad.filter((t) => !PERSON.test(t)), ...good.filter((t) => PERSON.test(t))]; if (wrong.length) offences.push(`PERSON self-test misreads: ${wrong.join(" | ")}`); }
 
-// The log's vocabulary is minor 1's (docs/DESIGN-log-vocabulary.md D3, 2026-11-04): kinds request/physics/redaction/governance,
+// The log's vocabulary is minor 1's (docs/decisions/LOG-VOCABULARY.md D3, 2026-11-04): kinds request/physics/redaction/governance,
 // `op` on a change, `cascade`, `commitment`, `rewindWindow`, the view marker `redacted`, the snapshot blob key `snapshotJson`. A retired
 // spelling (act, sim, purge, sequencer as a kind; followUps; rewind_window; commit-unpurged; purged: true; verb on genesis/say; cutJson
 // written) may not come back into runtime code; the reads that still meet an old spelling on purpose are listed in LOG_OK, each with why.

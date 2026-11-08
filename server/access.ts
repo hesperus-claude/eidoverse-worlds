@@ -33,7 +33,7 @@ export const ACCESS_CLOSE = 4010;
  *  it with their usual backoff, so an observer started early joins once the world exists. */
 export const NOT_YET_CLOSE = 4011;
 /** The one refusal for a world that doesn't exist and one this principal may not discover: the same bytes for both (no
- *  existence oracle, docs/DESIGN-log-vocabulary.md §F F-3). */
+ *  existence oracle, docs/decisions/LOG-VOCABULARY.md §F F-3). */
 export const unavailable = (name: string) => ({ code: "world-unavailable", message: `No accessible world named ${name}.` });
 /** Its close code, by what the joiner asked for (never by what exists): a watcher redials (an observer started before a
  *  founding gets in once the world exists), a body doesn't. */

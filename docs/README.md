@@ -39,7 +39,11 @@ Start with [README](../README.md) (what this is, how to run it), [AGENTS](../AGE
 
 [TXN-CAPABILITY](decisions/TXN-CAPABILITY.md) · [WORLD-ACCESS](decisions/WORLD-ACCESS.md) ·
 [CONSENT-TABLE-RECORD](decisions/CONSENT-TABLE-RECORD.md) · [PATHFINDING-ACCEPTANCE](decisions/PATHFINDING-ACCEPTANCE.md) ·
-[CUTOVER-ARTIFACTS](decisions/CUTOVER-ARTIFACTS.md)
+[CUTOVER-ARTIFACTS](decisions/CUTOVER-ARTIFACTS.md) · [LOG-VOCABULARY](decisions/LOG-VOCABULARY.md) (the protocol's words)
+
+## Research — why built code is the way it is
+
+`research/`: one note per subject (measurements, what was ruled out, sources), named by the code comments that point at them.
 
 ## History — ledgers and retired plans
 

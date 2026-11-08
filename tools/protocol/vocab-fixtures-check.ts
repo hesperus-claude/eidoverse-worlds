@@ -1,4 +1,4 @@
-// tools/protocol/vocab-fixtures-check.ts — docs/DESIGN-log-vocabulary.md §5: the fixtures that live outside the conformance logs
+// tools/protocol/vocab-fixtures-check.ts — docs/decisions/LOG-VOCABULARY.md §5: the fixtures that live outside the conformance logs
 // (F1–F3, F8, F14 are spec/conformance/test_reader.py's; F6, F9 test_story.py's; the chain's F9 test_chain.py's).
 //   F4  a physics checkpoint: body `seq` (was `at`); a checkpoint carrying `at` is skipped as malformed, never booted from
 //   F5  a redaction entry resyncs a live client; the wire marker is `{redacted: true}` (an old `{purged: true}` cell is no redaction)

@@ -32,7 +32,7 @@ A file's directory says who runs it.
 
 A doc's directory says who it is for and whether it binds: `spec/` binds; `docs/reference/` describes what is
 built; `docs/guide/` (using a world), `docs/operator/` (running a server) and `docs/contributing/` (changing this repo)
-get something done; `docs/design/` argues for what isn't built; `docs/decisions/` and `docs/history/` are dated and
+get something done; `docs/design/` argues for what isn't built; `docs/research/` holds the why behind built code; `docs/decisions/` and `docs/history/` are dated and
 frozen: supersede them, don't edit them.
 
 ## Style

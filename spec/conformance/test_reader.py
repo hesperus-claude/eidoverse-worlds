@@ -367,7 +367,7 @@ check("20 redaction of roles: ignored (diagnosed), the note redacted",
       and [c for s_, c in codes(r)].count("redaction-target-governance") == 2, (r.view(), codes(r)))
 
 
-# ---- docs/DESIGN-log-vocabulary.md §5: the positive fixtures F1–F3, F8 and the negative set F14 ----
+# ---- docs/decisions/LOG-VOCABULARY.md §5: the positive fixtures F1–F3, F8 and the negative set F14 ----
 # F1 an admitted request: kind request, verb, body.args an object (the readback keys on args.*)
 r = run("23a-f1-request-admitted", [GEN_LINE,
     json.dumps({"world": WID, "kind": "request", "ts": 1, "actor": "alice", "verb": "set", "body": {"args": {"id": "@world", "component": "label", "value": "x"}, "salt": "UUPZ_XwQSbZtpmdmt87bSQ"}}),

@@ -108,7 +108,7 @@ export function openLive(dir: string, name: string, opts: LiveOpts = {}) {
   // allowance would refill nothing meanwhile. A host that brings its own clock (a lab pinning time) is paced by it.
   const pace = opts.pace ?? (opts.now ? now : () => performance.now());
 
-  // F-5 (docs/DESIGN-log-vocabulary.md §F): the live sequencer key is checked against the log before any write; a missing or
+  // F-5 (docs/decisions/LOG-VOCABULARY.md §F): the live sequencer key is checked against the log before any write; a missing or
   // other key serves the world read-only, and no replacement is ever minted
   const custodyFile = opts.custodyFile ?? custodyFileIn(path.dirname(dir));
   const cv = custodyVerdict(custodyFile, entries, from0);

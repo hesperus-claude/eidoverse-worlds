@@ -299,7 +299,7 @@ export function sendJoin() {
     replica: true,
     session: PAGE_SESSION,
     clock: true,   // the server's time just before the snapshot ('clock' below)
-    hello: helloOf(),   // the protocol this client reads (docs/DESIGN-log-vocabulary.md §F F-3)
+    hello: helloOf(),   // the protocol this client reads (docs/decisions/LOG-VOCABULARY.md §F F-3)
   }));
 }
 

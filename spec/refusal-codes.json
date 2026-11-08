@@ -17,7 +17,7 @@
    "when": "a write while the fold says no-world/unknown-version/unsupported-feature"
   },
   "unsupported-feature": {
-   "meaning": "a feature this world or server can't use (docs/DESIGN-log-vocabulary.md §F F-1)",
+   "meaning": "a feature this world or server can't use (docs/decisions/LOG-VOCABULARY.md §F F-1)",
    "when": "a feature's verb before the world declares it; founding a world requiring a feature this server doesn't implement"
   },
   "ambiguous": {

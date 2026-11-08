@@ -1,4 +1,4 @@
-// server/custodycheck.ts — custody at startup and in backups (docs/DESIGN-log-vocabulary.md §F F-5): the live sequencer key is
+// server/custodycheck.ts — custody at startup and in backups (docs/decisions/LOG-VOCABULARY.md §F F-5): the live sequencer key is
 // verified against genesis (or the latest governance handoff) without minting; a mismatch serves the world read-only; a backup
 // manifest records the key fingerprints and the custody file's hash, and is checked from its written bytes when the backup is
 // made. No restore path reads it yet (notes WISHLIST, restore-path custody check): restoration is not verified by this.

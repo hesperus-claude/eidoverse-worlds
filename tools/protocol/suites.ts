@@ -14,7 +14,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["engine", "engine-check.ts", 1],          // what "carries" means: every carried engine version reproduces its conformance digests (house, #260 10-21)
   ["normative", "normative-check.ts", 1], // spec/NORMATIVE.md is the closed set, and its consent/roles tables equal the reference (10-20, nissa-seru)     // reviewer item 5 (10-18): the kernel (envelope, kinds, ops, identity grammar, version, transform, parent) is trial-kernel: a change is red unless the same change carries a translator, a changelog line and old-red/new-green vectors (spec/kernel-pin.json)
   ["gov-reserved", "gov-reserved-check.ts", 1],
-  ["freeze", "freeze-check.ts", 1],       // docs/DESIGN-log-vocabulary.md §F: feature declarations, provenance, the hello order, a key is not admission, custody read-only (F22–F31, P3) // reviewer item 8 (10-18): governance is RESERVED; the server refuses to serve a log holding a `sequencer` entry, truthfully
+  ["freeze", "freeze-check.ts", 1],       // docs/decisions/LOG-VOCABULARY.md §F: feature declarations, provenance, the hello order, a key is not admission, custody read-only (F22–F31, P3) // reviewer item 8 (10-18): governance is RESERVED; the server refuses to serve a log holding a `sequencer` entry, truthfully
   ["diffcheck", "diffcheck.ts", 1],
   ["hygiene", "hygiene-check.ts", 1],       // patterns that broke the gate site by site (Windows paths, sh -c, symlinks, fixed sleeps), refused as a class; debt only goes down        // review #260 rereview (10-19) blocker 3: the range is clean under `git diff --check`; two documented exemptions only
   ["body-state-bundle", "../body-state-bundle-test.ts", 1], // the built MCP entry points carry body_state and none of the test rig, corpus scanner or fixture paths
@@ -23,7 +23,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["shard", "shard-check.ts", 1],        // CI's sharded gate: shards cover SUITES once whatever the timings; a merge passes only every shard, every suite, one head
   ["nov1", "nov1-check.ts", 1],         // R 10-06 "no more v1 anywhere": no runtime file loads the old-world importer or speaks v1
   ["vocab", "vocab-check.ts", 1],       // R 10-14 one vocabulary: a record is read in the protocol's names (model, flat components), never lib / comp
-  ["vocab-fixtures", "vocab-fixtures-check.ts", 1], // docs/DESIGN-log-vocabulary.md §5: F4, F5, F7, F10, F12, F20 (a reader given the next v: unknown-version, nothing folded; no minor)
+  ["vocab-fixtures", "vocab-fixtures-check.ts", 1], // docs/decisions/LOG-VOCABULARY.md §5: F4, F5, F7, F10, F12, F20 (a reader given the next v: unknown-version, nothing folded; no minor)
   ["nonumber", "nonumber-check.ts", 1], // R 10-07 "a version number isn't a name": the protocol's number lives only in genesis {dialect, v}
   ["determinism", "determinism-check.ts", 1], // Covenant I: no host sin/cos/atan2/exp/log/pow/random, Date.now or performance.now in fold.js, eidosim or the sim modules they reach (TEACHING-FINDINGS 11-02)
   ["hostile", "hostile-check.ts", 2],   // PROTOCOL §6 proof 1: hostile logs against the strict fold

@@ -1,5 +1,5 @@
 // tools/protocol/hello-refused-check.ts — a join the server refuses at the hello ({type: "refused", code, need}: F-3
-// steps 2 and 4) is an answer every client says in words, never a join timeout (docs/DESIGN-log-vocabulary.md §F).
+// steps 2 and 4) is an answer every client says in words, never a join timeout (docs/decisions/LOG-VOCABULARY.md §F).
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun tools/protocol/hello-refused-check.ts
 // @ts-nocheck
 import fs from "node:fs";

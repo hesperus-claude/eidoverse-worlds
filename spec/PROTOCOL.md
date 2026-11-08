@@ -11,7 +11,7 @@ Which files are the contract, and the status of each choice it makes (decided, t
 `spec/NORMATIVE.md`. Code this document names is informative: a place to look, never the contract.
 
 Status: normative for logs whose genesis says `dialect: "eidoverse-log", v: 4` (the version history is at the end;
-this vocabulary is `docs/DESIGN-log-vocabulary.md`'s).
+this vocabulary is `docs/decisions/LOG-VOCABULARY.md`'s).
 **Alpha.** This whole protocol is in a trial period of about a year from v1.
 There is **no guarantee** that a log folded today will fold the same way under
 a later version: not a component's shape, not a field or message name, and not
@@ -102,7 +102,7 @@ redaction target's `seq`). An unknown field, a `seq` field, a missing or
 non-string `kind`/`actor`, an `op` or `verb` missing or on the wrong kind, a
 non-object `body`, a bad `cause`, or a missing, fractional or decreasing `ts`
 makes the entry malformed: it shapes nothing and the reader reports it in
-diagnostics, never in the world. Why each word: `docs/DESIGN-log-vocabulary.md`.
+diagnostics, never in the world. Why each word: `docs/decisions/LOG-VOCABULARY.md`.
 
 **The kinds.**
 
@@ -1053,7 +1053,7 @@ owed before this section is complete.
 *sequencer* is the chain-writer role whose key genesis names (§12, §13); the
 *operator* is the human in custody of the host (the operator key, repairs,
 the redaction decider); the *host* is the machine or service that runs them
-(`docs/DESIGN-log-vocabulary.md` §1.10). The *owner* (the role, §6: the world's). A *builder* (anyone whose
+(`docs/decisions/LOG-VOCABULARY.md` §1.10). The *owner* (the role, §6: the world's). A *builder* (anyone whose
 role holds `build`). The *invoker* (whoever's request this is). The
 *affected participant* (whoever's body a request touches). A *sponsor*
 (whoever's rights a script acts with, §8).
@@ -1358,7 +1358,7 @@ them, and the suite holds them to it), not part of conformance.
   `requires` is the sorted, unique list of feature ids (`namespace:name@major`, at most 64) a reader must implement to read
   the world; later ones are added only by a governance entry's `requiresAdd` (a monotonic union, never removed). A feature
   this reader doesn't implement, declared anywhere, means "unsupported feature" and no world (never a partial fold).
-  `provenance {registry, writer}` names the writer and its exact source tree (`docs/DESIGN-log-vocabulary.md` §F F-2):
+  `provenance {registry, writer}` names the writer and its exact source tree (`docs/decisions/LOG-VOCABULARY.md` §F F-2):
   the server's (`eidoverse-server`) at founding, the import tool's (`eidoverse-translate-v1`) at translation; it is the
   one carrier, and a translation's `translated` request and rollback manifest repeat it.
   Genesis seeds no state: the founding request then writes `@world` through the
@@ -1466,7 +1466,7 @@ v}`. File names, wire fields and code don't carry the number.
 |---|---|---|
 | 1–2 | The first world log: an untyped verb log folded by its reader (`genesis {verb: "genesis", args: {v, dialect}}`); dialect 2 added `force` and `punt` | `history/PROTOCOL-v1.md` |
 | 3 | The deterministic-physics amendment: a sim fold over sim-scoped entries, sim epochs (`dialect 3`) | `history/PROTOCOL-v2-sim.md` |
-| 4 | This protocol: typed entries (`change`, `request`, `physics`, `say`, `redaction`, `governance`), the authority, opaque identities, the signed chain and governance keys. Its physics is `PHYSICS.md`. **Minor 1** (the current one) is the log vocabulary of `docs/DESIGN-log-vocabulary.md`: the kinds above, `op` on a change, `verb` on a request or physics entry, `cascade`, `commitment`, `rewindWindow`, no `verb` on genesis; no `minor` (Mica 11-04: dialect + v, then requires). Before release, minor 0 gained the batch body's `cascade` (as `followUps`) and §6a, and renamed a number of pre-release words; each rename and how an older spelling was read is `spec/history/PRE-RELEASE-RENAMES.md` (informative). | this document |
+| 4 | This protocol: typed entries (`change`, `request`, `physics`, `say`, `redaction`, `governance`), the authority, opaque identities, the signed chain and governance keys. Its physics is `PHYSICS.md`. **Minor 1** (the current one) is the log vocabulary of `docs/decisions/LOG-VOCABULARY.md`: the kinds above, `op` on a change, `verb` on a request or physics entry, `cascade`, `commitment`, `rewindWindow`, no `verb` on genesis; no `minor` (Mica 11-04: dialect + v, then requires). Before release, minor 0 gained the batch body's `cascade` (as `followUps`) and §6a, and renamed a number of pre-release words; each rename and how an older spelling was read is `spec/history/PRE-RELEASE-RENAMES.md` (informative). | this document |
 
 Logs of `v` 1–3 are not read at runtime; §14 translates one, once, into a new
 world.

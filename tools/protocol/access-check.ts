@@ -7,7 +7,7 @@
 //   A3  /worlds and the reads are per caller: an invite-only world is on no stranger's map and /geom answers as for no
 //       world; a listed caller's bearer sees it (access, you); /access answers enter | watch | none, 404 world-unavailable
 //       to whom the world isn't discoverable, and 401 anonymously
-//   F23 no existence oracle (docs/DESIGN-log-vocabulary.md §F F-3): O1–O11 at their block (O7–O9: interrupted and old-format
+//   F23 no existence oracle (docs/decisions/LOG-VOCABULARY.md §F F-3): O1–O11 at their block (O7–O9: interrupted and old-format
 //       worlds, Mica 11-05; O10–O11: the same call sequence, not only the same bytes)
 //   A4  closing the door removes whoever is no longer let in, at once (4010); owners stay
 //   A5  a timed grant (roles:<id>.until): its holder is told before it ends (notice), and when it passes the authority

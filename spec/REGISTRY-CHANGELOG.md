@@ -391,14 +391,14 @@ docs/contributing/COMPONENT-LADDER.md). Written by `bun tools/protocol/pretrans-
 - 2026-11-06: wording only: 'anyone' for 'people and agents' (a person is anyone: AGENTS.md rule 6); the same layers
   - collider.blocks: its meaning "what it stops, a list of layers: bodies (people and agents walking or swimming), hulls (driven vehicles: the authority's hull sweep), things (loose things in the physics engine). What it leaves out passes through it: [\"hulls\"] with hidden is an invisible wall only vehicles meet" → "what it stops, a list of layers: bodies (anyone walking or swimming), hulls (driven vehicles: the authority's hull sweep), things (loose things in the physics engine). What it leaves out passes through it: [\"hulls\"] with hidden is an invisible wall only vehicles meet"
   - collider.mask: its meaning "the collision layers it SCANS when it moves (Godot's collision_mask), same items as layer: read for a hull (the authority's hull sweep meets only what is in a layer its mask scans). People and agents walking or swimming, and loose things in the physics engine, scan [1] (eidosim carries no layers between things); a still thing's mask is unread" → "the collision layers it SCANS when it moves (Godot's collision_mask), same items as layer: read for a hull (the authority's hull sweep meets only what is in a layer its mask scans). Anyone walking or swimming, and loose things in the physics engine, scan [1] (eidosim carries no layers between things); a still thing's mask is unread"
-- 2026-11-04: kernel: minor 1, the log vocabulary (docs/DESIGN-log-vocabulary.md D1-D5): kinds request/physics/redaction/governance; op on a change, verb on a request or physics entry, neither elsewhere; cascade, commitment, rewindWindow; for/grant/by leave the envelope; MINORS = {1}
+- 2026-11-04: kernel: minor 1, the log vocabulary (docs/decisions/LOG-VOCABULARY.md D1-D5): kinds request/physics/redaction/governance; op on a change, verb on a request or physics entry, neither elsewhere; cascade, commitment, rewindWindow; for/grant/by leave the envelope; MINORS = {1}
   - envelope.fields: ["actor","body","by","cause","for","grant","head","kind","sig","ts","verb","world"] → ["actor","body","cause","head","kind","op","sig","ts","verb","world"]
   - envelope.kinds: ["act","change","genesis","purge","say","sequencer","sim"] → ["change","genesis","governance","physics","redaction","request","say"]
   - fold.ops.set: ["id","comp","value","salt","commit"] → ["id","comp","value","salt","commitment"]
   - fold.batch: ["ops","followUps"] → ["ops","cascade"]
   - version.minors: [0] → [1]
   - version.genesis: ["dialect","minor","nonce","owners","parent","quorum","rewind_window","sequencer","v"] → ["dialect","minor","nonce","owners","parent","quorum","rewindWindow","sequencer","v"]
-- 2026-11-04: normative: readback rows re-keyed for minor 1: act:*→request:*, sim:*→physics:*, the admitted body's request.*→args.* (docs/DESIGN-log-vocabulary.md D2, D3)
+- 2026-11-04: normative: readback rows re-keyed for minor 1: act:*→request:*, sim:*→physics:*, the admitted body's request.*→args.* (docs/decisions/LOG-VOCABULARY.md D2, D3)
   - readback act:undo: gone (old logs may hold it)
   - readback act:use: gone (old logs may hold it)
   - readback act:script: gone (old logs may hold it)
@@ -412,7 +412,7 @@ docs/contributing/COMPONENT-LADDER.md). Written by `bun tools/protocol/pretrans-
   - readback sim:catch: gone (old logs may hold it)
 - 2026-11-05: kernel: minor 1 genesis admits requires (sorted unique feature ids, §F F-1) and provenance (the writer object, §F F-2); governance requiresAdd declares later features; a feature the reader doesn't implement is unsupported-feature, no world
   - version.genesis: ["dialect","minor","nonce","owners","parent","quorum","rewindWindow","sequencer","v"] → ["dialect","minor","nonce","owners","parent","provenance","quorum","requires","rewindWindow","sequencer","v"]
-- 2026-11-05: normative: refusal unreadable: also given while the fold says unsupported-feature; new code unsupported-feature (docs/DESIGN-log-vocabulary.md §F F-1)
+- 2026-11-05: normative: refusal unreadable: also given while the fold says unsupported-feature; new code unsupported-feature (docs/decisions/LOG-VOCABULARY.md §F F-1)
   - refusal unreadable: {"meaning":"the log folds to a status the authority won't write to","when":"a write while the fold says no-world/unknown-version"} → {"meaning":"the log folds to a status the authority won't write to","when":"a write while the fold says no-world/unknown-version/unsupported-feature"}
 - 2026-11-05: normative: components compose (Mica 11-04): one-place refused a light, model or mesh beside another, and anything but a socket's own fields on a socket; nothing refuses with it now
   - refusal one-place: gone (old logs may hold it)

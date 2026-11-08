@@ -1,4 +1,4 @@
-// tools/protocol/freeze-check.ts — the §F freeze of docs/DESIGN-log-vocabulary.md as fixtures: F22–F31 and P3's identity grammar.
+// tools/protocol/freeze-check.ts — the §F freeze of docs/decisions/LOG-VOCABULARY.md as fixtures: F22–F31 and P3's identity grammar.
 //   F28–F31 feature declarations (shared/protocol/features.js); F24 provenance (shared/protocol/provenance.js; F25, a repair body's, lands with the first repair writer);
 //   F22/F23 the join's hello order (shared/protocol/hello.js, server/server.ts join); F26 a key is not admission;
 //   F27 custody at startup and in backups (server/custodycheck.ts); P3 the person shape is exactly u-{20} | u-{24}.
