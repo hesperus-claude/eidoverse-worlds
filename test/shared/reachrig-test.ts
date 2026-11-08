@@ -20,7 +20,7 @@
  * the solver agreeing with itself would have told us.
  */
 
-import { rigs, libraryRigs } from "../harness/rig-load.mjs";
+import { rigs, libraryRigs } from "../../tools/assets/rig-load.mjs";
 import { solveTwoBone, chainLocalQuats, qMulq, qRot } from "../../shared/reach.js";
 import { bodyFrame, limitsFor, coneAxisBody, fromBody, toBody, D2R } from "../../shared/joints.js";
 

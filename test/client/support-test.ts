@@ -49,7 +49,7 @@ const { THREE } = await import('../stubs/core-stub.mjs');
 const { Ragdoll, JOINTS } = await import('../../client/lib/ragdoll.js');
 const { setTerrain, heightAt } = await import('../../client/lib/terrain.js');
 const { colliders, fitSupportBox, removeCollider } = await import('../../client/lib/colliders.js');
-const { makeAvatar } = await import('../harness/rig-load.mjs');
+const { makeAvatar } = await import('../../tools/assets/rig-load.mjs');
 
 const S = suite("support");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

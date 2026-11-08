@@ -5,7 +5,7 @@
 import { THREE, renderer } from './core.js';
 import { tee, bus, CONFIG } from './base.js';
 import { allFrames, getFrame, frameResizeInfo } from './windows.js';
-import { HTMLMesh } from './vendor/htmlmesh.js';
+import { HTMLMesh } from '../vendor/three-addons/htmlmesh.js';
 import { quadMaterial } from './quadcolour.js';
 
 const PX_PER_M = 900;      // xrpanels' density — the number the tester's eyes accepted

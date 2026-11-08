@@ -75,7 +75,7 @@ export function rigFromGltf(name, g) {
 /** A rig's skeleton as the repo carries it (test/fixtures/<name>-rig.json), for a suite that must run without the
  *  avatar library on disk. Throws when there is no such fixture: a missing fixture is a broken checkout, not a skip. */
 export function fixtureRig(name) {
-  const g = JSON.parse(readFileSync(fileURLToPath(new URL(`../fixtures/${name}-rig.json`, import.meta.url)), 'utf8'));
+  const g = JSON.parse(readFileSync(fileURLToPath(new URL(`../../test/fixtures/${name}-rig.json`, import.meta.url)), 'utf8'));
   return { ...rigFromGltf(name, g), fixture: true };
 }
 

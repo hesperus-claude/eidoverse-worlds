@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { createHash } from 'node:crypto';
-import { glbJson } from '../harness/rig-load.mjs';
+import { glbJson } from '../../tools/assets/rig-load.mjs';
 const file = process.argv[2];
 if (!file) throw new Error('usage: bun test/fixtures/extract-doll-fixture.ts rig.vrm');
 const bytes = readFileSync(file), g = glbJson(bytes);

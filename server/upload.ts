@@ -522,7 +522,7 @@ async function uploadBy(req: Request, url: URL, srv: UploadSrv): Promise<Respons
         const tmpIn = join(OPT_DIR, `.import-${name}.glb`);
         writeFileSync(tmpIn, body);
         // process.execPath, never "bun" (docs/history/INCIDENTS.md, the Windows shim)
-        const spawnArgs = [process.execPath, "run", join(ROOT, "tools/import-tripo-avatar.ts"),
+        const spawnArgs = [process.execPath, "run", join(ROOT, "tools/assets/import-tripo-avatar.ts"),
           tmpIn, "--name", name, "--out", OPT_DIR];
         if (process.env.EW_AVATAR_DONOR) spawnArgs.push("--donor", process.env.EW_AVATAR_DONOR);
         const proc = Bun.spawn(spawnArgs, { cwd: ROOT, stdout: "pipe", stderr: "pipe" });

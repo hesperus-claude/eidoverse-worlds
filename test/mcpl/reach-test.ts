@@ -21,7 +21,7 @@ const check = (label: string, ok: boolean, detail?: string) => {
 };
 
 // A VRM1 optimized rig for both bodies (the ragdoll suites' stand-in door).
-const { rigs } = await import("../harness/rig-load.mjs");
+const { rigs } = await import("../../tools/assets/rig-load.mjs");
 const rig: any = rigs().find((r: any) => !r.err && !r.vrm0);
 check("a VRM1 rig is available for the stand-ins", !!rig, "assets/opt missing?");
 if (!rig) process.exit(1);

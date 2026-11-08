@@ -11,7 +11,7 @@ try {
   await pg.goto(`${world.origin}/?world=staging&name=wrapprobe&key=${world.key}&lite=1`, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await pg.waitForTimeout(3000);
   const r = await pg.evaluate(async () => {
-    const { HTMLMesh } = await import('./lib/vendor/htmlmesh.js');
+    const { HTMLMesh } = await import('./vendor/three-addons/htmlmesh.js');
     const el = document.createElement('div');
     el.style.cssText = 'position:fixed;left:0;top:0;width:220px;padding:4px;font:14px/18px sans-serif;background:#123;color:#eee';
     el.innerHTML = '<div class="line"><span class="t">22:28</span> <b class="n">nick</b> <span class="m">BREAKTHROUGH its the grass or something on the same plane as it when I look up</span></div><div class="line2">short one</div>';

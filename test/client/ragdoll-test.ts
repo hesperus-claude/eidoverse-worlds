@@ -31,7 +31,7 @@ plugin({
 
 const { THREE } = await import('../stubs/core-stub.mjs');
 const { Ragdoll, TUNING, DRIVEN_BONES } = await import('../../client/lib/ragdoll.js');
-const { rigs, makeAvatar, worstOverlap, segDist, toppleLean, footKick } = await import('../harness/rig-load.mjs');
+const { rigs, makeAvatar, worstOverlap, segDist, toppleLean, footKick } = await import('../../tools/assets/rig-load.mjs');
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail = '') => {

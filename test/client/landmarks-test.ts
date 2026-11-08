@@ -7,7 +7,7 @@ plugin({ name: 'landmark-core', setup(b) { b.onResolve({ filter: /^\.\/core\.js$
 const { THREE } = await import('../stubs/core-stub.mjs');
 const { deriveLandmarks, derivePalmAnchor, landmarkWorld } = await import('../../client/lib/landmarks.js');
 const { measureChain, solveChain } = await import('../../client/lib/reachbone.js');
-const { rigs, libraryRigs, makeAvatar } = await import('../harness/rig-load.mjs');
+const { rigs, libraryRigs, makeAvatar } = await import('../../tools/assets/rig-load.mjs');
 
 const P = Object.fromEntries(Object.entries({ hips: [0, 1, 0], spine: [0, 1.2, 0],
   chest: [0, 1.4, 0], head: [0, 1.7, 0], leftUpperArm: [.2, 1.4, 0],

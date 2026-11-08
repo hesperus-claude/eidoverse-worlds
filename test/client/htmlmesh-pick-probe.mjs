@@ -1,4 +1,4 @@
-// htmlmesh-pick-probe — a VR panel click picks what a browser's hit test would (client/lib/vendor/htmlmesh.js, EIDO 7).
+// htmlmesh-pick-probe — a VR panel click picks what a browser's hit test would (client/vendor/three-addons/htmlmesh.js, EIDO 7).
 // Real client page, the real HTMLMesh; a synthetic panel inside a pointer-events:none stage (as domquad stages them):
 //   clip — a row scrolled up out of a scroll box, later in document order, overlaps the header button above the box:
 //          the click must reach the BUTTON (the clipped row is not visible there).
@@ -14,7 +14,7 @@ try {
   await pg.goto(`${world.origin}/?world=staging&name=pickprobe&key=${world.key}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await pg.waitForFunction(() => !!globalThis.EW?.renderer, null, { timeout: 120000 });
   const r = await pg.evaluate(async () => {
-    const { HTMLMesh } = await import('./lib/vendor/htmlmesh.js');
+    const { HTMLMesh } = await import('./vendor/three-addons/htmlmesh.js');
     const stage = document.createElement('div');
     stage.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;z-index:99999';
     const frame = document.createElement('div');

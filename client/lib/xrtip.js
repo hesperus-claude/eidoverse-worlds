@@ -8,7 +8,7 @@
 // It is DOM, like the nameplate card: one #xr-tip element laid out offscreen in the house chip's look, rasterised by
 // the vendored HTMLMesh, and hung IN the panel (a child of that panel's quad, a hair in front of it) under the control
 // — or above it at the panel's foot — at the panel's own pixel size, so it reads exactly as legibly as the panel.
-import { HTMLMesh } from './vendor/htmlmesh.js';
+import { HTMLMesh } from '../vendor/three-addons/htmlmesh.js';
 import { prepareQuadMaterial } from './domquad.js';
 
 const RASTER = 2.5;     // device px per CSS px, as the nameplate card (crisp at arm's length)

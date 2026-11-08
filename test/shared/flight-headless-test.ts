@@ -26,7 +26,7 @@ const check = (name: string, ok: boolean, detail = '') => {
 };
 
 const VRM = 'assets/opt/eidoverse/assets/vrms/mythos-wings.vrm';
-const rig: any = await import('../harness/rig-load.mjs');
+const rig: any = await import('../../tools/assets/rig-load.mjs');
 
 // ---- the stand-in, built exactly as mcpl/physics.ts skeletonFor() builds it
 console.log('\nSTAND-IN -- what an mcpl agent actually gets');

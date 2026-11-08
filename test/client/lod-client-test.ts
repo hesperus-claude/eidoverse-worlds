@@ -74,7 +74,7 @@ const { bus } = await import('../../client/lib/base.js');
 const { makeModelQuality, askFor, tierOf } = await import('../../client/lib/lod_policy.js');
 const { keyFromVersion, lodFromVersion, negotiate, withLod } = await import('../../shared/ktx2.js');
 const { LOD_RECIPE } = await import('../../server/store-variants.ts');
-const rig: any = await import('../harness/rig-load.mjs');
+const rig: any = await import('../../tools/assets/rig-load.mjs');
 const { freePort } = await import('../harness/harness.ts');
 
 let failures = 0;

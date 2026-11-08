@@ -20,7 +20,7 @@ plugin({ name: "core-stub", setup(b) { b.onResolve({ filter: /^\.\/core\.js$/ },
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "../../client/node_modules/three/build/three.module.js";
 const { Ragdoll } = await import("../../client/lib/ragdoll.js");
-const { rigs, makeAvatar, toppleLean, segDist } = await import("../harness/rig-load.mjs");
+const { rigs, makeAvatar, toppleLean, segDist } = await import("../../tools/assets/rig-load.mjs");
 
 await RAPIER.init();
 

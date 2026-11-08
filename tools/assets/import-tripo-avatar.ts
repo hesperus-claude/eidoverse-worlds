@@ -2,7 +2,7 @@
 // command. Born from three mythos-PAINT imports in three days, each export
 // missing something different; every repair below was needed at least once.
 //
-//   bun tools/import-tripo-avatar.ts <in.glb> --name mythos_paint3 \
+//   bun tools/assets/import-tripo-avatar.ts <in.glb> --name mythos_paint3 \
 //       [--donor path.glb] [--max-verts 200000] [--height 1.7] [--out dir]
 //
 // Stages, all detect-and-repair (a clean export passes through untouched):
@@ -34,7 +34,7 @@
 
 import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
-const STUB = fileURLToPath(new URL('../test/stubs/core-stub.mjs', import.meta.url));
+const STUB = fileURLToPath(new URL('../../test/stubs/core-stub.mjs', import.meta.url));
 plugin({ name: 'core-stub', setup(b) { b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB })); } });
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -52,7 +52,7 @@ const opt = (k: string, d: string | null = null) => {
   return i >= 0 ? args[i + 1] : d;
 };
 if (!input || !opt('name')) {
-  console.error('usage: bun tools/import-tripo-avatar.ts <in.glb> --name <avatar_name> [--donor glb] [--max-verts N] [--height M] [--out dir]');
+  console.error('usage: bun tools/assets/import-tripo-avatar.ts <in.glb> --name <avatar_name> [--donor glb] [--max-verts N] [--height M] [--out dir]');
   process.exit(2);
 }
 const NAME = opt('name')!;
@@ -543,9 +543,9 @@ await Bun.file(tmpGlb).unlink?.() ?? Bun.spawnSync(['rm', tmpGlb]);
 say(`wrote ${outPath} (${(out.length / 1048576).toFixed(1)}MB)`);
 
 // ---- 6: verify with the fleet fixtures + both engines -----------------------
-const { glbJson, humanBones: hb, worldPositions, makeAvatar, toppleLean } = await import('../test/harness/rig-load.mjs');
-const { AmmoRagdoll, ensureAmmo } = await import('../client/lib/ammodoll.js');
-const { Ragdoll } = await import('../client/lib/ragdoll.js');
+const { glbJson, humanBones: hb, worldPositions, makeAvatar, toppleLean } = await import('./rig-load.mjs');
+const { AmmoRagdoll, ensureAmmo } = await import('../../client/lib/ammodoll.js');
+const { Ragdoll } = await import('../../client/lib/ragdoll.js');
 const g2 = glbJson(readFileSync(outPath));
 const bones2 = hb(g2);
 const wpos = worldPositions(g2);

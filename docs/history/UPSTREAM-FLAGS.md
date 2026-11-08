@@ -94,7 +94,7 @@ our 2-rig local fleet tripped; prod's 14-rig fleet may trip them too:
   collected. Note the coupling since the reach merge: shared/joints.js's
   tables now serve BOTH the tumble clamps and the reach IK — widening a
   limit moves what an arm can reach, not just how a body falls.
-- **`test/harness/rig-load.mjs` excludes `.ktx2.vrm` from the fleet** (3b8e67a):
+- **`tools/assets/rig-load.mjs` excludes `.ktx2.vrm` from the fleet** (3b8e67a):
   texture serving-variants were being tumbled as bodies, and one
   long-standing "8.6cm handover" red was an artifact rig all along.
 

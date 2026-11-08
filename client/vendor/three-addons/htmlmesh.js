@@ -1,6 +1,6 @@
 // Vendored from three examples/jsm/interactive/HTMLMesh.js (MIT — notice in ./LICENSE-three-MIT.txt) for eido's VR
 // quads (2026-09-05, from 0.185.1). It differs from the installed three's copy by the EIDO patches below plus upstream
-// drift; to see the difference: `diff client/lib/vendor/htmlmesh.js client/node_modules/three/examples/jsm/interactive/HTMLMesh.js`.
+// drift; to see the difference: `diff client/vendor/three-addons/htmlmesh.js client/node_modules/three/examples/jsm/interactive/HTMLMesh.js`.
 // Used by domquad.js (VR quads, part 4) and platecard.js (the nameplate card in VR); inert on the desktop.
 // Patches, each marked EIDO: (1) DPR scale — canvas rasterised at `scale` px per CSS px so the quad
 // matches xrpanels' 900 px/m; (2) inline <svg> drawn via serialise→Image (the icon system);

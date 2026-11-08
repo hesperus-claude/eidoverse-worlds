@@ -28,7 +28,7 @@ plugin({
 
 const { THREE } = await import('../stubs/core-stub.mjs');
 const { AmmoRagdoll, ensureAmmo } = await import('../../client/lib/ammodoll.js');
-const { rigs, makeAvatar, toppleLean } = await import('../harness/rig-load.mjs');
+const { rigs, makeAvatar, toppleLean } = await import('../../tools/assets/rig-load.mjs');
 const { dollGltf, wingRig, bareRig } = await import('../fixtures/doll-fixture.mjs');
 
 const S = suite("ammodoll");
@@ -707,7 +707,7 @@ console.log('\nlifecycle (one rig, every downstream contract):');
 // hair: read out of the VRM's node tree, parented to their real humanoid
 // ancestor.
 {
-  const { humanBones, worldPositions } = await import('../harness/rig-load.mjs');
+  const { humanBones, worldPositions } = await import('../../tools/assets/rig-load.mjs');
   console.log('\nwings (the ragdoll takes them over):');
   {
     // The CONTROL is the same rig as the fleet sees it — humanoid bones and the
@@ -985,7 +985,7 @@ console.log('\nlifecycle (one rig, every downstream contract):');
 {
   console.log('\nhair writes reach the renderer (matrixAutoUpdate = false):');
   const rigW: any = wingRig;
-  const { worldPositions } = await import('../harness/rig-load.mjs');
+  const { worldPositions } = await import('../../tools/assets/rig-load.mjs');
   const g = dollGltf;
   const wp = worldPositions(g);
   const P: any = { ...rigW.P };

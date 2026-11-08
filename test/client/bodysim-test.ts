@@ -38,7 +38,7 @@ const bs = await import('../../client/lib/bodysim.js');
 const { Ragdoll } = await import('../../client/lib/ragdoll.js');
 const { AmmoRagdoll } = await import('../../client/lib/ammodoll.js');
 const { BodyEngineBase } = await import('../../client/lib/bodyengine.js');
-const { rigs, makeAvatar, toppleLean, fixtureRig, VRM_DIR } = await import('../harness/rig-load.mjs');
+const { rigs, makeAvatar, toppleLean, fixtureRig, VRM_DIR } = await import('../../tools/assets/rig-load.mjs');
 
 const S = suite("bodysim");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

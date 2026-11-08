@@ -278,7 +278,7 @@ try {
     const img = new Image(); img.src = 'data:image/png;base64,' + png; await img.decode();
     const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const x = c.getContext('2d'); x.drawImage(img, 0, 0);
     const desk = pts.map(([px, py]) => Array.from(x.getImageData(Math.floor(px), Math.floor(py), 1, 1).data).slice(0, 3));
-    const { HTMLMesh } = await import('./lib/vendor/htmlmesh.js');
+    const { HTMLMesh } = await import('./vendor/three-addons/htmlmesh.js');
     const d = document.getElementById('dimfx'); const mesh = new HTMLMesh(d, { scale: 1 }); mesh.material.map.pause();
     const svg = d.querySelector('svg'), t0 = performance.now();   // EIDO (2): the icon draws once its image has loaded
     while (!svg.__eidoReady && performance.now() - t0 < 5000) await new Promise((r) => setTimeout(r, 50));
@@ -334,7 +334,7 @@ try {
     const cv = document.createElement('canvas'); cv.width = 64 * cols.length; cv.height = 64;
     const c2 = cv.getContext('2d'); cols.forEach((c, i) => { c2.fillStyle = c; c2.fillRect(i * 64, 0, 64, 64); });
     // the quad's OWN material, as domquad builds it (a stand-in HTMLMesh over a div painted in the token colours)
-    const { HTMLMesh } = await import('./lib/vendor/htmlmesh.js');
+    const { HTMLMesh } = await import('./vendor/three-addons/htmlmesh.js');
     const div = document.createElement('div'); div.style.cssText = `position:fixed;left:0;top:0;width:${cols.length * 64}px;height:64px;display:flex`;
     for (const c of cols) { const s = document.createElement('div'); s.style.cssText = `width:64px;height:64px;background:${c}`; div.appendChild(s); }
     document.body.appendChild(div);

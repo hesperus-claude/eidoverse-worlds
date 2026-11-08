@@ -22,7 +22,7 @@ const STUB = fileURLToPath(new URL('../stubs/core-stub.mjs', import.meta.url));
 plugin({ name: 'core-stub', setup(b) { b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB })); } });
 
 const { THREE } = await import('../stubs/core-stub.mjs');
-const { rigs, libraryRigs, makeAvatar } = await import('../harness/rig-load.mjs');
+const { rigs, libraryRigs, makeAvatar } = await import('../../tools/assets/rig-load.mjs');
 const { measureChain, solveChain } = await import('../../client/lib/reachbone.js');
 const { solveTwoBone, penetration } = await import('../../shared/reach.js');
 

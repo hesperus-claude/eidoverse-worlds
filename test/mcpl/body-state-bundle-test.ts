@@ -11,7 +11,7 @@ try {
     if (!result.success) throw new Error(result.logs.map(String).join("\n"));
     const code = (await Promise.all(result.outputs.map(o => o.text()))).join("\n");
     if (!code.includes("body_state") || !code.includes("posture_not_evaluated")) throw new Error(`${entry}: perception code missing from bundle`);
-    for (const token of ["test/harness/rig-load.mjs", "test/stubs/core-stub.mjs", "VRM_DIR", "libraryRigs", "function rigs(", "assets/opt/eidoverse/assets/vrms/"]) {
+    for (const token of ["tools/assets/rig-load.mjs", "test/stubs/core-stub.mjs", "VRM_DIR", "libraryRigs", "function rigs(", "assets/opt/eidoverse/assets/vrms/"]) {
       if (code.includes(token)) throw new Error(`${entry}: test corpus leaked into production: ${token}`);
     }
     console.log(`PASS ${entry}: no test rig module, corpus scanner or fixture path`);
