@@ -309,16 +309,16 @@ const cleanup = () => { if (current && current.exitCode == null && current.signa
 process.on("exit", cleanup);
 for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.on(sig, () => { console.log(`\nprotocol gate: ${sig}: killing the running suite's process group`); cleanup(); process.exit(130); });
 
-const OPT_TRACKED = (spawnSync("git", ["-C", ENGINE, "ls-files", "-z", "assets/opt"], { encoding: "utf8" }).stdout ?? "").split("\0").filter(Boolean).map((f) => f.slice("assets/opt/".length));
+const OPT_TRACKED = (spawnSync("git", ["-C", ENGINE, "ls-files", "-z", "test/fixtures/props"], { encoding: "utf8" }).stdout ?? "").split("\0").filter(Boolean).map((f) => f.slice("test/fixtures/".length));
 const PATH = `${path.dirname(process.execPath)}${path.delimiter}${process.env.PATH ?? process.env.Path ?? "/usr/bin:/bin"}`;   // a nested `bun` is this bun
 // files a suite leaves in the checkout fail it (a killed child skips its own cleanup on Windows: #260 review)
 const untracked = () => new Set((spawnSync("git", ["-C", ENGINE, "ls-files", "--others", "--exclude-standard", "-z"], { encoding: "utf8" }).stdout ?? "").split("\0").filter(Boolean));
 async function run(name: string, file: string): Promise<{ code: number | null; signal: string | null; out: string; lines: string[]; timedOut: boolean; leftovers: number; stuck?: boolean }> {
   const dir = fs.mkdtempSync(path.join(GATE_TMP, `${name}-`));
   for (const d of ["home", "library", "opt", "worlds", "patched"]) fs.mkdirSync(path.join(dir, d));
-  // the asset cache starts empty EXCEPT for what the repo itself commits there (props/ball.glb, a fixture since 08-03):
+  // the asset store starts empty EXCEPT for the repo's prop fixtures (test/fixtures/props/, today ball.glb):
   // hermetic means no host cache, not hiding this checkout's own files
-  for (const rel of OPT_TRACKED) { const to = path.join(dir, "opt", rel); fs.mkdirSync(path.dirname(to), { recursive: true }); fs.copyFileSync(path.join(ENGINE, "assets/opt", rel), to); }
+  for (const rel of OPT_TRACKED) { const to = path.join(dir, "opt", rel); fs.mkdirSync(path.dirname(to), { recursive: true }); fs.copyFileSync(path.join(ENGINE, "test/fixtures", rel), to); }
   // hermetic: nothing the suite reads by default lies outside this checkout and this dir (no ~, no ../eidoverse-video)
   const env: Record<string, string> = { ...process.env as Record<string, string>, PATH, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0",
     HOME: path.join(dir, "home"), TMPDIR: dir, PROTOCOL_SCRATCH: dir, EIDOVERSE_DIR: path.join(dir, "library"), OPT_DIR: path.join(dir, "opt"),

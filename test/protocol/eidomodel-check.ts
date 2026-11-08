@@ -25,7 +25,7 @@ import { suite } from "../gate/suite.ts";
 const S = scratch("eidomodel"); const OPT = path.join(S, "opt"), LIB = path.join(S, "lib");
 fs.mkdirSync(path.join(OPT, "store"), { recursive: true }); fs.mkdirSync(path.join(LIB, "eidoverse/assets/models"), { recursive: true });
 process.env.OPT_DIR = OPT; process.env.EIDOVERSE_DIR = LIB;
-const glb = fs.readFileSync(path.join(ENGINE, "assets/opt/props/ball.glb"));
+const glb = fs.readFileSync(path.join(ENGINE, "test/fixtures/props/ball.glb"));
 const sha = (b: Uint8Array) => crypto.createHash("sha256").update(b).digest("hex");
 const H = sha(glb); fs.writeFileSync(path.join(OPT, "store", `${H.slice(0, 16)}.glb`), glb);
 // a library model whose optimized mirror differs from its original: the address is the original's
