@@ -1,4 +1,4 @@
-# The eidoverse live-wire protocol — inventory freeze v0
+# The eidoverse live-wire protocol — as-built for log dialect v4
 
 Status: **as-built inventory**, first frozen 2026-08-22 (branch
 `overhaul/rimward`), revised for the protocol. This is the surface a new
@@ -92,7 +92,7 @@ Every message belongs to exactly one plane:
 |---|---|---|---|---|
 | `join` | — | anyone admitted | `{world, id?, token?, avatar?, surface?, spectate?, declares?, renderer?, roam?, agentToken?, replica, session?, clock?, hello?}` | travel = leave A, join B on the same socket. Verified sessions: `id` ignored, login name wins. An embodied (`world` surface) join must say `replica: true` — it folds the log itself — or it is refused. `session`: the page's own id (8–64 of `A-Za-z0-9_-`), relayed as its presence `session` (§4). `clock: true`: the server's time comes just before the snapshot (`clock {t}`, §4). `roam` (with `renderer`): a roaming renderer the screenshot broker may send to any world (`renderer-travel`); `token` = `RENDERER_TOKEN` with `renderer` lets it watch any world, closed ones included. `hello {dialect, v, features}` (exactly those keys) (shared/protocol/hello.js) is checked before any world lookup (`{type: "refused", code: "update-required", need}`), and the world's `requires` against `features` only after access (`unsupported-feature`); it is required: a join without one is refused `update-required`, and every in-repo client sends `helloOf()`. A world that doesn't exist and one the joiner may not discover answer alike: `{type: "error", code: "world-unavailable", error: "No accessible world named X."}`, close 4005 (4011 to a watcher). The door's refusals: 4005 (a bad link, world-unavailable, a conversion interrupted mid-swap, a client that doesn't fold the log; 4005 "full" is transient), 4006 (moderation), 4010 (this world isn't open to you, `@world.access`), 4011 (nothing to watch yet: redial). Answers `snapshot` (§4). |
 | `history` | read | anyone incl. spectators | `{before?, after?, limit?≤300, verbs?, reqId?}` | pages the chat newest-first; answers `history`. Arrival-only: only lines said since this connection arrived, unless the asker holds read-back by effective permission (the owner, or anyone currently holding `readChat` — a server operator only by a role here — granted to a whole role by the owner's Roles toggle, or to one person by a `grantRoles` holder in People, below their own role and only with permissions they hold): they page the master log. |
-| `debug` | read | anyone incl. spectators | `{limit?, kinds?}` or `{behavior}` or `{behaviors:true}` | the flight recorder (every refusal) + script status; answers `debug`. |
+| `debug` | read | anyone incl. spectators | `{limit?, kinds?}` or `{script}` or `{scripts:true}` | the flight recorder (every refusal) + script status; answers `debug`. |
 | `pose` | presence | embodied | `{pose}` | latest-wins into the world's dirty map; fanned out in stage `frame`s at ~15Hz. Bag fields incl. the C18 `xr` tracked-body contract: **docs/reference/POSE-WIRE.md**. Non-finite / malformed samples are refused at the source (`server/posecheck.ts`, 09-06). |
 | `clock` | presence | any | `{t0}` | answered `{type: "clock", t0, t}`: `t` on the world's authority clock (spec/PHYSICS.md §5.1). Never logged. |
 | `state` | presence | embodied | `{s: [sample, …]}` | **reserved** (spec/PHYSICS.md §4.3): each sample `{id, by, aseq, oseq, t, p, q, v, w, sleep}`, absolute and latest-wins. Checked (`shared/presencewire.js stateSampleError`) and refused until live simulation authority exists. |
@@ -111,7 +111,7 @@ Every message belongs to exactly one plane:
 | `world-fork` | admin | owner | `{to}` | a new world (its own genesis) whose founding request names this one, holding a copy of its current state; answers `world-forked`. |
 | `operator-repair` | admin | server operator (`SERVER_OPERATORS`) | `{id, verb, args}` | a server operator's recorded repair of the world it is in (PROTOCOL §7a): `set`/`delete` of @world `roles:<id>`, `access`, `default-role`, `role-defs`, `unban`; answers `reply` with `operator: true`; the request's body carries `operator: true`. |
 | `world-reset` | admin | owner | `{name}` (must equal the world's) | archives the log beside it and re-founds the world for the same owners. |
-| `world-bans` | read | anyone present | `{}` | answers a `mod` text summary. |
+| `world-bans` | read | the owner, or anyone holding a moderation power here (`mute`, `kick`, `ban`, `pauseScripts`) | `{}` | answers a `mod` text summary. |
 | `world-upgrade-review` / `world-upgrade` | — | a server operator (`SERVER_OPERATORS`) or the world's owner (main's records bind the owner to this account, or name them with no account: server/ownerrecognise.ts `recogniseOwner`), by a session or an agent credential (no join needed) | `{id, world}` / `{id, world, approved: <report hash>}` | an old-format world's upgrade (docs/operator/TRANSLATING-OLD-WORLDS.md): the CLI's dry-run report `{ok, world, report, hash, owner?, warning?}`, then the backup and the CLI's translation bound to that hash `{ok, world, backup, report, rollback, people, owner?, claimed?, owned?, warning?}`. `owner {recognised: "bound" \| "name", name}`: how an owner was recognised; `claimed: true` + `owned`: an ownerless world's upgrader is now its owner; `warning`: no owner is bound to an account; `people`: everyone who holds a role, with the account bound to them (if any). Refused `{ok: false, refused: {code, reason, fix?}}`: not-old, rights (ask the server's operator or the world's owner), cli, shape (approved isn't a hash), busy, rate, stale (another hash), refused, failed (server/upgrade.ts). |
 | `server-ban` / `server-unban` / `server-bans` | admin | server operator (`SERVER_OPERATORS`) | `{id, days?, reason?}` | server-wide, persisted in `.bans.json`, not requests (there is no server-wide log). |
 
@@ -227,7 +227,7 @@ Reach travels inside presence pose bags (`pose.reach`, relayed opaquely —
 see the amended spec/PROTOCOL.md §5).
 
 Wire additions since the v0 freeze (each flagged in its commit):
-physics (PROTOCOL_v2): `snapshot.physics` (the sim layer's snapshot: what flies,
+physics (spec/PHYSICS.md): `snapshot.physics` (the sim layer's snapshot: what flies,
 from which launch, adopted by joiners) ·
 `/defs` (the def registry, charter §3 — instance content as data, slice 2) ·
 `/tick` (heartbeat gauges, charter §4 — per-system runs/worst-ms/errors,
