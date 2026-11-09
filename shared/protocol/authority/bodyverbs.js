@@ -1,6 +1,6 @@
 // shared/protocol/authority/bodyverbs.js — the verbs a body performs (move, grab, put, throw, drop, punt, leave, wait) as
-// EMBODIED_VERBS, which authority.js spreads into VERBS first (refactor split, 2026-10-17; moved from authority.js's
-// "physics" section unchanged). They stand on physics.js, occupants.js and manipulate.js; the gate is above them, through UP.
+// EMBODIED_VERBS, which authority.js spreads into VERBS first. They stand on physics.js, occupants.js and manipulate.js;
+// the gate is above them, through UP.
 import { TRACK, areaFactor, bodyScale, tokensAfter } from "../../mover.js";
 import { AREA_MODES, physicsAreasOf, speedFactorAt } from "../../zone.js";
 import { atASpawn, spawnsOf, fallBackOf, FELL } from "../../spawn.js";
@@ -32,8 +32,7 @@ const areasOf = (st) => { let a = AREAS.get(st.entities); if (!a) AREAS.set(st.e
 // owner level is an owner's or its locker's to lift, never any builder's
 const unlockFix = (w, st, k) => { const by = lastSetterOf(w, k, "lock");
   return `${R.lockWord(lockStrength(w, st, k))}${by && !by.deleted ? ` (it was locked by ${said(by.by)})` : ""} can unlock it first: delete {id: '${k}', component: 'lock'}`; };
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// the layers above this one, reached through UP (ctx.js; a leaf may not import them: authority-layers-check)
 const actEntry = (...a) => UP.actEntry(...a);
 const actOf = (...a) => UP.actOf(...a);
 const admit = (...a) => UP.admit(...a);
@@ -222,7 +221,7 @@ const EMBODIED_VERBS = {
     return { ok: true, recorded: act !== null, holding: a.id, inHandAt: hand.map(r3), ...how, ...(notes.length ? { notes } : {}) };
   },
   // P3: putting something down is a settlement: a claim the authority checks like any write, then logs as a plain result.
-  // grabbable says where it goes (research §3): home (release: return), into a socket that accepts it (fits), where
+  // grabbable says where it goes: home (release: return), into a socket that accepts it (fits), where
   // the hand let go (release: stay), or straight down onto what's below (drop, the default).
   put(w, actor, a, how = "put") {
     const me = body(w, actor); const h = gripOf(w, actor, a.id);
@@ -320,7 +319,7 @@ const EMBODIED_VERBS = {
   // volley) is launched with v, or with power along the line
   // from where the body stands through it, lifted (physobj's 0.9 ratio: a knee-high hop at power 4). Its gates are grab's:
   // dynamic, physics.who, its locks and its ancestors', and nobody's hand. A thing in flight is caught and re-launched (logged).
-  // `contact: true` is a moving body's push (shoveGate); `shove` stays the word for knocking a BODY over (`shove` is the word for knocking a BODY over)
+  // `contact: true` is a moving body's push (shoveGate); `shove` stays the word for knocking a BODY over
   // blast: {from, act} when a blast punts it (force, below): the line starts at the blast, no body or reach, one act for all
   punt(w, actor, a, blast = null) {
     const me = blast ? { at: blast.from } : body(w, actor); const st = w.state(); const e = st.entities[a.id];
@@ -399,7 +398,7 @@ const EMBODIED_VERBS = {
     for (const { id, r } of out) if (!r.ok && w.presence.holds[id]?.by === actor) returnHeld(w, actor, id, r.refused?.code, "left");
     endDrivesBy(w, w.state(), actor);   // a driver leaving: the lease commits, the helm frees (shared/protocol/authority/drive.js)
     if (CTX.isAnon(actor)) C.forgetIdentity(w.presence, actor);   // a guest never returns
-    delete w.presence.bodies[actor]; forgetReaches(w.presence, actor); clearOccupant(w, actor); w.savePresence();   // F3 (b): a yes ends when either person leaves
+    delete w.presence.bodies[actor]; forgetReaches(w.presence, actor); clearOccupant(w, actor); w.savePresence();   // a yes ends when either person leaves
     return { ok: true, left: true, dropped: out.map(({ id, r }) => ({ id, ok: r.ok, ...(r.refused ? { refused: r.refused.reason } : {}) })) };
   },
   wait(w) {

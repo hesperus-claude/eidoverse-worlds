@@ -61,12 +61,9 @@ export function worldOf(io) {
   if (io.provenance) w.provenance = io.provenance;   // () → the writer's provenance genesis records (§F F-2; server/livehost.ts)
   // §2.1: moderation lives in a SEPARATE moderator log with the authority's enforcement, never in the world log
   w.mod = io.mod ?? [];
-  // Persist before publishing (review of PR #260, storage.js:110): a line reaches memory only after durable storage took it.
-  // A failed write may have left part of a line on disk (open, write and sync are not one step), so the file's state is
-  // unknown: the world refuses every later write (fail closed) until it is reopened from what the disk actually holds.
-  // Each file is wedged on its own: a failed moderator-log write stops moderator-log writes, a failed log write stops log writes.
-  // wedgedAt: the log seq whose line's disk state is unknown (the one being written when the write threw), for the
-  // transaction outcome (txnOutcome below: the reply names it as `from`).
+  // Persist before publishing: a line reaches memory only after durable storage took it. A failed write may have left part
+  // of a line on disk, so the file's state is unknown: it is WEDGED and refuses every later write until reopened from
+  // disk. Each file wedges on its own. wedgedAt: the seq whose disk state is unknown (txnOutcome reports it as `from`).
   w.wedged = {}; w.wedgedAt = null;
   const durably = (what, write) => {
     // the wedge's own refusal says which file it is (`wedged`), so the reply can tell it from any other throw (txnOutcome)
@@ -125,7 +122,7 @@ export function worldOf(io) {
     return { line, parsed, bad };
   };
   // Would these entries, appended in this order, all be lines a reader accepts? Checked BEFORE any line is written, so
-  // a cap refuses the whole request (an act is never left without its result, 33 C2); a throw between lines is `ambiguous` (DESIGN-txn §4 T1). A size or depth cap is a refusal.
+  // a cap refuses the whole request (an act is never left without its result); a throw between lines is `ambiguous`.
   w.fits = (...es) => { for (const [k, e] of es.entries()) { const { bad } = render(e, entries.length + k, "size"); if (!bad) continue;   // with the chain fields append adds
     if (/^cap-/.test(bad.code)) refuse("too-big", `that would be a ${bad.code === "cap-size" ? `${bad.detail}-byte` : "too deeply nested"} ${e.kind} entry; a log line is at most 1 MiB, 64 deep (§1)`, "split it into smaller requests, or put big data in a blob and store its hash");
     throw new Error(`authority bug: would write a malformed entry (${bad.code} ${bad.detail})`); } };
@@ -153,7 +150,7 @@ export function worldOf(io) {
 //                                          attempt record, rests that were due) may still be written; they are published
 //                                          like any line and are not the asker's.
 //   {outcome: "ambiguous", from, wedged}   the asker can't treat it as either: a durable write threw (its bytes may be on
-//                                          disk: open, write, sync and close are not one step; the file is wedged, B1), or
+//                                          disk; the file is wedged), or
 //                                          the request was cut off after part of it was written. Lines below `from` stand
 //                                          (they were durable and are published); from `from` on, history says what holds.
 // An ambiguous request is never reported as ok, nor as a plain failure. `wedgedBefore`: wedgedOf(w) when the request began,
@@ -257,16 +254,14 @@ function versionSeq(w, v, what) {
 }
 const versionOf = (w, seq) => (seq === undefined || seq === null ? null : { seq, head: w.headAt(seq) });
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
-// PROTOCOL §5 (locks: decided): `lock` keeps the first protocol's meaning, so an imported log's locks carry over
-// untranslated. A lock is on when its value is truthy; the authority stores `true` (an old log's {rank} still reads as
-// on, its rank ignored: strength is the setter's rank, gate.js).
-// A purged value is absent(purged), not a lock. The lab's `pinned` and top-level `locked` are retired.
+// PROTOCOL §5: a lock is on when its value is truthy; the authority stores `true` (an old log's {rank} still reads as on;
+// strength is the setter's rank, gate.js). A purged value is absent, not a lock.
 const lockedC = (c) => { const v = c?.lock; return v !== undefined && v !== REDACTED && !!v; };
 // a rotation written to the log: rounded like a position, then made unit again (0.707 per axis is not a unit quaternion,
 // and a reader composing it through a parent drifts off unit)
 const qr3 = (q) => { const r = q.map(r3); const n = Math.hypot(r[0], r[1], r[2], r[3]); return n > 0 ? r.map((v) => v / n) : [0, 0, 0, 1]; };
 const setOp = (id, comp, value) => ({ op: "set", id, comp, value });
-const IMPORTED_ONLY = (comp) => typeof comp === "string" && /^imported(?:-(?:behavior|bans))?(?::|$)/.test(comp);   // imported-epoch is imported:epoch (10-16); imported-guard was never registered
+const IMPORTED_ONLY = (comp) => typeof comp === "string" && /^imported(?:-(?:behavior|bans))?(?::|$)/.test(comp);   // imported-epoch is imported:epoch
 const delOp = (id, comp) => (comp === undefined ? { op: "delete", id } : { op: "delete", id, comp });
 const createOps = (id, comps) => [{ op: "create", id }, ...Object.entries(comps).map(([k, v]) => setOp(id, k, v))];
 // a preview of ops on st: copy-on-write (the same state applyOps gives, sharing every entity the ops don't touch; values
@@ -274,14 +269,10 @@ const createOps = (id, comps) => [{ op: "create", id }, ...Object.entries(comps)
 const scratch = (st, ops) => { const s = applyCow(cowState(st), ops); if (VOLATILE.has(st.entities)) VOLATILE.add(s.entities); return s; };
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "thing";
 
-// (here beside CHANGE: the gate admits these ops, the write path and undo mark them, and a leaf can't reach the gate)
-// The authority's own follow-up ops inside a person's write: clearing the references to what a
-// delete removed, and an undo putting back the references that delete cleared. Marked on the op object (a request's JSON
-// can't carry a symbol), and admitted like the authority's other follow-ups (rest, system): no rights, key, seniority,
-// lock or in-flight check, and no capability scope, so a third party's keyed reference or lock can't veto your delete or
-// your undo, and a script deleting what it made isn't refused for a reference outside its scope. Shape and value checks
-// still apply. Unity, Unreal and Resonite null such references at read time, attributed to nobody; this is the same rule
-// written eagerly (ids are never reused, so it is tidiness, never a resurrection guard).
+// The authority's own follow-up ops inside a person's write (clearing references to what a delete removed; an undo putting
+// them back), marked on the op object (a request's JSON can't carry a symbol) and admitted like its other follow-ups: no
+// rights, key, lock or scope check, so a third party's reference or lock can't veto your delete. Shape and value checks
+// still apply. Here, not in the gate, because a leaf can't reach the gate.
 const FOLLOW_UP = Symbol("follow-up");
 const followUp = (o) => { o[FOLLOW_UP] = true; return o; };
 export { cascadeOf };

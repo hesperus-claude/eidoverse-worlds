@@ -1,7 +1,6 @@
-// particles — how a `particles` component READS: the one prose line a text-tier resident gets for an emitter, and the
+// particles — how a `particles` component READS: the prose line a text-tier resident gets for an emitter, and the
 // begin / change / end narration of a live change. What a value MEANS is shared/particle_effects.js; the simulation is
-// shared/particlesim.js. Pure; shared by mcpl/agent.ts and shared/a11y.js so every reader agrees on what is burning.
-// Tests: test/client/particles-test.ts.
+// shared/particlesim.js. Pure; shared by mcpl/agent.ts and shared/a11y.js. Tests: test/client/particles-test.ts.
 import { ESSENTIALS, ESSENTIAL_NAMES, instanceOf, effectBlobName, effectFor, hashSeed, QUALITY_TIERS, essentialNameOf } from './particle_effects.js';
 import { quoted } from './text.js';
 
@@ -21,12 +20,11 @@ export function mulberry32(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-/** The emitter's seed: the authored one if there is one, otherwise derived from the entity id and the effect (persistent:
- *  the id is; every client and every replay computes the same number without a round trip). */
+/** The emitter's seed: the authored one, else derived from the entity id and the effect (so every client and replay agrees). */
 export function emitterSeed(entityId, data) {
   const inst = instanceOf(data) ?? {};
   if (typeof inst.seed === 'number' && Number.isFinite(inst.seed)) return Math.floor(inst.seed) >>> 0;
-  return hashSeed(`${entityId}:${essentialNameOf(inst.effect) ?? inst.effect ?? ''}`);   // an Essential's name (or the address an older value was stored as)
+  return hashSeed(`${entityId}:${essentialNameOf(inst.effect) ?? inst.effect ?? ''}`);
 }
 /** Particles one viewer draws of `amount`: the effect's own ratio (an older value's quality) and the viewer's tier,
  *  whichever asks for less. The only number allowed to differ between two clients looking at the same fire. */
@@ -40,7 +38,7 @@ const short = (addr) => `${addr.replace(/^eido:sha256\//, 'sha256:').slice(0, 19
  *  reader has it; else its address, shortened. */
 function readsAs(effect, lookup) {
   if (typeof effect !== 'string' || !effect) return 'something';
-  const ess = essentialNameOf(effect); if (ess) return ESSENTIALS[ess].reads;   // a name, or the address it is stored as
+  const ess = essentialNameOf(effect); if (ess) return ESSENTIALS[ess].reads;
   const doc = effectFor(effect, lookup);
   if (doc) return doc.reads || doc.name ? quoted(doc.reads || doc.name, 80) : `a stored effect (${short(effect)})`;
   if (effectBlobName(effect)) return `a stored effect (${short(effect)})`;
@@ -59,11 +57,9 @@ export function describeParticles(data, { lookup = () => null } = {}) {
   const o = Array.isArray(inst.at) && inst.at.length === 3 && inst.at.every((n) => typeof n === 'number' && Number.isFinite(n)) ? inst.at : null;
   bits.push(`local origin [${(o ?? [0, 0, 0]).join(', ')}]`);
   if (typeof inst.part === 'string') bits.push(`on its ${quoted(inst.part, 64)}`);
-  // size is a shared fact a resident can act on (a candle flame is not a bonfire), so a scaled emitter
-  // says so; at its own size (absent, or 1) nothing is claimed
+  // a scaled emitter says so (a candle flame is not a bonfire); at its own size nothing is claimed
   if (typeof inst.scale === 'number' && Number.isFinite(inst.scale) && inst.scale !== 1) bits.push(`scale ${+inst.scale.toPrecision(3)}`);
   if (!known && !effectBlobName(inst.effect)) bits.push('effect unknown to this client');
-  // the component IS the emitter's state: present and playing means it is emitting now
   bits.push(inst.playing === false ? 'stopped' : 'active');
   return `${inst.playing === false ? 'can emit' : 'emitting'} ${readsAs(inst.effect, lookup)} (${bits.join('; ')})`;
 }

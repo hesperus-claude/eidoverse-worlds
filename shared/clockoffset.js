@@ -4,8 +4,8 @@
 // docs/research/clock-offset.md.
 export const LEAK_MS_PER_S = 2, LEAK_MAX_MS = 100;
 
-// The stream offset: every sample blended in at STREAM_BLEND, about one mean delay early. Only remote-body
-// interpolation reads it (remotes.js streamNow); everyone else wants the true time and reads the offset.
+// The stream offset: every sample blended in at STREAM_BLEND, about one mean delay early — for a remote-body
+// interpolator; anything that wants the true time reads `offset`.
 export const STREAM_BLEND = 0.08;
 
 /** Fold one sample into the estimate. `prev` is the previous result, or null

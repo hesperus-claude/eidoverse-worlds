@@ -20,7 +20,7 @@ const MAX_LINE = 1 << 20, MAX_DEPTH = 64, BIG = 2 ** 53;
 // a changelog line and old-reader/new-reader vectors (test/protocol/kernel-check.ts)
 export const ENVELOPE = new Set(["world", "kind", "ts", "actor", "cause", "op", "verb", "body", "head", "sig"]);
 export const KINDS = new Set(["genesis", "change", "request", "physics", "say", "redaction", "governance"]);
-// `op` on a change (the storage operation), `verb` on a request or physics entry (what was asked / the engine event), neither elsewhere (D3)
+// `op` on a change (the storage operation), `verb` on a request or physics entry (what was asked / the engine event), neither elsewhere
 export const WORD_OF = Object.freeze({ change: "op", request: "verb", physics: "verb" });
 /** The kinds whose whole body is purgeable (hashed as {commitment} in the chain skeleton, §12). */
 export const BODY_KINDS = Object.freeze(["request", "say", "physics"]);
@@ -427,7 +427,7 @@ export function applyInPlace(s, ops, seq = Infinity, redacted = null, batch = fa
   return s;
 }
 /** every redaction in a log, as the strict fold reads them: `${seq}:${op index, or - for a whole entry}` → the redaction's seq.
- *  The one parser of redaction targets: every other reader derives from this (hygiene-check redaction-parse).
+ *  The one parser of redaction targets: every other reader derives from this (test/gate/hygiene-check.ts).
  *  `stubs: false` leaves out the values stripped with no redaction naming them (keyed → 0 otherwise). */
 export function redactionsIn(entries, { stubs = true } = {}) {
   const none = () => {}, settled = acceptedEntries(entries), named = redactionsOf(settled, none);
@@ -440,7 +440,7 @@ export function redactedBodies(entries, red = redactionsIn(entries, { stubs: fal
     if (i === "-" && ["request", "say", "physics"].includes(e?.kind)) out.add(+s); }
   return out;
 }
-/** the entries the strict fold accepts, by seq (null where it rejects one); none where it reads no world (#260 Stella 10-30).
+/** the entries the strict fold accepts, by seq (null where it rejects one); none where it reads no world.
  *  `ops`: also null a change whose ops the fold skips as malformed (a bind's authors; redactionsIn keeps the fold's own input). */
 export function acceptedEntries(entries, { ops = false } = {}) {
   const none = () => {}; const ok = checkedEntries(entries, none); const g = ok[0];

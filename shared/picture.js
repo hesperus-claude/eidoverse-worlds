@@ -1,20 +1,14 @@
-// picture — what a `picture` component MEANS. Shared verbatim between the
-// browser host (client/lib/pictures.js) and the mcpl agent (text-tier
-// perception), so the two can never describe different pictures.
+// picture — what a `picture` component MEANS, shared by the browser host (client/lib/pictures.js) and the mcpl agent.
 //
 //   picture {src, width?, description?, lit?}   (a quad of its own, facing +Z on the thing's origin)
-//   delete {id, component: "picture"}                # take it down
 //
-// A picture is a standalone image (Godot's Sprite3D, Unity's SpriteRenderer): it owns its quad, `width` metres wide,
-// its height from the image's aspect once the image loads. A texture on a NAMED node of a model is the `material`
-// component's (shared/material.js: two shapes, no overlap).
-
-// SOURCES. An https link (shared/mediasrc.js decides whose browser may fetch it), or a library-relative store path
-// under one of PICTURE_DIRS, both served by the sequencer's /library/ route: `eidoverse/assets/` (what the operator
-// placed) and `store/images/` (uploads via `POST /upload?as=image`: content-addressed, sniffed, token-gated).
+// A standalone image: its own quad, `width` metres wide, height from the image's aspect. A texture on a NAMED node of a
+// model is the `material` component's (shared/material.js).
 //
-// THE DESCRIPTION. Text-tier residents perceive by reading: the author's ≤200-char `description` is what look()
-// carries (else "a picture (<file>)"). Nothing about pixels is ever claimed.
+// SOURCES: an https link (shared/mediasrc.js decides whose browser may fetch it), or a library-relative path under one
+// of PICTURE_DIRS, served by the server's /library/ route (`store/images/` holds uploads via `POST /upload?as=image`).
+//
+// DESCRIPTION: the author's ≤200-char `description` is what look() carries for text-tier readers. Nothing about pixels is claimed.
 
 import { mediaTier } from './mediasrc.js';
 import { graphemes, quoted } from './text.js';
@@ -32,8 +26,8 @@ export const PICTURE_LIT = Object.freeze({ scene: 'lit by the scene', self: 'sel
 const KNOWN_KEYS = new Set(['src', 'width', 'description', 'lit']);
 
 /** Is `src` an allowed picture source? Library-relative, under one of PICTURE_DIRS, image extension, no scheme, no
- *  leading slash, no dot segments, no `%` at all (a URL parser reads `%2e%2e` as `..`). The parsed pathname must come
- *  back byte-identical to the declared one: the rule is over what the FETCH canonicalizes to. */
+ *  leading slash, no dot segments, no `%` (a URL parser reads `%2e%2e` as `..`), and the parsed pathname comes back
+ *  byte-identical: the rule is over what the FETCH canonicalizes to. */
 export function allowedPictureSrc(src) {
   if (typeof src !== 'string' || !src) return false;
   if (/^[a-z][a-z0-9+.-]*:/i.test(src) || src.startsWith('/') || src.includes('\\')) return false;
@@ -41,17 +35,13 @@ export function allowedPictureSrc(src) {
   if (src.split('/').some((seg) => seg === '' || seg === '.' || seg === '..')) return false;
   if (!PICTURE_DIRS.some((d) => src.startsWith(d)) || !IMAGE_EXT.test(src)) return false;
   try {
-    // What the browser will actually ask the library route for. Any
-    // difference — a collapsed segment, a decoded byte — means the string
-    // and the fetch disagree, and the fetch is the one that matters.
+    // what the browser will actually ask the library route for; any difference means the string and the fetch disagree
     if (new URL(`/library/${src}`, 'http://library.invalid').pathname !== `/library/${src}`) return false;
   } catch { return false; }
   return true;
 }
 
-/** Validate an authored bag. `ok:false` carries WHY (legible, once per authoring);
- *  `ok:true` carries the normalized picture plus notes for anything coerced.
- *  `description` is the describing line; src may be an https link (shared/mediasrc.js says who may fetch it). */
+/** Validate an authored bag: {ok: false, why} or {ok: true, picture, tier, notes} (notes for anything coerced). */
 export function normalizePicture(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     return { ok: false, why: 'picture data must be an object {src, width?, description?, lit?}' };
@@ -65,8 +55,7 @@ export function normalizePicture(data) {
   if (data.width !== undefined) { const w = Number(data.width); if (Number.isFinite(w) && w > 0) picture.width = Math.min(PICTURE_MAX_WIDTH, w); else notes.push('width is a number of metres above 0 — using 1'); }
   if (data.description != null) {
     const d = String(data.description).replace(/\s+/g, ' ').trim();
-    if (graphemes(d) > PICTURE_DESCRIPTION_MAX) return { ok: false, why: `description is ${graphemes(d).toLocaleString('en')} characters (at most ${PICTURE_DESCRIPTION_MAX})` };   // the door's bound, in the editor's words (mediasrc.js, editor-range-test)
-    if (d) picture.description = d;
+    if (graphemes(d) > PICTURE_DESCRIPTION_MAX) return { ok: false, why: `description is ${graphemes(d).toLocaleString('en')} characters (at most ${PICTURE_DESCRIPTION_MAX})` };    if (d) picture.description = d;
   }
   if (!picture.description) notes.push('no description — anyone who can\'t see it (or reads the world as text) gets only the file name; say what it shows');
   if (data.lit != null) {
@@ -76,8 +65,7 @@ export function normalizePicture(data) {
   return { ok: true, picture, tier, notes };
 }
 
-/** The one line look() carries for a picture — the same string on the authority, in mcpl and in every client, from the
- *  same bag. Says what the author said it shows (quoted, as data); never claims anything about the pixels. */
+/** The one line look() carries for a picture: what the author said it shows (quoted, as data); never anything about pixels. */
 export function describePicture(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return 'a picture (malformed declaration)';
   const file = typeof data.src === 'string' ? (/^https:/i.test(data.src) ? (() => { try { return new URL(data.src).hostname; } catch { return 'a link'; } })() : data.src.split('/').pop()) : null;

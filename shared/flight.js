@@ -1,10 +1,8 @@
 // flight — the deterministic flight integrator: glide polar, falling leaf,
 // stamina, and the state machine that decides which of them owns the body.
 //
-// Implements the physical half of flight-spec-v0.md (SHA-256
-// 641da611754c7097142e16b355a6dd79b4d431646e0c1d890759884f86fbe805) and the
-// airborne clause of down-spec-v0.1.md v0.1.1 (SHA-256
-// 71e4fff28fbc6145f452df9a8b7a03b3fbbcd0bf9eba471f207edbd3435c0a91).
+// Implements the physical half of flight-spec-v0.md and the airborne clause of down-spec-v0.1.md (the "spec §"
+// and "down-spec §" notes below cite them; neither spec is in this repo).
 //
 // PURE and dependency-free, and shared on purpose: ONE deterministic function that every runtime integrates (spec Q2).
 // Authority is not position streaming; the server's verb-RECEIPT TIMESTAMPS are the tie-breaker, and a late verb is a
@@ -115,7 +113,7 @@ export const DEFAULT_CONFIG = {
     minTotal: 0.35,           // floor: anything faster reads as a teleport
   },
 
-  // ---- bounds and ceiling (spec R3): the world's own @world.bounds (env.box); no bounds, no fence (LEGACY-PINS item 3)
+  // ---- bounds and ceiling (spec R3): the world's own @world.bounds (env.box); no bounds, no fence
   bounds: {
     softMargin: 8,            // m of authority band inside the box's sides and under its top (the ceiling)
     groundClearance: 0.15,    // m; below this counts as ground contact

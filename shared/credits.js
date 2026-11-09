@@ -1,5 +1,5 @@
 // credits — who made a thing what it is, as a view over the log. Never
-// stored: no hand credits, no author field (L2). The editor's History tab shows it as filter modes (client/lib/
+// stored: no hand credits, no author field. The editor's History tab shows it as filter modes (client/lib/
 // historyrows.js historyView); this is the per-thing grouping it and an agent share.
 //
 //   creditsOf(entries, id, {nameOf}) → [{by, who, did: [{what, n, at}], first, last}], ordered by first contribution

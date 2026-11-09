@@ -8,7 +8,7 @@
 //   so ordinary bodies never manage it: a declaration holds until the next real transition or the next declaration
 //   (bodyModeTracker). Nothing here moves a body.
 // It is separate from the anim: the presence `clip` is what plays; bodyMode is the mode. It is a SELF-DECLARED
-// description and nothing more (PROTOCOL §5): no authority rule, consent check or permission is granted or relaxed
+// description and nothing more (spec/PROTOCOL.md §5): no authority rule, consent check or permission is granted or relaxed
 // because of it; a rule that depends on state checks what the authority can verify on the act (the water at the
 // position, the fly permission at take-off).
 

@@ -12,8 +12,7 @@ import { refuse, said } from "./refuse.js";
 import { lockedC } from "./storage.js";
 import { aabb, ancestors, descendants, worldT } from "./math.js";
 import { isSocketC } from "./sockets.js";
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// the layers above this one, reached through UP (ctx.js; a leaf may not import them: authority-layers-check)
 const lacks = (...a) => UP.lacks(...a);
 const lastTouch = (...a) => UP.lastTouch(...a);
 const lockCheck = (...a) => UP.lockCheck(...a);
@@ -116,7 +115,7 @@ function occupyRights(w, st, s, who, role, norm, made) {
   for (const [h, op] of hosts) { if (made.has(h) || !st.entities[h]) continue;
     const at = h + "'s sockets (" + op.op + " " + op.id + (op.comp !== undefined ? "." + op.comp : "") + ")"; const as = { op: "set", id: h, comp: "sockets" };
     // a socket joining h (made, re-parented onto it, or a thing made one) needs h's rights; an edit of a socket already
-    // on h is judged on the socket's own rights in rights() (its creator, or the builder the command's lift names: RL4)
+    // on h is judged on the socket's own rights in rights() (its creator, or the builder the command's lift names)
     const n = joins.has(h) ? lacks(w, st, holder, as, made, { viaCap: !!cap }) : null;
     const whose = cap ? " (" + said(holder) + "'s, whose rights this write carries)" : "; you are " + role;
     if (n) refuse("rights", "a socket is part of its host, so " + op.id + " is an edit of " + at + ": that needs " + needWords(n) + whose, "ask " + h + "'s builder or an owner; a socket on a thing of your own needs nothing more", { needs: n, host: h });

@@ -12,51 +12,26 @@
 //
 //   captions = {session, n, gen, title?, line: {t0, t1, text, speaker?}}
 //
-// Each write holds ITS line, once (render-media-env §11; WebVTT and TTML store a cue once). A reader that wants the last
-// lines reads the last captions changes (the log is the transcript); an older stored value's `window` still reads.
+// Each write holds ITS line, once (as WebVTT and TTML store a cue once). A reader that wants earlier lines reads the
+// earlier captions changes (the log is the transcript); an older stored value's `window` still reads.
 //
-// Rung 2 of the projector ladder (anima_dev/eidoverse_projector_design.md):
-// the music player — audio in, captions the models can read, no video yet.
-// Writing one screen's captions takes the `caption` deed (a per-entity grant),
-// not builder standing over the whole world.
+// Writing one screen's captions takes the `caption` deed (a per-entity grant), not builder standing over the world.
+// Captions are durable world testimony like `say`; `end` clears current perception, not history.
 //
-// RETENTION, stated truthfully: captions are durable world testimony like
-// `say`; `end` clears current perception, not history. The bot keeps no
-// transcript the world does not already hold.
+// WHO IS THE CAPTIONER: the LIVE LEG. The sequencer stamps every caption entry with the writer's join generation
+// (server/world.ts legGen: monotonic across restarts; a same-identity join is a takeover); a client cannot supply it.
+// The bag remembers the generation that wrote it: a lower one is refused as a superseded leg, a higher one takes over.
+// Supersession is thus the authority's fact, never a clock the bot claims. The owner's recovery is `end` or `caption: null`.
 //
-// WHO IS THE CAPTIONER: the LIVE LEG. The sequencer issues every accepted
-// join a generation (World.legGen: the log seq the world was opened at,
-// times a million, plus the admission count — so it survives a sequencer
-// restart and never goes backwards; a same-identity join is a TAKEOVER that
-// retires the older leg), and vCaption stamps that generation onto every
-// caption entry — a client cannot supply it. The bag remembers the
-// generation that wrote it; a caption from a lower generation is refused as
-// a superseded leg, a higher one takes over. So supersession is the authority's
-// own fact, never a clock the bot claims: a restart under clock rollback
-// still takes over (its leg is newer), a stale predecessor cannot present a
-// "later" timestamp and win (its leg is older), and two captioners for one
-// screen resolve to whichever joined last — the owner's recovery is `end`
-// or `caption: null`.
+// SESSION is the bot's media-clock label, minted at attach (ISO time plus a nonce): it says which attach a `00:30`
+// belongs to. Within a session `n` is the bot's monotonic counter; the bag folds the high-water mark and refuses a
+// caption at or below it BEFORE it becomes history, so a resend after a lost receipt is safe. A different session
+// from the live leg's starts a fresh window.
 //
-// SESSION is the bot's media-clock label, minted at attach (ISO time plus a
-// nonce, human-readable): it says which attach a `00:30` belongs to. Within
-// one session `n` is the bot's monotonic counter; the bag folds the
-// high-water mark, and a caption at or below it is refused BEFORE it
-// becomes history — a resend after a lost receipt is safe by construction,
-// and a reader never meets the same line twice under one clock. A caption
-// under a different session from the live leg starts a fresh window.
+// TIMES: t0/t1 are MEDIA TIME in seconds (today: since the bot attached to the stream).
 //
-// TIMES. t0/t1 are MEDIA TIME in seconds: the stream's own clock, as far as
-// the bot can know it. In this rung that is seconds since the bot attached
-// to the stream (the source clock plumbing is phase 3); the field's meaning
-// does not change when the source improves, only its accuracy — and the
-// session says which attach a `00:30` belongs to.
-//
-// BOUNDS are in CHARACTERS (String.length, UTF-16 code units), not bytes: a
-// 240-character line of CJK is ~720 UTF-8 bytes and that is fine — the bag is
-// folded state, not a verb payload under the comp cap; and the authority keeps each
-// value under 64 KiB of UTF-8 (authority/gate.js), so a bag of 20 full lines plus
-// title and speakers stays well inside it in any script.
+// BOUNDS are in CHARACTERS (String.length), not bytes: the bag is folded state, not a verb payload, and the authority's
+// 64 KiB value cap (shared/protocol/authority/gate.js) holds 20 full lines in any script.
 
 import { shown } from './shown.js';
 

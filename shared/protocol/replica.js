@@ -4,7 +4,7 @@
 // The client folds the log itself, from the server's own log stream:
 //   adopt(snap)        the join snapshot: {dialect, v, world, seq, state: wireState(fold), physics, mine?}, the fold as the
 //                      server holds it at `seq` (a client can't refold the whole log on join; it adopts a snapshot). An unknown
-//                      {dialect, v} is refused before anything is folded: status `unknown-version`, no state (D5)
+//                      {dialect, v} is refused before anything is folded: status `unknown-version`, no state
 //   ingest(entries, from, held)
 //                      the `log` message: the raw entries the authority just wrote, folded with the fold's own ops
 //                      (opsOf + applyInPlace, the strict reader's code). A gap, a redaction (retroactive by law, L1), a
@@ -83,7 +83,7 @@ export function makeReplica({ freeze = true } = {}) {
   let E = [], folder = null;
   v.sim = null; v.simVersion = 0;
   // An input the log only names (siminputs.js: a heightmap's grid) may land after the entries that read it: keep the cut
-  // from before the first such entry and refold from it when it lands (#144); WAIT_MAX bounds an input that never comes.
+  // from before the first such entry and refold from it when it lands; WAIT_MAX bounds an input that never comes.
   let waiting = null; const WAIT_MAX = 5000;
   const feedOne = (seq, e) => { E[seq] = e; folder.feed(seq); if (!(e.kind === "physics" && e.verb === "launch")) delete E[seq]; };
   const snapNow = () => { const f = folder.view(); return JSON.parse(JSON.stringify({ state: wireState(f.st), physics: simSnapshotOf(f, E) })); };
@@ -104,7 +104,7 @@ export function makeReplica({ freeze = true } = {}) {
     folder = simFolder(E, { models: {}, from: { st: stateFromWire(snap.state), clock: cut?.clock ?? 0, spec, foreign, sim: foreign ? null : cut?.sim ?? null, launched: cut?.launched ?? {}, lifted: cut?.lifted ?? [], unknownEpoch: !!cut?.unknownEpoch, unknownHold: !!cut?.unknownHold } });
     v.sim = folder.view(); v.simVersion++;
   };
-  /** Adopt a join snapshot. False, with v.status "unknown-version" and no state, when its {dialect, v} isn't this reader's (D5): never a half-read. */
+  /** Adopt a join snapshot. False, with v.status "unknown-version" and no state, when its {dialect, v} isn't this reader's: never a half-read. */
   v.adopt = (snap) => {
     if (!snap || typeof snap !== "object" || snap.dialect !== DIALECT || snap.v !== VERSION) { v.reset(); v.status = "unknown-version"; return false; }
     v.status = "ok"; v.st = stateFromWire(snap.state); v.seq = Number.isInteger(snap.seq) ? snap.seq : -1; v.world = snap.world ?? null; v.active = true;

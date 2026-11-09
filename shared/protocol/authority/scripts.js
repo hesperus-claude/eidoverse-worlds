@@ -13,14 +13,13 @@ import { VOLATILE, cascadeOf, isE, opsQuiet } from "./storage.js";
 import { descendants } from "./math.js";
 import { backward, creatorOf, entryBy, isScriptActor, may, roleOf } from "./rights.js";
 import * as Roles from "../roles.js";
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// the layers above this one, reached through UP (ctx.js; a leaf may not import them: authority-layers-check)
 const guess = (...a) => UP.guess(...a);
 const lacks = (...a) => UP.lacks(...a);
 const nearMiss = (...a) => UP.nearMiss(...a);
 const needWords = (...a) => UP.needWords(...a);
 
-// ---------- behaviours (L4, L7 as revised; research 41; the lab's slice, the protocol lab's authority.js @ 2300bae, on a real sandbox) ----------
+// ---------- behaviours (L4, L7) ----------
 // A script is a keyed component `script:<name>` naming a source blob ({lang: "js", api, text}, by its sha256 name) and a
 // declared SCOPE. Its sponsor is whose rights admitted the LATEST write to that key in its current life (§5 "Two views"):
 // a view, never a stored field. Every activation is a fresh admission with capability {kind: "script"}: the sponsor's

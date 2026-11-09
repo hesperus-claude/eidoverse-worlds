@@ -7,8 +7,7 @@ import { r3 } from "../round.js";
 import { UP } from "./ctx.js";
 import { refuse } from "./refuse.js";
 import { isScriptActor } from "./rights.js";
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// the layers above this one, reached through UP (ctx.js; a leaf may not import them: authority-layers-check)
 const body = (...a) => UP.body(...a);
 const dist = (...a) => UP.dist(...a);
 const gripPoint = (...a) => UP.gripPoint(...a);
@@ -22,7 +21,7 @@ const ringPush = (P, r) => { (P.ring ??= []).push(r); if (P.ring.length > 200) P
 // stops changing)
 const inboxPush = (P, who, m) => { const n = ((P.inboxN ??= {})[who] ?? 0) + 1; P.inboxN[who] = n; const q = (P.inbox ??= {})[who] ??= []; q.push({ ...m, n }); if (q.length > 200) q.shift(); };
 const bodyRef = (x) => (typeof x === "string" ? x.replace(/^body:/, "") : x);
-// 42 §4.13 item 4: five refusals of one class from three distinct targets in 5 min puts the actor on a 10-minute
+// five refusals of one class from three distinct targets in 5 min puts the actor on a 10-minute
 // cool-down for that class, world-wide, written as an automatic action in the MODERATOR log. Never a ban.
 // `to` may be several bodies: one blast's refusals are ONE attempt, its people all counted as refusing
 function noteRefusal(w, from, to, cls, now) { const P = w.presence; (P.refusals ??= []).push({ ts: now, from, to, cls }); P.refusals = P.refusals.filter((r) => now - r.ts < 300000);
@@ -41,7 +40,7 @@ function tellTarget(w, from, to, cls, d) { const P = w.presence, now = w.now(), 
 /** The relay refused `from`'s act on `to` itself (server/messages.ts bodyRefusal: a puppet or a grab): the target is told as
  *  above. Decided again here, so the notice names the gate that answered. Returns whether it was said now. */
 export function noteRefused(w, from, to, cls) { syncDefault(w); const d = C.decide(w.presence, from, to, cls); return d.mode === "deny" && tellTarget(w, from, to, cls, d); }
-// A cool-down (repeated refusals) refuses `from`'s acts of this class, unless the target listed them: allow = yes regardless (L15)
+// A cool-down (repeated refusals) refuses `from`'s acts of this class, unless the target listed them: allow = yes regardless
 const coolDown = (P, d, from, cls, now) => (!d.listed && P.throttle?.[`${from}:${cls}`] > now
   ? { code: "cool-down", class: cls, reason: `${from} is on a cool-down for ${cls} (${Math.ceil((P.throttle[`${from}:${cls}`] - now) / 60000)} min left) after repeated refusals`, fix: COOL_FIX } : null);
 // The gate for every act on another body. extra: { cls?, spec?, script?, sponsor?, uncounted? (the caller counts: a blast) }.
@@ -80,7 +79,7 @@ export function reachAdmits(w, from, to, cls, { point = null, limb = null, quiet
     inboxPush(P, from, { type: "reach-refused", to, class: cls, ...(point ? { point } : {}), ...(typeof limb === "string" ? { limb } : {}), why: r.reason, fix: r.fix, code: r.code }); w.presenceDirty = true; }
   return { ok: false, class: cls, ...r, noted, told: toldTarget };
 }
-// F3 (a): the relay, after gating one packet of `from`'s: `aimed` is the set of bodies a limb that RELAYED in it rests on.
+// the relay, after gating one packet of `from`'s: `aimed` is the set of bodies a limb that RELAYED in it rests on.
 // A touch on record whose hand has landed (`seen`) and that no relayed limb rests on now was let go: its record ends.
 export function reachLetGo(w, from, aimed) {
   const P = w.presence, g = P.reaches?.[from];
@@ -108,7 +107,7 @@ function deliver(w, from, to, kind, cls, extra) {
 // The world's body-default (@world.body-default: {move?, touch?}), read where a decision is made: absent = DEFAULT_GATES.
 function syncDefault(w) { const v = w.state?.()?.entities?.["@world"]?.c?.["body-default"]; if (v !== undefined) w.presence.bodyDefault = v; else delete w.presence.bodyDefault; }
 // After any change to `to`'s table: whatever someone is doing to them that the table now refuses ends NOW, and the actor
-// hears body-revoked once (42 §4.6): a gate closed on it, or its actor blocked.
+// hears body-revoked once: a gate closed on it, or its actor blocked.
 function revokeAfter(w, to) { syncDefault(w); const P = w.presence, b = P.bodies[to]; if (!b) return [];
   const ended = []; const end = (actor, sponsor, cls, clear) => { if (decideAs(P, actor, sponsor, to, cls).mode !== "deny") return; clear(); ended.push({ actor, class: cls }); inboxPush(P, actor, { type: "body-revoked", by: to, class: cls }); };
   if (b.poseBy) end(b.poseBy, b.poseSponsor, "pose", () => { delete b.poseBy; delete b.poseSponsor; });
@@ -127,21 +126,21 @@ const BODY_VERBS = {
     syncDefault(w);
     return { ok: true, table: readTable(P, actor), world: { ...C.DEFAULT_GATES, ...C.worldGates(P.bodyDefault) },
       attempts: (P.ring ?? []).filter((r) => r.to === actor).slice(-10) }; },
-  // one shape for every act on a body (42 §4.4): pose, anim, shove, drag. Says what happened.
+  // one shape for every act on a body: pose, anim, shove, drag. Says what happened.
   body(w, actor, a) { const me = body(w, actor); const to = bodyRef(a.to);
     if (!["pose", "anim", "shove", "drag", "occupy", "carry"].includes(a.kind)) refuse("shape", `no body kind '${a.kind}'`, "body {to, kind: pose|anim|shove|drag|occupy|carry}");
     const t = w.presence.bodies[to]; if (t && ["shove", "drag", "carry"].includes(a.kind) && dist(me.at, t.at) > BODY_REACH) refuse("out-of-reach", `${to} is ${r3(dist(me.at, t.at))} m away`, "get closer");
     const g = bodyGate(w, actor, to, a.kind, { spec: a.spec });
     if (!g.ok) refuse(g.code, g.reason, g.fix, { class: g.class });
     g.deliver(); return { ok: true, outcome: "allowed", delivered: true, consent: g.consent, recorded: false }; },
-  // touch is judged by where the hand IS (42 P8): a named point, or a bare world point at someone's body
+  // touch is judged by where the hand IS: a named point, or a bare world point at someone's body
   reach(w, actor, a) { const me = body(w, actor); const P = w.presence; let to, cls, point = a.point ?? null;
     if (Array.isArray(a.at)) { if (a.at.length !== 3 || a.at.some((n) => !Number.isFinite(n))) refuse("shape", "at: [x, y, z]", "");
       for (const [k, b] of Object.entries(P.bodies)) { if (k === actor) continue; const c = C.pointClass(b.at, a.at); if (c) { to = k; cls = c; break; } }
       if (dist(gripPoint(me), a.at) > REACH) refuse("out-of-reach", `that point is ${r3(dist(gripPoint(me), a.at))} m from your hand`, "get closer");
       if (!to) { (P.reaches ??= {})[actor] = { at: a.at.slice() }; w.presenceDirty = true; return { ok: true, touching: null, recorded: false }; } }
     else { to = bodyRef(a.who); if (!to || !point) refuse("shape", "reach {who, point} or {at: [x, y, z]}", "points: " + C.REACH_POINTS.join(", "));
-      const np = C.namedPointClass(point); if (!np) refuse("shape", `no point '${point}'`, C.REACH_POINTS.join(", "));   // the relay's own classifier (F5)
+      const np = C.namedPointClass(point); if (!np) refuse("shape", `no point '${point}'`, C.REACH_POINTS.join(", "));   // the relay's own classifier
       point = np.point; cls = np.cls;
       const t = P.bodies[to]; if (t && dist(me.at, t.at) > BODY_REACH) refuse("out-of-reach", `${to} is ${r3(dist(me.at, t.at))} m away`, "get closer"); }
     delete P.reaches?.[actor];

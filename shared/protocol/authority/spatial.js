@@ -18,7 +18,7 @@ import { shapeParams, shapeReady, waterParams, worldWater } from "../../terrains
 //   A state is never mutated once folded or previewed (admit's working copy is never queried), so neither is its index.
 // Every answer lists candidates in the state's key order, so a first-hit or best-so-far loop over them picks exactly what
 // the loop over Object.keys picked. The work budget (CTX.work, set per call by enter) bounds what one call may spend in these
-// searches, counted in units of about 0.1 µs of this laptop's time (measured: a candidate scanned ≈ 1, an axis-aligned
+// searches, counted in units of about 0.1 µs (measured: a candidate scanned ≈ 1, an axis-aligned
 // box test ≈ 1, a rotated one ≈ 80, a query ≈ 10): WORK_BUDGET.units ≈ 30 ms at rest, the same answer on any host. A
 // clock backstop (WORK_BUDGET.ms from the call's start, read every 64 units) bounds a host that is far slower. Past
 // either, a read or a solver is refused (too-costly) rather than holding every world's thread.

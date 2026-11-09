@@ -28,9 +28,9 @@ function edited(w, st, host, L) {
 }
 
 /** What the hull runs into sweeping `from` → `pose` (sub-steps ≤ its smallest half-extent): an id, "ground", or null; an
- *  overlap it starts in blocks only a sub-step that deepens it (drive-check D10, D11). */
+ *  overlap it starts in blocks only a sub-step that deepens it. */
 export function hullHit(st, id, pose, from) {
-  const e = st.entities[id]; if (!e || solidOff(e.c)) return null;   // only enabled: false passes through; its own blocks says what IT stops (review 1.8)
+  const e = st.entities[id]; if (!e || solidOff(e.c)) return null;   // only enabled: false passes through; its own blocks says what IT stops
   const fam = familyOf(st, id), G = groundOf(st), mask = maskOf(e.c);   // what this hull scans (collider.mask; simlayer.js scans)
   const at = (p) => obbs(scratch(st, [setOp(id, "transform", { ...(e.c.transform ?? {}), pos: p.pos, q: p.q })]), id);
   const ext = (o) => { const h = [0, 1, 2].map((i) => o.ax.reduce((a, axv, j) => a + Math.abs(axv[i]) * o.h[j], 0)); return { min: o.c.map((v, i) => v - h[i]), max: o.c.map((v, i) => v + h[i]) }; };
@@ -80,7 +80,7 @@ function commitLease(w, st, host, why, free = true) {
   try { const plan = admit(w, st, { actor: "system", cap: { kind: "system", ids: [host], comps: ["transform"] } }, [setOp(host, "transform", t)]);
     changeEntry(w, plan, w.append(actEntry(w, "system", "drive-commit", { id: host, driver: L.by, carried: carriedBy(w, st, host, L.by), why })));
     L.logged = loggedKey(w.state(), host); }
-  catch (x) { L.fails = (L.fails ?? 0) + 1;   // bounded: a refusal never lands, a failing disk is tried COMMIT_TRIES times (review delta-260 L-A)
+  catch (x) { L.fails = (L.fails ?? 0) + 1;   // bounded: a refusal never lands, a failing disk is tried COMMIT_TRIES times
     if (!(x instanceof Refusal) && L.fails < COMMIT_TRIES) throw x;
     console.warn(`[authority] ${host}'s drive-commit failed ${L.fails}× (${String(x?.message ?? x).slice(0, 160)}): its lease is dropped and the helm freed; the hull stays at its logged pose`);
     dropLease(w, st, host, free); return false; }
@@ -99,7 +99,7 @@ function endLease(w, st, host, why, free = true) {
   dropLease(w, st, host, free);
 }
 /** `who` stood up or left: a driver's lease ends and commits; a passenger's hull commits (why alight), so their step off is
- *  measured from the seat where it is now (drive-check D12). The caller lets them off the seat (bodyverbs' stand-up, leave). */
+ *  measured from the seat where it is now. The caller lets them off the seat (bodyverbs' stand-up, leave). */
 export function endDrivesBy(w, st, who) {
   const seat = occupantOf(w, st, who)?.to;
   for (const [host, L] of Object.entries(leases(w))) {

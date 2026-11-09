@@ -16,8 +16,7 @@ import { admits } from "./rights.js";
 import { whoWords } from "../roles.js";
 /** A pendulum's maxAmp when its value has none (componentspec motion absentMeans: the first protocol's push cap). */
 const ABSENT_MAX_AMP = 1.1;
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// the layers above this one, reached through UP (ctx.js; a leaf may not import them: authority-layers-check)
 const actOf = (...a) => UP.actOf(...a);
 const activate = (...a) => UP.activate(...a);
 const commit = (...a) => UP.commit(...a);
@@ -57,7 +56,7 @@ function buildUse(ctx, a) {
   // no action named: the thing's one action, or say what it offers
   // "one action" means one this asker may do: an owner-only lock beside an open-to-all door isn't a choice for a visitor
   // a translated world: main's behaviour on this thing is carried (@world imported-behavior:<name>, attach) but never run;
-  // say that, not "offers nothing" (decision row 12, R 10-30: main took any event word, and its only listener was the behaviour)
+  // say that, not "offers nothing"
   if (a.action != null ? !offers.includes(a.action) : !offers.length) {
     const old = Object.entries(ctx.st.entities["@world"]?.c ?? {}).find(([k, b]) => k.startsWith("imported-behavior:") && b?.attach === a.id);
     if (old) { const name = old[0].slice("imported-behavior:".length);

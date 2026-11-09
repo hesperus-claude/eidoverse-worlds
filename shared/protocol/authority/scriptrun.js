@@ -18,8 +18,7 @@ import { isBanned, isScriptActor, lastSetterOf, may, muteOf, roleOf } from "./ri
 import { bodyGate } from "./bodyconsent.js";
 import { scriptUse } from "./use.js";
 import { DRY, DUTY, allScripts, budgetOf, dutyLeft, dutyLog, limitWhose, logRt, overCpu, pausedBy, presentOf, rtKey, rtOf, sampleOf, scopeIds, scriptDepth, scriptsCfg, sponsorOf, uploadEffect } from "./scripts.js";
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// the layers above this one, reached through UP (ctx.js; a leaf may not import them: authority-layers-check)
 const admit = (...a) => UP.admit(...a);
 const changeEntry = (...a) => UP.changeEntry(...a);
 const changeShape = (...a) => UP.changeShape(...a);
@@ -41,8 +40,7 @@ const settleSim = (...a) => UP.settleSim(...a);
 // so purging that say or that request purges it everywhere (an auditor reads it from the trigger: scriptaudit.js)
 const recorded = (ev) => { const { text, to, args, ...rest } = ev; return ev.seq !== undefined ? rest : ev; };
 // an arrival or a departure is presence (a signed act naming who came and went would be an attendance list): its
-// activation records no identity (no trigger actor, no event.by); the script still hears `by` live. The auditor re-runs
-// it with a stand-in arrival (scriptaudit.js)
+// activation records no identity; the script still hears `by` live. The auditor re-runs it with a stand-in (scriptaudit.js)
 const ANON_EVENTS = new Set(["enter", "leave"]), GRIP_EVENTS = new Set(["grab", "release"]);
 const anonEvent = ({ by: _by, ...rest }) => rest;
 const overBudget = (st, B, cfg, key, sponsor, cost) => (B.mine >= cfg.rate ? `${key} logged ${B.mine} activations in the last minute; the rate is ${cfg.rate}`
@@ -114,10 +112,8 @@ function activate(w, id, name, ev) {
   if (dry) return { script: key, id, status: "would-run", would: plan?.ops ?? [], says: res.says, bodies: res.bodies, ...(uses.length ? { uses } : {}), sponsor: sp.sponsor, fuel: res.fuel, note: "dry: nothing was written; body effects still meet each body's consent when it runs", ...logs };
   const gates = [];
   for (const b of res.bodies) { const g = bodyGate(w, `script:${id}`, b.to, b.kind, { spec: b.spec, script: key, sponsor: sp.sponsor }); if (!g.ok) return mark(g.code, g.reason); gates.push({ ...b, consent: g.consent, deliver: g.deliver }); }
-  // an arrival or departure, and a hand event whose own entry isn't on the record (an unlogged grab: presence), record no
-  // identity: the log would otherwise hold who handled what only because a script listened. A hand
-  // event with an act of its own (a grab the sim had to be told of, a release's settlement) already names its actor there,
-  // so its activation keeps `trigger` (and the auditor its `by`)
+  // an arrival, a departure, or a hand event with no entry of its own records no identity: the log would otherwise hold
+  // who handled what only because a script listened. A hand event with an act already names its actor: keep `trigger`
   const anon = ANON_EVENTS.has(ev.on) || (GRIP_EVENTS.has(ev.on) && ev.seq === undefined);
   const actE = { kind: "request", actor: `script:${id}`, verb: "script", ...(cause !== undefined ? { cause } : {}),
     body: { script: key, src: v.src, sponsor: sp.sponsor, sponsorAt: sp.sponsorAt, on: ev.on, ...(ev.by && !anon ? { trigger: { actor: ev.by, ...(ev.seq !== undefined ? { seq: ev.seq } : {}) } } : {}),
@@ -148,7 +144,7 @@ function withAuthority(w, fn) {
  * its own clock (server: once a second); it never runs inside a request.
  */
 /**
- * The engine's heartbeat (DESIGN-physics-responsiveness §1). Advances the sim toward the authority's clock, at most `maxTicks`
+ * The engine's heartbeat. Advances the sim toward the authority's clock, at most `maxTicks`
  * engine ticks a pass (a stall catches up over several passes, never by a longer step: the bits stay the law's), and logs
  * what came to rest, returns what is due back. A host calls this at tick cadence; a request still settles
  * first (the fallback for a host without a heartbeat) and finds nothing left to do. Returns how many entries it wrote.
@@ -158,7 +154,7 @@ export function settle(w, { maxTicks = 8 } = {}) {
   if (!w.exists || w.state().status !== "ok" || !holdsCustody(w)) return 0;
   return withAuthority(w, () => {
     const clock = w.now; const t0 = clock(); const cap = w.simCapTs?.(maxTicks); const t = cap !== null && cap !== undefined && cap < t0 ? cap : t0;
-    w.now = () => t;   // one clock for the pass, as a request has (physlive Q1): a rest's digest and its ts agree
+    w.now = () => t;   // one clock for the pass, as a request has: a rest's digest and its ts agree
     w.changedQ = []; w.sayQ = []; w.heldQ = [];
     const n0 = w.entries.length;
     CTX.work = { left: Infinity, until: Infinity, k: 0 };
@@ -167,12 +163,9 @@ export function settle(w, { maxTicks = 8 } = {}) {
     return w.entries.length - n0;
   });
 }
-// A checkpoint is a persisted joiner cut, so a boot need not re-simulate every flight.
-// At a quiet moment (nothing in flight or waiting to be logged) after launches, the authority writes one `sim:checkpoint`
-// entry naming a blob that holds the sim cut as a joiner gets it (simSnapshotOf), with its engine and digest. A host that
-// carries the engine boots from the last valid checkpoint; any other reader folds past an unknown sim verb. The fold
-// itself is never checkpointed. w.simCheckpointEvery (config SIM_CHECKPOINT_EVERY) also bounds the replayed tail: one is
-// written once that many entries, including something the sim folds, follow the last checkpoint (or a purge).
+// A checkpoint is a persisted joiner cut (simSnapshotOf), so a boot need not re-simulate every flight: written at a quiet
+// moment after launches as one `sim:checkpoint` entry naming a blob, or once w.simCheckpointEvery entries the sim folds
+// follow the last one. A host with the engine boots from the last valid checkpoint; other readers fold past it.
 const CHECKPOINT_QUIET_MS = 20000;
 /** checkpointSim's scan of the log, advanced to its end (a pure fold of kinds, verbs and ts; a host seeds w.ckptScan from its
  *  fold cache, server/foldviews.ts). `k`: advance this copy instead of w's own. */
@@ -194,9 +187,8 @@ function checkpointSim(w, { every = w.simCheckpointEvery ?? 0 } = {}) {
   const longTail = every > 0 && k.moved && E.length - 1 - k.base >= every;
   if (!afterLaunch && !longTail) return;
   const sf = w.sim(); if (!sf.sim || sf.foreign || Object.keys(livePoses(sf)).length || sf.rested.length || (w.unsettled?.length ?? 0)) return;
-  // the cut rides as a JSON string: the blob store canonicalises objects (sorted keys), and the engine's object order is the
-  // law's (statics and bodies tie by insertion order), so a re-keyed cut would be a different sim. Its clock and tick ride in
-  // the entry (null in the blob, in place): at rest they are all that time moves, so an unchanged engine is the same blob
+  // the cut rides as a JSON string: the blob store sorts keys, and the engine's object order is the law's (ties by
+  // insertion order). Clock and tick ride in the entry, so an unchanged engine at rest is the same blob
   const cut = simSnapshotOf(sf, E); cut.clock = null; cut.sim.tick = null;
   const state = w.putBlob({ snapshotJson: JSON.stringify(cut) });   // the checkpoint blob: snapshotJson, read by livehost.ts
   w.append({ kind: "physics", actor: "sim", verb: "checkpoint", body: { seq: E.length - 1, engine: { engine: sf.spec.engine }, tick: sf.sim.tick, clock: sf.clock, sim: digestOf(sf.sim), state } });
@@ -243,22 +235,16 @@ export function expireRoles(w) {
     return ids;
   });
 }
-/** A world opened after its host stopped without settling presence (a crash, a SIGKILL: no leave ran). Holds are
- *  presence. A host that persists presence (test/harness/filehost.ts) still has the hold, with no one connected to let go: it's
- *  settled as `leave` settles it (a drop as the holder, which its grabbable may send home, into a socket or straight
- *  down; a drop the authority refuses becomes its return-held). A host that keeps presence in memory (server/livehost.ts)
- *  has lost the hold, but in a world that runs physics the grab's `lift` took the thing out of the engine and nothing
- *  put it back: it would stay a ghost (no body, no collider) until someone moved it. That is settled by the authority as
- *  leave's refusal is: a return-held act (cause: the lift) writing where the log last had it, which seats it in the
- *  engine again, or, for a grabbable that returns, a return-home. `present` = identities connected now (none, at
- *  load). Returns what it settled. */
-// Bounded: it runs at world load on the thread every world shares, so at most ORPHANS.holders
-// holders are settled as leave settles them and ORPHANS.lifts lifts returned; any holds past that simply end (presence),
-// and what the log still has lifted is settled at the next load. The result says how many waited ({deferred}).
+/** A world opened after its host stopped without settling presence (a crash: no leave ran). A persisted hold
+ *  (test/harness/filehost.ts) is settled as `leave` settles it. A lost hold (server/livehost.ts) left the thing lifted out
+ *  of the engine, a ghost until someone moved it: settled as leave's refusal is, by a return-held act (cause: the lift)
+ *  writing where the log last had it, or a return-home. `present` = identities connected now. Returns what it settled. */
+// Bounded (it runs at world load on the shared thread): at most ORPHANS.holders holders and ORPHANS.lifts lifts a load;
+// the rest wait for the next load ({deferred})
 export const ORPHANS = { holders: 16, lifts: 64 };
 export function settleOrphans(w, present = []) {
   if (!w.exists || w.state().status !== "ok") return [];
-  const here = new Set(present); const out = [], ended = [];   // ended: holds that end here with no act, heard as a drop (review 1.10)
+  const here = new Set(present); const out = [], ended = [];   // ended: holds that end here with no act, heard as a drop
   const holders = [...new Set(Object.values(w.presence.holds ?? {}).map((h) => h?.by))].filter((who) => !here.has(who));
   if (holders.length > ORPHANS.holders) { const late = new Set(holders.slice(ORPHANS.holders));
     for (const [id, h] of Object.entries(w.presence.holds)) if (late.has(h?.by)) { ended.push({ id, by: h.by }); delete w.presence.holds[id]; }
@@ -266,8 +252,8 @@ export function settleOrphans(w, present = []) {
     out.push({ deferred: late.size, why: `more than ${ORPHANS.holders} holders at once: their holds ended; what the log still has lifted settles at the next load` }); }
   for (const who of holders.slice(0, ORPHANS.holders)) {
     const r = request(w, who, "leave", {}); out.push({ holder: who, left: r.ok, dropped: r.dropped ?? [] });
-    // a holder the authority won't take requests from now (banned since): the hold just ends (presence), and what the log
-    // lifted is settled below by the authority, as leave's own refusal is (review 10-06)
+    // a holder the authority won't take requests from now (banned since): the hold just ends, and what the log lifted is
+    // settled below by the authority, as leave's own refusal is
     if (!r.ok) { for (const [id, h] of Object.entries(w.presence.holds)) if (h.by === who) { ended.push({ id, by: who }); delete w.presence.holds[id]; } delete w.presence.bodies[who]; } }
   if (holdsCustody(w)) withAuthority(w, () => {
     w.changedQ = []; w.sayQ = []; w.heldQ = [];
@@ -297,10 +283,8 @@ function orphanReturns(w, out) {
   if (waiting) out.push({ deferred: waiting, why: `more than ${ORPHANS.lifts} lifted things at once: the rest settle at the next load` });
 }
 // Things the log has lifted out of the engine (a grab's lift, a catch) with nothing after that puts them back: no launch,
-// and no write that ends the hold (simlayer's ends() and endsUnder(), the replay's own rule). An epoch cut doesn't end
-// one: a hold outlives it, and the new epoch's engine leaves the held thing out, as the replay does.
-// Resumed from where it last stopped while the log holds no purge (a purge changes what an earlier lift reads back: then from
-// genesis, as before); a host seeds w.__orphans from its fold cache (server/foldviews.ts).
+// and no write that ends the hold (simlayer's ends() and endsUnder()). An epoch cut doesn't end one. Incremental while the
+// log holds no purge (a purge changes what an earlier lift reads back); a host seeds w.__orphans (server/foldviews.ts).
 function orphanLifts(w) {
   if (purgedSeqs(w).size) { delete w.__orphans; return orphanScan(w, { n: 0, lifted: new Map(), parentOf: new Map() }).lifted; }
   return orphanScan(w, (w.__orphans ??= { n: 0, lifted: new Map(), parentOf: new Map() })).lifted;
@@ -314,9 +298,7 @@ export function orphanScan(w, sc) {
     else if (e.kind === "physics" && e.verb === "launch") lifted.delete(readback(w, seq)?.id);
     else if (e.kind === "change") { const ops = opsQuiet(e);
       for (const o of ops) if (o.comp === "parent") parentOf.set(o.id, o.op === "set" && typeof o.value?.to === "string" ? o.value.to : null);
-      // the same lifecycle as the engine's (simlayer ends() and endsUnder(), read after the whole entry as the replay reads
-      // them): what ends a hold is a write that moves it, re-parents it, switches it off or removes it, or switches off or
-      // removes a thing it hangs from; an engine change or an edit to its physics or model leaves it in the hand
+      // the engine's own lifecycle (simlayer ends() and endsUnder(), read after the whole entry as the replay does)
       for (const o of ops) { if (o.op === "create" || ends(o)) lifted.delete(o.id);
         if (endsUnder(o)) for (const k of [...lifted.keys()]) if (under(k, o.id)) lifted.delete(k); }
       for (const o of ops) if (o.op === "delete" && o.comp === undefined) parentOf.delete(o.id); }
@@ -337,11 +319,9 @@ export function presenceEvent(w, kind, who) {
     return ran;
   });
 }
-// grab and release (grabbable): every script whose scope covers the thing and lists the event hears
-// it, once. A grab is presence (unlogged unless the sim had to be told): its activation's cause is the grab's own act
-// when there is one, else the entry that made the script's sponsor, as enter/leave. A release is the settlement, which
-// is logged: its act is the cause. Fields: by, id, hand, grip? (grab); by, id, how (put | drop | throw | stay | return |
-// snap | left | fell | edited), socket? and to? (release), seq (the act) when logged.
+// grab and release: every script whose scope covers the thing and lists the event hears it, once. The cause is the event's
+// own act when there is one, else the entry that made the script's sponsor. Fields: by, id, hand, grip? (grab); by, id,
+// how (put | drop | throw | stay | return | snap | left | fell | edited), socket?, to? (release); seq when logged.
 const heldEvent = (w, kind, id, ev) => { (w.heldQ ??= []).push({ kind, id, ev }); };
 // Everything a write set off, until nothing is left: a hand event's scripts may write (changed:, say), and a changed:
 // script's move may let go of a held thing (letGoEdited), which is a hand event again. So the two queues are drained in
@@ -384,7 +364,7 @@ function drainScripts(w) {
   }
   if (w.changedQ) w.changedQ.length = 0; if (w.sayQ) w.sayQ.length = 0;
 }
-// The status view (41 §3.4): suspended / paused / stopped / unavailable / dormant (and why, since when) / asleep / active.
+// The status view: suspended / paused / stopped / unavailable / dormant (and why, since when) / asleep / active.
 // A view, never logged.
 /** Whether the sandbox here can run a script: true, or why not (its own available()). One with no available() runs
  *  whatever it's given, as activate runs it, so it counts as available. */
@@ -452,9 +432,8 @@ const SCRIPT_VERBS = {
     if (b) { try { doc = w.getBlob(b); } catch { /* below */ } } else doc = effectFor(a.name);
     if (!doc || doc.kind !== EFFECT_KIND) refuse("not-found", `no particle effect ${a.name} here`, `the Essentials: ${ESSENTIAL_NAMES.join(", ")}; upload {effect: {…}} stores one`, b ? undefined : { didYouMean: guess(a.name, ESSENTIAL_NAMES) });
     return { ok: true, name: a.name, effect: doc }; },
-  // 41 §3.4: recovery is an explicit, logged adopt: a NEW life of the key (delete + set, one batch), so the adopter becomes
-  // its creator and sponsor. §5's key rule decides who may (its creator or an owner); install checks apply with the
-  // adopter's rights. `base` (the version inspect gives) makes two racing adopters one winner.
+  // recovery is an explicit, logged adopt: a NEW life of the key (delete + set, one batch), so the adopter becomes its
+  // creator and sponsor; install checks apply with the adopter's rights. `base` makes two racing adopters one winner.
   adopt: (w, actor, a) => commit(w, actor, "adopt", a, (ctx) => { const e = needThing(ctx, a.id); const key = `script:${a.script}`; const v = e.c[key];
     if (!v || typeof v !== "object") refuse("not-found", `${a.id} has no ${key}`, "scripts lists them");
     const lt = lastTouch(w, a.id, key); const base = a.base === undefined ? undefined : versionSeq(w, a.base, "base");

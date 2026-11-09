@@ -24,8 +24,7 @@ import { toggleOf } from "./use.js";
 import { scriptCeiling } from "./scripts.js";
 import { CAPACITY_CEILING } from "./capacity.js";
 import { isNum } from "../is.js";
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// the layers above this one, reached through UP (ctx.js; a leaf may not import them: authority-layers-check)
 const guess = (...a) => UP.guess(...a);
 
 // Sanity and shape of the values the authority's own engine reads (what the change IS, not which word carried it).
@@ -127,8 +126,7 @@ function valueCheck(s, { id, comp, value: v }, { carry = false, now = null } = {
   if (comp === "motion" && obj && "pivot" in v && !carry) refuse("derived", `${at}.pivot: a whole thing's motion turns about its pivot component, not a field of the motion`, `set {id: '${id}', component: 'pivot', value: {pos: [x, y, z]}} (its own frame); a part's motion (motion:<part>) takes pivot`);
   if (comp === "home") { const okQ = (q) => nums(q, 4, 2) && Math.abs(Math.hypot(...q) - 1) < 1e-3;
     if (obj && v.parent && typeof v.parent === "object" && v.parent.socket !== undefined) refuse("legacy", `${at}.parent.socket is the old spelling: a socket is a child entity now`, `home {parent: {to: <the socket's id>}} (inspect {id: '${v.parent.to}'} lists its sockets)`);
-    // one spelling (shape audit 10-16): scale is [x, y, z] (a number is taken at write and stored as one; an older stored
-    // number is carried by a fork or a lift), parent is {to}
+    // one spelling: scale is [x, y, z] (a number is taken at write and stored as one), parent is {to}
     const okScale = (sc) => (nums(sc, 3) && sc.every((x) => x > 0)) || (carry && typeof sc === "number" && sc > 0);
     if (!obj || !nums(v.pos, 3) || (v.q !== undefined && !okQ(v.q)) || (v.scale !== undefined && !okScale(v.scale)) || Object.keys(v).some((k) => !["pos", "q", "scale", "parent"].includes(k)) || (v.parent !== undefined && !(v.parent && typeof v.parent === "object" && typeof v.parent.to === "string" && Object.keys(v.parent).every((k) => k === "to"))))
       refuse("shape", `${at} is {pos: [x, y, z], q?: [x, y, z, w], scale?: [x, y, z], parent?: {to}}`, "e.g. {pos: [0, 0, 2]}"); }

@@ -1,4 +1,4 @@
-// floradefs — the flora def contract, as one pure module (charter §3:
+// floradefs — the flora def contract, as one pure module (docs/design/OVERHAUL-CHARTER.md §3:
 // content is declarative data; code is reserved for new KINDS of things).
 //
 // A flora species def is a JSON object in defs/flora/<name>.json. The server

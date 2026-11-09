@@ -1,10 +1,7 @@
-// shared/humanoid.js — the VRM humanoid bone vocabulary, and what counts as a
-// well-formed pose over it.
+// humanoid — the VRM humanoid bone vocabulary, and what counts as a well-formed pose over it.
 //
-// One vocabulary, one validator, three runtimes: a typo'd bone name or a
-// malformed quaternion is reported, never taken silently. The bone list is VRM
-// 1.0's (three-vrm normalizes VRM0 rigs onto these names, so this is what
-// `getNormalizedBoneNode` answers to on both).
+// One vocabulary, one validator, every runtime: a typo'd bone name or a malformed quaternion is reported, never taken
+// silently. The bone list is VRM 1.0's (three-vrm normalizes VRM0 rigs onto these names).
 
 /** Bones every humanoid rig has. */
 export const REQUIRED_BONES = [
@@ -48,10 +45,8 @@ const HUMANOID_SET = new Set(HUMANOID_BONES);
 const BY_KEY = new Map();
 for (const b of HUMANOID_BONES) BY_KEY.set(b.toLowerCase(), b);
 
-/** Names people reach for that the spec does not use. Kept deliberately short:
- *  this resolves genuine synonyms from other rig conventions (Mixamo, Blender
- *  Rigify, VRChat docs), not guesses. Anything not here gets a suggestion
- *  instead, so a wrong name is never silently turned into a different bone. */
+/** Genuine synonyms from other rig conventions (Mixamo, Rigify, VRChat), kept short on purpose: anything not here gets
+ *  a suggestion instead of a silent remap. */
 const ALIASES = {
   leftarm: 'leftUpperArm', rightarm: 'rightUpperArm',
   leftforearm: 'leftLowerArm', rightforearm: 'rightLowerArm',
@@ -72,7 +67,7 @@ export function canonicalBone(name) {
   return BY_KEY.get(key) ?? ALIASES[key] ?? null;
 }
 
-/** Levenshtein, bounded — only ever run over 55 short strings. */
+/** Levenshtein, bounded (99 when the lengths differ by more than 4). */
 function distance(a, b) {
   const m = a.length, n = b.length;
   if (Math.abs(m - n) > 4) return 99;
@@ -91,8 +86,7 @@ function distance(a, b) {
   return prev[n];
 }
 
-/** The closest real bone name to something that isn't one — so a rejection can
- *  say "did you mean", which is the difference between a wall and a hint. */
+/** The closest real bone name (edit distance under 4) to something that isn't one, for "did you mean". */
 export function suggestBone(name) {
   if (typeof name !== 'string' || !name) return null;
   const key = name.trim().toLowerCase().replace(/[\s_.-]/g, '');
@@ -114,8 +108,7 @@ export function normalizeQuat(v) {
   if (!n.every(Number.isFinite)) return { why: 'has a non-finite component' };
   const len = Math.hypot(n[0], n[1], n[2], n[3]);
   if (len < EPS) return { why: 'zero length — a quaternion needs a direction' };
-  // Always normalize; only SAY so when the input was off unit by enough to mean something (hand-written quaternions
-  // land a couple of thousandths out, and reporting that is noise).
+  // always normalize; only report it when the input was off unit by more than hand-written rounding
   const off = Math.abs(len - 1);
   return { q: off <= 1e-9 ? n : n.map((c) => c / len), renormalized: off > 1e-2 };
 }
@@ -128,8 +121,7 @@ export function normalizeQuat(v) {
  *      parent's rest axes turned by the parent's pose; on hips, plain model
  *      space — `{t:[0,-0.3,0]}` on hips lowers the body 30 cm
  *   s  scale in the bone's own axes: [x,y,z], or one number for uniform
- * Returns `{q, t, s}` with absent channels null, or null when nothing in the
- * value is usable. Every consumer that only understands rotations reads `.q`.
+ * Returns `{q, t, s}` with absent channels null, or null when nothing in the value is usable.
  */
 export function poseChannels(v) {
   const fin = (a, n) => Array.isArray(a) && a.length === n && a.every((x) => typeof x === 'number' && Number.isFinite(x));
@@ -142,12 +134,8 @@ export function poseChannels(v) {
 }
 
 /**
- * Posing only the bones you name. `base` is the pose being held (or null),
- * `delta` the new bones; a bone whose value is null in `delta` is RELEASED
- * back to the clip. Returns a new object, or null when nothing is left held.
- *
- * Merge lets a pose compose over a clip (posing an arm while kneeling keeps
- * the kneel).
+ * Merge `delta` over the held pose `base` (or null); a null value in `delta` RELEASES that bone back to the clip.
+ * Returns a new object, or null when nothing is left held.
  */
 export function mergePose(base, delta) {
   const out = { ...(base && typeof base === 'object' ? base : {}) };
@@ -158,17 +146,13 @@ export function mergePose(base, delta) {
 }
 
 /**
- * What a request to pose SOMEONE ELSE carries, from either seat: the agent's
- * anim tool (joints, and {stop: true} to let go), and the browser console's
- * EW.pose and EW.clearPose. `replace` makes the named bones their whole pose;
- * otherwise they merge over what the target holds. A null pose releases
- * theirs whole, as anim {stop} does and as posing yourself with null does.
+ * What a request to pose SOMEONE ELSE carries (the agent's anim tool, the console's EW.pose/EW.clearPose). `replace`
+ * makes the named bones their whole pose; otherwise they merge over what the target holds. A null pose releases it whole.
  */
 export function puppetPose(bones, replace = false) {
   if (bones == null) return { pose: {} };
   if (replace) return { pose: mergePose(null, bones) ?? {} };
-  // An undefined bone releases it, as mergePose reads it here; on the wire
-  // it would vanish, so it goes as null, which the receiver reads the same.
+  // undefined would vanish on the wire; send a release as null
   return { pose: Object.fromEntries(Object.entries(bones).map(([k, v]) => [k, v === undefined ? null : v])), merge: true };
 }
 
@@ -219,13 +203,9 @@ function nearest(name, names) {
  * Validate a sparse pose map, reporting everything it did rather than
  * silently keeping the good parts.
  *
- * Names resolve in this order: an exact VRM humanoid name; then an exact bone
- * of the rig (`opts.rig`) — a raw humanoid bone reads as its VRM name, any
- * other is kept as a CUSTOM bone; then humanoid synonyms ("forearm"). Exact
- * rig names outrank synonyms because rigs reuse them: mythos-alpha has a real
- * `Pelvis` below its hips, and folding that onto `hips` would pose the wrong
- * bone without a word. Bones ABOVE the hips are refused: the body's place
- * comes from hips every frame, so posing them would be undone.
+ * Names resolve in this order: an exact VRM humanoid name; then an exact bone of the rig (`opts.rig`), read as its VRM
+ * name or kept as a CUSTOM bone; then humanoid synonyms ("forearm"). Exact rig names outrank synonyms because rigs reuse
+ * them (a real `Pelvis` below the hips). Bones ABOVE the hips are refused: the body is placed from hips every frame.
  *
  * @param {unknown} bones raw input, straight off the wire or a tool call
  * @param {{known?: string[]|null, rig?: {bones: string[], humanoidOf: Record<string,string>,
@@ -285,9 +265,7 @@ export function validatePose(bones, opts = {}) {
     const pv = normalizePoseValue(v);
     if (pv.why) { out.rejected.push({ name: raw, why: pv.why }); continue; }
     if (!isCustom && known && !known.has(name)) { out.absent.push(name); continue; }
-    // Two written names can fold to one bone ("leftElbow" and "LeftLowerArm").
-    // Last-write-wins would drop one of them without a word — the exact silent
-    // overwrite this module exists to stop. Keep the first, name the clash.
+    // two written names can fold to one bone ("leftElbow", "LeftLowerArm"): keep the first, name the clash
     if (name in out.pose) {
       out.rejected.push({ name: raw, why: `also names ${name}, already set here — one bone, one value` });
       continue;
@@ -302,13 +280,10 @@ export function validatePose(bones, opts = {}) {
   return out;
 }
 
-/** One line an agent can read back and act on. Empty string when a pose was
- *  taken exactly as written — silence means nothing went wrong. */
+/** One line an agent can read back and act on; empty when the pose was taken exactly as written. */
 export function poseReport(v) {
   const bits = [];
-  // Tolerant of either validator's result shape — validateTracks has no
-  // `renormalized`, and a caller should never have to rebuild a record to
-  // ask for a sentence about it.
+  // accepts validatePose's or validateTracks' result (the latter has no `renormalized`)
   const renamed = v?.renamed ?? [], renormalized = v?.renormalized ?? [];
   const absent = v?.absent ?? [], rejected = v?.rejected ?? [];
   if (renamed.length) bits.push(`read ${renamed.map((r) => `${r.from}→${r.to}`).join(', ')}`);
@@ -323,10 +298,8 @@ export function poseReport(v) {
 }
 
 /**
- * Validate keyframe tracks for a one-off animation — the same vocabulary
- * check as a pose, plus the time axis. Keys are sorted by `t`; a track whose
- * keyframes are all unusable is dropped with a reason rather than sent as an
- * empty track that plays as a freeze.
+ * Validate keyframe tracks for a one-off animation: the pose vocabulary check plus the time axis. Keys are sorted by
+ * `t`; a track with no usable keyframes is dropped with a reason.
  *
  * @param {unknown} tracks bone -> [{t, q:[x,y,z,w]}]
  * @param {{known?: string[]|null, maxKeys?: number}} [opts]
@@ -378,8 +351,7 @@ export function validateTracks(tracks, opts = {}) {
   return out;
 }
 
-/** The latest keyframe time across every track — the duration an animation
- *  actually needs, so a caller can be told when `dur` cuts its own motion off. */
+/** The latest keyframe time across every track: the duration the animation actually needs. */
 export function tracksSpan(tracks) {
   let end = 0;
   for (const keys of Object.values(tracks ?? {})) {

@@ -1,19 +1,10 @@
-// sockbody — what a person's body does at a socket: the `station` component on a socket entity (formerly the `body`
-// block of `socket` / `sockets.<name>`, still read here as the old world's spelling the importer lifts), as data.
+// sockbody — what a person's body does at a socket: the `station` component on a socket entity (an older world's
+// `body` block of `socket` is still read as the same shape), as data. One shape for every way a body attaches to a
+// thing: a chair, a saddle, a driver's seat, a bunk, a lectern.
 //
-// The alpha registers the station's core only (shared/protocol/componentspec.js station: action, pose, anchor, exit,
-// leaveBy, who). The rest of the researched shape below is RESERVED: the door refuses it (STATION_RESERVED), its names are
-// held, and this reader still reads it generously so it comes back as an addition, not a rewrite. hold is cut; input is
-// the one reserved field opened since (the helm: input.move 'drive', componentspec.js station).
-//
-// One shape for every way a body attaches to a thing: a chair, a swing, a saddle, a car's driver seat, a rocket couch, a bunk, a lectern you stand
-// at. The cross-platform pattern it follows: one occupant per socket (VRChat Station, Roblox Seat); WHICH body point
-// lands on the socket (Resonite AvatarAnchor PositionNode); a pose that is a clip, a blend by state, or time locked to
-// the thing's motion (Unreal/Godot AnimBP/AnimationTree, without the state machine: data says what the body does in a
-// given world state, scripts change the world state); IK targets parented to moving parts (Unity Two Bone IK, Unreal
-// Control Rig); a per-limb VR policy (Resonite `Required`, VRChat per-part tracking); exit locks (VRChat Disable
-// Station Exit); input published as signals for the vehicle to consume (Roblox VehicleSeat's Throttle/Steer, without
-// its physics-on-the-seat weakness).
+// Only the core keys are registered (shared/protocol/componentspec.js station: action, pose, anchor, exit, leaveBy,
+// who, and input for the helm). The rest of the shape below is RESERVED: the door refuses it (STATION_RESERVED), its
+// names are held, and this reader still reads it so it can come back as an addition. `hold` is cut.
 //
 //   body: {
 //     action   'sit'            the verb `use` calls it AND the default posture (sit | lie | stand | ride | kneel | …)
@@ -80,11 +71,9 @@ const PARAM_RE = /^param\.[a-zA-Z][a-zA-Z0-9_]{0,31}$/;
 const isSignal = (s) => typeof s === 'string' && (SIGNALS.includes(s) || PARAM_RE.test(s));
 const MAX_BLEND = 16, MAX_POSES = 16, LIM = 1e4;
 
-/** What an action means when the station says nothing more: the pose it holds. The registry's (componentspec.js station:
- *  its defaults and `when` rules), applied at WRITE, so a stored station always holds its pose and editing this table never
- *  re-poses a seat. The anchor defaults to the ROOT for every action — where every seat put a body before anchors existed
- *  (the Commons' twelve seats); a station names hips, feet or head to seat that body point instead. (For the house sit
- *  clips the root IS about the seat surface: the clip lifts the hips a pelvis above it.) */
+/** What an action means when the station says nothing more: the pose it holds. The registry's defaults (componentspec.js
+ *  station), applied at WRITE, so a stored station always holds its pose and editing this table never re-poses a seat.
+ *  The anchor defaults to the ROOT for every action (where seats put a body before anchors existed). */
 export const ACTION_DEFAULTS = Object.fromEntries(['sit', 'ride', 'drive', 'lie', 'kneel', 'stand'].map((action) => {
   const v = materialize('station', { action }).value; return [action, { pose: v.anim, anchor: v.anchor }]; }));
 const defaultsFor = (action) => ACTION_DEFAULTS[action] ?? ACTION_DEFAULTS.sit;
@@ -151,11 +140,9 @@ export function choosePose(body, choices = []) {
 }
 
 /** Is a leave request of this kind allowed by the socket? kind: 'move' (a movement key), 'jump', 'menu' (the explicit
- *  get-up: X, the stand tile, /stand, the radial menu), 'script', 'escape'. A seat whose input takes the movement keys
- *  (drive, walk) never treats them as "get off".
- *  'escape' is the occupant's one exit no seat can take away (cf. VRChat's respawn and menu, SL's stand):
- *  holding X (or the stand tile) for ESCAPE_HOLD_S, pressing the get-up again within ESCAPE_REPEAT_S of a refusal, or an
- *  agent's detach {escape: true}. A seat may make leaving deliberate, never impossible. */
+ *  get-up), 'script', 'escape'. A seat whose input takes the movement keys (drive, walk) never treats them as "get off".
+ *  'escape' is the exit no seat can take away: holding the get-up for ESCAPE_HOLD_S, repeating it within ESCAPE_REPEAT_S
+ *  of a refusal, or an agent's detach {escape: true}. A seat may make leaving deliberate, never impossible. */
 export const ESCAPE_HOLD_S = 1.5, ESCAPE_REPEAT_S = 2;
 /** Does the authority's `vacated` inbox message name the socket I occupy now (`mount` = {to: <socket id>}, mine or null)? A
  *  late message (after a reconnect) never stands anyone up from a seat taken since (client and agent). */
@@ -163,11 +150,9 @@ export const vacatedFromMine = (u, mount) => !!(u && mount && typeof u.socket ==
 /** Where the authority let me go (`vacated {at}`, its track of my body restarts there): [x, y, z] or null. The browser and the
  *  agent both stand there, so the body and the authority's track start together. */
 export const vacatedAt = (u) => (Array.isArray(u?.at) && u.at.length === 3 && u.at.every((n) => typeof n === 'number' && Number.isFinite(n)) ? u.at.slice() : null);
-/** How near a body must be to sit (a sit is presence, and leaving the seat restarts the authority's track at
- *  it, so a sit from afar would be an unlogged teleport). The client's plain X offers a seat within `r` m on the ground and
- *  within `up`/`down` m of the feet (localbody.js nearestSeat: a seat 3 m up isn't near); the authority
- *  allows `lag` more on each, because its track of a walking body trails the client by one tracked step (thingphysics.js
- *  sends at most 5 a second: 0.2 s at a 4 m/s run is 0.8 m). */
+/** How near a body must be to sit (a sit from afar would be an unlogged teleport): within `r` m on the ground and
+ *  `up`/`down` m of the feet (client/lib/localbody.js nearestSeat); the authority allows `lag` more on each, since its
+ *  track trails a walking body by one tracked step (client/lib/thingphysics.js, 5 a second). */
 export const OCCUPY_REACH = Object.freeze({ r: 3.5, up: 1.6, down: 1.0, lag: 1.0 });
 /** Is a seat at `seat` within sitting reach of feet at `feet` ([x, y, z] each)? lag: the authority's allowance (0 for the client). */
 export function inOccupyReach(feet, seat, lag = 0) {
@@ -355,7 +340,7 @@ export function resolveSeat(world, seat) {
 /** What a socket is for, read from what it has (never stored): a station if it has one, a snap point if accepts, else
  *  an attach point. `c` is the socket's record (a fold `c` or a view's `comp`). */
 export const socketRole = (c) => (isObj(c?.station) && !isRedacted(c.station) ? 'station' : Array.isArray(c?.socket?.accepts) ? 'snap' : 'attach');   // the authority's own reads this one (authority/sockets.js)
-/** A host's sockets, as its socket children (PLAN-sockets-entities §1): [{id, name, sock, station}] in `kids` order. `kids(host)`
+/** A host's sockets, as its socket children: [{id, name, sock, station}] in `kids` order. `kids(host)`
  *  lists a thing's child ids; `rec(id)` is a record's components (a fold `c`, or a view's `comp`). A socket switched off
  *  on its own is a closed seat: not listed. The one reader every client and agent surface shares (the authority's own is
  *  authority/sockets.js socketsOf, over its children index). */

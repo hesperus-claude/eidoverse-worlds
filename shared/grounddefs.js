@@ -1,9 +1,7 @@
-// grounddefs — the ground-palette contract (charter §3).
+// grounddefs — the ground palette (defs/ground/_palette.json): validation, and the terrain/grass verb args a choice writes.
 //
-// Same law as the sky presets: everything here is an AUTHORING convenience.
-// The ground panel applies a choice as a concrete terrain/grass verb on a
-// deliberate click, so the log never stores one of these names — a mutable
-// def file can restyle the panel, never rewrite logged meaning.
+// Palette names are an authoring convenience only: a panel click writes concrete verb args, so the log never stores a
+// palette name and a restyled def can't rewrite logged meaning.
 import { isNum, isObj, isStr } from "./protocol/is.js";
 
 // panel labels, not def files — spaces allowed ("mojave desert"), still bounded
@@ -45,10 +43,7 @@ export function validateGroundPalette(t) {
 }
 
 // ------------------------------------------------------------ the verb args a choice writes
-// One recipe for "this palette choice → these terrain/grass args", read by the
-// world panel's 🌿 section (client/lib/groundpanel.js) and the Build tab's World
-// section (client/lib/editpanels.js) alike, so the two can never write
-// different args for the same pick.
+// One recipe shared by client/lib/groundpanel.js and client/lib/editpanels.js, so the two never write different args for the same pick.
 
 /** The choice the panel starts from when nothing is dialled yet (the names
  *  groundpanel always preferred, else each table's first entry). */

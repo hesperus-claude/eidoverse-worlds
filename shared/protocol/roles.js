@@ -1,4 +1,4 @@
-// shared/protocol/roles.js — who may do what in a world (RESEARCH-roles-moderation-2026-10-06).
+// shared/protocol/roles.js — who may do what in a world.
 // Pure data and pure functions: the authority (shared/protocol/authority.js) reads them to admit writes, the server reads them through
 // the authority to tell a client its rights, and the client reads them to draw badges, menus and the roles grid. No state
 // of its own, no clock, no imports: a browser and bun import the same file.
@@ -24,7 +24,7 @@ export const GUESTS_AT_MOST_DEFAULT = true;
 /** Q4: editWorld (sky, weather, ground, the card, spawn, bounds, fall) is a permission; false = those stay owner-only. */
 export const EDIT_WORLD_PERMISSION = true;
 
-// ---------------- the other caps (research §5) ----------------
+// ---------------- the other caps ----------------
 export const MUTE_MAX_MIN = 7 * 24 * 60;        // a mute lasts at most 7 days
 export const REASON_MAX = 500;
 
@@ -70,7 +70,7 @@ export const BASE = "member";
 export const isBase = (x) => (typeof x === "string" ? x : x?.role) === BASE;
 export const isOwner = (x) => (typeof x === "string" ? x : x?.role) === OWNER;   // a role string, a grant or effective rights
 export const MOD_POWERS = Object.freeze(["mute", "kick", "ban", "pauseScripts"]);
-/** The powers that may warn (research §2: warn isn't a permission; the gentlest act comes with any of these). */
+/** The powers that may warn (warn isn't a permission; the gentlest act comes with any of these). */
 export const WARN_POWERS = Object.freeze(["mute", "kick", "ban"]);
 
 const on = (...ks) => Object.freeze(Object.fromEntries(PERMISSION_NAMES.map((k) => [k, ks.includes(k)])));
@@ -266,7 +266,7 @@ const article = (n) => (/^[aeiou]/i.test(n) ? `an ${n.toLowerCase()}` : `a ${n.t
 export function grantableRoles(wc, me) {
   return rolesOf(wc).filter((r) => isOwner(me) ? true : r.rank < me.rank && PERMISSION_NAMES.every((k) => !r.can[k] || (me.permissions ?? []).includes(k)));
 }
-/** The badge a person's row shows (research §UI): none for a member (the list doesn't shout), "guest" for someone
+/** The badge a person's row shows: none for a member (the list doesn't shout), "guest" for someone
  *  without an account (whatever role guests get), else the role's name. {text, tone: 'owner'|'mod'|'role'|'guest'}. */
 export function badgeOf(p) {
   if (!p) return null;

@@ -29,8 +29,7 @@ import { Admitted, admit, rateCheck, rated } from "./gate.js";
 import { applyResettle, clearRefsTo, lastTouch, planResettle, resettleEntries, stampMedia, stampModelHash, stampShapes, stripDry, touched, warnOrNot, warnings } from "./followups.js";
 import { AXES, POSITIVE_AXES } from "../../axes.js";
 import { ratedHoursAt } from "../../forecast.js";
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// the layers above this one, reached through UP (ctx.js; a leaf may not import them: authority-layers-check)
 const guess = (...a) => UP.guess(...a);
 
 function changeShape(plan, cause, w) {
@@ -92,10 +91,8 @@ function commit(w, actor, verb, args, build) {
   if (ops.some((o) => o.op === "delete" && o.comp === undefined)) { const after = scratch(st, ops); const gone = new Set(ops.filter((o) => o.op === "delete" && o.comp === undefined && !after.entities[o.id]).map((o) => o.id));
     if (gone.size) ops.push(...clearRefsTo({ ...ctx, st: after }, gone)); }
   const plan = admit(w, st, { actor, cap: ctx.cap, restores: ctx.restores }, ops); ctx.notes.push(...plan.notes);
-  // the write's consequences (occupants re-dropped off a host whose shape changed) are planned and admitted HERE, against the
-  // state the write leaves, before anything is appended: a refusal refuses the whole request, never half of it. A dry
-  // run plans them too, and says
-  // what the write would do besides its own ops: who it would stand up, what it would re-drop, and what it would wake
+  // the write's consequences (occupants re-dropped off a host whose shape changed) are planned and admitted HERE, against
+  // the state the write leaves, before anything is appended: a refusal refuses the whole request. A dry run plans them too
   const settle = planResettle(w, actor, plan.ops, st, plan.after);
   if (args.dry) { const woke = (ctx.launches ?? []).filter((b) => plan.after.entities[b.id]).map((b) => b.id);
     const lifted = liftsOf(w, ctx, plan).map((e) => e.body.id);
@@ -175,8 +172,7 @@ function needThing(ctx, id) {
 
 // Resolve a component value fully (R7): defaults written out, conveniences converted, stamps applied. Shape and rights
 // are admit's; this only turns what was asked into a plain value.
-// @world.bounds as the readers use it: a malformed one already in a log (written before the authority checked it) is
-// treated as no bounds, never a crash in every create's reply (review T0d)
+// @world.bounds as the readers use it: a malformed one already in a log reads as no bounds, never a crash
 const MOTION_AXES = AXES;   // shared/axes.js: all six letters
 const boundsOf = (st) => { const B = st.entities["@world"]?.c.bounds; const v3 = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
   return B && v3(B.min) && v3(B.max) ? B : null; };
@@ -281,11 +277,8 @@ function buildSet(ctx, a) {
   const e = needThing(ctx, a.id); handWrite(ctx, a.id, a.component);
   if (!isComponent(a.component)) refuse("shape", `'${a.component}' isn't a component name`, "§3.1: [a-z][a-z0-9-]*, optionally <domain>/, @<n> and :<key> (ASCII only)", { didYouMean: guess(String(a.component), Object.keys(COMPONENTS)) });
   const lt = lastTouch(ctx.w, a.id, a.component); const base = a.base === undefined ? undefined : versionSeq(ctx.w, a.base, "base");
-  // No `current` here, for the same reason as expect's (attack-check H5a/H5c): buildSet runs inside commit's
-  // build(ctx) BEFORE admit, so before rights/lacks/lockCheck, and a dry request is never logged — a value echoed
-  // here is a direct read of any component of anything, through a lock, by anyone, with no trace. The fix line
-  // already sends them to `inspect`, which is rights-checked. `version`/`by` stay: history is READ_ONLY,
-  // so who-touched-what-when is public already.
+  // No `current` value echoed here: buildSet runs BEFORE admit and a dry request is never logged, so it would be an
+  // untraced read of anything by anyone. The fix line sends them to `inspect` (rights-checked); version/by are public.
   if (base !== undefined && lt && lt.seq > base) refuse("stale", `${a.id}.${a.component} changed since version ${base}: ${said(lt.actor)} set it at ${lt.seq}`, a.merge ? `inspect {id: '${a.id}'} for the current value and its new version, then re-send with that base` : `inspect {id: '${a.id}'} for the current value and version, then decide; or re-send without base and with merge: true to change only your fields`, { version: lt.seq, by: lt.actor });
   if (a.base === undefined && !a.merge && lt && lt.actor !== ctx.actor && a.component in e.c) ctx.notes.push({ id: a.id, component: a.component, overwrote: { by: lt.actor, seq: lt.seq }, why: "you replaced someone else's value without a base version; send base (from inspect) to be refused instead if it changed" });
   let v = a.merge ? merge7396(e.c[a.component], a.value) : a.value;
@@ -396,7 +389,7 @@ function buildPlace(ctx, a) {
   const m = geomE(e); if (!m) refuse("shape", modelOf(e.c.model) ? `${a.id}'s model hasn't been measured here, so it has no size to place` : `${a.id} has no model or mesh, so it has no size to place`, "set its transform directly");
   // the one gate before any solving (so a refused place costs nothing): admit a move of this thing as it stands — rights,
   // locks, flight and rate, the checks the placed result meets — so a refusal costs nothing. admit runs again on the result.
-  // one place runs admit up to 3× on purpose: this pre-check, commit's on the result, planResettle's on its consequences (tel0s #260)
+  // one place runs admit up to 3× on purpose: this pre-check, commit's on the result, planResettle's on its consequences
   if (!a.__made) admit(ctx.w, ctx.st, { actor: ctx.actor }, [setOp(a.id, "transform", COMPONENTS.transform.defaults)]);   // (the value is a stand-in: these checks don't read it)
   const st = ctx.st, cur = worldT(st, a.id), scale = cur.scale;
   const fam = new Set([a.id, ...descendants(st, a.id)]);
@@ -436,11 +429,9 @@ function buildPlace(ctx, a) {
       const [hx, hz] = half(yaw);
       // the footprint's own corners, turned by yaw (never the box of them, which refuses a long thing on a turned top)
       const fq = yawQ(yaw), foot = [[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([sx, sz]) => { const r = qrot(fq, [sx * S[0] / 2, 0, sz * S[2] / 2]); return [r[0], r[2]]; });
-      // the 2.5 cm grid as ever (positions by the same running sum), searched nearest-first: ring by ring out from the
-      // cell nearest `want`, stopping once no further ring can hold a nearer cell. The answer is the full scan's (the
-      // nearest free cell, ties to the earlier in its x-then-z order); the work is the cells near the answer, not the
-      // surface's. Past the
-      // work budget it's refused (too-costly), never minutes of every world's thread.
+      // the 2.5 cm grid, searched nearest-first ring by ring out from the cell nearest `want`, stopping once no further
+      // ring can hold a nearer cell: the full scan's answer (ties to the earlier in x-then-z order) for the work of the
+      // cells near it. Past the work budget it's refused (too-costly)
       if ((s.max[0] - s.min[0]) / 0.025 > 2e5 || (s.max[1] - s.min[1]) / 0.025 > 2e5) spend(Infinity, `finding room for ${a.id} on ${a.on} (${r3(s.max[0] - s.min[0])}×${r3(s.max[1] - s.min[1])} m at 2.5 cm)`);
       const xs = [], zs = []; for (let x = s.min[0] + hx; x <= s.max[0] - hx + 1e-9; x += 0.025) xs.push(x); for (let z = s.min[1] + hz; z <= s.max[1] - hz + 1e-9; z += 0.025) zs.push(z);
       const nx = xs.length, nz = zs.length; let lastIdx = -1;
