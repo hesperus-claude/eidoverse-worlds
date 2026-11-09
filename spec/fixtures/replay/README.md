@@ -16,7 +16,7 @@ terrain change releasing bodies and rebuilding statics. The order fixture
 adds a final punt so two bodies survive into the settled snapshot.
 
 The `sweep` suite (`bun test/gate/run.ts sweep`, `test/protocol/sweep.ts`) replays each fixture here against
-its golden in `.replaybench.json` (`tools/replaybench.ts` and `replaybench-test.ts`, which once held this, are gone);
+its golden in `.replaybench.json`;
 committed fixtures fail if their sim golden is missing.
 
 Nothing rewrites `.replaybench.json`: a golden changes by a deliberate edit

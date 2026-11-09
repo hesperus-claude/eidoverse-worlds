@@ -38,8 +38,8 @@ Who imports what (2026-11-08): most modules have two or three runtimes as
 importers, but not all.
 - **server only (40)**: the authority (`protocol/authority.js`, `protocol/authority/*`), the sandbox pair
   (`sandbox-child.js` is spawned by path), `protocol/{verbspec,verbclasses,refusalcodes,scriptrules,assetref}.js`,
-  `skydefs`, `structdefs`, `uidefs`, `floradefs`, `flora_presets`, `blast`.
-- **client only (8)**: `blueprint`, `credits`, `flightpilot`, `lookat`, `particlesim`, `reach`, `structure_edit`, `terrainlayers`.
+  `skydefs`, `structdefs`, `uidefs`, `floradefs`, `flora-presets`, `blast`.
+- **client only (8)**: `blueprint`, `credits`, `flightpilot`, `lookat`, `particlesim`, `reach`, `structure-edit`, `terrainlayers`.
 - **no runtime importer**: `protocol/kernelspec.js` (the kernel pin's pure half, read by
   test/protocol/kernel-check.ts) and `protocol/scriptaudit.js` (an auditor's re-run, docs/guide/SCRIPTS.md).
 

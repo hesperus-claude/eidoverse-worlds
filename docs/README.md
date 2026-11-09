@@ -56,4 +56,4 @@ Start with [README](../README.md) (what this is, how to run it), [AGENTS](../AGE
 
 [shared](../shared/README.md) · [defs](../defs/README.md) · [patched](../patched/README.md) ·
 [import-v1](../tools/import-v1/README.md) · [water](../tools/water/README.md) · [seatlab](../bench/seatlab/README.md) ·
-[projector](../deploy/projector/README.md) · [spec fixtures](../test/fixtures/v1-worlds/README.md)
+[projector](../deploy/projector/README.md) · [v1-worlds fixtures](../test/fixtures/v1-worlds/README.md)
