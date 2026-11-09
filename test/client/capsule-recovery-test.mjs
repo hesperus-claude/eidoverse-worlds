@@ -38,7 +38,6 @@ plugin({
     b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
     b.onResolve({ filter: /^\.\/avatar\.js$/ }, () => ({ path: here('../stubs/recovery-avatar-stub.mjs') }));
     b.onResolve({ filter: /^\.\/world\.js$/ }, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/seats\.js$/ }, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
     b.onResolve({ filter: /^\.\/occupants\.js$/ }, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
     b.onResolve({ filter: /^\.\/reachnet\.js$/ }, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
     b.onResolve({ filter: /^\.\/poseclips\.js$/ }, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
