@@ -9,7 +9,6 @@
     "chromium": "151 (Chromium or Chrome for Testing, this major or newer: the browser lane)"
   },
   "dependencies": {
-    "@dimforge/rapier3d-compat": "^0.19.3",
     "@gltf-transform/core": "^4.1.1",
     "@gltf-transform/extensions": "^4.1.1",
     "@gltf-transform/functions": "^4.1.1",
@@ -23,6 +22,7 @@
     "werift": "^0.24.4"
   },
   "devDependencies": {
+    "@dimforge/rapier3d-compat": "^0.19.3",
     "@happy-dom/global-registrator": "^21.0.4",
     "iwer": "^2.4.0",
     "playwright": "^1.62.1"
