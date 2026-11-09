@@ -49,7 +49,7 @@ const spawn = async (pg: any) => {
 };
 const sound = (pg: any, data: any) => req(pg, data ? OP.set(ID, 'sound', data) : OP.unset(ID, 'sound'));
 const state = (pg: any) => pg.evaluate(async (id: string) => {
-  const { _playing, _worldBus, effectiveGain } = await import('/lib/sounds.js');
+  const { _playing, _worldBus, effectiveGain } = await import('/lib/realize/sounds.js');
   const { audioContextState } = await import('/lib/audioctx.js');
   const { entities } = await import('/lib/world.js');
   const h = _playing.get(id);

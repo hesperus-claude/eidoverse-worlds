@@ -1,5 +1,5 @@
 // lookat — the turn a `look-at` component asks for, as a pure function. Each client evaluates it every frame
-// (client/lib/lookats.js): the component is logged state, the turn is a view nobody logs. No three.js.
+// (client/lib/realize/lookats.js): the component is logged state, the turn is a view nobody logs. No three.js.
 //
 //   evalLookAt({rest, frame, at, target, la, prev, dt}) → {q, yaw, pitch, rested}
 //     rest    the node's rest rotation, local to its parent [x,y,z,w]

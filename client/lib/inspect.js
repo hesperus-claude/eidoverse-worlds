@@ -21,7 +21,7 @@
 // until it retires; that panel also gets the schema groups, rendered by the
 // factory, through the same commit path.
 
-import { materialsOf } from './matoverride.js';
+import { materialsOf } from './realize/material_draft.js';
 import { isMineMuted, allowUntrusted } from './mediaprefs.js';
 import { rotOrderFor, setRotOrder } from './viewprefs.js';
 import { entities } from './world.js';
@@ -40,7 +40,7 @@ import { localOf } from '../../shared/hierarchy.js';
 import { lightOf } from '../../shared/components.js';
 import { WORLD_ID, worldSchema, worldEditOps } from '../../shared/worldentity.js';
 import * as Edits from './editwrites.js';   // slice 3b: component edits are requests
-import { effectLookup } from './emitters.js';
+import { effectLookup } from './realize/emitters.js';
 import { isOwner } from '../../shared/protocol/roles.js';
 const R2D = 180 / Math.PI;
 

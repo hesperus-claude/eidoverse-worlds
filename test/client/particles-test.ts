@@ -21,7 +21,7 @@ import {
 import { resolveParticles, instanceOf, ESSENTIALS } from "../../shared/particle_effects.js";
 import {
   makeEmitterRegistry, retireEmitter, retireRawSystem, adoptSystem,
-} from "../../client/lib/emitter_field.js";
+} from "../../client/lib/realize/emitter_field.js";
 import {
   autoHooks, ownHook, pushHostHook, releaseHook, isHostOwned, claimUnowned,
 } from "../../client/lib/autohooks.js";

@@ -21,7 +21,7 @@ try {
     const st = await import('/lib/state.js'); for (let i = 0; i < 200 && !st.state.hydrated; i++) await new Promise(r => setTimeout(r, 50));
     const { THREE, scene, camera, renderer } = await import('/lib/core.js'); await renderer.init?.();
     const { CONFIG } = await import('/lib/base.js'); CONFIG.renderer = true;
-    const w = await import('/lib/watervolumes.js'); w.setWaterObjects(() => new Map());
+    const w = await import('/lib/realize/watervolumes.js'); w.setWaterObjects(() => new Map());
     for (const o of scene.children) o.visible = false;
     const rec = (pos, comps) => ({ pos, q: [0,0,0,1], scale: 1, ...comps });
     const view = (pockets) => ({ ...st.state.st, entities: { sea: rec([0,-5,0], { zone: { shape: 'box', size: [100,10,100] }, water: { attenuationColor: [Math.exp(-.1),Math.exp(-.1),Math.exp(-.1)], attenuationDistance: 1, scatterColor: [0,0,0] } }), ...pockets } });

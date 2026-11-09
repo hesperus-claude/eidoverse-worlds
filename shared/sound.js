@@ -1,4 +1,4 @@
-// sound — what a `sound` component means, shared by the browser (client/lib/sounds.js) and the mcpl agent so the two
+// sound — what a `sound` component means, shared by the browser (client/lib/realize/sounds.js) and the mcpl agent so the two
 // never describe different sounds.
 //
 //   set {id, component: "sound", value: {src, playing?, loop?, volume?, pitch?, near?, radius?, spatial?, t0?, description?}}
@@ -52,7 +52,7 @@ const num = (v, lo, hi, dflt) => {
 };
 
 // FALLOFF: inverse-distance held at 1 inside near, times (1 − t)² over the last 5% of the range, so exactly 0 at radius
-// (Web Audio's `inverse` clamps at maxDistance and is heard across the world). client/lib/sounds.js applies this gain
+// (Web Audio's `inverse` clamps at maxDistance and is heard across the world). client/lib/realize/sounds.js applies this gain
 // itself; its panner keeps only the direction.
 export const TAPER_START = 0.95;
 /** The distance gain at d metres from a sound: 1 inside near, inverse beyond, 0 at radius and past it. */

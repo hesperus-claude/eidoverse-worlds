@@ -378,7 +378,7 @@ row("IM-W4", () => {
   ok(o.open === TV1.waterChildId("tank") && o.room === null && o.unturned === TV1.waterChildId("tank") && o.above === null, "IM-W4 the translated world's medium (shared/zone.js mediumOf): open water wet, the air box dry where its thing's yaw puts it, above the surface dry", o);
 });
 row("IM-W5", () => {
-  // main sized both by its host's scale (client/lib/watervolumes.js at ccd5c53fa: size × |matrixWorld scale|; an air box through the inverse matrixWorld)
+  // main sized both by its host's scale (client/lib/realize/watervolumes.js at ccd5c53fa: size × |matrixWorld scale|; an air box through the inverse matrixWorld)
   const L = seqd([BASIC[0], { actor: "Ann", verb: "spawn", args: { id: "big", lib: "b.glb", pos: [0, -10, 0], scale: 2 } },
     { actor: "Ann", verb: "comp", args: { id: "big", type: "water", data: { center: [1, 0, 0], size: [10, 2, 4] } } }, { actor: "Ann", verb: "comp", args: { id: "big", type: "air", data: { boxes: [{ center: [0, 0, 1], size: [1, 1, 1] }] } } }]);
   const r = TV1.translate(L), T = r.final.translated, st = { entities: Object.fromEntries(Object.entries(T).map(([id, c]) => [id, { c }])) }, z = ZN.zonesOf(st);

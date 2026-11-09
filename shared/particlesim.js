@@ -1,5 +1,5 @@
 // particlesim — the particle simulation every client runs for a `particles` effect: one emitter's particles, stepped on
-// the CPU. Pure (no THREE, no DOM): the renderer (client/lib/particlefx.js) reads its arrays each frame, and
+// the CPU. Pure (no THREE, no DOM): the renderer (client/lib/realize/particlefx.js) reads its arrays each frame, and
 // test/protocol/describe-particles-check.ts steps it in bun.
 //
 // Ported from Godot Engine 4.7.2-stable, scene/3d/cpu_particles_3d.cpp (CPUParticles3D::_particles_process and

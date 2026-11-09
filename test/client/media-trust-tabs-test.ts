@@ -1,5 +1,5 @@
 // media-trust-tabs-test — "Allow untrusted links" turned off in one tab reaches the others: mediaprefs.js listens for the
-// browser's storage event on its key and re-emits media:trust, which pictures/sounds/materialcomp re-read on (bot #141).
+// browser's storage event on its key and re-emits media:trust, which pictures/sounds/material re-read on (bot #141).
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/media-trust-tabs-test.ts
 // Mutation (must go red): in client/lib/mediaprefs.js drop the addEventListener('storage', …) line.
 let pass = 0, fail = 0;

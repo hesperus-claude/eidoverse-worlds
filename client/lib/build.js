@@ -271,7 +271,7 @@ function meshGhost(shape, [x, y, z]) {
 // Q/E turn it, ,/. size its width. The lib is '@picture:<src>'.
 const pictureOf = (lib) => (typeof lib === 'string' && lib.startsWith('@picture:') ? lib.slice(9) : null);
 export async function holdPicture() {
-  const { pickPicture } = await import('./pictures.js');
+  const { pickPicture } = await import('./realize/pictures.js');
   const src = await pickPicture();
   if (src) await holdGhost(`@picture:${src}`, 'picture');
 }

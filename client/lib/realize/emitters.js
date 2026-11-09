@@ -14,15 +14,15 @@
 // `playing: false` is Godot's emitting = false: the living particles finish and none are born; turning it back on
 // resumes the same emitter (no rebuild).
 
-import { THREE, scene } from './core.js';
-import { bus } from './base.js';
-import { primeFiles } from './assets.js';
-import { entities, findPart } from './world.js';
-import { resolveParticles, effectBlobName, effectProblem, readableEffect, QUALITY_TIERS } from '../../shared/particle_effects.js';
+import { THREE, scene } from '../core.js';
+import { bus } from '../base.js';
+import { primeFiles } from '../assets.js';
+import { entities, findPart } from '../world.js';
+import { resolveParticles, effectBlobName, effectProblem, readableEffect, QUALITY_TIERS } from '../../../shared/particle_effects.js';
 import { buildEmitter } from './particlefx.js';
 import { makeEmitterRegistry, retireEmitter } from './emitter_field.js';
-import { autoHooks as autos, ownHook } from './autohooks.js';
-import { sendRequest } from './net.js';
+import { autoHooks as autos, ownHook } from '../autohooks.js';
+import { sendRequest } from '../net.js';
 
 // ---- textures --------------------------------------------------------------
 // Sprite textures are shared and cached per path, and NOT disposed when an emitter retires: the cache owns them, the

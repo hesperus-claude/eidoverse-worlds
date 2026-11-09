@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const STUB = fileURLToPath(new URL('../stubs/lod-client-stub.mjs', import.meta.url));
 plugin({ name: 'governor-xr-stub', setup(b) {
   // the same cone lod-client-test stubs: governor.js and the REAL realize/models.js it imports stay real
-  for (const f of ['^\\./core\\.js$', '^\\./warmqueue\\.js$', '^\\./loadwork\\.js$', '^\\./lightrig\\.js$', '^\\./emitters\\.js$',
+  for (const f of ['^\\./core\\.js$', '^\\./warmqueue\\.js$', '^\\./loadwork\\.js$', '^\\./lightrig\\.js$', '^\\./realize/emitters\\.js$',
     '^\\./terrain\\.js$', '^\\./breadcrumbs\\.js$', '^\\./frameloop\\.js$', '^\\./remotes\\.js$', '^\\./frame\\.js$', '^\\./ui\\.js$', '^\\./statuschips\\.js$',
     '^\\.\\./core\\.js$', '^\\.\\./assets\\.js$', '^\\.\\./colliders\\.js$', '^\\.\\./lightrig\\.js$', '^\\.\\./lightgizmo\\.js$', '^\\.\\./world\\.js$', '^\\.\\./materials\\.js$'])
     b.onResolve({ filter: new RegExp(f) }, () => ({ path: STUB }));

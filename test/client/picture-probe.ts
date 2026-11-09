@@ -55,7 +55,7 @@ const req = async (pg: any, op: any) => {
 let ID = '';
 const state = (pg: any) => pg.evaluate(async (id: string) => {
   const { entities } = await import('/lib/world.js');
-  const { _hung, _blocked } = await import('/lib/pictures.js');
+  const { _hung, _blocked } = await import('/lib/realize/pictures.js');
   const root = entities.get(id); const h = _hung.get(id);
   let mat: any = null; h?.quad?.traverse((o: any) => { if (o.isMesh && !mat) mat = o.material; });
   let quads = 0; root?.traverse((o: any) => { if (o.userData?.pictureQuad) quads++; });

@@ -31,7 +31,7 @@ export function swimTargets(m, t) {
   ];
 }
 
-// The volume swimmer's pose (client/lib/watervolumes.js oceans and pools, not the water level): absolute
+// The volume swimmer's pose (client/lib/realize/watervolumes.js oceans and pools, not the water level): absolute
 // normalized-humanoid rotations, radians (XYZ Euler). Owns shoulders, arms and hands during the stroke.
 export function swimPose(time, surface=false){
  const stroke=.5+.5*Math.sin(time*2.5),kick=Math.sin(time*4);

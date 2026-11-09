@@ -1,5 +1,5 @@
 // picture-editor-probe — the owned browser receipt for how a HUMAN hangs a
-// picture: the scene panel's semantic block (client/lib/pictures.js editor),
+// picture: the scene panel's semantic block (client/lib/realize/pictures.js editor),
 // with a real sequencer, a real model, and the image door.
 //
 //   bun test/client/picture-editor-probe.ts     (EIDOVERSE_DIR must point at the library)
@@ -64,7 +64,7 @@ const spawn = async (pg: any) => {
 };
 const state = (pg: any) => pg.evaluate(async (id: string) => {
   const { entities, findPart, bagOf } = await import('/lib/world.js');
-  const { _hung } = await import('/lib/pictures.js');
+  const { _hung } = await import('/lib/realize/pictures.js');
   const root = entities.get(id); const part = root ? findPart(root, 'screenplane') : null;
   const h = _hung.get(id);
   let mat: any = null; h?.quad?.traverse((o: any) => { if (o.isMesh && !mat) mat = o.material; });

@@ -1,4 +1,4 @@
-// sound-editor-test — client/lib/sounds.js under the house stubs: the shared playhead runs on the SERVER clock, not the
+// sound-editor-test — client/lib/realize/sounds.js under the house stubs: the shared playhead runs on the SERVER clock, not the
 // machine's; the editor leaves `t0` to the authority, which stamps it on its own clock; and the editor reads no guard.
 //
 //   bun test/client/sound-editor-test.ts
@@ -17,9 +17,9 @@ const check = (name: string, ok: unknown, detail = '') => {
 };
 plugin({ name: 'sound-editor-stubs', setup(b) {
   for (const m of ['core', 'base', 'world', 'net'])
-    b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: here('../stubs/guard-label-stub.mjs') }));
+    b.onResolve({ filter: new RegExp(`^\\.\\.?/${m}\\.js$`) }, () => ({ path: here('../stubs/guard-label-stub.mjs') }));
   for (const m of ['inspect', 'ui', 'audioctx', 'audiounlock', 'voiceconsent', 'serverclock'])
-    b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: here('../stubs/sound-clock-stub.mjs') }));
+    b.onResolve({ filter: new RegExp(`^\\.\\.?/${m}\\.js$`) }, () => ({ path: here('../stubs/sound-clock-stub.mjs') }));
 } });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
@@ -38,7 +38,7 @@ class FakeAudio {
 
 const stub: any = await import('../stubs/guard-label-stub.mjs');
 const seams: any = await import('../stubs/sound-clock-stub.mjs');
-const sounds: any = await import('../../client/lib/sounds.js');
+const sounds: any = await import('../../client/lib/realize/sounds.js');
 
 // The machine's clock is 5 s AHEAD of the server's. A listener seeking on
 // Date.now() lands 5 s late; on serverNow() it lands where everyone else is.
@@ -108,7 +108,7 @@ as('carol', SUB_CAROL, 'builder');
 check('no stored guard: the stranger gets the form too', /data-se-root/.test(render()));
 
 // R 10-28 (item 18): 32 world sounds heard at once (was 8), and the editor's radius goes to the 200 m cap
-{ const S: any = await import('../../client/lib/sounds.js'); const { SOUND_MAX_RADIUS } = await import('../../shared/sound.js');
+{ const S: any = await import('../../client/lib/realize/sounds.js'); const { SOUND_MAX_RADIUS } = await import('../../shared/sound.js');
   check('VOICES: 32 world sounds are heard at once', S.VOICES === 32, String(S.VOICES));
   check('the editor\'s radius field goes to SOUND_MAX_RADIUS (200 m)', new RegExp(`data-se="radius"[^>]*max="${SOUND_MAX_RADIUS}"`).test(render()) && SOUND_MAX_RADIUS === 200, render().match(/data-se="radius"[^>]*/)?.[0]); }
 

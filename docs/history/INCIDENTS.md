@@ -1631,7 +1631,7 @@ Lesson: a relative coordinate with no bound is an absolute coordinate in
 disguise.
 
 **Determinism is a scoped `Math.random` swap, at exactly one call site**
-`shared/particles.js:96-111`, `client/lib/emitters.js:14-28`, `:99-101`
+`shared/particles.js:96-111`, `client/lib/realize/emitters.js:14-28`, `:99-101`
 "`makeParticles` seeds its per-instance spawn attributes from `Math.random()`. Two
 clients would therefore render two different fires from one authored component, and
 a reconnect would render a third. The build call is synchronous, so the seam is a
@@ -1642,19 +1642,19 @@ Lesson: monkey-patching a global is acceptable only when scoped around
 synchronous code, at one site, with the deletion path written down.
 
 **Sprite textures are borrowed, never owned by the emitter**
-`client/lib/emitters.js:37-42`
+`client/lib/realize/emitters.js:37-42`
 "Disposing a borrowed texture is how you blank every other fire in the world by
 putting one out."
 Lesson: state texture ownership explicitly; caches own, emitters borrow.
 
 **A missing sprite is not a missing emitter**
-`client/lib/emitters.js:53-58`
+`client/lib/realize/emitters.js:53-58`
 "the builder's procedural dot always works, and a hearth that reads as fire in
 text but shows a soft glow beats a hearth that shows nothing."
 Lesson: degrade the look, keep the semantics.
 
 **The window between `makeParticles` returning and a handle existing**
-`client/lib/emitter_field.js:37-50`, `client/lib/emitters.js:115-121`
+`client/lib/realize/emitter_field.js:37-50`, `client/lib/realize/emitters.js:115-121`
 "This is the window the adapter promised to close and initially did not: the
 moment the builder returns, its mesh is in the scene and its update is in the
 global hook array. If any host step after that point throws (parenting, marking,
@@ -1664,13 +1664,13 @@ Lesson: wrap every post-allocation host step in an adopt/unwind so a raw upstrea
 allocation can never be stranded.
 
 **Hooks come off by IDENTITY, never by index**
-`client/lib/emitter_field.js:19-26`
+`client/lib/realize/emitter_field.js:19-26`
 "the array is global and shared with grass wind and the sky, so an index captured
 at build time means unhooking somebody else's emitter."
 Lesson: never index into a shared registry you do not own.
 
 **Retire the old emitter FIRST, and re-authoring the identical bag is a no-op**
-`client/lib/emitter_field.js:97-134`
+`client/lib/realize/emitter_field.js:97-134`
 "Replacement is not two emitters overlapping for the duration of an await: the
 world says one thing is burning there." And: "re-authoring the identical bag (a
 replay of the same entry, a snapshot that repeats what the log already said) must
@@ -1681,7 +1681,7 @@ Lesson: generation-counted slots plus key equality; delete the slot before
 retiring so an in-flight build sees it is gone.
 
 **A `comp` usually arrives before the entity's GLB**
-`client/lib/emitters.js:165-187`
+`client/lib/realize/emitters.js:165-187`
 "The bag is already folded — perception is correct the whole time — so the emitter
 just waits for something to hang off." A `null` parent is "a spawn reservation
 whose GLB is still downloading… and a world-origin emitter is the drift #25 names
@@ -1689,7 +1689,7 @@ in requirement 2 — so we don't build one."
 Lesson: never fall back to world origin when the intended parent is merely late.
 
 **The emitter mesh carries `entityId` so the sky's diff cannot claim it**
-`client/lib/emitters.js:126-131`
+`client/lib/realize/emitters.js:126-131`
 "an async sky build that happens to snapshot scene.children mid-flight must never
 claim (and then dispose) somebody's hearth. Same marker entities and bodies
 carry."

@@ -1,5 +1,5 @@
 // material — a `material` component: an image on a NAMED node of the thing's model (glTF baseColorTexture). A standalone
-// image is a picture (shared/picture.js). Read by the browser host (client/lib/materialcomp.js) and every other reader.
+// image is a picture (shared/picture.js). Read by the browser host (client/lib/realize/material.js) and every other reader.
 //
 //   material {node, texture, description?, lit?}
 //   comp {id, type: "material", data: null}          # the node wears its own material again

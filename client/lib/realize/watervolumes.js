@@ -1,12 +1,12 @@
 // watervolumes — water bodies and dry pockets (things with zone + water / water-exclusion, read through shared/zone.js),
 // drawn and fogged; also the level's underwater optics. Distinct from water.js, the world's one water LEVEL. No world names or layouts.
-import { THREE, TSL, scene, camera, sun } from './core.js';
-import { report } from './base.js';
-import { state, onWorldChange } from './state.js';
-import { MAX_WATER, MAX_AIR, mediumAt } from '../../shared/water.js';
-import { zonesOf, waterVolumes, physicsAreasOf, speedFactorAt, zoneChangeTouches, foldOfView, fogSlots, worldLevelAt, lookOf, lookChangeTouches, waterBox, headingOf } from '../../shared/zone.js';
-import { worldPose } from '../../shared/protocol/simlayer.js';
-import { levelWaterInfo, surfaceHeightAt, waterAt as levelWaterAt } from './water.js';
+import { THREE, TSL, scene, camera, sun } from '../core.js';
+import { report } from '../base.js';
+import { state, onWorldChange } from '../state.js';
+import { MAX_WATER, MAX_AIR, mediumAt } from '../../../shared/water.js';
+import { zonesOf, waterVolumes, physicsAreasOf, speedFactorAt, zoneChangeTouches, foldOfView, fogSlots, worldLevelAt, lookOf, lookChangeTouches, waterBox, headingOf } from '../../../shared/zone.js';
+import { worldPose } from '../../../shared/protocol/simlayer.js';
+import { levelWaterInfo, surfaceHeightAt, waterAt as levelWaterAt } from '../water.js';
 // the sky's under-water switch, injected by main.js (setSkyHider): importing sky.js here pulled the whole sky (assets,
 // the boot gate, the baked domes) into everything that imports the controller
 let hideSkyForWater = (_on) => {};

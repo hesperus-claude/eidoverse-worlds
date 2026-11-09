@@ -11,7 +11,7 @@ plugin({
   name: 'predict-pending-stubs',
   setup(b) {
     b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
-    for (const m of ['world', 'remotes', 'colliders', 'autohooks', 'bodyscale', 'net', 'ui', 'chat', 'actions', 'emitters', 'plainwords', 'markup', 'xrask'])
+    for (const m of ['world', 'remotes', 'colliders', 'autohooks', 'bodyscale', 'net', 'ui', 'chat', 'actions', 'realize/emitters', 'plainwords', 'markup', 'xrask'])
       b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: STUB }));
     // a measured round trip: the stub's null would refuse every guess (planRelease)
     b.onResolve({ filter: /^\.\/serverclock\.js$/ }, () => ({ path: 'rtt', namespace: 'rtt' }));

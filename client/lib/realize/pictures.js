@@ -1,22 +1,22 @@
 // pictures — the browser host for the `picture` component: a standalone image, a quad of its own (shared/picture.js says
-// what a bag means). An image on a named node of a model is the material component's host (materialcomp.js).
+// what a bag means). An image on a named node of a model is the material component's host (material.js).
 //
 // NEVER dispose a STORE file's texture: loadImageTexture caches by bytes and pins the texture for the session (assets.js
 // §16.2.B: `dispose` is a no-op on cached textures); the cache owns it, the picture borrows it. Same rule as emitter
 // sprites. A LINK's texture is decoded here, uncached (linkTexture: userData.owned), and the quad's dispose frees it.
 
-import { THREE } from './core.js';
-import { bus } from './base.js';
-import { primeFiles } from './assets.js';
-import { entities, bags, bagOf } from './world.js';
-import { CONFIG } from './base.js';
-import { registerEditor, registerHandler, commitEdit } from './inspect.js';
-import { namedParts } from './parts.js';
-import { toast, flashHint } from './ui.js';
-import { normalizePicture, PICTURE_LIT, PICTURE_DESCRIPTION_MAX, PICTURE_STORE, DESCRIPTION_HINT } from '../../shared/picture.js';
-import { clientMayFetch } from '../../shared/mediasrc.js';
-import { allowUntrusted, RIGHTS_WARNING } from './mediaprefs.js';
-import { escapeHtml as esc } from './markup.js';
+import { THREE } from '../core.js';
+import { bus } from '../base.js';
+import { primeFiles } from '../assets.js';
+import { entities, bags, bagOf } from '../world.js';
+import { CONFIG } from '../base.js';
+import { registerEditor, registerHandler, commitEdit } from '../inspect.js';
+import { namedParts } from '../parts.js';
+import { toast, flashHint } from '../ui.js';
+import { normalizePicture, PICTURE_LIT, PICTURE_DESCRIPTION_MAX, PICTURE_STORE, DESCRIPTION_HINT } from '../../../shared/picture.js';
+import { clientMayFetch } from '../../../shared/mediasrc.js';
+import { allowUntrusted, RIGHTS_WARNING } from '../mediaprefs.js';
+import { escapeHtml as esc } from '../markup.js';
 
 // THE QUAD (Godot Sprite3D, a Resonite image import): `width` metres wide, its height from the image's aspect,
 // standing on the thing's origin and facing its front (+Z), readable from behind too (a second plane turned π, so the
@@ -331,7 +331,7 @@ registerHandler('comp', (id, _obj, k, _v, opts) => {
 // Add Component › Picture on a MODEL hangs it on the model's front face, as its own child (facemedia.js), not on the
 // model's origin inside it. On an empty it is that thing's own quad, as before.
 async function uploadThenFace(id) {
-  const fm = await import('./facemedia.js');
+  const fm = await import('../facemedia.js');
   if (!fm.frontOf(id)) return uploadThenSet(id, 'picture.src');
   flashHint(`🖼 ${RIGHTS_WARNING}`, 4000);
   const file = await pickFile(PICTURE_ACCEPT); if (!file) return;

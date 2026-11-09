@@ -268,7 +268,7 @@ export const COMPONENTS = {
                   lit: "scene (takes the scene's light) | self (a screen, unlit)" },
                 help: "an image on this thing: {src (store/images/…, eidoverse/assets/…, or an https link: see sound), width? m (the quad's, facing +Z on its origin; its height follows the image), description? (what it shows, in words: for people who can't see it and for agents), lit?: scene|self (self = a screen, unlit)}. To put an image on a node of its model: the material component" },
   // an image on a NAMED node of its model (shared/material.js); the client restores the original on removal
-  // (client/lib/materialcomp.js)
+  // (client/lib/realize/material.js)
   material:   { on: "thing", fields: { node: "string", texture: "string", description: "string", lit: "string" },
                 defaults: { lit: "scene" }, required: ["node", "texture"], enums: { lit: ["scene", "self"] },
                 ranges: { node: { maxLen: 64 }, texture: { maxLen: 2048 }, description: { maxLen: 200 } }, clean: { description: "line" },

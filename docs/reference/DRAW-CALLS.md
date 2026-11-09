@@ -37,7 +37,7 @@ The audit found these existing reductions:
 
 * [Flora](../../client/lib/flora.js) uses instanced, culled spatial tiles. Merging
   those into one field-wide draw would lose culling and submit more grass.
-* [Particles](../../client/lib/emitters.js) already use instanced emitters. Different
+* [Particles](../../client/lib/realize/emitters.js) already use instanced emitters. Different
   emitter parameters, origins and transparent ordering require separate care.
 * [Buildings](../../client/lib/realize/structure.js) already merge geometry per
   palette material per building. Their shaders use building-local coordinates;

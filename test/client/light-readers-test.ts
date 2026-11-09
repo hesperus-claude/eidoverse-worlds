@@ -3,7 +3,7 @@
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/light-readers-test.ts
 //
-// lightgizmo.js, matoverride.js, inspect.js and realize/models.js boxOf are real. inspect.js runs in the inspect harness
+// lightgizmo.js, material_draft.js, inspect.js and realize/models.js boxOf are real. inspect.js runs in the inspect harness
 // (test/protocol/inspectharness.ts); the realizer in the lod-client stub cone (test/stubs/lod-client-stub.mjs); the light rig
 // is a Set of the keys that hold a slot.
 // @ts-nocheck
@@ -21,7 +21,7 @@ plugin({
       b.onResolve({ filter: new RegExp(f) }, (a) => (a.importer.replace(/\\/g, "/").includes("/client/lib/realize/") ? { path: LOD } : undefined));
     }
     b.onResolve({ filter: /^\.\/(lightrig|materials)\.js$/ }, (a) =>
-      (/\/client\/lib\/(lightgizmo|matoverride)\.js$/.test(a.importer.replace(/\\/g, "/")) ? { path: a.path, namespace: "light-readers" } : undefined));
+      (/\/client\/lib\/(lightgizmo|realize\/material_draft)\.js$/.test(a.importer.replace(/\\/g, "/")) ? { path: a.path, namespace: "light-readers" } : undefined));
     b.onLoad({ filter: /.*/, namespace: "light-readers" }, (a) => ({
       loader: "js",
       contents: a.path.includes("lightrig")
@@ -32,7 +32,7 @@ plugin({
 });
 
 const { makeLightGizmo, lightCasting } = await import("../../client/lib/lightgizmo.js");
-const { materialsOf } = await import("../../client/lib/matoverride.js");
+const { materialsOf } = await import("../../client/lib/realize/material_draft.js");
 const { liveFor, setEditHooks } = await import("../../client/lib/inspect.js");
 const lod: any = await import("../stubs/lod-client-stub.mjs");
 const { boxOf } = await import("../../client/lib/realize/models.js");

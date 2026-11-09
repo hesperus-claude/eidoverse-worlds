@@ -20,7 +20,7 @@ import { attribute, mix, smoothstep, vec3, float, positionGeometry, uniform, sin
 import { OCEAN, RIVER, STILL, waveClock, cyc, surfaceOffset } from '../../shared/waves.js';
 import { setWaterField } from './terrain.js';
 import { onWorldChange } from './state.js';
-import { dryAt } from './watervolumes.js';   // the dry boxes' mask (a cycle, used only at build time)
+import { dryAt } from './realize/watervolumes.js';   // the dry boxes' mask (a cycle, used only at build time)
 import { waterParams } from '../../shared/terrainshape.js';
 import { analyzeWater, waterGridSeg } from '../../shared/waterkind.js';
 

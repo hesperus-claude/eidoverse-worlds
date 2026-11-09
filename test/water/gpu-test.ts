@@ -15,7 +15,7 @@ for(const backend of ['webgpu','webgl']){
   const {THREE,scene,camera,renderer}=await import('/lib/core.js');
   await renderer.init?.();
   const {CONFIG}=await import('/lib/base.js');CONFIG.renderer=true;
-  const {state}=await import('/lib/state.js');const w=await import('/lib/watervolumes.js');
+  const {state}=await import('/lib/state.js');const w=await import('/lib/realize/watervolumes.js');
   for(const o of scene.children)o.visible=false;
   w.setWaterObjects(()=>new Map());
   // view records (view.js): a body is zone + water, a pocket zone + water-exclusion one priority above it (shared/zone.js)
@@ -48,7 +48,7 @@ for(const backend of ['webgpu','webgl']){
  if(backend==='webgpu'){
   // Rebuilds follow water/environment data only — through the real fold/event path (review #248).
   const r=await page.evaluate(async()=>{
-   const w=await import('/lib/watervolumes.js'),st=await import('/lib/state.js');
+   const w=await import('/lib/realize/watervolumes.js'),st=await import('/lib/state.js');
    // each step is the next view (state.js applyView: the events the client really gets)
    const ents:any={};const view=(f:(e:any)=>void)=>{f(ents);st.applyView({...st.state.st,entities:structuredClone(ents)});w.updateWater();return w.waterDebug();};
    const n=()=>w.waterDebug().rebuilds,out:any={};let b=n();const step=(k:string,d:any)=>{out[k]={rebuilt:n()-b,waters:d.waters};b=n();};

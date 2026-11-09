@@ -7,7 +7,7 @@
 //         machine) and none names the untrusted host; no audio element exists for it. The same detector sees the request
 //         for a trusted host's link (so it would have seen one), and for the untrusted link once the viewer opts in
 //         (Settings › 🛡 safety): that's the gate's own mutant, run live.
-//   MAT   a material's link worn while the viewer allowed untrusted links comes off when they turn it off (materialcomp.js)
+//   MAT   a material's link worn while the viewer allowed untrusted links comes off when they turn it off (material.js)
 //   PIC   a picture with no part is a quad of its own: its aspect is the image's (a 2:1 moon), width as written
 //   SND   a store sound: the limiter is in the graph; silent past its radius (gain exactly 0), heard inside; of 35 sounds in
 //         reach, 32 are heard (the voice cap)
@@ -66,7 +66,7 @@ try {
   await evalJson(`(() => { const s = document.querySelector('#splash'); if (s) s.style.pointerEvents = 'none'; return true; })()`);
   check("B1 world", await waitFor(`import('/lib/net.js').then((m) => m.replicaActive())`));
   // the media modules are loaded by the page (main.js imports them): wait for them to answer
-  await waitFor(`Promise.all([import('/lib/sounds.js'), import('/lib/pictures.js'), import('/lib/texts.js'), import('/lib/lookats.js')]).then(() => true)`);
+  await waitFor(`Promise.all([import('/lib/realize/sounds.js'), import('/lib/realize/pictures.js'), import('/lib/realize/texts.js'), import('/lib/realize/lookats.js')]).then(() => true)`);
   const empty = (id: string, pos: number[], components: any = {}) => req("create", { id, components: { transform: { pos }, ...components } });
 
   // ---- PRIV: an untrusted link is never fetched for a viewer who hasn't opted in ----
@@ -77,7 +77,7 @@ try {
   check("PRIV1 the authority takes both links (said: only viewers who opted in)", p1?.ok && s1?.ok && JSON.stringify([p1, s1]).includes("opted-in"), [p1?.notes, s1?.notes]);
   await waitFor(`import('/lib/world.js').then((m) => m.entities.has('linkpic') && m.entities.has('linkradio'))`);
   await sleep(2500);   // time enough for any fetch, preload or decode to have been attempted
-  const st1 = await page(`const s = await import('/lib/sounds.js'), p = await import('/lib/pictures.js');
+  const st1 = await page(`const s = await import('/lib/realize/sounds.js'), p = await import('/lib/realize/pictures.js');
     return { audio: s._playing.has('linkradio'), sb: s._blocked.get('linkradio') ?? null, pb: p._blocked.get('linkpic') ?? null, plate: !!p._hung.get('linkpic')?.quad,
       els: [...document.querySelectorAll('audio,img')].filter((e) => String(e.src).includes('${UNTRUSTED}')).length };`);
   check("PRIV2 …and this browser never contacts the untrusted host: 0 requests, no audio element, both marked blocked (the picture shows its empty plate)",
@@ -96,7 +96,7 @@ try {
       // alone met it, so it could pass with no picture request seen)
       sent.some(({ u }) => u.includes(UNTRUSTED) && u.endsWith(".png")) && sent.some(({ u }) => u.includes(UNTRUSTED) && u.endsWith(".mp3")) && sent.every(({ r }) => r === null), sent); }
   const unclicked = await waitFor(`(() => { const cb = document.querySelector('#sec-safety input[type=checkbox]'); if (!cb || !cb.checked) return false; cb.click(); return true; })()`, 4000);   // the row again (PRIV4 clicked it on; the setter alone leaves the drawn row checked)
-  check("PRIV5 …and opting out again (the row, clicked off) tears the link's audio down", unclicked && await waitFor(`import('/lib/sounds.js').then((s) => !s._playing.has('linkradio') && s._blocked.get('linkradio') === 'untrusted')`));
+  check("PRIV5 …and opting out again (the row, clicked off) tears the link's audio down", unclicked && await waitFor(`import('/lib/realize/sounds.js').then((s) => !s._playing.has('linkradio') && s._blocked.get('linkradio') === 'untrusted')`));
   await evalJson(`(() => { document.querySelector('#sec-safety-tab')?.click(); return true; })()`);
   check("PRIV6 the setting is a row in Settings › 🛡 safety (off)", await waitFor(`(() => { const b = document.querySelector('#sec-safety'); const cb = b?.querySelector('input[type=checkbox]'); return !!cb && !cb.checked && /Allow untrusted links/.test(b.textContent); })()`, 4000),
     await evalJson(`({ tab: document.querySelector('#sec-safety-tab')?.title ?? null, body: (document.querySelector('#sec-safety')?.textContent ?? '').slice(0, 120) })`));
@@ -108,43 +108,43 @@ try {
   await page(`const c = await import('/lib/core.js'), w = await import('/lib/world.js'); const mesh = new c.THREE.Mesh(new c.THREE.PlaneGeometry(1, 1), new c.THREE.MeshStandardMaterial());
     mesh.name = 'screen'; w.entities.get('telly').add(mesh); window.__screen = { mesh, original: mesh.material }; return true;`);
   await req("set", { id: "telly", component: "material", value: { node: "screen", texture: `https://${MATHOST}/screen.png` } });
-  const wornNow = `import('/lib/materialcomp.js').then((m) => ({ worn: m._worn.has('telly'), own: window.__screen.mesh.material === window.__screen.original, map: !!window.__screen.mesh.material.map }))`;
+  const wornNow = `import('/lib/realize/material.js').then((m) => ({ worn: m._worn.has('telly'), own: window.__screen.mesh.material === window.__screen.original, map: !!window.__screen.mesh.material.map }))`;
   check("MAT1 (setup) with untrusted links allowed, a material on a link is worn: the node's mesh wears a textured clone", await waitFor(`${wornNow}.then((s) => s.worn && !s.own && s.map)`, 8000), await evalJson(wornNow));
   await page(`(await import('/lib/mediaprefs.js')).setAllowUntrusted(false); return true;`);
   check("MAT2 …turning untrusted links off takes it off: nothing worn, the mesh's own material back", await waitFor(`${wornNow}.then((s) => !s.worn && s.own)`, 4000), await evalJson(wornNow));
 
   // ---- PIC: a quad of its own, the image's aspect ----
   await empty("moon", [0, 1, -3], { picture: { src: "eidoverse/assets/sky/moon_color_1k.jpg", width: 2, description: "the moon" } });
-  check("PIC1 a picture with no part is a quad 2 m wide, as tall as the image's aspect (a 2:1 moon: 1 m)", await waitFor(`import('/lib/pictures.js').then((p) => { const h = p._hung.get('moon'); if (!h?.quad || !h.aspect) return false;
+  check("PIC1 a picture with no part is a quad 2 m wide, as tall as the image's aspect (a 2:1 moon: 1 m)", await waitFor(`import('/lib/realize/pictures.js').then((p) => { const h = p._hung.get('moon'); if (!h?.quad || !h.aspect) return false;
       const g = h.quad.children[0].geometry.parameters; return Math.abs(g.width - 2) < 1e-6 && Math.abs(g.height - 1) < 0.01 && h.quad.children.length === 2; })`, 12000),
-    await page(`const p = await import('/lib/pictures.js'); const h = p._hung.get('moon'); return h ? { aspect: h.aspect, kids: h.quad?.children.length, g: h.quad?.children[0]?.geometry.parameters } : null;`));
+    await page(`const p = await import('/lib/realize/pictures.js'); const h = p._hung.get('moon'); return h ? { aspect: h.aspect, kids: h.quad?.children.length, g: h.quad?.children[0]?.geometry.parameters } : null;`));
 
   // ---- SND: the limiter, silent at radius, 32 voices (R 10-28, 55435d86d) ----
   await empty("radio", [0, 0, 40], { sound: { src: "eidoverse/assets/audio/crow_caw_single.wav", radius: 12 } });
-  await waitFor(`import('/lib/sounds.js').then((s) => s._playing.has('radio'))`);
+  await waitFor(`import('/lib/realize/sounds.js').then((s) => s._playing.has('radio'))`);
   const me = await page(`const c = await import('/lib/core.js'); const v = c.camera.getWorldPosition(new c.THREE.Vector3()); return [v.x, v.y, v.z];`);
   await sleep(400);
-  const far = await page(`const s = await import('/lib/sounds.js'); s.tickSounds(); return { g: s._playing.get('radio').gain.gain.value, limiter: !!s._limiter(), ratio: s._limiter()?.ratio.value };`);
+  const far = await page(`const s = await import('/lib/realize/sounds.js'); s.tickSounds(); return { g: s._playing.get('radio').gain.gain.value, limiter: !!s._limiter(), ratio: s._limiter()?.ratio.value };`);
   check("SND1 a store sound 40 m away with radius 12 is exactly silent (gain 0), and the limiter is in the graph", far.g === 0 && far.limiter && far.ratio === 20, { far, me });
   await req("set", { id: "radio", component: "transform", value: { pos: [me[0] + 1, 0, me[2]], q: [0, 0, 0, 1], scale: [1, 1, 1] } });
-  check("SND2 …moved beside you, it's heard", await waitFor(`import('/lib/sounds.js').then((s) => (s.tickSounds(), s._playing.get('radio').gain.gain.value > 0.1))`), await page(`const s = await import('/lib/sounds.js'); return s._playing.get('radio')?.gain.gain.value;`));
+  check("SND2 …moved beside you, it's heard", await waitFor(`import('/lib/realize/sounds.js').then((s) => (s.tickSounds(), s._playing.get('radio').gain.gain.value > 0.1))`), await page(`const s = await import('/lib/realize/sounds.js'); return s._playing.get('radio')?.gain.gain.value;`));
   const loops: string[] = [];   // the authority mints ids: wait on what the creates were given, not on the names asked for
   for (let i = 0; i < 34; i++) loops.push((await empty(`loop${i}`, [me[0] + 1 + i * 0.1, 0, me[2] + 1], { sound: { src: "eidoverse/assets/audio/crow_caw_single.wav", radius: 30 } }))?.ids?.[`$loop${i}`]);
-  check("(setup) the thirty-four loops are playing", await waitFor(`import('/lib/sounds.js').then((s) => ${JSON.stringify(loops)}.every((id) => s._playing.has(id)))`), loops);
-  const heard = await page(`const s = await import('/lib/sounds.js'); s.tickSounds(); return [...s._playing.values()].filter((h) => (h.gain ? h.gain.gain.value : h.el.volume) > 0).length;`);
+  check("(setup) the thirty-four loops are playing", await waitFor(`import('/lib/realize/sounds.js').then((s) => ${JSON.stringify(loops)}.every((id) => s._playing.has(id)))`), loops);
+  const heard = await page(`const s = await import('/lib/realize/sounds.js'); s.tickSounds(); return [...s._playing.values()].filter((h) => (h.gain ? h.gain.gain.value : h.el.volume) > 0).length;`);
   check("SND3 thirty-five sounds in reach: 32 are heard (the voice cap)", heard === 32, heard);
 
   // ---- TXT: signs ----
   await empty("sign", [3, 1.5, -3], { text: { text: "Welcome · ようこそ · مرحبا", size: 0.2 } });
   await empty("post", [-3, 1.5, -3], { text: { text: "this way", billboard: "yaw" } });
-  check("TXT1 a flat sign is drawn: two planes (readable from behind), wrapped lines", await waitFor(`import('/lib/texts.js').then((t) => { const s = t._signs.get('sign'); return !!s && s.group.children.length === 2 && s.lines >= 1 && s.w > 0; })`),
-    await page(`const t = await import('/lib/texts.js'); const s = t._signs.get('sign'); return s ? { kids: s.group.children.length, lines: s.lines, w: s.w, h: s.h } : null;`));
-  check("TXT2 a yaw billboard is one plane that turns toward the viewer", await waitFor(`import('/lib/texts.js').then((t) => { const s = t._signs.get('post'); if (!s) return false; t.tickTexts(); return s.group.children.length === 1 && Math.abs(s.group.quaternion.y) > 0.01; })`),
-    await page(`const t = await import('/lib/texts.js'); const s = t._signs.get('post'); return s ? s.group.quaternion.toArray() : null;`));
+  check("TXT1 a flat sign is drawn: two planes (readable from behind), wrapped lines", await waitFor(`import('/lib/realize/texts.js').then((t) => { const s = t._signs.get('sign'); return !!s && s.group.children.length === 2 && s.lines >= 1 && s.w > 0; })`),
+    await page(`const t = await import('/lib/realize/texts.js'); const s = t._signs.get('sign'); return s ? { kids: s.group.children.length, lines: s.lines, w: s.w, h: s.h } : null;`));
+  check("TXT2 a yaw billboard is one plane that turns toward the viewer", await waitFor(`import('/lib/realize/texts.js').then((t) => { const s = t._signs.get('post'); if (!s) return false; t.tickTexts(); return s.group.children.length === 1 && Math.abs(s.group.quaternion.y) > 0.01; })`),
+    await page(`const t = await import('/lib/realize/texts.js'); const s = t._signs.get('post'); return s ? s.group.quaternion.toArray() : null;`));
 
   // ---- LA: look-at the viewer ----
   await empty("statue", [4, 0, 0], { "look-at": { target: "@viewer", speed: 0 } });
-  const la = await (async () => { for (let i = 0; i < 60; i++) { const r = await page(`const c = await import('/lib/core.js'), w = await import('/lib/world.js'), l = await import('/lib/lookats.js'); l.tickLookAt();
+  const la = await (async () => { for (let i = 0; i < 60; i++) { const r = await page(`const c = await import('/lib/core.js'), w = await import('/lib/world.js'), l = await import('/lib/realize/lookats.js'); l.tickLookAt();
       const o = w.entities.get('statue'); if (!o) return null; const p = o.getWorldPosition(new c.THREE.Vector3()), e = c.camera.getWorldPosition(new c.THREE.Vector3());
       const f = new c.THREE.Vector3(0, 0, 1).applyQuaternion(o.getWorldQuaternion(new c.THREE.Quaternion())); const to = e.sub(p); to.y = 0; to.normalize(); f.y = 0; f.normalize();
       return { dot: f.dot(to), live: l._lookats.size };`); if (r && r.dot > 0.99) return r; await sleep(100); } return null; })();

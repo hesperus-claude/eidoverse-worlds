@@ -25,14 +25,14 @@ const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok,
 
 plugin({ name: 'picture-note-stubs', setup(b) {
   for (const m of ['core', 'base', 'assets', 'world', 'inspect', 'ui', 'net'])
-    b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: here('../stubs/guard-label-stub.mjs') }));
+    b.onResolve({ filter: new RegExp(`^\\.\\.?/${m}\\.js$`) }, () => ({ path: here('../stubs/guard-label-stub.mjs') }));
 } });
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
 
 const stub: any = await import('../stubs/guard-label-stub.mjs');
-const pics: any = await import('../../client/lib/pictures.js');
+const pics: any = await import('../../client/lib/realize/pictures.js');
 const editor = stub.editors[0];
 check('pictures.js registered its editor', typeof editor === 'function');
 

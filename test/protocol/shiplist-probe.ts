@@ -85,7 +85,7 @@ try {
   let samp: any[] = [], moving: any[] = [], first: any, last: any, rest: any, drawnMid = 0, framesInSwing: number | null = null, why = "", tries = 0;
   for (;;) {
     tries++;
-    await evalJson(`(window.__samp = (async () => { const [o, w] = await Promise.all([import('/lib/openable.js'), import('/lib/world.js')]); const out = []; const t0 = performance.now();
+    await evalJson(`(window.__samp = (async () => { const [o, w] = await Promise.all([import('/lib/realize/openable.js'), import('/lib/world.js')]); const out = []; const t0 = performance.now();
     while (performance.now() - t0 < 5000) { const s = o.openableState('gate'); const q = w.entities.get('gate').quaternion; out.push([Math.round(performance.now() - t0), s?.f ?? null, s?.to ?? null, 2 * Math.acos(Math.min(1, Math.abs(q.w)))]); await new Promise((r) => { requestAnimationFrame(() => r()); setTimeout(r, 5500 - (performance.now() - t0)); }); }
     return out; })(), true)`);
     await key("KeyE");
@@ -103,7 +103,7 @@ try {
     console.log(`  [shiplist-probe] D3 try ${tries} inconclusive (${why}); closing the gate and swinging it again`);
     await key("KeyE");
     await waitDisk(() => disk().entities[N("gate")]?.c.openable?.open === false);
-    await waitFor(`import('/lib/openable.js').then((o) => (o.openableState('gate')?.f ?? 0) === 0)`, 8000);
+    await waitFor(`import('/lib/realize/openable.js').then((o) => (o.openableState('gate')?.f ?? 0) === 0)`, 8000);
   }
   check("D3 it swings, drawn: part-way for a while (the gate itself drawn between shut and open), then at rest a quarter turn from where it stood",
     moving.length >= 5 && drawnMid >= 3 && rest && first && rest[0] - first[0] >= 600 && last[1] === 1 && Math.abs(last[3] - Math.PI / 2) < 0.02,
@@ -796,7 +796,7 @@ try {
     const before = ${look(MTA)}; const set = await n.sendRequest('set', { id: '${MTA}', component: 'hesperus/material', value: { color: 0xff2200, roughness: 0.15 } });
     await new Promise((z) => setTimeout(z, 1500)); const a = ${look(MTA)}, b = ${look(MTB)};
     const del = await n.sendRequest('delete', { id: '${MTA}', component: 'hesperus/material' }); await new Promise((z) => setTimeout(z, 1500)); const back = ${look(MTA)};
-    const slot = globalThis.__matoverride.materialsOf('${MTA}')[0]?.slot; await n.sendRequest('set', { id: '${MTA}', component: 'hesperus/material:' + slot, value: { color: 0x0044ff } });
+    const slot = globalThis.__materialDraft.materialsOf('${MTA}')[0]?.slot; await n.sendRequest('set', { id: '${MTA}', component: 'hesperus/material:' + slot, value: { color: 0x0044ff } });
     await n.sendRequest('set', { id: '${MTB}', component: 'hesperus/material:not-a-slot', value: { color: 0x00ff00 } }); await new Promise((z) => setTimeout(z, 1500));
     const sa = ${look(MTA)}, sb = ${look(MTB)};
     return { slot, slotA: sa.c, slotB: sb.c, set: set.ok ?? set.refused, before: [before.c, before.r], a: [a.c, a.r], b: [b.c, b.r], sharedWithB: a.mat === b.mat, back: [back.c, back.r], backIsOwn: back.mat === before.mat, del: del.ok ?? del.refused };`);

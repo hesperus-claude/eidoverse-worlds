@@ -10,13 +10,13 @@
 // Beyond range, or with no target, it eases back to rest. It runs after motion (main.js registers it later), so an oscillate or
 // an orbit moves it and then it turns; a rotating motion on the same node is refused at the authority (one driver per node).
 // The authority's geometry (placing, colliders, what stands on what) uses the logged transform, never the turned one.
-import { THREE, camera } from './core.js';
-import { bus, CONFIG } from './base.js';
-import { identityOf } from './net.js';
-import { dec } from '../../shared/protocol/names.js';
-import { entities, bags, findPart } from './world.js';
-import { remotes } from './remotes.js';
-import { evalLookAt } from '../../shared/lookat.js';
+import { THREE, camera } from '../core.js';
+import { bus, CONFIG } from '../base.js';
+import { identityOf } from '../net.js';
+import { dec } from '../../../shared/protocol/names.js';
+import { entities, bags, findPart } from '../world.js';
+import { remotes } from '../remotes.js';
+import { evalLookAt } from '../../../shared/lookat.js';
 
 const live = new Map();   // `${id}\0${key}` → { node, rest: [x,y,z,w], q: [x,y,z,w] }
 export const _lookats = live;   // probes

@@ -50,9 +50,9 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["fire's spin is written in radians", "shared/particle_effects.js", "rotation: { angle: [0, TAU4], velocity: [-P.rotate, P.rotate] }", "rotation: { angle: [0, 360], velocity: [r4(-P.rotate * 180 / Math.PI), r4(P.rotate * 180 / Math.PI)] }", ["P1"]],
   ["gravity is turned into the emitter's frame", "shared/particlesim.js", "const r = qRotate(qi, g, _R);", "const r = [g[0], g[1], g[2]];", ["P4"]],
   ["the sim takes the frame's gravity", "shared/particlesim.js", "gx = +v[0]; gy = +v[1]; gz = +v[2];", "", ["P4"]],
-  ["the renderer hands the sim its world gravity", "client/lib/particlefx.js", "sim.setGravity(localGravity(", "void (", ["P5"]],
+  ["the renderer hands the sim its world gravity", "client/lib/realize/particlefx.js", "sim.setGravity(localGravity(", "void (", ["P5"]],
   ["the reader skips what it doesn't know", "shared/particle_effects.js", "  const doc = readable ? readableEffect(raw, skipped) : raw;", "  const doc = raw;", ["P6"]],
-  ["the client's fetch keeps a document it can partly read", "client/lib/emitters.js", "readableEffect(r.effect)", "(effectProblem(r.effect) ? null : r.effect)", ["P6"]],
+  ["the client's fetch keeps a document it can partly read", "client/lib/realize/emitters.js", "readableEffect(r.effect)", "(effectProblem(r.effect) ? null : r.effect)", ["P6"]],
   ["the upload validator checks the whole document", "shared/protocol/authority/scripts.js", "const bad = effectProblem(a.effect);", "const bad = null;", ["P6", "P7", "X6"]],
   ["reserved names say so", "shared/particle_effects.js", "if (RESERVED_EMITTER[k]) return reservedWhy(`${at}.${k}`, RESERVED_EMITTER[k]);", "", ["P7"]],
   ["instance t0 is held", "shared/protocol/componentspec.js", 'reservedFields: ["t0"],', "", ["P7"]],
@@ -321,14 +321,14 @@ const cases: Case[] = [
       return { lg, back: lg && rot(q, lg), world, tang: Math.max(...speeds) }; },
     good: (o) => Array.isArray(o.lg) && Math.abs(o.back[0]) < 1e-9 && Math.abs(o.back[1] + 9.8) < 1e-9 && Math.abs(o.back[2]) < 1e-9 && Math.abs(o.world[0]) < 0.05 && o.world[1] < -4.2 && o.world[1] > -5.6 && o.tang > 1 },
   { id: "P5", what: "the renderer hands each emitter's sim its gravity in the emitter's frame before it steps (source order in particlefx.js: setGravity precedes step)", run() {
-      const src = fs.readFileSync(TREE + "client/lib/particlefx.js", "utf8"); const i = src.indexOf("sim.setGravity(localGravity("), j = src.indexOf("sim.step(dt)");
+      const src = fs.readFileSync(TREE + "client/lib/realize/particlefx.js", "utf8"); const i = src.indexOf("sim.setGravity(localGravity("), j = src.indexOf("sim.step(dt)");
       return { i, j }; },
     good: (o) => o.i > 0 && o.j > o.i },
   { id: "P6", what: "unknown-field policy: a document with an unknown optional field, module and param path draws its known parts on the client reader (and the client's fetch keeps it), and the authority's upload validator refuses it", run(s) { cast(s);
       const e0 = doc().emitters[0];
       const future = doc({ emitters: [{ ...e0, noise: { strength: 1 }, render: { ...e0.render, glow: 2 } }], params: { ...doc().params, wobble: { type: "number", to: [{ path: "emitters.0.noise.strength" }] } }, author: "someone later" });
       const h = `sha256:${"c".repeat(64)}`; const r = PE.resolveParticles({ effect: h, params: { glow: 0.5 } }, { entityId: "x", lookup: (b: string) => (b === h ? future : null) });
-      const em0 = r.emitters?.[0]; const fetchSrc = fs.readFileSync(TREE + "client/lib/emitters.js", "utf8");
+      const em0 = r.emitters?.[0]; const fetchSrc = fs.readFileSync(TREE + "client/lib/realize/emitters.js", "utf8");
       return { ok: r.ok, why: r.why, amount: em0?.spawn?.amount, blend: em0?.render?.blend, alpha: em0?.color?.alpha, noise: em0 && "noise" in em0, fetch: /readableEffect\(r\.effect\)/.test(fetchSrc), up: show(s.call("bob", "upload", { effect: future })) }; },
     good: (o) => o.ok === true && o.amount === 40 && o.blend === "add" && o.alpha === 0.5 && !o.noise && o.fetch && /^refused shape/.test(o.up) },
   { id: "P7", what: "reserved names (space, render.mode, render.trail, collision, sub, spawn.rate, spawn.bursts; instance t0) are refused at upload / write with \"reserved: not built yet\"", run(s) { cast(s); thing(s, "torch");

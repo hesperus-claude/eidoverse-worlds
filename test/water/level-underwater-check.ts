@@ -40,7 +40,7 @@ try {
         geo.computeVertexNormals();
         return { mesh: new THREE.Mesh(geo, new THREE.MeshStandardNodeMaterial({ color: 0x7a8a5a, roughness: 0.95 })), heightAt: h };
       };
-      const lw = await import('/lib/water.js'), wv = await import('/lib/watervolumes.js'); (globalThis as any).__lvlDebug = [];
+      const lw = await import('/lib/water.js'), wv = await import('/lib/realize/watervolumes.js'); (globalThis as any).__lvlDebug = [];
       // a level at the ground's 35th percentile: a third of the square floods, whatever the seed makes
       const { heightAt } = await import('/lib/terrain.js');
       // applyTerrainState queues the build (world.js enqueueWorldBuild): wait for each to land

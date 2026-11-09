@@ -1,4 +1,4 @@
-// matoverride — the reader for the DRAFT component `hesperus/material` (docs/contributing/COMPONENT-LADDER.md, rung 1).
+// material_draft — the reader for the DRAFT component `hesperus/material` (docs/contributing/COMPONENT-LADDER.md, rung 1).
 //
 // Absent, a thing shows its model's own materials. Present, the value
 // overrides fields of them: {color?, roughness?, metalness?, emissive?, emissiveStrength?, opacity?} (glTF PBR terms).
@@ -10,11 +10,11 @@
 // world material (materials.js prepareMaterial: the node graph's shape is fixed before its first compile); later edits
 // are uniform writes. Removing the override puts the model's own material back.
 
-import { THREE } from './core.js';
-import { bus } from './base.js';
-import { entities, bagOf } from './world.js';
-import { prepareMaterial } from './materials.js';
-import { registerDraft } from '../../shared/drafts.js';
+import { THREE } from '../core.js';
+import { bus } from '../base.js';
+import { entities, bagOf } from '../world.js';
+import { prepareMaterial } from '../materials.js';
+import { registerDraft } from '../../../shared/drafts.js';
 
 export const MAT = 'hesperus/material';
 // Add Component offers it where this reader applies (every thing with meshes), as a draft or, once trusted here, in the main list
@@ -106,5 +106,5 @@ export function initMaterialOverrides() {
   bus.on('entity', ({ id, kind }) => { if (kind === 'spawn' || kind === 'place') { const bag = bagOf(id); if (bag && Object.keys(bag).some((k) => k === MAT || k.startsWith(`${MAT}:`))) requestAnimationFrame(() => applyMaterials(id)); } });
   // a deleted override: the bag no longer has it, and nothing announces a deleted type by name everywhere; re-read on any comp change of a thing that had one
   bus.on('comp', ({ id }) => { const obj = entities.get(id); if (obj && meshes(obj).some((m) => m.userData.__matClones?.some(Boolean))) applyMaterials(id); });
-  globalThis.__matoverride = { applyMaterials, materialsOf: (id) => materialsOf(entities.get(id)) };
+  globalThis.__materialDraft = { applyMaterials, materialsOf: (id) => materialsOf(entities.get(id)) };
 }

@@ -7,9 +7,9 @@
 //
 // The pure halves (openFraction, openPose) live in motioneval.js (no THREE, no DOM: test/protocol/shiplist-check.ts and an
 // agent can read them); tickOpenables applies them.
-import { entities, bags, bagOf, findPart } from './world.js';
-import { reindexCollider } from './colliders.js';
-import { qAxisAngle, openFraction, openPose, OPEN_DEFAULTS } from './motioneval.js';
+import { entities, bags, bagOf, findPart } from '../world.js';
+import { reindexCollider } from '../colliders.js';
+import { qAxisAngle, openFraction, openPose, OPEN_DEFAULTS } from '../motioneval.js';
 export { openFraction, openPose, OPEN_DEFAULTS };
 
 const tweens = new Map();   // id → {from, to, t0, dur, obj, base, sig, f}

@@ -34,7 +34,7 @@ import { busy as budgetBusy, setShare, budgetStats } from './framebudget.js';
 import { promoteTailPending, modelQuality } from './realize/models.js';
 import { setSlotCap, getSlotCap, maxSlots, litCount,
   setCasterBudget, getCasterBudget, getCasterCeiling, casterCount, shadowsOn, shadowRes } from './lightrig.js';
-import { setEmitterQuality, emitterQuality, emitterCount } from './emitters.js';
+import { setEmitterQuality, emitterQuality, emitterCount } from './realize/emitters.js';
 import { setGrassDensity, getGrassDensity, hasGrass } from './terrain.js';
 import { setLodBias } from './remotes.js';
 import { setSystemEvery, getSystemEvery } from './frameloop.js';

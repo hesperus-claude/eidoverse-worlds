@@ -11,7 +11,7 @@ plugin({
   name: 'fp-plate-stubs',
   setup(b) {
     // controller.js gets the posture-tiles world; avatar.js (and what it pulls in) the core stub the plate tests use
-    b.onResolve({ filter: /^\.\/core\.js$/ }, (a) => ({ path: here(a.importer.replace(/\\/g, '/').endsWith('/controller.js') ? '../stubs/posture-tiles-stub.mjs' : '../stubs/core-stub.mjs') }));
+    b.onResolve({ filter: /^\.\.?\/core\.js$/ }, (a) => ({ path: here(a.importer.replace(/\\/g, '/').endsWith('/controller.js') ? '../stubs/posture-tiles-stub.mjs' : '../stubs/core-stub.mjs') }));
     for (const m of ['base', 'terrain', 'colliders', 'chat', 'ui']) {
       b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, (a) => (a.importer.replace(/\\/g, '/').endsWith('/controller.js') ? { path: here('../stubs/posture-tiles-stub.mjs') } : undefined));
     }

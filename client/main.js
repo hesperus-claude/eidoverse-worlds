@@ -1,6 +1,6 @@
 // the water level seen from under it (#254): fog, the background, Snell's window (watervolumes.js); authored water volumes,
 // air boxes and environments (#248) wait for their components to be registered (PROTOCOL §4)
-import { updateWater, updateWaterView, setWaterObjects, setWaterClock, setSkyHider, waterDebug, applyEnvLight } from './lib/watervolumes.js';
+import { updateWater, updateWaterView, setWaterObjects, setWaterClock, setSkyHider, waterDebug, applyEnvLight } from './lib/realize/watervolumes.js';
 // eidoverse-worlds browser client.
 //
 // Two planes: the world log (verbs, ordered, replayed on join) and presence
@@ -31,14 +31,14 @@ import { initStructureUI } from './lib/structure_ui.js';
 import { initCauses } from './lib/realize/livechat.js';
 // side-effecting: the `particles` component's host wires itself to the comp
 // and entity buses on import (it has no boot step of its own)
-import './lib/emitters.js';
-import './lib/pictures.js';
-import './lib/materialcomp.js';   // the material component: an image on a named node of the model
-import { tickSounds } from './lib/sounds.js';   // the sound comp: positional audio from an entity
+import './lib/realize/emitters.js';
+import './lib/realize/pictures.js';
+import './lib/realize/material.js';   // the material component: an image on a named node of the model
+import { tickSounds } from './lib/realize/sounds.js';   // the sound comp: positional audio from an entity
 import { tickMotion } from './lib/motion.js';
-import { tickLookAt } from './lib/lookats.js';   // batch 2: look-at, after motion (a bob moves it, then it turns)
-import { tickTexts } from './lib/texts.js';      // batch 2: signs (the text component)
-import { tickOpenables } from './lib/openable.js';
+import { tickLookAt } from './lib/realize/lookats.js';   // batch 2: look-at, after motion (a bob moves it, then it turns)
+import { tickTexts } from './lib/realize/texts.js';      // batch 2: signs (the text component)
+import { tickOpenables } from './lib/realize/openable.js';
 import {
   myState, updateMe, updateSpectator, setCamYaw, setPosture, togglePhotoMode,
   setRightsHook, setMeHook, setFolded, photoMode, setBoundsHook, setRespawnHooks, respawnMe, flying as flyingNow, capSpeed,
@@ -73,7 +73,7 @@ import { initEditPanels } from './lib/editpanels.js';
 import { initEditLayout } from './lib/editlayout.js';
 import { initGizmo } from './lib/gizmo.js';
 import { initGripEdit } from './lib/gripedit.js';
-import { initMaterialOverrides } from './lib/matoverride.js';
+import { initMaterialOverrides } from './lib/realize/material_draft.js';
 import { initWorldEdge } from './lib/edge.js';
 import { initXR, updateXR, bindXRSelf, isPresenting } from './lib/xr.js';
 import { initPeople, personOf, isPhone, menuAt as personMenuAt, sheetFor as personSheet, stripFor as personStrip, badgeHtml as personBadge } from './lib/people.js';

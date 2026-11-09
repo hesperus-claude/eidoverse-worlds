@@ -14,8 +14,8 @@
 // Cost is bounded three ways: what an effect may hold (EFFECT_LIMITS, checked at the door), the viewer's tier (the perf
 // governor thins drawn particles, never the simulation's meaning), and distance (an emitter farther than FAR is neither
 // stepped nor drawn: a cosmetic, per-viewer simulation needs no continuity nobody sees).
-import { THREE, TSL, camera } from './core.js';
-import { makeSim, localGravity } from '../../shared/particlesim.js';
+import { THREE, TSL, camera } from '../core.js';
+import { makeSim, localGravity } from '../../../shared/particlesim.js';
 
 export const FAR = 90;   // m: past this an emitter sleeps (its quads would be sub-pixel long before)
 const _qa = [0, 0, 0, 1], _sa = [1, 1, 1], _ga = [0, 0, 0];   // scratch for localGravity (nothing allocated per frame)

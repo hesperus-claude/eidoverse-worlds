@@ -36,7 +36,7 @@ import { replica, net, sendRequest as rawSend, identities } from './net.js';
 import { flashHint } from './ui.js';
 import { logChat } from './chat.js';
 import { register as registerAction } from './actions.js';
-import { setPressFx, pressFxOn } from './emitters.js';
+import { setPressFx, pressFxOn } from './realize/emitters.js';
 import { advanceSim, tickOf, ENGINES, engineViewM, worldPose } from '../../shared/protocol/simlayer.js';
 import { createShover, obbOf, aabbOfObb, contactOf, smoother } from '../../shared/shove.js';
 import { simEntry } from '../../shared/sim.js';

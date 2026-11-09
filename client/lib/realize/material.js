@@ -1,4 +1,4 @@
-// materialcomp — the browser host for the `material` component: an image on a named node of the thing's model
+// material — the browser host for the `material` component: an image on a named node of the thing's model
 // (shared/material.js says what a bag means). Main's picture on a part, moved here (a picture is a quad of its own).
 //
 //   1. NEVER mutate the node's material: glTF materials are shared across primitives and instances, so painting one
@@ -7,12 +7,12 @@
 //   3. A load installs only under the intent revision it was issued for (a new bag, a removal, the entity leaving or
 //      re-realized, a world reset each bump it): the picture host's rule, pictures.js.
 
-import { bus } from './base.js';
-import { entities, findPart, bags } from './world.js';
-import { prepareMaterial } from './materials.js';
-import { normalizeMaterial } from '../../shared/material.js';
-import { clientMayFetch } from '../../shared/mediasrc.js';
-import { allowUntrusted } from './mediaprefs.js';
+import { bus } from '../base.js';
+import { entities, findPart, bags } from '../world.js';
+import { prepareMaterial } from '../materials.js';
+import { normalizeMaterial } from '../../../shared/material.js';
+import { clientMayFetch } from '../../../shared/mediasrc.js';
+import { allowUntrusted } from '../mediaprefs.js';
 import { imageTexture } from './pictures.js';
 
 const worn = new Map();      // id → { material, on: [[mesh, original, clone]] }

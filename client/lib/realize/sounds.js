@@ -42,19 +42,19 @@
 //      needs it; its host sees the page's Origin); a host without CORS headers plays from a plain element instead,
 //      volume by the same distance curve (no HRTF, no limiter: said once in the console).
 //  10. Mute for me (mediaprefs.js): a muted thing's sound is gain 0, never logged.
-import { THREE, camera } from './core.js';
-import { bus, CONFIG } from './base.js';
-import { entities, bags, bagOf } from './world.js';
-import { audioContext } from './audioctx.js';
-import { serverNow } from './serverclock.js';
-import { playWhenAllowed } from './audiounlock.js';
-import { volumeFor } from './voiceconsent.js';
-import { registerEditor, registerHandler, commitEdit } from './inspect.js';
-import { toast, flashHint } from './ui.js';
-import { normalizeSound, gainAt, TAPER_START, SOUND_DESCRIPTION_MAX, SOUND_DESCRIPTION_HINT, SOUND_STORE, SOUND_MAX_RADIUS } from '../../shared/sound.js';
-import { mediaTier, clientMayFetch, mediaUrl } from '../../shared/mediasrc.js';
-import { allowUntrusted, isMineMuted, toggleMineMuted, RIGHTS_WARNING } from './mediaprefs.js';
-import { escapeHtml as esc } from './markup.js';
+import { THREE, camera } from '../core.js';
+import { bus, CONFIG } from '../base.js';
+import { entities, bags, bagOf } from '../world.js';
+import { audioContext } from '../audioctx.js';
+import { serverNow } from '../serverclock.js';
+import { playWhenAllowed } from '../audiounlock.js';
+import { volumeFor } from '../voiceconsent.js';
+import { registerEditor, registerHandler, commitEdit } from '../inspect.js';
+import { toast, flashHint } from '../ui.js';
+import { normalizeSound, gainAt, TAPER_START, SOUND_DESCRIPTION_MAX, SOUND_DESCRIPTION_HINT, SOUND_STORE, SOUND_MAX_RADIUS } from '../../../shared/sound.js';
+import { mediaTier, clientMayFetch, mediaUrl } from '../../../shared/mediasrc.js';
+import { allowUntrusted, isMineMuted, toggleMineMuted, RIGHTS_WARNING } from '../mediaprefs.js';
+import { escapeHtml as esc } from '../markup.js';
 
 export const VOICES = 32;
 // id → { sound, el, srcNode?, gain?, panner?, plain?, capped, want, done? }

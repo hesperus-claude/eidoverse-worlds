@@ -44,9 +44,9 @@ plugin({
     // shim over parts-stub rather than to parts-stub itself. Two specifiers
     // resolving to one plugin-returned path is the configuration that breaks
     // on macOS Bun 1.3.14 (see colliders-stub.mjs for the evidence).
-    build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: CORE }));
-    build.onResolve({ filter: /^\.\/world\.js$/ }, () => ({ path: PARTS }));
-    build.onResolve({ filter: /^\.\/colliders\.js$/ }, () => ({ path: COLLIDERS }));
+    build.onResolve({ filter: /^\.\.?\/core\.js$/ }, () => ({ path: CORE }));
+    build.onResolve({ filter: /^\.\.?\/world\.js$/ }, () => ({ path: PARTS }));
+    build.onResolve({ filter: /^\.\.?\/colliders\.js$/ }, () => ({ path: COLLIDERS }));
     // motion.js's cone reaches remotes.js → loadwork.js, which schedules on
     // requestAnimationFrame at module scope and dies headless. avatar-test
     // already carries a stub for exactly this; share it.
@@ -165,7 +165,7 @@ console.log('\n━━ a parented thing keeps its own motion, in its parent\'s fr
 // I37, the openable half (openable.js skipped userData.mountedTo the same way): a lid parented to its box still opens
 // Mutation (must go red): restore `|| obj.userData.mountedTo` in openable.js apply().
 {
-  const { tickOpenables } = await import('../../client/lib/openable.js');
+  const { tickOpenables } = await import('../../client/lib/realize/openable.js');
   const box = new THREE.Object3D(); const lid = new THREE.Object3D(); lid.position.set(0, 1, 0);
   box.add(lid); lid.userData.mountedTo = 'box'; lid.userData.base = { pos: [0, 1, 0], yaw: 0, q: [0, 0, 0, 1] };
   entities.set('lid', lid);

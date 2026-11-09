@@ -1,4 +1,4 @@
-// particles-host-test — the ACTUAL browser host (client/lib/emitters.js) with a stand-in GPU half (particlefx.js
+// particles-host-test — the ACTUAL browser host (client/lib/realize/emitters.js) with a stand-in GPU half (particlefx.js
 // buildEmitter) and real THREE transforms. Ported from upstream #256's host test to this protocol's shapes (an instance
 // names an effect document; a thing carries one `particles`). What it pins:
 //
@@ -42,7 +42,7 @@ mock.module(`${base}net.js`, () => ({ sendRequest: async (verb: string, args: an
 // the GPU half: one mesh per emitter, counted, with a dispose the host must call
 const built: { name: string; seed: number; em: any; fx?: any }[] = [];
 let disposed = 0;
-mock.module(`${base}particlefx.js`, () => ({
+mock.module(`${base}realize/particlefx.js`, () => ({
   buildEmitter: (em: any, { seed, name }: { seed: number; name: string }) => {
     const mesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial()); mesh.name = name;
     let on = true;
@@ -53,7 +53,7 @@ mock.module(`${base}particlefx.js`, () => ({
 }));
 
 const hooks: Function[] = ((globalThis as any)._autoParticleSystems ||= []);
-const { _registry: registry, clearEmitters, emitterCount } = await import('../../client/lib/emitters.js');
+const { _registry: registry, clearEmitters, emitterCount } = await import('../../client/lib/realize/emitters.js');
 const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 const comp = async (id: string, data: unknown) => { emit('comp', { id, type: 'particles', data }); await settle(); };
 const groups = (root: THREE.Object3D) => root.children.filter((c) => c.userData.emitterOf);

@@ -21,7 +21,7 @@ import { isOverlayOpen, flashHint, html } from './ui.js';
 import { selectClip, AIRBORNE_GRACE } from './locomotion_clip.js';
 import { bodyModeOf } from '../../shared/bodymode.js';
 // the 3D swim (under a water level, and in water volumes where a world has them): the mover's law (shared/mover.js stepSwim)
-import { waterAt as volumeAt, waterTime, levelAt, speedAt } from './watervolumes.js';
+import { waterAt as volumeAt, waterTime, levelAt, speedAt } from './realize/watervolumes.js';
 import { swimStep, waveHeight } from '../../shared/water.js';
 import { register as registerAction } from './actions.js';
 import {

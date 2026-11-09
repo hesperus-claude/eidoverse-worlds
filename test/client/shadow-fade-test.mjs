@@ -187,7 +187,7 @@ console.log('MATERIALS — one mask node, marked');
   const basic = new THREE.MeshBasicMaterial(); basic.isNodeMaterial = true; basic.isMeshBasicNodeMaterial = true;
   mats.prepareMaterial(basic);
   check('an unlit material is not marked (hard flip)', basic.userData.shadowFade !== true);
-  // matoverride clones a prepared material: NodeMaterial.copy carries maskShadowNode AND userData, then prepareMaterial runs again
+  // realize/material_draft.js clones a prepared material: NodeMaterial.copy carries maskShadowNode AND userData, then prepareMaterial runs again
   const clone = new THREE.NodeMaterial(); clone.roughness = 0.5; clone.metalness = 0; clone.maskShadowNode = a.maskShadowNode; clone.userData = { ...a.userData };
   clone.colorNode = a.colorNode; clone.roughnessNode = a.roughnessNode;
   mats.prepareMaterial(clone);

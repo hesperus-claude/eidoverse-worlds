@@ -19,7 +19,7 @@ try {
   const out = await evalJson(`(async () => {
     const st = await import('/lib/state.js');
     const { MAX_WATER, MAX_AIR } = await import('/shared/water.js');
-    const w = await import('/lib/watervolumes.js'); w.setWaterObjects(() => new Map());
+    const w = await import('/lib/realize/watervolumes.js'); w.setWaterObjects(() => new Map());
     const rec = (pos, comps) => ({ pos, q: [0, 0, 0, 1], scale: 1, ...comps });
     const entities = {};
     for (let i = 0; i <= MAX_WATER; i++) entities['pool' + i] = rec([i * 20, -5, 0], { zone: { shape: 'box', size: [10, 10, 10], priority: i }, water: {} });

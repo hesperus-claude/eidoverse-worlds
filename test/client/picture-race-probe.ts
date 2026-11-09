@@ -79,7 +79,7 @@ const remove = (pg: any) => req(pg, OP.remove(ID));
 const comp = (pg: any, src: string | null) => req(pg, src ? OP.set(ID, 'picture', { src, description: 'race', lit: 'self' }) : OP.unset(ID, 'picture'));
 const state = (pg: any) => pg.evaluate(async (id: string) => {
   const { entities } = await import('/lib/world.js');
-  const { _hung } = await import('/lib/pictures.js');
+  const { _hung } = await import('/lib/realize/pictures.js');
   const root = entities.get(id); const h = _hung.get(id);
   let mat: any = null; h?.quad?.traverse((o: any) => { if (o.isMesh && !mat) mat = o.material; });
   return { entity: !!root, hung: !!h, count: _hung.size, hasMap: !!mat?.map, mapSrc: h?.picture?.src ?? null, original: !!root && !h };

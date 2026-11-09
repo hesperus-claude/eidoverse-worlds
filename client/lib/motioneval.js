@@ -202,7 +202,7 @@ export function evalWholeMotion(base, m, nowMs) {
   return r;
 }
 
-// ---- openable: a door, a gate, a lid — the pure halves of client/lib/openable.js ----------
+// ---- openable: a door, a gate, a lid — the pure halves of client/lib/realize/openable.js ----------
 export const OPEN_DEFAULTS = Object.freeze({ angle: Math.PI / 2, time: 1 });   // a quarter turn; Roblox TweenInfo's 1 s
 
 /** How open (0 shut … 1 open) a tween {from, to, t0, dur} is at `now` (ms). Smoothstep: it starts and stops softly. */

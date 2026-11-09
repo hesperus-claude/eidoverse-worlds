@@ -236,7 +236,7 @@ await tryRow('DS', async () => {
   const { renameFields } = await import('../../tools/import-v1/shapes.js');
   const rp = renameFields('picture', { src: 'store/images/a.png', alt: 'a print' }), rs = renameFields('sound', { src: 'store/audio/a.ogg', alt: 'rain', description: 'kept' }), rl = renameFields('picture', { src: 'store/images/a.png', look: 'older' });
   check('DS5 repair: a stored alt (or the look before it) is description (one time); description already there wins', rp.value.description === 'a print' && !('alt' in rp.value) && rs.value.description === 'kept' && !('alt' in rs.value) && rl.value.description === 'older' && !('look' in rl.value), [rp, rs, rl]);
-  const src = ['shared/descriptors.js', 'shared/editschema.js', 'shared/components.js', 'client/lib/pictures.js', 'client/lib/sounds.js'].map(read).join('\n');
+  const src = ['shared/descriptors.js', 'shared/editschema.js', 'shared/components.js', 'client/lib/realize/pictures.js', 'client/lib/realize/sounds.js'].map(read).join('\n');
   check('DS6 alt leaves the editors (descriptors, editschema, components, the client\'s panels)', !/['"]alt['"]|\.alt\b|\balt:|ALT_/.test(src), (src.match(/.{0,40}(['"]alt['"]|\.alt\b|\balt:|ALT_).{0,40}/g) ?? []).slice(0, 5));
 });
 
@@ -252,8 +252,8 @@ await tryRow('MA', async () => {
   check('MA2 …refuses a texture nobody may fetch (the picture rule) and a missing node', code(r2) === 'shape' && /texture/.test(r2.refused?.reason ?? '') && code(r3) !== 'ok', [r2.refused, r3.refused]);
   const Ma = await import('../../shared/material.js'), { saysOf } = await import('../../shared/says.js');
   check('MA3 look reads it: what the author said, on which node', Ma.describeMaterial({ node: 'screen', texture: 'store/images/a.png', description: 'static' }) === 'an image on its screen: «static»' && saysOf({ material: { node: 'screen', texture: 'store/images/a.png' } }).includes('an image on its screen (a.png)'), saysOf({ material: { node: 'screen', texture: 'store/images/a.png' } }));
-  const host = read('client/lib/materialcomp.js');
-  check('MA4 the client wears it: imported by main, a prepared clone per mesh of the node, the original put back on removal', /import '\.\/lib\/materialcomp\.js'/.test(read('client/main.js')) && /original\.clone\(\)/.test(host) && /prepareMaterial\(clone/.test(host) && /mesh\.material = original/.test(host) && /findPart\(root, m\.node\)/.test(host), '');
+  const host = read('client/lib/realize/material.js');
+  check('MA4 the client wears it: imported by main, a prepared clone per mesh of the node, the original put back on removal', /import '\.\/lib\/realize\/material\.js'/.test(read('client/main.js')) && /original\.clone\(\)/.test(host) && /prepareMaterial\(clone/.test(host) && /mesh\.material = original/.test(host) && /findPart\(root, m\.node\)/.test(host), '');
 });
 
 // ===================================================================== Create ▸ Picture: a non-technical way in (R 10-27)

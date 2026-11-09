@@ -22,7 +22,7 @@ const KEY = 'eido.audio.prefs';
 // accepted, false = refused. A boolean cannot tell "not asked" from "said no",
 // so a refusal would be re-prompted on the next mic-on.
 // volWorld defaults to 1 (as authored, no cut nobody chose). Its one caller is
-// the world bus in client/lib/sounds.js (the `sound` component); anything else
+// the world bus in client/lib/realize/sounds.js (the `sound` component); anything else
 // that plays placed or ambient audio should end in that bus, so the slider stays
 // one control over one thing.
 const DEFAULTS = { recvVoice: false, volVoices: 1, volWorld: 1, volTts: 1, sttConsent: null,

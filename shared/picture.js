@@ -1,4 +1,4 @@
-// picture — what a `picture` component MEANS, shared by the browser host (client/lib/pictures.js) and the mcpl agent.
+// picture — what a `picture` component MEANS, shared by the browser host (client/lib/realize/pictures.js) and the mcpl agent.
 //
 //   picture {src, width?, description?, lit?}   (a quad of its own, facing +Z on the thing's origin)
 //

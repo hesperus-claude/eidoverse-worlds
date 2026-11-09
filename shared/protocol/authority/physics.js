@@ -227,7 +227,7 @@ function solidAt(w, st, p, except = new Set(), cands = null, box = bodyBox(p)) {
   return null;
 }
 // an open openable (a whole door, not a cabinet's part) is out of the way: the fix above says "through a door someone
-// opens", and every browser's collider follows the drawn leaf (client/lib/openable.js reindexes it at rest)
+// opens", and every browser's collider follows the drawn leaf (client/lib/realize/openable.js reindexes it at rest)
 const openNow = (st, id) => { const o = st.entities[id]?.c.openable; return !!o && typeof o === "object" && o.open === true && !o.part; };
 // THE GROUND under a body. In a world with terrain (and water), each point of a step is judged with the MOVER's floor law
 // (shared/mover.js floorStep) on the terrain heightfield and any placed top it could step onto: where the feet end up,

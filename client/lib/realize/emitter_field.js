@@ -5,7 +5,7 @@
 // replacement retires the old one instead of stacking a second system. Everything is idempotent: the same
 // state twice is a no-op, and a build that finishes after its entity was replaced retires itself.
 
-import { releaseHook } from './autohooks.js';
+import { releaseHook } from '../autohooks.js';
 
 /**
  * Retire one built emitter completely: unhook its per-frame update, release

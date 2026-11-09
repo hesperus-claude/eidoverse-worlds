@@ -10,11 +10,11 @@
 //   - Flat (billboard off): two planes back to back facing ±Z, so it reads from behind unmirrored. yaw: it turns about
 //     world up toward the viewer. full: it faces the viewer with world up kept (roll-locked: a VR head tilt never tilts it).
 //   - Centred on the thing's origin (Godot Label3D). Its world extent is held to 30 m whatever the transform's scale.
-import { THREE, camera } from './core.js';
-import { bus } from './base.js';
-import { entities, bagOf } from './world.js';
-import { layoutLines } from '../../shared/text.js';
-import { COMPONENTS } from '../../shared/protocol/componentspec.js';
+import { THREE, camera } from '../core.js';
+import { bus } from '../base.js';
+import { entities, bagOf } from '../world.js';
+import { layoutLines } from '../../../shared/text.js';
+import { COMPONENTS } from '../../../shared/protocol/componentspec.js';
 
 const D = COMPONENTS.text.defaults;
 const LINE_PX = 96, MAX_PX = 2048, MAX_EXTENT = 30;

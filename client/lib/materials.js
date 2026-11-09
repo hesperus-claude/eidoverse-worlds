@@ -296,10 +296,10 @@ export function prepareMaterial(mat, receiver = null) {
   // bodies) get the wetness color term only — exactly what the sweeps did
   const pbr = mat.isMeshStandardNodeMaterial || mat.isMeshPhysicalNodeMaterial
     || (mat.roughness !== undefined && mat.metalness !== undefined);
-  // a clone of a prepared material (matoverride) copies the wrapped colour/roughness nodes and userData: wrapping it again
+  // a clone of a prepared material (realize/material_draft.js) copies the wrapped colour/roughness nodes and userData: wrapping it again
   // would compose wetness and cloud shade twice
   if (!mat.userData.envWrapped) { wrapMaterial(mat, receiver, pbr); mat.userData.envWrapped = true; }
-  // a clone of a prepared material (matoverride) carries the node AND the flag: never compose the fade with itself
+  // a clone of a prepared material (realize/material_draft.js) carries the node AND the flag: never compose the fade with itself
   if (!mat.userData.shadowFade) {
     const mask = mat.maskShadowNode ?? mat.maskNode;   // maskShadowNode wins over maskNode in three's depth pass
     mat.maskShadowNode = mask ? FADE_MASK.and(bool(mask)) : FADE_MASK;

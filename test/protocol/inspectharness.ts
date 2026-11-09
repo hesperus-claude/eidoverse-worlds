@@ -10,7 +10,7 @@
 //   xrask.js   a headset is never presenting (the ask goes to confirmcenter)
 //   realize/models.js (from inspect.js)  boxOf → null (the realizer is three.js and the GPU; not under test)
 //   core.js    three.js without a renderer (inspect.js reads THREE; nothing here draws)
-//   emitters.js, matoverride.js   no stored effect document is loaded; a realized object's materials → none
+//   emitters.js, material_draft.js   no stored effect document is loaded; a realized object's materials → none
 // client/lib/loadwork.js (reached through realize/structure.js) starts a frame-gap watch on requestAnimationFrame at import:
 // headless, the clock never answers (a timer-backed shim would re-arm forever and hold the process open).
 // @ts-nocheck
@@ -41,13 +41,13 @@ export function inspectHarness(tag = "inspect", { actor = "olive" } = {}) {
       // importers compared with forward slashes: on Windows they arrive with backslashes, and "/realize/" never matched, so the
       // realizer's own modules were handed the stub core.js (no grid)
       const fwd = (p: string) => p.replace(/\\/g, "/"), LIB = fwd(path.join(ROOT, "client/lib/"));
-      b.onResolve({ filter: /^\.\/(world|state|net|panels|ui|confirmcenter|xrask|core|emitters|matoverride)\.js$/ }, (a) =>
+      b.onResolve({ filter: /^\.\/(world|state|net|panels|ui|confirmcenter|xrask|core|realize\/emitters|realize\/material_draft)\.js$/ }, (a) =>
         (fwd(a.importer).startsWith(LIB) && !fwd(a.importer).includes("/realize/") ? { path: a.path, namespace: "inspect-harness" } : undefined));
       // the realizer (three.js, the GPU paths) is not under test: inspect.js asks it only for a model's box
       b.onResolve({ filter: /^\.\/realize\/models\.js$/ }, (a) => (fwd(a.importer).endsWith("/client/lib/inspect.js") ? { path: "realize-models", namespace: "inspect-harness" } : undefined));
       b.onLoad({ filter: /.*/, namespace: "inspect-harness" }, (a) => {
         if (a.path === "realize-models") return { contents: "export const boxOf = () => null; export const previewMesh = () => false; export const previewLight = (...a) => globalThis.__previewLight?.(...a) ?? false;", loader: "js" };
-        const m = a.path.match(/(world|state|net|panels|ui|confirmcenter|xrask|core|emitters|matoverride)/)[1];
+        const m = a.path.match(/(world|state|net|panels|ui|confirmcenter|xrask|core|emitters|material_draft)/)[1];
         // every name client/lib imports from these modules exists (no-ops where the edit path never calls them)
         const noop = (names) => names.map((n) => `export const ${n} = () => {};`).join(" ");
         const src = {
@@ -68,7 +68,7 @@ export function inspectHarness(tag = "inspect", { actor = "olive" } = {}) {
           core: `import * as THREE_ from ${JSON.stringify(path.join(ROOT, "client/node_modules/three/build/three.module.js"))}; export const THREE = { ...THREE_, MeshBasicNodeMaterial: THREE_.MeshBasicMaterial }; export const scene = new THREE_.Scene(); export const camera = new THREE_.PerspectiveCamera();
             export const renderer = { info: { memory: { total: 0 } }, domElement: null, xr: {} }; export const canvas = null; export const CONFIG = {}; export const report = () => {}; export const sun = null; export const ground = null; export const TSL = {}; export const BASE_PIXEL_RATIO = 1; export const XR_BOOT = false;`,
           emitters: "export const effectLookup = () => null;",
-          matoverride: "export const materialsOf = () => [];",
+          material_draft: "export const materialsOf = () => [];",
           xrask: `export const xrActive = () => false; export const chooseXR = async () => null; export const xrAskState = () => null; ${noop(["initXRAsk", "xrAnswer"])}`,
         }[m];
         return { contents: src, loader: "js" };
