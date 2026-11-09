@@ -1,15 +1,10 @@
 /**
  * tts_chunk — the spoken form of an utterance, in synthesis-sized pieces.
  *
- * Ported from the porch token-router aggregation (aggregate.py → LiveSay in
- * eido-cc-extras.ts). Constants are MEASURED, not guessed: a 152-char opening
- * sentence is ≈ 5s of unbroken speech, so soft clause-splitting past 90 chars
- * gives the voice somewhere to breathe. This is the BATCH adaptation: a
- * complete utterance in, chunks out (the streaming form stays in LiveSay).
- *
- * Sanitization lives here too because this is where text stops being for eyes:
- * markdown marks and emoji are dropped (piper reads emoji BY NAME). The say
- * keeps its glyphs; only the voice drops them.
+ * Batch port of the token-router's LiveSay aggregation. The constants are measured: a
+ * 152-char sentence is ≈ 5s of unbroken speech, so clauses past 90 chars get a soft split.
+ * Sanitization lives here too: markdown marks and emoji are dropped for the voice only
+ * (piper reads emoji by name); the say keeps its glyphs.
  */
 
 const ABBREVS = new Set([
@@ -24,14 +19,9 @@ const MIN_LEN = 20;
 const SOFT_LEN = 90;
 const SOFT_MIN = 35;
 
-/** Markdown is for eyes; emoji are for the log. Neither is for the larynx.
- *  (Rules after eido-cc-extras'.)
- *
- *  · FENCED CODE NEVER SPEAKS: fenced content is work, not words; it goes entirely.
- *  · URLs become "link" (espeak spells them out); [label](url) keeps its label.
- *  · Symbols espeak names aloud (→ ▸ ·, ->, =>, "world:staging" colons, bare
- *    | and ~ runs) become the PAUSE they meant: a comma or a space. Times
- *    (6:04) and ratios keep their colon: espeak already says digit:digit. */
+/** Text → what the larynx gets. Fenced code is dropped entirely; URLs become "link" (espeak spells
+ *  them out) and [label](url) keeps its label; symbols espeak would name aloud become the pause
+ *  they meant. Times (6:04) keep their colon. */
 export function spokenForm(text) {
   return text
     .replace(/```[\s\S]*?(?:```|$)/g, ' ')                     // fenced code never speaks
@@ -82,10 +72,8 @@ function splitLong(sentence) {
 const FIRST_MAX = 64;   // the opener: small enough that synth(first) is fast (research: 60-80)
 const FIRST_MIN = 20;   // ...but never a comic stub (research: 20-25 floor for piper quality)
 
-/** Split the OPENING chunk aggressively: time-to-first-word is synth(chunk 1),
- *  so the first piece should be a short clause even when the sentence is long.
- *  Relaxed minimum, any soft boundary, and a hard word-boundary cap as the
- *  last resort — better a slightly abrupt first clause than a silent second. */
+/** Split the opening chunk aggressively: time-to-first-word is synth(chunk 1). Any soft boundary,
+ *  then a word-boundary cap as the last resort. */
 function fastFirst(chunk) {
   if (chunk.length <= FIRST_MAX) return [chunk];
   let cut = -1;
@@ -105,16 +93,12 @@ function fastFirst(chunk) {
   return [shapeContinuation(chunk.slice(0, cut).trim()), chunk.slice(cut).trim()];
 }
 
-/** A mid-sentence chunk should END WITH A COMMA: espeak renders comma as a
- *  continuation RISE where a bare end gets sentence-final FALL — the split
- *  stops sounding like a full stop (the one free prosody mitigation piper
- *  supports). */
+/** A mid-sentence chunk ends with a comma: espeak renders it as a continuation rise, not a full stop. */
 function shapeContinuation(chunk) {
   return /[,;:—–.!?…]$/.test(chunk) ? chunk : chunk + ',';
 }
 
-/** A complete utterance → synthesis-sized spoken chunks (possibly none:
- *  an emoji-only utterance is in the log, not the air). */
+/** A complete utterance → synthesis-sized spoken chunks (none for an emoji-only utterance). */
 export function ttsChunks(text) {
   const spoken = spokenForm(text);
   if (!spoken) return [];

@@ -1,8 +1,5 @@
-// wavpcm — WAV (PCM s16) → {pcm, sampleRate}. A pure function with NO imports, so
-// it stays testable outside a browser (core.js would drag in `location`).
-//
-// The sample rate is PARSED, never assumed: a voice at another rate than Piper's
-// 22050Hz would otherwise play back at the wrong pitch.
+// wavpcm — WAV (PCM s16) → {pcm, sampleRate}. No imports, so it runs outside a browser.
+// The sample rate is parsed, not assumed: a non-22050Hz voice would otherwise play at the wrong pitch.
 
 export function decodeWavToPcm(arrayBuffer) {
   const dv = new DataView(arrayBuffer);

@@ -1,26 +1,18 @@
-// tts — THE MOUTH. Everything that makes samples: the registered synthesizer
-// function, the MediaStreamTrackGenerator, the wall-clock pacer, the queue,
-// the sidetone monitor, the own-say bridge, and the benches.
+// tts — the mouth: the registered synthesizer function, the MediaStreamTrackGenerator, the
+// wall-clock pacer and queue, the sidetone monitor, the own-say bridge, and the benches.
 //
-// The SEAM lives in voicesource.js; this module registers into it as a synth
-// PROVIDER (setSynthProvider), handing over a finished MediaStreamTrack.
-// voice.js and the mesh never import from here.
-//
-// LOCAL, always: synthesis on the client costs the server nothing and scales
-// with clients rather than with the room. Design notes: docs/research/tts-mouth.md.
+// It registers into voicesource.js as a synth provider (setSynthProvider), handing over a
+// finished MediaStreamTrack. Synthesis is always local. Design notes: docs/research/tts-mouth.md.
 
 import { report, bus } from './base.js';
 import { setSynthProvider, notifySynthTrackChanged } from './voicesource.js';
 import { volumeFor } from './voiceconsent.js';
 import { audioContext } from './audioctx.js';
 
-// The registered TTS source. null = ordinary microphone.
-//   fn: (text: string) => Promise<{pcm: Int16Array, sampleRate: number}>
-// A *function pointer*, deliberately: an agent points at its own synthesizer
-// and nothing here needs to know what produces the samples.
+// The registered synthesizer, (text) => Promise<{pcm: Int16Array, sampleRate}>; null = microphone only.
 let ttsFn = null;
-let ttsName = '';        // shown in the audio panel so it is never ambiguous
-let ttsEnabled = false;  // OFF by default — speaking is opt-in, like a mic
+let ttsName = '';        // shown in the audio panel
+let ttsEnabled = false;  // off by default: speaking is opt-in, like a mic
 
 let genTrack = null;     // the live MediaStreamTrackGenerator, if any
 let writer = null;
@@ -29,45 +21,28 @@ export const ttsAvailable = () => !!ttsFn;
 export const ttsVoiceName = () => ttsName;
 export const isTtsEnabled = () => ttsEnabled && !!ttsFn;
 
-/** Point this body's mouth at a synthesizer. Called by an agent harness, never
- *  by the UI. Passing null reverts to the microphone. */
+/** Point this body's mouth at a synthesizer (an agent harness or ttsrow's engine load). null reverts to the microphone. */
 export function setTtsSource(fn, name = 'TTS') {
   ttsFn = fn || null;
   ttsName = fn ? name : '';
   if (!fn) ttsEnabled = false;
 }
 
-// ── the human path to the SAME seam ─────────────────────────────────────────
-// A human picking a voice and an agent registering one are the same call
-// (setTtsSource); a UI is only ever a wrapper over it. The browser's built-in
-// speechSynthesis CANNOT be a source (no route from speak() to samples); any
-// synthesizer that returns {pcm, sampleRate} can (docs/research/tts-mouth.md).
-// Until one is bundled the UI row stays disabled: "system default (microphone)".
-
-/** The audio panel's toggle. Humans leave this off and use a mic; an agent
- *  turns it on once its source is registered. */
+/** The audio panel's toggle; an agent turns it on once its source is registered. */
 export function setTtsEnabled(on) {
   const was = ttsEnabled;
   ttsEnabled = !!on && !!ttsFn;
-  // EITHER ORDER MUST WORK, ONE MECHANISM ONLY. Enabling TTS with the mic
-  // already live arms it and touches nothing (MIC BEATS TTS; voice.js mic-off
-  // does the takeover via rebindSenders). Enabling with the mic off does the
-  // takeover HERE the same way: the generator goes on the sender via
-  // replaceTrack. No WebAudio mixing path: its destination produces nothing
-  // where the AudioContext clock stalls (every headless body).
+  // Mic beats TTS. Enabling with the mic live arms it and touches nothing (the mic-off path in
+  // voicesfu.js does the takeover); enabling with the mic off hands the generator over here.
   if (ttsEnabled !== was && typeof window !== 'undefined') {
     import('./micstate.js').then((v) => {
-      // ASK THE LIVE TRANSPORT: v.micOn() reads voice.js's micStream, which is
-      // null forever on an SFU client, so it would fail open here.
+      // ask the live transport first (micstate's micOn() is null on an SFU client)
       const micLive = (typeof window !== 'undefined' && typeof window.__sfuMicOn === 'function')
         ? !!window.__sfuMicOn() : v.micOn?.();
       if (ttsEnabled && canSynthesize() && !micLive) {
         startPacer(); notifySynthTrackChanged(ensureGenerator());
       } else if (!ttsEnabled) {
-        // Disable stills the producer; the senders keep the (now silent)
-        // generator track unless a live mic already reclaimed them — the
-        // same standing-lane rule the mic release uses.
-        stopPacer();
+        stopPacer();   // the senders keep the (now silent) generator track
       }
     }).catch(() => {});
   }
@@ -75,80 +50,59 @@ export function setTtsEnabled(on) {
 }
 
 // ── the generator ───────────────────────────────────────────────────────────
-// MediaStreamTrackGenerator fed timestamped PCM at WALL-CLOCK pace: a realtime
-// AudioContext in a headless browser runs its clock at ~1% and stalls.
-// Chromium-only; elsewhere an agent falls back to the microphone path (silent)
-// rather than throwing.
+// A MediaStreamTrackGenerator fed timestamped PCM at wall-clock pace, because a realtime
+// AudioContext stalls in a headless browser. Chromium-only; elsewhere an agent is silent, not broken.
 const CHUNK_MS = 20;
 
 const canSynthesize = () => typeof MediaStreamTrackGenerator !== 'undefined';
 
-// Fired when a DEAD generator is replaced by a live one: every sender still
-// holding the old track would transmit silence forever. voice.js listens and
-// replaceTrack()s it onto the existing senders (no renegotiation).
-/** Test seam: fire the installed hook without having to kill a real generator
- *  (MediaStreamTrackGenerator does not exist under happy-dom). */
-
-// Exported so the mic-off handover can wire the synth in (voice.js). Internal
-// to the module otherwise — nothing else should be minting generators.
+/** The live generator track, rebuilt if it ended; a rebuild notifies voicesource's hooks so
+ *  voicesfubridge re-binds the senders (replaceTrack, no renegotiation). */
 export function ensureGenerator() {
   if (genTrack && genTrack.readyState === 'live') return genTrack;
   const replacing = !!genTrack;
-  // An ENDED generator is not a dead end: make a new one and hand it back; the
-  // caller replaceTrack()s it (no device, no prompt, no renegotiation).
   genTrack = new MediaStreamTrackGenerator({ kind: 'audio' });
   writer = genTrack.writable.getWriter();
   if (replacing) {
     console.warn('[voice] generator was dead — rebuilt; re-binding senders');
-    notifySynthTrackChanged(genTrack);   // voice.js re-binds every sender
+    notifySynthTrackChanged(genTrack);
   }
   return genTrack;
 }
 
-// ONE SPEAKER TALKS ONE AT A TIME. speak() awaits synthesis BEFORE enqueue(),
-// so two says would synthesize concurrently and could overlap or reorder.
-// Chained per speaker: two people talking at once is correct in a shared room;
-// one person's consecutive utterances must not interleave.
+// One speaker talks one utterance at a time: synthesis is chained per speaker so consecutive
+// says cannot overlap or reorder. A rejection never poisons the chain.
 const _speakChains = new Map();   // speaker -> Promise
 function chain(speaker, job) {
   const key = speaker || 'self';
   const prev = _speakChains.get(key) ?? Promise.resolve();
-  // Never let a rejection poison the chain: a failed utterance must not stop
-  // the next one from being spoken.
   const next = prev.then(job, job);
   const tail = next.catch(() => {});
   _speakChains.set(key, tail);
-  // Drop the entry once this is still the tail and it has settled, so a
-  // long-lived room does not keep one promise per departed speaker.
+  // drop the entry once settled, so a long-lived room does not keep one promise per departed speaker
   tail.then(() => { if (_speakChains.get(key) === tail) _speakChains.delete(key); });
   return next;
 }
 
-/** Speak text through the registered synthesizer. Silent no-op when TTS is off
- *  or unavailable — callers should not have to branch.
+/** Speak text through the registered synthesizer; a no-op when TTS is off.
  *  `speaker` scopes the serialization; omit it for your own voice. */
 export function speak(text, speaker) {
   return chain(speaker, () => speakChunked(text));
 }
 
-// LENGTH IS LATENCY: piper's RTF is ~1.1, so one long ort.run() freezes the
-// main thread for as long as the audio lasts. tts_chunk.js splits like the
-// sidecar, with an aggressive opening clause (time-to-first-word = synth of
-// chunk 1). Chunks still run on the main thread; a Worker is the real cure.
+// Length is latency: piper's RTF is ~1.1 and inference runs on the main thread, so tts_chunk.js
+// splits the utterance, with an aggressive opening clause for time-to-first-word.
 async function speakChunked(text) {
   const { ttsChunks } = await import('./tts_chunk.js');
   const chunks = ttsChunks(text);
   if (!chunks.length) return false;          // emoji-only: in the log, not the air
   if (chunks.length === 1) return speakOne(chunks[0]);
-  // ONE EPOCH FOR THE WHOLE UTTERANCE: a stopPacer() mid-utterance (mic
-  // takeover) must kill every later chunk too, not only the one in flight.
+  // one epoch for the whole utterance: a stopPacer() mid-utterance kills every later chunk too
   const epoch0 = ttsEpoch;
   let any = false;
   for (const c of chunks) {
     if (ttsEpoch !== epoch0) { console.warn('[voice] utterance cancelled between chunks — dropping the rest'); return any; }
-    // Sequential BY DESIGN: the queue plays in order, and synthesizing ahead
-    // would put us right back into the race the speaker chain exists to stop.
-    // Yielding between chunks lets the page paint — the whole point.
+    // sequential by design; yielding between chunks lets the page paint
     const ok = await speakOne(c);
     any = any || ok;
     await new Promise((r) => setTimeout(r, 0));
@@ -158,11 +112,9 @@ async function speakChunked(text) {
 
 async function speakOne(text) {
   const epoch = ttsEpoch;
-  // EVERY REFUSAL SAYS WHY, so "nothing came out" is distinguishable (TTS off,
-  // no sender, empty synthesis).
+  // every refusal says why, so "nothing came out" is diagnosable
   if (!isTtsEnabled()) { console.warn(`[voice] speak refused: tts off (enabled=${ttsEnabled} fn=${!!ttsFn})`); return false; }
-  // NO SINK IS NOT NO REASON TO SPEAK: sidetone still plays locally; only
-  // TRANSMISSION needs the lane. Say which of the two happened.
+  // no sink is not no reason to speak: sidetone still plays locally
   if (!canSynthesize() && !sidetone()) {
     console.warn('[voice] speak refused: no generator sink and sidetone off');
     return false;
@@ -173,8 +125,7 @@ async function speakOne(text) {
     out = await ttsFn(text);
   } catch (e) { report('tts synthesize', e); return false; }
   if (!out?.pcm?.length) { console.warn('[voice] synthesizer returned no pcm'); return false; }
-    // IS THE PCM ITSELF CLEAN? Clipping and DC offset both sound like
-    // distortion; measure them before blaming the pacer.
+    // measure clipping and DC offset in the PCM before blaming the pacer
     {
       const pcm = out.pcm;
       let peak = 0, sum = 0, clipped = 0;
@@ -191,8 +142,7 @@ async function speakOne(text) {
         + (clipped > pcm.length * 0.001 ? '  ⚠️ CLIPPING' : '')
         + (Math.abs(dc / 32768) > 0.01 ? '  ⚠️ DC OFFSET' : ''));
     }
-  // QUEUE IT — DO NOT PUSH IT. The frames are handed to a wall-clock pacer that
-  // is already running; see the pacer below for why the track must never starve.
+  // hand the frames to the running pacer, which must never starve (below)
   if (epoch !== ttsEpoch) {
     console.warn('[voice] synthesis finished after a disable — result dropped (stale, not current)');
     return false;
@@ -201,30 +151,22 @@ async function speakOne(text) {
   return true;
 }
 
-// ── the pacer: A MOUTH IS ALWAYS OPEN ──────────────────────────────────────
-// A 10ms pacer writes exactly as many frames as wall time OWES: speech when
-// there is speech, SILENCE when not, like a microphone. A starved generator is
-// a track with nothing to encode, and the room hears nothing.
-//
-// Output is resampled to 48k ourselves, once, with a real filter (resampleTo):
-// piper emits 22050 Hz and a cheap converter aliases (docs/research/tts-mouth.md).
+// ── the pacer ───────────────────────────────────────────────────────────────
+// A 10ms pacer writes exactly as many frames as wall time owes: speech when there is speech,
+// silence when not, like a microphone (a starved generator has nothing to encode).
+// Output is resampled to 48k once, with a real filter (toOutRate): piper emits 22050 Hz and a
+// cheap converter aliases (docs/research/tts-mouth.md).
 const OUT_RATE = 48000;
 const FRAME = Math.round(OUT_RATE / 50);   // 20ms at the OUTPUT rate
 let queue = [];            // pending {pcm, sampleRate}
-// Disable epoch: a synthesis in flight when TTS is disabled completes after
-// stopPacer cleared the queue; speak() captures the epoch first and drops its
-// result if a disable happened in between.
-let ttsEpoch = 0;
+let ttsEpoch = 0;          // bumped by stopPacer; a synthesis from an older epoch is dropped
 let qOff = 0;              // read offset into queue[0]
 let playhead = 0;          // samples emitted since the pacer started
 let t0 = 0;
 let pacer = null;
 
-/** SIDETONE — hearing your own synthesized voice. speak() feeds the SENDER, so
- *  without this you are the one person who cannot hear you. Fed from our own
- *  PCM before pacing (exact, no round trip). Off for renderers/spectators. */
-// Through the PAGE's one AudioContext (audioctx.js), never a private one: it
-// counts against Chrome's ~six-context cap and can't join the shared gain graph.
+/** Sidetone: hearing your own synthesized voice, fed from our own PCM before pacing, through the
+ *  page's one AudioContext (audioctx.js). */
 let monitorOn = (() => {
   try { return localStorage.getItem('eido.ttsSidetone') !== 'off'; } catch { return true; }
 })();
@@ -236,7 +178,7 @@ export const sidetone = (on) => {
   return monitorOn;
 };
 
-// The shared sidetone gain (see its use site).
+// one shared sidetone gain per AudioContext, so a volume drag reaches audio already scheduled
 let _monGain = null, _monGainCtx = null;
 function monitorGain(ctx) {
   if (_monGainCtx !== ctx) {
@@ -246,52 +188,30 @@ function monitorGain(ctx) {
   }
   return _monGain;
 }
-// The drag must land on audio ALREADY queued (v1's failure). Guarded: the bus
-// exists at module load, the node may not.
 bus.on('audio:volume', ({ cat }) => {
   if (cat === 'tts' && _monGain) _monGain.gain.value = 0.8 * volumeFor('tts');
 });
 
-// Where the sidetone has played up to, in AudioContext time. Chunks schedule
-// against this rather than against "now", so a burst of fast synthesis lands as
-// consecutive speech instead of a chord.
-let monitorHead = 0;
-/** Every sidetone chunk currently scheduled, so a cancel (stopPacer) can STOP
- *  them and you don't keep hearing a cancelled tail. */
-const _monSources = new Set();
+let monitorHead = 0;              // where the sidetone has played up to, in AudioContext time
+const _monSources = new Set();    // scheduled sidetone chunks, so stopPacer can stop them
 
 
 function monitor(pcm, sampleRate) {
   if (!monitorOn || !pcm?.length) return;
   try {
     const monitorCtx = audioContext();
-    // A context created before a user gesture starts suspended; a resume() that
-    // never lands must not throw away the sample.
     if (monitorCtx.state === 'suspended') void monitorCtx.resume();
     const buf = monitorCtx.createBuffer(1, pcm.length, sampleRate);
     const ch = buf.getChannelData(0);
     for (let i = 0; i < pcm.length; i++) ch[i] = pcm[i] / 32768;
     const src = monitorCtx.createBufferSource();
-    // ONE shared gain node per AudioContext, needing both properties: shared
-    // (a drag reaches audio already scheduled ahead) and context-tracked
-    // (rebuilt when the context identity changes, never orphaned on a dead one).
-    // Level is re-applied per chunk AND on the volume bus event.
     const g = monitorGain(monitorCtx);
-    g.gain.value = 0.8 * volumeFor('tts');
-    // Self-TTS volume scales the SIDETONE only, never the outbound track: a
-    // listener owns what they hear ('voices', distance, consent), a speaker
-    // owns what they monitor. 0.8 is the baseline the slider rides.
+    g.gain.value = 0.8 * volumeFor('tts');   // the 'tts' slider scales the sidetone only, never the outbound track
     src.buffer = buf;
-    src.connect(g);   // g is already wired to this context's destination
-    // SCHEDULE, DO NOT FIRE: chunks synthesize faster than they play, so a
-    // bare src.start() stacks them. The sidetone keeps its own playhead: chunk
-    // N+1 starts when chunk N ends.
+    src.connect(g);
+    // schedule, don't fire: chunks synthesize faster than they play, so chunk N+1 starts when N ends
     const now = monitorCtx.currentTime;
-    // Behind the clock (a gap in speaking, or the very first chunk) → start
-    // now. Ahead of it → queue after what is still playing.
     const at = Math.max(now, monitorHead);
-    // Retained so cancellation can reach audio that is already scheduled —
-    // see stopPacer. onended keeps the set from growing past what is queued.
     _monSources.add(src);
     src.onended = () => _monSources.delete(src);
     src.start(at);
@@ -299,14 +219,9 @@ function monitor(pcm, sampleRate) {
   } catch (e) { console.warn('[voice] sidetone failed (still transmitting):', e?.message || e); }
 }
 
-/** Resample to OUT_RATE with WebAudio's own (good) resampler, so WebRTC never
- *  uses a cheap one (OfflineAudioContext renders with the filter the monitor
- *  path gets). Async: callers queue the RESULT. */
+/** Resample to OUT_RATE with an OfflineAudioContext (WebAudio's own good resampler), so WebRTC
+ *  never uses a cheap one. localStorage.eidoTtsResample = 'off' hands WebRTC the native rate, to A/B by ear. */
 async function toOutRate(pcm, inRate) {
-  // SWITCHABLE: never verified to beat the browser's own resample (the symptom
-  // it targeted was missing terminal punctuation, rhasspy/piper#252).
-  //   localStorage.eidoTtsResample = 'off'   → hand WebRTC the native rate
-  // A/B it by ear; the probe below prints what each path produces.
   try {
     if (localStorage.getItem('eidoTtsResample') === 'off') {
       const f = new Float32Array(pcm.length);
@@ -336,9 +251,7 @@ async function toOutRate(pcm, inRate) {
   src.start();
   const rendered = await ctx.startRendering();
   const outCh = rendered.getChannelData(0);
-  // Same measurement the pcm probe makes, one stage later. Clean in + dirty out
-  // here would be conclusive; matching stats mean the resampler is exonerated
-  // and the fault is further down (pacer, generator, or Opus).
+  // the pcm probe's measurement, one stage later: clean in + dirty out would indict the resampler
   {
     let peak = 0, sum = 0;
     for (let i = 0; i < outCh.length; i++) { const a = Math.abs(outCh[i]); if (a > peak) peak = a; sum += a * a; }
@@ -352,14 +265,9 @@ async function toOutRate(pcm, inRate) {
 
 function enqueue(pcm, sampleRate) {
   monitor(pcm, sampleRate);          // hear yourself, then send
-  // Deliberately NOT gated on having a sender: canSynthesize() tests SUPPORT,
-  // and genTrack is created inside startPacer(), so gating would block the
-  // first utterance. The pacer's `if (!writer) return` makes a senderless
-  // queue harmless.
+  // not gated on a sender: the pacer's `if (!writer) return` makes a senderless queue harmless
   if (!canSynthesize()) return;
-  // Resample BEFORE queueing so the pacer only handles OUT_RATE floats. The
-  // push is EPOCH-GUARDED too: the resample is async and a disable can land
-  // in between.
+  // resample before queueing so the pacer only handles OUT_RATE floats; epoch-guarded, as the resample is async
   const epoch = ttsEpoch;
   void toOutRate(pcm, sampleRate)
     .then((f) => { if (epoch === ttsEpoch) queue.push(f); })
@@ -386,17 +294,14 @@ export function startPacer() {
   playhead = 0;
   pacer = setInterval(() => {
     if (!writer) return;
-    // A CLOSED WRITER IS NOT A NULL WRITER: a source swap stops the old
-    // generator and closes its writable, so write() would reject every tick.
-    // ensureGenerator() rebuilds it and re-binds every sender.
+    // a source swap closes the old generator's writable; rebuild it and re-bind the senders
     if (genTrack?.readyState !== 'live') { ensureGenerator(); return; }
     const owed = Math.floor(((performance.now() - t0) / 1000) * OUT_RATE) - playhead;
     for (let n = 0; n + FRAME <= owed; n += FRAME) {
       const data = new Float32Array(FRAME);
       fillSpeech(data);
       try {
-        // a stream closed between the liveness check and write() rejects
-        // async: swallow exactly that; the next tick's check owns the rebuild.
+        // a stream closed between the liveness check and write() rejects async; the next tick rebuilds
         void writer.write(new AudioData({
           format: 'f32', sampleRate: OUT_RATE, numberOfFrames: FRAME,
           numberOfChannels: 1, timestamp: Math.round((playhead / OUT_RATE) * 1e6), data,
@@ -412,11 +317,8 @@ export function stopPacer() {
   if (pacer) { clearInterval(pacer); pacer = null; }
   queue = []; qOff = 0;
   ttsEpoch++;              // anything still synthesizing belongs to the old era
-  // Drop the sidetone playhead with the queue, or the next utterance
-  // schedules itself behind audio that was just cancelled.
+  // drop the sidetone playhead and stop what is already scheduled: a cancelled utterance falls silent in your own ears too
   monitorHead = 0;
-  // ...and stop the sidetone audio that is ALREADY scheduled — a cancelled
-  // utterance must fall silent in your own ears too, not only in the room.
   for (const s of _monSources) { try { s.stop(); } catch { /* already ended */ } }
   _monSources.clear();
 }
@@ -424,52 +326,34 @@ export function stopPacer() {
 /** Probe seam: is the mouth open, and how much is waiting to be said? */
 export const mouthInfo = () => ({ pacing: !!pacer, queued: queue.length, playhead });
 
-/** What voice.js calls instead of getUserMedia. Returns a MediaStream from
- *  whichever source this body uses. */
-
 // ── speak your own says ─────────────────────────────────────────────────────
-// livechat.js emits 'speech' for every say not already performed (voice
-// CAPABILITY + `performed` receipts, #57; never the author-controlled spoken
-// flag). A body with a synthesizer voices its OWN through the ordinary sender,
-// so distance, the category slider and consent apply as to a microphone.
+// A body with a synthesizer voices its own says through the ordinary sender, so distance, the
+// category slider and consent apply as to a microphone.
 export function speakOwnSays(bus, myId) {
   bus.on('speech', async ({ actor, text, performed }) => {
     const mine = actor === myId();
     if (!mine) return;                       // someone else's say: not ours to voice
-    // performed = a receipt-confirmed display re-emit (#57): the voice leg
-    // already made the sound; this event exists for bubbles/mouth only
-    if (performed) return;
+    if (performed) return;                   // a display re-emit: the voice leg already made the sound
     if (!isTtsEnabled()) { console.warn(`[voice] own say NOT spoken — tts disabled`); return; }
-    // Declared policy: a typed say while the mic is live is DISCARDED, visibly
-    // (mic beats TTS; queuing would play stale text when the mic drops). Read
-    // the LIVE transport: on the SFU, micstate's micOn() misses a live mic.
+    // mic beats TTS: a typed say while the mic is live is discarded, visibly (queuing would play stale text)
     const micLive = (typeof window !== 'undefined' && typeof window.__sfuMicOn === 'function')
       ? !!window.__sfuMicOn() : (await import('./micstate.js')).micOn?.();
     if (micLive) { console.warn(`[voice] own say NOT synthesized — mic is live, mic beats TTS: "${String(text).slice(0, 40)}"`); return; }
     console.log(`[voice] own say → speaking: "${String(text).slice(0, 60)}"`);
-    // Keyed by the speaker so consecutive says QUEUE instead of overlapping.
-    void speak(text, actor);
+    void speak(text, actor);   // keyed by speaker so consecutive says queue
   });
 }
 
-/** Is the track we feed the same object the peer connection is sending? speak()
- *  can succeed into an orphan generator while the room hears nothing; this
- *  exposes the identity for a probe to compare against the sender's track. */
+/** The generator track's identity, for a probe to compare against the sender's track. */
 export const genTrackInfo = () => (genTrack
   ? { id: genTrack.id, kind: genTrack.kind, readyState: genTrack.readyState, enabled: genTrack.enabled }
   : null);
 
 
 
-/** Benchmark the current voice: N runs of the same text, reporting the spread.
- *
- *      await ttsBench('hello')                     // current backend
- *      localStorage.eidoTtsBackend = 'wasm'        // then reload and re-run
- *
- *  Reports P50 and best rather than a mean: a mean hides the slow first call. */
+// ── console benches: window.ttsTTFS / ttsBench / ttsSpread ──────────────────
+/** Time to first sound: phonemize + infer + everything until audio exists. P50 and best, not a mean. */
 async function ttsTTFS(text = 'hello there, this is a test', runs = 3) {
-  // TIME TO FIRST SOUND (TTFS): what a listener experiences, phonemize + infer
-  // + everything until audio exists, measured via self-monitoring. Not `infer`.
   if (!isTtsEnabled() || !ttsFn) { console.warn('[ttfs] no voice loaded'); return null; }
   const out = [];
   for (let i = 0; i < runs; i++) {
@@ -488,6 +372,7 @@ async function ttsTTFS(text = 'hello there, this is a test', runs = 3) {
 }
 if (typeof window !== 'undefined') window.ttsTTFS = ttsTTFS;
 
+/** N synth runs of the same text: best / P50 / worst and RTF. */
 async function ttsBench(text = 'hello', runs = 5) {
   if (!isTtsEnabled() || !ttsFn) { console.warn('[bench] no voice loaded'); return null; }
   const ms = [];
@@ -508,8 +393,7 @@ async function ttsBench(text = 'hello', runs = 5) {
 if (typeof window !== 'undefined') window.ttsBench = ttsBench;
 
 
-/** Speak the same text N times to hear the SPREAD: VITS samples noise on every
- *  call, so one utterance is one draw. */
+/** Synthesize the same text N times to see the spread: VITS samples noise on every call. */
 async function ttsSpread(text = 'hello there', runs = 5) {
   if (!isTtsEnabled() || !ttsFn) { console.warn('[spread] no voice loaded'); return null; }
   const rows = [];
@@ -529,12 +413,8 @@ async function ttsSpread(text = 'hello there', runs = 5) {
 }
 if (typeof window !== 'undefined') window.ttsSpread = ttsSpread;
 
-// ── the provider registration ────────────────────────────────────────────────
-// voicesource.js owns the QUESTION (where does this body's voice come from);
-// this module is one ANSWER. available() is enablement AND capability — a
-// registered engine with TTS switched on. start() hands the generator track
-// over with the pacer running; stop() stills the pacer but leaves enablement
-// standing (mic beats TTS is a priority, not a toggle).
+// ── the provider registration (voicesource.js) ──────────────────────────────
+// stop() stills the pacer but leaves enablement standing: mic beats TTS is a priority, not a toggle.
 setSynthProvider({
   label: () => ttsName || 'TTS',
   available: () => isTtsEnabled() && canSynthesize(),

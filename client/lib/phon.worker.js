@@ -1,24 +1,17 @@
-/** The phonemizer, running where its loader is fast.
+/** The phonemizer worker (driven by piperphon.js).
  *
- *  Why a Worker: the browser build loads espeak-ng's data with synchronous XHR
- *  (`xhr.open("GET", url, false)`), which is the slow deprecated path on the main
- *  thread and the legal fast path inside a Worker (guarded by
- *  ENVIRONMENT_IS_WORKER). Measured: ~57 ms in Bun vs ~27.5 s on the main thread,
- *  same bytes — so trimming the 17 MB data package would not have helped.
+ *  Why a Worker: the emscripten build loads espeak-ng's data with synchronous XHR, which is
+ *  the slow deprecated path on the main thread (~27 s) and the fast legal one in a Worker.
  *
- *  PROTOCOL — deliberately tiny (the seam is piperphon.js's phonemize /
- *  warmPhonemizer / phonReady):
- *      → { id, op: 'warm',      wasmPaths }         ← { id, ok }
+ *  Protocol — every reply carries the id it answers:
+ *      → { id, op: 'warm',      wasmPaths }              ← { id, ok }
  *      → { id, op: 'phonemize', text, voice, wasmPaths } ← { id, ok, ids }
- *      any failure                                   ← { id, ok: false, error }
- *  Every reply carries the id it answers, so a slow call cannot resolve a fast
- *  one's promise.
+ *      any failure                                        ← { id, ok: false, error }
  */
 
 let _mod = null;
 let _building = null;
-// Where the CURRENT call wants stdout to go. Emscripten captures Module.print
-// ONCE at construction, so the handler is permanent and the sink swappable.
+// per-call stdout/stderr sinks: Emscripten captures Module.print once at construction
 let _sink = null, _errSink = null;
 
 async function build(wasmPaths) {
@@ -41,19 +34,15 @@ async function build(wasmPaths) {
 function run(mod, text, voice) {
   let ids = null;
   _sink = (data) => { try { ids = JSON.parse(data).phoneme_ids; } catch { /* not our line */ } };
-  // stderr is CHATTER until proven otherwise: Emscripten's printErr carries
-  // espeak warnings and info lines. Collect; it becomes the diagnostic only if
-  // the run produces no ids.
+  // stderr is espeak chatter; it becomes the diagnostic only if the run yields no ids
   const errLines = [];
   _errSink = (msg) => { errLines.push(String(msg)); };
   try {
     mod.callMain(['-l', voice || 'en-us', '--input', JSON.stringify([{ text }]),
                   '--espeak_data', '/espeak-ng-data']);
   } catch (e) {
-    // callMain throws its exit code even on success; a real failure is an Error.
+    // callMain throws its exit code even on success; only a real Error propagates
     if (typeof e !== 'number' && e?.status === undefined) throw e;
-    // exit-code throws are normal; real failures fall through to the ids
-    // check below, where collected stderr becomes the message.
   } finally {
     _sink = null; _errSink = null;
   }
