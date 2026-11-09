@@ -4,6 +4,7 @@
 // The write path's resolve/mint and the history readers are above it, reached through UP.
 import { grabOf, describeGrab } from "../../grab.js";
 import { isEntityId, REDACTED } from "../fold.js";
+import { isObj } from "../is.js";
 import { COMPONENTS, mapRefs } from "../componentspec.js";
 import { verbHelp, VERBSPEC, REMOVED_VERBS } from "../verbspec.js";
 import { graphemes } from "../../text.js";
@@ -142,7 +143,6 @@ function buildUpdate(ctx, a, w) {
       if (eq(b, t)) continue; // nothing new upstream
       if (eq(m, b)) { ops.push(t === undefined ? delOp(id, comp) : setOp(id, comp, t)); continue; }
       if (eq(m, t)) continue;
-      const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
       if (isObj(b) && isObj(t) && isObj(m)) { // field level
         const out = clone(m); const clash = [];
         for (const f of new Set([...Object.keys(b), ...Object.keys(t)])) { if (eq(b[f], t[f])) continue; if (eq(m[f], b[f])) { if (t[f] === undefined) delete out[f]; else out[f] = clone(t[f]); } else if (!eq(m[f], t[f])) clash.push(f); }

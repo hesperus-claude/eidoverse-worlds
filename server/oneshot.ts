@@ -41,7 +41,6 @@ export type OneShotOpts = { cwd: string; env: Record<string, string | undefined>
 export const FORCED = "semantic result complete / forced process cleanup";
 
 const frameIn = (s: string, nonce: string) => new RegExp(`\\n?\\[oneshot ${nonce}\\] answered \\(exit (-?\\d+)\\); open handles: ([^\\n]*)\\n$`).exec(s);
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const within = <T>(p: Promise<T>, ms: number, v: T) => { let t: any; return Promise.race([p, new Promise<T>((r) => { t = setTimeout(() => r(v), ms); })]).finally(() => clearTimeout(t)); };
 
 export async function runOneShot(argv: string[], { cwd, env, guardMs, graceMs = 5_000, label }: OneShotOpts): Promise<OneShot> {
@@ -73,7 +72,7 @@ export async function runOneShot(argv: string[], { cwd, env, guardMs, graceMs = 
   }
   // the group, emptied: polled for a while (a killed process takes a moment to leave the table)
   let rest = await g.members();
-  for (let i = 0; i < 20 && (rest === null || rest.length) && (end !== "exited" || why); i++) { await sleep(250); rest = await g.members(); }
+  for (let i = 0; i < 20 && (rest === null || rest.length) && (end !== "exited" || why); i++) { await Bun.sleep(250); rest = await g.members(); }
   const gone = p.exitCode !== null || p.signalCode !== null ? rest !== null && rest.length === 0 : false;
   g.close();
 
