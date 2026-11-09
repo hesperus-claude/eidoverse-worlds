@@ -93,12 +93,11 @@ export async function optimizeGlb(bytes: Uint8Array): Promise<Uint8Array> {
   return io.writeBinary(doc);
 }
 
-// ---- KTX2 (§20a): the library variant diet ----------------------------------
-// GPU-native compressed textures: no createImageBitmap decode, no raw RGBA uploads, 4-8× less VRAM. The store recipe
-// minus webp (KTX2 encodes from the best source) plus a per-texture KTX2 pass before draco. Serves ONLY on ?ktx2=1:
-// KHR_texture_basisu is in extensionsRequired, and parsers without a KTX2 decoder throw on it.
+// ---- KTX2: the library variant diet ----------------------------------
+// GPU-native compressed textures: no createImageBitmap decode, no raw RGBA uploads, 4-8× less VRAM. The store recipe minus
+// webp plus a per-texture KTX2 pass before draco. Serves only on ?ktx2=1: KHR_texture_basisu is in extensionsRequired.
 
-// findKtx2Encoder lives in tools-stamp.ts (the verdict stamp names the encoder it finds) — re-exported above
+// findKtx2Encoder lives in tools-stamp.ts (the verdict stamp names the encoder it finds)
 
 // baseColor/emissive are eye-facing sRGB → ETC1S (~4-8× smaller, block noise hides in shading). Every other slot
 // carries per-channel DATA (MToon .r/.b scalars, normals) where ETC1S artifacts read as corruption → UASTC+zstd.
@@ -573,10 +572,9 @@ export async function optimizeGlbLod(bytes: Uint8Array, encoder: string | null, 
   return { out: await io.writeBinary(doc), verdict: null, before, after, permissive, texOnly, texRatio, ...tally };
 }
 
-// ---- KTX2 for VRMs (§20c): the surgical container rewrite -------------------
-// gltf-transform drops unknown extensions on read, and a VRM is mostly unknown extensions — so a VRM never touches a
-// Document. Raw GLB work whose ONLY mutations are image bytes → KTX2, the bufferView offsets/lengths that implies, and
-// the minimal JSON declaring them. View indices/order and every other section ride through byte-untouched;
+// ---- KTX2 for VRMs: the surgical container rewrite -------------------
+// gltf-transform drops unknown extensions on read, and a VRM is mostly unknown extensions, so a VRM never touches a
+// Document: the only mutations are image bytes → KTX2, the bufferView offsets that implies, and the JSON declaring them.
 // validateVrmRewrite checks the output and throws (CLI exit 1) rather than return anything questionable.
 
 
@@ -622,7 +620,7 @@ export function findImageLies(bytes: Uint8Array): ImageLie[] {
 /** Slot classification from the JSON alone, folded onto IMAGES (textures sharing an image accumulate marks):
  *    - core glTF: baseColor/emissive = color; normal/occlusion/metallicRoughness = data.
  *    - VRM 1.x VRMC_materials_mtoon: shade/matcap/rimMultiply = color; other *Texture keys = data (MToon samples
- *      .r/.b scalars there; ETC1S noise reads as corruption, §20).
+ *      .r/.b scalars there; ETC1S noise reads as corruption).
  *    - VRM 0.x materialProperties[].textureProperties: _MainTex/_ShadeTexture/_SphereAdd/_RimTexture/_EmissionMap =
  *      color; anything else = data.
  *  Unrecognized or unreferenced (meta thumbnails) → UASTC: safe, bigger. */
@@ -881,16 +879,13 @@ export async function transcodeVrmKtx2(bytes: Uint8Array, encoder: string):
   return { out, converted: newImageBytes.size, etc1s, uastc: uastcN };
 }
 
-// ---- KTX2 for loose library images (§20d) -----------------------------------
-// Vegetation, sky and particle textures otherwise reach the client as raw image bytes (big RGBA uploads). three's
-// KTX2Loader ignores KTX orientation metadata and the client trusts the container, so TWO contracts are baked at
-// ENCODE time:
-//   1. THE FLIP. loadImageTexture bakes the vertical flip into the PIXELS (tex.flipY stays false so repeat tiling
-//      composes), so every encode here flips rows first. Decoding is pngjs/jpeg-js (pure JS, deterministic); sharp is
-//      not used in this mode — a flip that silently failed is a mirrored meadow.
-//   2. THE TRANSFER. The DFD's OETF must match the call site's opts.srgb (the client reads colorSpace from the DFD).
-//      Classified by FILENAME against the consumers: vegetation.js loadMap, sky_worlds.js readTex, emitters.js
-//      spriteTexture.
+// ---- KTX2 for loose library images -----------------------------------
+// Vegetation, sky and particle textures otherwise reach the client as raw RGBA uploads. three's KTX2Loader ignores KTX
+// orientation metadata and the client trusts the container, so two contracts are baked at encode time:
+//   1. the flip: loadImageTexture bakes the vertical flip into the pixels, so every encode here flips rows first (pure-JS
+//      decoders; a flip that silently failed is a mirrored meadow);
+//   2. the transfer: the DFD's OETF must match the call site's opts.srgb, classified by filename against the consumers
+//      (vegetation.js loadMap, sky_worlds.js readTex, emitters.js spriteTexture).
 
 const isPow2 = (n: number) => n > 0 && (n & (n - 1)) === 0;
 

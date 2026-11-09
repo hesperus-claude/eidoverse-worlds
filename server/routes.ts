@@ -1,4 +1,4 @@
-// eidoverse-worlds sequencer — the HTTP surface (TEL0S_NOTES §15, step 7c).
+// eidoverse-worlds sequencer — the HTTP surface.
 //
 // A route table: one row per endpoint, first match wins, so ORDER matters (the catch-all
 // last serves the browser client); server.ts's fetch() is a one-line delegate. Also home to
@@ -117,14 +117,14 @@ export function avatarRoster(): { name: string; path: string; height: number | n
     const dir = join(base, "eidoverse/assets/vrms");
     if (!existsSync(dir)) continue;
     for (const f of readdirSync(dir)) {
-      // .ktx2.vrm files are §20c texture variants — serving artifacts, not bodies of their own
+      // .ktx2.vrm files are texture variants: serving artifacts, not bodies of their own
       if (f.endsWith(".vrm") && !f.endsWith(".ktx2.vrm")) {
         const v = String(Math.round(Bun.file(join(dir, f)).lastModified));
         seen.set(f.replace(".vrm", ""), { url: `eidoverse/assets/vrms/${f}?v=${v}`, file: join(dir, f), v });
       }
     }
   }
-  // The def overlay (§24, defs/avatars/): declared beats discovered. An unresolvable `vrm` is refused loudly and the
+  // The def overlay (defs/avatars/): declared beats discovered. An unresolvable `vrm` is refused loudly and the
   // discovered entry stands (a typo'd def must not vanish a body).
   const defs = avatarDefs();
   for (const [name, d] of Object.entries(defs)) {
@@ -172,7 +172,7 @@ export function animationRoster(): { name: string; path: string; size: number }[
         { path: `eidoverse/assets/animations/${f}?v=${Math.round(file.lastModified)}`, size: file.size });
     }
   }
-  // The def overlay (§24, defs/animations/): same contract as the avatar roster. Metadata (tags, doc) rides /defs.
+  // The def overlay (defs/animations/): same contract as the avatar roster. Metadata (tags, doc) rides /defs.
   // Resolution is /library's own (libfile.ts libraryFile), so a listed clip loads.
   const resolveClip = (lib: string): string | null => libraryFile(lib, /\.vrma$/i);
   const defs = animationDefs();
@@ -238,7 +238,7 @@ const BUILD = (() => {
 const gzCache = new Map<string, { mtime: number; gz: Uint8Array }>();
 
 // What may cache for a day without asking: heavy, rarely-edited art. Not things we iterate on, where a stale copy
-// costs a debugging session: avatars and animations (.vrm/.vrma) and library code and data sidecars (§22g).
+// costs a debugging session: avatars and animations (.vrm/.vrma) and library code and data sidecars.
 // Those get no-cache, which still rides the ETag (a 304, not a re-download).
 const hardCacheable = (path: string) =>
   !/\.vrma?$/i.test(path) && !/\.(m?js|json)$/i.test(path);
@@ -358,7 +358,7 @@ const ROUTES: Route[] = [
       return new Response("expected websocket", { status: 400 });
     },
   },
-  // ---- archipelago-home doors (connectome docs/home-node.md §7) ----
+  // ---- archipelago-home doors ----
   {
     match: (u) => u.pathname === "/authcfg",
     handler: () => new Response(
@@ -545,9 +545,9 @@ const ROUTES: Route[] = [
     handler: ({ req, url, srv }) => handleUpload(req, url, srv),
   },
   {
-    // POST /seat-profile — the live proposal door (§24r). A NAMED actor only (tokens.json bearer or aid1 identity);
-    // the anonymous door token may not write, since a seat profile moves every wearer. Writes PROPOSALS only;
-    // acceptance has no HTTP path (tools/operator/seat-accept.ts, an operator act on the box).
+    // POST /seat-profile — the live proposal door. A named actor only (tokens.json bearer or aid1 identity); the anonymous
+    // door token may not write, since a seat profile moves every wearer. Writes proposals only; acceptance has no HTTP path
+    // (tools/operator/seat-accept.ts).
     match: (u, req) => u.pathname === "/seat-profile" && req.method === "POST",
     handler: async ({ req, url }) => {
       const j = (o: unknown, status = 200) => new Response(JSON.stringify(o),
@@ -693,13 +693,13 @@ const ROUTES: Route[] = [
         "x-profiles-rev": String(seatStore.rev) } }),
   },
   {
-    // The heartbeat's gauges (charter §4): per-system runs / worst ms / errors. Public and cheap like /version.
+    // The heartbeat's gauges: per-system runs / worst ms / errors. Public and cheap like /version.
     match: (u) => u.pathname === "/tick",
     handler: () => new Response(JSON.stringify({ ...tickStats() }),
       { headers: { "content-type": "application/json", "cache-control": "no-store" } }),
   },
   {
-    // The def registry (charter §3), one fetch per client boot; no-store so an edited def reaches the next boot.
+    // The def registry, one fetch per client boot; no-store so an edited def reaches the next boot.
     match: (u) => u.pathname === "/defs",
     handler: () => new Response(defsPayload(),
       { headers: { "content-type": "application/json", "cache-control": "no-store" } }),
@@ -714,7 +714,7 @@ const ROUTES: Route[] = [
   {
     // diagnostics: the adapter's live SFU view — legs, gens, consent, incarnation.
     match: (u) => u.pathname === "/relay-diag",
-    // who hears whom is the world's live state: behind the joining door, like /snap (security review L8)
+    // who hears whom is the world's live state: behind the joining door, like /snap
     handler: ({ req, url, srv }) => !mayRead(req) ? unauthorized() : new Response(
       JSON.stringify((() => {
         // a world the caller may not see answers like one with no voice at all
@@ -787,7 +787,7 @@ const ROUTES: Route[] = [
         const key = bearerOf(req);
         const ok = (key && (key === JOIN_TOKEN || agentTokens().byToken.has(key) || !!aid1JoinIdentity(key)))
           // a cookie rides requests from sibling subdomains (SameSite=Lax is per-SITE): never from another site's page.
-          // Embodied sign-ins only (worlds:join), as /upload asks: a spectate-only session can't rebuild (#260 bot 12's twin)
+          // Embodied sign-ins only (worlds:join), as /upload asks: a spectate-only session can't rebuild
           || !!sessionOfRequest(req)?.scopes.includes("worlds:join");
         if (!ok) return new Response("sign in or send the authority key as a Bearer header", { status: 401 });
       }
@@ -979,7 +979,7 @@ const ROUTES: Route[] = [
         const p = normalize(join(PATCH_DIR, rel));
         if (p.startsWith(PATCH_DIR) && existsSync(p)) return serveFrom(PATCH_DIR, rel, true, req, versioned);
       }
-      // KTX2 is NEGOTIATED (§20; GLBs, VRMs §20c, loose images §20d): parsers without a decoder throw on its required
+      // KTX2 is negotiated (GLBs, VRMs, loose images): parsers without a decoder throw on its required
       // extension, so only ?ktx2=<key> gets it.
       const negotiable = rel.endsWith(".glb") || rel.endsWith(".vrm") || /\.(png|jpe?g)$/i.test(rel);
       // the key is a generation (shared/ktx2.js): a retired one is an unflagged fetch
@@ -1118,7 +1118,6 @@ const ROUTES: Route[] = [
 function isolate(res: Response): Response {
   // a successful /ws upgrade returns no Response (Bun owns the socket): never touch it
   if (!res) return res;
-  // A 101 upgrade owns its own handshake — do not touch it.
   if (res.status === 101) return res;
   res.headers.set("cross-origin-opener-policy", "same-origin");
   res.headers.set("cross-origin-embedder-policy", "credentialless");
