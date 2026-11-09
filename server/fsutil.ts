@@ -1,4 +1,5 @@
-// Filesystem idioms: write-then-rename helpers. The fs is injectable so a caller's crash atomicity is testable.
+// Filesystem idioms: write-then-rename helpers (the fsynced replace is durable.ts replaceDurable). The fs is injectable so a
+// caller's crash atomicity is testable.
 
 import fs, { writeFileSync, renameSync } from "node:fs";
 import { dirname } from "node:path";

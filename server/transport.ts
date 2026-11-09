@@ -2,7 +2,8 @@
 // "are we on the SFU?" never loads one.
 
 import { join } from "node:path";
-import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { atomicWrite } from "./fsutil.ts";
 import { nextIncarnation } from "./relaydecision.ts";
 
 /** Which voice transport is live.
@@ -23,9 +24,7 @@ export function bootIncarnation(dir: string): string {
   const file = join(dir, "relay-incarnation");
   const prev = existsSync(file) ? readFileSync(file, "utf8").trim() : null;
   incarnation = nextIncarnation(prev, crypto.randomUUID().slice(0, 8));
-  const tmp = file + ".tmp";
-  writeFileSync(tmp, incarnation);
-  renameSync(tmp, file);
+  atomicWrite(file, incarnation);
   return incarnation;
 }
 

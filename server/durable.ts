@@ -142,10 +142,5 @@ export function withFileLock<T>(lock: string, waitMs: number, f: () => T): T {
 /** Store blob text `s` under its hash `h` at `file`: atomically, and replacing a copy that doesn't verify. */
 export function putBlobFile(file: string, s: string, h: string) {
   if (fs.existsSync(file)) { try { if (`sha256:${sha256(fs.readFileSync(file, "utf8"))}` === h) return; } catch {} }
-  mkdirDurable(path.dirname(file));
-  const tmp = `${file}.${process.pid}.tmp`;
-  const fd = fs.openSync(tmp, "w");
-  try { writeAll(fd, Buffer.from(s, "utf8")); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-  fs.renameSync(tmp, file);
-  syncDir(path.dirname(file));
+  replaceDurable(file, s);
 }

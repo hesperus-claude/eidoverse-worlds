@@ -11,6 +11,7 @@ import { validateProfile, profileStatus } from "../client/lib/seatcore.js";
 import { OPT_DIR, LIBRARY_DIR, PATCH_DIR } from "./config.ts";
 import { worlds } from "./world.ts";
 import { sha256Bytes } from "../shared/protocol/hash.js";
+import { atomicWrite } from "./fsutil.ts";
 
 export const SEAT_POSE = "sitchair";
 export const CLIP_REL = "eidoverse/assets/animations/sitting_normal_chair.vrma";
@@ -234,8 +235,7 @@ export class SeatStore {
 
   private persistSnapshotOnly() {
     mkdirSync(this.dir, { recursive: true });
-    this.fs.writeFileSync(`${this.file}.tmp`, JSON.stringify(this.store));
-    this.fs.renameSync(`${this.file}.tmp`, this.file);
+    atomicWrite(this.file, JSON.stringify(this.store), { fs: this.fs });
     try { this.fileMtime = statSync(this.file).mtimeMs; } catch { /* next poll reloads harmlessly */ }
   }
 
@@ -260,8 +260,7 @@ export class SeatStore {
       // the receipt stands; the snapshot must not race a successor (recovery folds it forward, or quarantines)
       return { ok: false, why: "lock ownership lost after provenance append — snapshot withheld; recovery will reconcile the receipt" };
     try {
-      this.fs.writeFileSync(`${this.file}.tmp`, JSON.stringify(next));
-      this.fs.renameSync(`${this.file}.tmp`, this.file);
+      atomicWrite(this.file, JSON.stringify(next), { fs: this.fs });
     } catch (e) {
       // the log holds the receipt; the live store stays unchanged and the next load folds it forward
       return { ok: false, why: `snapshot write failed (receipted in the log; recovery will fold it forward): ${(e as Error).message}` };
