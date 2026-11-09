@@ -675,6 +675,8 @@ check(`near-tie jitter 40× → ${swaps} slot swaps (no stickiness would thrash)
   check("guard does NOT swallow a TypeError that merely mentions an errno",
     benign(mk("Cannot read properties of undefined (reading 'ECONNRESET')")) === false);
   check("guard does NOT swallow a non-transport errno", benign(mk("no such file", "ENOENT", "open")) === false);
+  check("guard does NOT swallow a benign code with no syscall", benign(mk("fetch failed", "ECONNREFUSED")) === false);
+  check("guard does NOT swallow a benign code from a non-recv/send syscall", benign(mk("connect refused", "ECONNREFUSED", "connect")) === false);
 }
 
 const d = sfu.diag();
