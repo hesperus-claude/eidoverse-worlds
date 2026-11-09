@@ -70,7 +70,7 @@ window** — ordinary release rollback, not an ongoing product architecture
 withdrawn; Eidoverse is not maintaining mesh audio after relay cutover, and
 "executable rollback" over-carried the pre-cutover A5 posture). The
 step-by-step procedure, with its verification canaries and the window's
-boundaries, is `docs/operator/CUTOVER-ROLLBACK.md` — an operator runbook, not a
+boundaries, is `docs/history/CUTOVER-ROLLBACK.md` (expired) — an operator runbook, not a
 git-history claim. After the acceptance window closes, the previous release
 retires and relay-only is the product.
 
