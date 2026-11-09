@@ -253,7 +253,7 @@ ok(foldName("Marígold") === foldName("marigold") && foldName("JOSÉ") === foldN
   const own = d.resolve({ sub: "human:discord:w1", name: "Wyn" }), vis = d.resolve({ sub: "human:discord:w2", name: "Val" });
   request(w, own, "create-world", { title: "wx" }); request(w, own, "set", { id: "@world", component: `roles:${vis}`, value: { role: "member" } });
   const panel = { hours: 18, rate: 2, clouds: "cumulus", weather: "clear", azimuth: 1.2 };   // sun/fill/world/clock cut 10-16; the panel strips them (skypanel.js:114)
-  const m: any = { verb: "sky", args: panel };   // what the sky panel sends (client/lib/skypanel.js)
+  const m: any = { verb: "sky", args: panel };   // what the sky panel sends (client/lib/edit/skypanel.js)
   const we: any = worldEditOps({ sky: null, terrain: null, grass: null }, { "weather.state": "rain" }, { now: T });
   ok(we.ops.length === 1 && we.ops[0].verb === "weather" && we.ops[0].args.weather === "rain", "W1 edit @world plans the authority's own tools (weather), never a v1 verb", we);
   const r: any = request(w, own, m.verb, m.args); const sky = w.state().entities["@world"].c.sky;

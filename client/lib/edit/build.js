@@ -11,33 +11,33 @@
 // seat-anchor grammar in socketedit.js; the router here hands seat gestures
 // across that seam and never re-implements them.
 
-import { svg as iconSvg } from './icons.js';
-import * as OP from '../../shared/requests.js';
-import { LIGHT_DEFAULTS } from '../../shared/components.js';
-import { THREE, scene, camera, canvas } from './core.js';
-import { bus, report } from './base.js';
-import { loadGLB, libLabels, modelName } from './assets.js';
-import { makeLightGizmo } from './lightgizmo.js';
-import { entities, metaOf, bagOf, editHolds } from './world.js';
-import { reindexCollider } from './colliders.js';
-import { heightAt } from './terrain.js';
-import { net, sendDrag } from './net.js';
-import { scaleOf } from '../../shared/scale3.js';
-import { MESH_DEFAULT, ghostMeshSize } from './meshdefaults.js';
+import { svg as iconSvg } from '../icons.js';
+import * as OP from '../../../shared/requests.js';
+import { LIGHT_DEFAULTS } from '../../../shared/components.js';
+import { THREE, scene, camera, canvas } from '../core.js';
+import { bus, report } from '../base.js';
+import { loadGLB, libLabels, modelName } from '../assets.js';
+import { makeLightGizmo } from '../lightgizmo.js';
+import { entities, metaOf, bagOf, editHolds } from '../world.js';
+import { reindexCollider } from '../colliders.js';
+import { heightAt } from '../terrain.js';
+import { net, sendDrag } from '../net.js';
+import { scaleOf } from '../../../shared/scale3.js';
+import { MESH_DEFAULT, ghostMeshSize } from '../meshdefaults.js';
 import { engage, release } from './keyhints.js';
-import { placeRefusal } from '../../shared/blueprint.js';
-import { myState, mouse, setPointerClaim, setBuildingProbe } from './controller.js';
-import { flashHint, collapseAll, panelFrame, html, claimStatus, releaseStatus } from './ui.js';
-import { paint, escapeHtml } from './markup.js';
-import { pushHostHook } from './autohooks.js';
+import { placeRefusal } from '../../../shared/blueprint.js';
+import { myState, mouse, setPointerClaim, setBuildingProbe } from '../controller.js';
+import { flashHint, collapseAll, panelFrame, html, claimStatus, releaseStatus } from '../ui.js';
+import { paint, escapeHtml } from '../markup.js';
+import { pushHostHook } from '../autohooks.js';
 import { clickable } from './selectmask.js';
 import { outOfMyView } from './myview.js';
-import * as Sel from './edit/selection.js';
-import { claimEscape } from './windows.js';
-import { isOwner } from '../../shared/protocol/roles.js';
+import * as Sel from './selection.js';
+import { claimEscape } from '../windows.js';
+import { isOwner } from '../../../shared/protocol/roles.js';
 import { currentTool as structureTool, setTool as setStructureTool } from './structure_ui.js';   // an armed building tool is Esc's first rung
-import { state } from './state.js';   // one rule for who may author (and one name for them), shared with the scene panel
-import * as Edits from './editwrites.js';   // slice 3b: every write here is a request
+import { state } from '../state.js';   // one rule for who may author (and one name for them), shared with the scene panel
+import * as Edits from './writes.js';   // slice 3b: every write here is a request
 import { refreshSocketGizmos, resetSockets, armSocketPlacement, socketArmed, socketSelected,
   cancelSocketArm, deselectSocket, socketMouseDown, socketKeyDown, updateSocketDrag } from './socketedit.js';
 
@@ -102,7 +102,7 @@ export function setBuildMode(on, { quiet = false } = {}) {
   document.body.classList.toggle('build-mode', on);
   if (!on) { cancelGhost(); deselect(); resetSockets(); }
   refreshSocketGizmos();   // anchors are visible exactly while you are editing
-  // Saying you are building puts the tools in front of you: the workspace's Build tab (editlayout.js) is the catalog.
+  // Saying you are building puts the tools in front of you: the workspace's Build tab (layout.js) is the catalog.
   // The legacy World frame opens only if it was open before.
   if (!quiet) {
     flashHint(on
@@ -271,7 +271,7 @@ function meshGhost(shape, [x, y, z]) {
 // Q/E turn it, ,/. size its width. The lib is '@picture:<src>'.
 const pictureOf = (lib) => (typeof lib === 'string' && lib.startsWith('@picture:') ? lib.slice(9) : null);
 export async function holdPicture() {
-  const { pickPicture } = await import('./realize/pictures.js');
+  const { pickPicture } = await import('../realize/pictures.js');
   const src = await pickPicture();
   if (src) await holdGhost(`@picture:${src}`, 'picture');
 }
@@ -568,7 +568,7 @@ export function undo() {
 }
 
 // Edit mode's panels own the selection the inspector SHOWS (a tree pick doesn't touch `selected`, which only a
-// viewport pick sets), so editpanels installs its remover here (it can't be imported: editpanels imports us).
+// viewport pick sets), so panels.js installs its remover here (it can't be imported: panels.js imports us).
 let removeHook = null;
 export function setRemoveHook(fn) { removeHook = fn; }
 /** What the keys act on: the inspector's selection, else the viewport's. */
@@ -615,7 +615,7 @@ function pickHit(nx, ny) {
   raycaster.setFromCamera(mouse, camera);
   const targets = [];
   for (const o of entities.values()) if (o) targets.push(o);
-  const W = state.st?.entities ?? {};   // the editor's world view (lib, comp, parent), as editpanels reads it
+  const W = state.st?.entities ?? {};   // the editor's world view (lib, comp, parent), as panels.js reads it
   return raycaster.intersectObjects(targets, true).find((h) => { let r = h.object; while (r && !r.userData.entityId) r = r.parent; return r && clickable(W, r.userData.entityId) && !outOfMyView(h.object); }) ?? null;
 }
 
@@ -643,7 +643,7 @@ canvas.addEventListener('mousedown', (e) => {
   while (root && !root.userData.entityId) root = root.parent;
   if (!root) return;
   const id = root.userData.entityId;
-  // Ctrl-click EXTENDS the selection (editpanels owns the set; Shift is the
+  // Ctrl-click EXTENDS the selection (panels.js owns the set; Shift is the
   // vertical drag here, so it can't double as the extend modifier it is in
   // the tree). No drag starts from an extend.
   if (e.ctrlKey || e.metaKey) { bus.emit('edit-extend', id); e.preventDefault(); return; }   // keys: selectExtend
@@ -753,7 +753,7 @@ bus.on('key', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); undo(); return; }   // keys: undo
   if (!buildMode) return;
 
-  // reset the selection's transform (editpanels.resetTransform): the tools' own letters with Alt, and Ctrl+G for all
+  // reset the selection's transform (panels.js resetTransform): the tools' own letters with Alt, and Ctrl+G for all
   // three. Before the tool keys, which ignore modifiers.
   if (e.altKey && !e.ctrlKey && !e.metaKey && ['KeyG', 'KeyE', 'KeyR'].includes(e.code)) { e.preventDefault(); bus.emit('edit-reset', { KeyG: 'pos', KeyE: 'rot', KeyR: 'scale' }[e.code]); return; }   // keys: resetTransform
   if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyG') { e.preventDefault(); bus.emit('edit-reset', 'all'); return; }   // keys: resetTransform

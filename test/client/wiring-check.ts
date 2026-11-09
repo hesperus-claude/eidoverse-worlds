@@ -44,11 +44,11 @@ const ROWS: Row[] = [
   // bodies-wear: the restored wear button is not a no-op
   { name: "switchAvatar's same-path early return exempts the capsule", file: "client/lib/mybody.js", must: [/if \(path === myAvatarPath && !me\?\.isCapsule\) return;/] },
   // conjure-coop: under COOP the poll owns login completion, one idempotent teardown
-  { name: "login: one shared cleanup latches done, removes the listener, clears the timer", file: "client/lib/generate.js", scope: between("let done = false", "} catch (e) { report('orrery login'"),
+  { name: "login: one shared cleanup latches done, removes the listener, clears the timer", file: "client/lib/edit/generate.js", scope: between("let done = false", "} catch (e) { report('orrery login'"),
     must: [/const cleanup = \(\) => \{[^}]*done = true;[\s\S]*?removeEventListener\('message', onMsg\);[\s\S]*?clearInterval\(poll\);/] },
-  { name: "login: the timeout runs the teardown (abandon), not a bare clearInterval", file: "client/lib/generate.js", scope: between("let done = false", "} catch (e) { report('orrery login'"),
+  { name: "login: the timeout runs the teardown (abandon), not a bare clearInterval", file: "client/lib/edit/generate.js", scope: between("let done = false", "} catch (e) { report('orrery login'"),
     must: [/tries > 45\) \{ abandon\(/], not: [[/tries > 45\) \{ clearInterval/, "if (++tries > 45) { clearInterval(poll); return; }"]] },
-  { name: "login: abandon restores a retryable state, and messages are checked against the Orrery's origin", file: "client/lib/generate.js", scope: between("let done = false", "} catch (e) { report('orrery login'"),
+  { name: "login: abandon restores a retryable state, and messages are checked against the Orrery's origin", file: "client/lib/edit/generate.js", scope: between("let done = false", "} catch (e) { report('orrery login'"),
     must: [/const abandon[\s\S]*?connected = false/, /ev\.origin !== new URL\(ORRERY\)\.origin/] },
   // channel-cap-gate: typing is a notification, gated before the relay starts, handled in one place
   { name: "channels/typing is gated on channelsTyping before the relay starts", file: "mcpl/net-server.ts", scope: after("private onTyping(", 1400), before: ["capAllowed(CAP.channelsTyping)", "this.typing.start("] },

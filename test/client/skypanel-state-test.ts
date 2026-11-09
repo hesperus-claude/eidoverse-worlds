@@ -12,7 +12,7 @@ const stub = fileURLToPath(new URL("../stubs/skypanel-stub.mjs", import.meta.url
 plugin({
   name: "skypanel-stubs",
   setup(b) {
-    b.onResolve({ filter: /^\.\/(base|defs|net|ui|sky|terrain|lod_policy|realize\/models|editwrites)\.js$/ }, () => ({ path: stub }));
+    b.onResolve({ filter: /^\.\.?\/(base|defs|net|ui|sky|terrain|lod_policy|realize\/models|writes)\.js$/ }, () => ({ path: stub }));
   },
 });
 
@@ -28,7 +28,7 @@ const check = (name: string, ok: boolean, detail = "") => {
 };
 
 const { S, logSky, previewSky, bus } = await import("../stubs/skypanel-stub.mjs");
-const { paintSky } = await import("../../client/lib/skypanel.js");
+const { paintSky } = await import("../../client/lib/edit/skypanel.js");
 
 const body = document.createElement("div");
 document.body.append(body);

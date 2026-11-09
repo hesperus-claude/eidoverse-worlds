@@ -293,12 +293,12 @@ let HV = '';   // the record's hash, "sha256:<hex>"
   check('the shade is locked (lock is a bool again: recut C11), spins, and carries no rotation order (the order is the viewer\'s)',
     shade?.lock === true && shade?.motion?.type === 'spin' && !Object.keys(shade ?? {}).some((k) => /rot-?order|726f744f72646572/i.test(k)), J(shade));
   // the viewer's order stays on the viewer: the editor reads the copy in whatever order this viewer chose, and placing
-  // the copy wrote none (PROTOCOL §9.1; client/lib/viewprefs.js keeps it)
+  // the copy wrote none (PROTOCOL §9.1; client/lib/edit/viewprefs.js keeps it)
   check('…and a viewer reading the copy in ZXY reads it in ZXY, from its own settings', fieldAt(inspectSchema(shade, id('shade')!, { rotOrder: 'ZXY' }), 'rot.order')?.value === 'ZXY'
     && fieldAt(inspectSchema(shade, id('shade')!), 'rot.order')?.value === 'XYZ');
   check('the glow is an Empty whose light burns at noon; the base collides as a box', glow.model === undefined && glow?.light?.daytime === 'full' && glow.light.color === 0xff8800 && E.desk2?.collider?.shape === 'box', J([glow, E.desk2.comp]));
   // a lock binds removal (§5), and undoing a create removes: the door refuses the bare undo `locked` (v1's inverses
-  // unlocked first). The person is asked "Move anyway?" (editwrites: undo offers through, not unlock); throughLock takes it.
+  // unlocked first). The person is asked "Move anyway?" (edit/writes.js: undo offers through, not unlock); throughLock takes it.
   const u0 = W.call('undo', {});
   check('a bare undo of the copy is refused `locked` (its shade is locked), and nothing is removed', u0.ok === false && u0.refused?.code === 'locked' && ['desk', 'arm', 'shade', 'glow'].every((k) => !!W.view().entities[partOf(W.view().entities, 'desk2', k)]), J(u0));
   const u = W.call('undo', { throughLock: true });

@@ -59,7 +59,7 @@ await tryRow('LI', async () => {
   check('LI9 …a second run finds nothing', repairComps(R).set.length === 0, '');
   const Ld = L.defaults.intensity, at5 = (I: number, d: number) => I / 5 ** d;
   check('LI11 a new default light (decay 2) is as bright as main\'s default (16 cd, decay 1.7) at half the default range, 5 m: 16 × 5^0.3; every new-light path writes it', Ld === +(16 * (L.defaults.range / 2) ** 0.3).toPrecision(4) && Math.abs(at5(Ld, 2) / at5(16, 1.7) - 1) < 1e-3
-    && lightOf({ light: { decay: 2 } })?.intensity === Ld && !/intensity: 16/.test(read('client/lib/build.js')) && !/intensity: 16/.test(read('mcpl/tools.ts')), [Ld, at5(Ld, 2), at5(16, 1.7)]);
+    && lightOf({ light: { decay: 2 } })?.intensity === Ld && !/intensity: 16/.test(read('client/lib/edit/build.js')) && !/intensity: 16/.test(read('mcpl/tools.ts')), [Ld, at5(Ld, 2), at5(16, 1.7)]);
   const Ro = repairComps({ light: { color: 1 } }).c.light, Rn = repairComps({ light: { color: 1, decay: 2, daytime: 'dim' } });
   check('LI12 an older light (no decay) wrote no intensity and read 16: lightOf reads it so, and the repair writes 16 beside decay 1.7; a light with its decay is left at the default', lightOf({ light: {} })?.intensity === 16 && Ro?.intensity === 16 && Ro?.decay === 1.7 && Rn.set.length === 0, [lightOf({ light: {} }), Ro, Rn.set]);
   const t = translate(v1({ verb: 'light', args: { id: 'l1', pos: [0, 2, 0], color: '#ffeedd', intensity: 8, range: 6, day: false } }));
@@ -133,7 +133,7 @@ await tryRow('AD', async () => {
   check('AD6 the engine\'s catalogue never labels an address by its hex (a cold entry: "thing")', cold && !/[0-9a-f]{16}/.test(cold.label), cold);
   // the client and agent readers can't run headless here: each is held to the shared word (and not to the value's file name)
   const OLD = /model\??\.split\(['"]\/['"]\)|\(meta\?\.model \?\? meta\?\.kind[^)]*\)\.split|libLabels\.get\(one\.model\) \?\? libLabel|String\(lib \?\? ''\)\.split\('\/'\)|String\(ghost\.lib \?\? ''\)\.split|String\(e?\.?model\)\.split\(["']\/["']\)|String\(rec\.model\)\.split|String\(meta\.model\)\.split|String\(a\.model\)\.split|libLabels\.get\(libPath\) \?\? libPath\.split/;
-  const FILES = ['client/lib/build.js', 'client/lib/socketedit.js', 'client/lib/editpanels.js', 'client/lib/scenegraph.js', 'client/lib/plainwords.js', 'client/lib/perfscope.js', 'client/lib/assets.js', 'mcpl/agent.ts', 'mcpl/tools.ts', 'shared/hierarchy.js', 'shared/editschema.js'];   // worldquad and the authority minted from a word: R 10-17, they mint nothing readable now
+  const FILES = ['client/lib/edit/build.js', 'client/lib/edit/socketedit.js', 'client/lib/edit/panels.js', 'client/lib/scenegraph.js', 'client/lib/plainwords.js', 'client/lib/perfscope.js', 'client/lib/assets.js', 'mcpl/agent.ts', 'mcpl/tools.ts', 'shared/hierarchy.js', 'shared/editschema.js'];   // worldquad and the authority minted from a word: R 10-17, they mint nothing readable now
   const stale = FILES.filter((f) => OLD.test(read(f)) || !/modelWord|modelName/.test(read(f)));
   check('AD7 every client and agent reader that names a thing by its model goes through the shared word', stale.length === 0, stale);
   // the sim (shiplist FL1, 10-16): an addressed dynamic thing is stamped, punted, and flies in the authority and in a client's fold
@@ -258,7 +258,7 @@ await tryRow('MA', async () => {
 
 // ===================================================================== Create ▸ Picture: a non-technical way in (R 10-27)
 await tryRow('CP', () => {
-  const menu = read('client/lib/editlayout.js'), build = read('client/lib/build.js');
+  const menu = read('client/lib/edit/layout.js'), build = read('client/lib/edit/build.js');
   check('CP1 the Create menu offers Picture, which picks an image and holds it to place', /label: 'Picture…', run: \(\) => holdPicture\(\)/.test(menu) && /export async function holdPicture\(/.test(build), '');
   check('CP2 …and placing it creates a thing with a picture {src, width} (its height follows the image)', /pictureOf\(ghost\.lib\)[^\n]*components: \{ picture: \{ src: pictureOf\(ghost\.lib\), width:/.test(build), '');
 });

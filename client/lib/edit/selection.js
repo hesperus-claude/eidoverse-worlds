@@ -7,7 +7,7 @@
 //   kind: 'things' (placed entities) | 'world' (the @world entity) | 'env:<key>' (the world with
 //         one environment card in focus) | null when empty
 //
-// scenegraph.sceneSelected() and editpanels.selection() remain as thin adapters over this
+// scenegraph.sceneSelected() and panels.js selection() remain as thin adapters over this
 // (client-check names them); they are the 'things' view of the store.
 import { bus } from '../base.js';
 

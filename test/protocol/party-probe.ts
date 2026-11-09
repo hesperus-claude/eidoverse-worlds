@@ -63,7 +63,7 @@ const centre = (sel: string) => evalJson(`(() => { const e = ${sel}; if (!e) ret
 const clickEl = async (sel: string) => { const c = await centre(sel); if (!c) return false; await click(c[0], c[1]); return true; };
 const insp = `document.querySelector('[data-frame="inspector"]')`;
 const select = async (id: string) => { await page(`(await import('/lib/scenegraph.js')).sceneSelect('${id}'); return true;`); await waitFor(`import('/lib/scenegraph.js').then((m) => m.sceneSelected() === '${id}')`); await sleep(400); };
-const buildMode = async (on: boolean) => { await evalJson(`import('/lib/build.js').then((m) => (m.setBuildMode(${on}), true))`); await waitFor(`document.body.classList.contains('build-mode') === ${on}`); await sleep(500); };
+const buildMode = async (on: boolean) => { await evalJson(`import('/lib/edit/build.js').then((m) => (m.setBuildMode(${on}), true))`); await waitFor(`document.body.classList.contains('build-mode') === ${on}`); await sleep(500); };
 const make = async (id: string, comps: string, at: [number, number, number], model = CRATE) => { const r = await page(`const m = await import('/lib/net.js'); return await m.sendRequest('create', { id: '${id}', ${model ? `model: '${model}', ` : ""}components: { ${comps} transform: { pos: [${at}], q: [0, 0, 0, 1], scale: [1, 1, 1] } } });`); if (r?.ok) NODE.set(id, await evalJson(`'${id}'`)); return r; };
 const chatLines = `[...document.querySelectorAll('#chatlog .line, #chatlog > *')].map((l) => l.textContent)`;
 
@@ -253,8 +253,8 @@ try {
 
   // ---- S7: a placed thing is selected ----
   await stage("S7", async () => {
-    await page(`(await import('/lib/scenegraph.js')).sceneSelect(null); (await import('/lib/build.js')).deselectAll?.(); return true;`); await sleep(300);
-    await page(`await (await import('/lib/build.js')).holdGhost('${CRATE}', 'crate (blue)'); return true;`);
+    await page(`(await import('/lib/scenegraph.js')).sceneSelect(null); (await import('/lib/edit/build.js')).deselectAll?.(); return true;`); await sleep(300);
+    await page(`await (await import('/lib/edit/build.js')).holdGhost('${CRATE}', 'crate (blue)'); return true;`);
     await sleep(1500);
     const vp = await evalJson(`(() => { const l = parseFloat(getComputedStyle(document.body).getPropertyValue('--edit-left-edge')) || 0; const r = parseFloat(getComputedStyle(document.body).getPropertyValue('--edit-right-w')) || 0; return [l + (innerWidth - r - l) / 2, innerHeight * 0.62]; })()`);
     const before = new Set(Object.keys(disk().entities));

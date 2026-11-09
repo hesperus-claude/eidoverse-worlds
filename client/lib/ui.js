@@ -3,7 +3,7 @@
 // and the two overlays (help, front door).
 
 import { chooseClient } from './litechoice.js';
-import { confirmCenter } from './confirmcenter.js';
+import { confirmCenter } from './edit/confirmcenter.js';
 import { bus, CONFIG, setName, setToken, setErrorSink, report, forgetRememberedWorlds } from './base.js';
 import { resizeZoneAt, fitTabStrip } from './windows.js';
 import { flipMic, flipEar, micLive, earOn, glyphPinned, setGlyphPinned, micGlyph, earGlyph, xrGlyph, xrGlyphAvailable, xrLive, flipXr } from './mictoggle.js';
@@ -589,7 +589,7 @@ function initPanels() {
   // dynamic, not static: profile/videopanel reach controller.js through xrpanels/mybody, and a static edge from
   // ui.js closed an import loop that read controller's `pointerClaimed` before initialization (rung-4 boot).
   // The dock entry is pushed now; the frames land a tick later and the dock repaints so the button shows.
-  Promise.all([import('./profile.js'), import('./stylepanel.js'), import('./videopanel.js'), import('./capnotice.js'), import('./dropdown.js')])
+  Promise.all([import('./profile.js'), import('./stylepanel.js'), import('./videopanel.js'), import('./capnotice.js'), import('./edit/dropdown.js')])
     .then(([p, st, v, c, d]) => { p.initProfile(); st.initStylePanel(); v.initVideoPanel(); c.initCapNotice(); d.initDropdowns(); paintDock(); })
     .catch((e) => report('ui panels', e));
   return [{ id: 'profile', icon: 'user-circle' }];

@@ -2,7 +2,7 @@
 // (xrPrefs / setXrPref) so the frame loop reads them without a round trip.
 // Visible whether or not a headset is sensed; the first row says which.
 import { makeSection, flashHint } from './ui.js';
-import { checkRow, selectRow, btn, sliderTable } from './rows.js';
+import { checkRow, selectRow, btn, sliderTable } from './edit/rows.js';
 import { currentGrade, setGrade, GRADE_DEFAULT, GRADE_RANGE } from './quadcolour.js';
 import { xrPrefs, setXrPref, recentreXR, isPresenting } from './xr.js';
 import { pointerVisibilityMode } from './xrpointer.js';

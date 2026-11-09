@@ -33,7 +33,7 @@ plugin({
 
 const { makeLightGizmo, lightCasting } = await import("../../client/lib/lightgizmo.js");
 const { materialsOf } = await import("../../client/lib/realize/material_draft.js");
-const { liveFor, setEditHooks } = await import("../../client/lib/inspect.js");
+const { liveFor, setEditHooks } = await import("../../client/lib/edit/inspect.js");
 const lod: any = await import("../stubs/lod-client-stub.mjs");
 const { boxOf } = await import("../../client/lib/realize/models.js");
 const { Group } = await import("../../client/node_modules/three/build/three.module.js");

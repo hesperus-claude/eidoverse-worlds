@@ -30,7 +30,7 @@ const RULES: [RegExp, string][] = [
 // true exceptions, each with why (file → a pattern the whole line must match)
 const EXEMPT: [string, RegExp, string][] = [
   ["client/lib/", /userData\??\.lib\b/, "three.js userData.lib: the renderer's own tag on a loaded object, not a record"],
-  ["client/lib/build.js", /ghost\.lib|params\.lib/, "the placement ghost's own field, and a catalogue entry's"],
+  ["client/lib/edit/build.js", /ghost\.lib|params\.lib/, "the placement ghost's own field, and a catalogue entry's"],
   ["shared/components.js", /params:\s*\{\s*lib|p\.lib\b|type === 'Model'/, "the component LIST's Model params (its own schema, RFC #208): leaves with the schema-layer merge"],
   ["shared/editschema.js", /params\.lib|c\.type === 'Model'/, "the component LIST's Model params: leaves with the schema-layer merge"],
   ["shared/blueprint.js", /params\.lib/, "the component LIST's Model params: leaves with the schema-layer merge"],

@@ -1,9 +1,9 @@
 // hierarchy-commit — a drag in the Hierarchy is ONE undo step (design §5),
-// through the client's real commit path (client/lib/inspect.js commitEdit →
-// client/lib/editwrites.js sendOps → the door), headless. The Hierarchy's drop and
+// through the client's real commit path (client/lib/edit/inspect.js commitEdit →
+// client/lib/edit/writes.js sendOps → the door), headless. The Hierarchy's drop and
 // the inspector's Parent field both call commitEdit(id, 'parent.to', onto);
 // this checks what that sends, what the door makes of it, and that the
-// client's own Ctrl+Z (editwrites.undo: the door's undo of my last act) takes it back.
+// client's own Ctrl+Z (edit/writes.js undo: the door's undo of my last act) takes it back.
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/hierarchy-commit-test.ts
 //
@@ -15,8 +15,8 @@ import { inspectHarness } from "../protocol/inspectharness.ts";
 import { worldPose } from "../../shared/hierarchy.js";
 import { qNorm, qFromYaw } from "../../shared/rot.js";
 const H = inspectHarness("hiercommit");
-const { commitEdit } = await import("../../client/lib/inspect.js");
-const Edits = await import("../../client/lib/editwrites.js");
+const { commitEdit } = await import("../../client/lib/edit/inspect.js");
+const Edits = await import("../../client/lib/edit/writes.js");
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail = "") => {

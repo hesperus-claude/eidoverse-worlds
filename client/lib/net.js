@@ -24,7 +24,7 @@ import { markPhase, refuseBoot, waitBoot } from './boot.js';
 import { showOldFormat } from './upgradeview.js';
 import { OLD_FORMAT_SPLASH } from '../../shared/oldformat.js';
 // this client folds the authority's own stream (shared/protocol/replica.js) and derives the view the realizers draw from it,
-// locally; build mode sends requests (editwrites.js) and waits for the authority.
+// locally; build mode sends requests (edit/writes.js) and waits for the authority.
 import { makeReplica } from '../../shared/protocol/replica.js';
 import { redialer, REDIAL } from '../../shared/redial.js';
 import { actorName } from '../../shared/protocol/names.js';
@@ -98,7 +98,7 @@ export function wireNet(h) {
 
 // ---------------------------------------------------------------- sending
 
-// Every write is a request (sendRequest below; edits go through editwrites.js sendOps). No verb crosses the wire.
+// Every write is a request (sendRequest below; edits go through edit/writes.js sendOps). No verb crosses the wire.
 
 /** People present, by the name they show → the identity the world knows them by (u-…, from the authority's directory;
  *  the server sends it on arrive and in the join roster). A role, a ban or a rollback goes to THIS, never to a typed

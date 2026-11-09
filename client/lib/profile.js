@@ -8,7 +8,7 @@ import { registerXRPanel } from './xrpanels.js';
 import { getMyAvatarName, getMe } from './mybody.js';
 import { bodiesFields, bodiesDispatch, mountBodies } from './bodies.js';
 import { presence, setPresence, STATES } from './presence.js';
-import { renderDOM } from './panels.js';
+import { renderDOM } from './edit/fieldpanels.js';
 import { makeFrame, fitTabStrip } from './windows.js';
 import { fsvg } from './icons.js';
 import { net } from './net.js';

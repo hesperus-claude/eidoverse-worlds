@@ -233,7 +233,7 @@ try {
     check("L2 Always allow: pressed, it lands at the authority as my allow list", await press("Always allow") && await waitFor(`${tbl}.then((t) => t && t.allow.includes(${JSON.stringify(wrenActor)}))`, 5000), await evalJson(tbl));
     check("L2b …and Wren's pose now lands, though my touch gate is off", (await wreq("body", pose))?.ok === true);
     check("L2c …and the menu shows ✓ Always allow", (await items())?.includes("✓ Always allow"));
-    await evalJson(`(async () => { (await import('/lib/panels.js')).closeContextMenu(); (await import('/lib/windows.js')).getFrame('settings')?.show(); document.getElementById('sec-body-tab')?.click(); return true; })()`);
+    await evalJson(`(async () => { (await import('/lib/edit/fieldpanels.js')).closeContextMenu(); (await import('/lib/windows.js')).getFrame('settings')?.show(); document.getElementById('sec-body-tab')?.click(); return true; })()`);
     check("L3 Settings ▸ body lists Wren under Always allowed, with a remove button", await waitFor(`(() => { const r = document.querySelector('#sec-body [data-list=allow][data-id=${JSON.stringify(wrenActor)}]'); return !!r && /Wren/.test(r.textContent) && !!r.querySelector('button'); })()`, 3000), await evalJson(`document.querySelector('#sec-body [data-lists]')?.outerHTML ?? null`));
     check("L4 Never allow: pressed, Wren moves to my block list (off allow)", await press("Never allow") && await waitFor(`${tbl}.then((t) => t && t.block.includes(${JSON.stringify(wrenActor)}) && !t.allow.includes(${JSON.stringify(wrenActor)}))`, 5000), await evalJson(tbl));
     await evalJson(`import('/lib/consent.js').then((m) => (m.setGate('move', true), true))`);
@@ -243,7 +243,7 @@ try {
     check("L5 the panel's remove takes Wren off at the authority, and the switches answer them again (a shove lands)", await waitFor(`${tbl}.then((t) => t && !t.block.includes(${JSON.stringify(wrenActor)}) && !t.allow.includes(${JSON.stringify(wrenActor)}))`, 5000) && (await wreq("body", { to: victim, kind: "shove" }))?.ok === true && await evalJson(`!document.querySelector('#sec-body [data-list]')`), await evalJson(tbl));
     await press("Always allow"); await waitFor(`${tbl}.then((t) => t && t.allow.length > 0)`, 5000);
     check("L6 Default from the menu takes them off too", await press("Default") && await waitFor(`${tbl}.then((t) => t && !t.allow.length && !t.block.length)`, 5000), await evalJson(tbl));
-    await evalJson(`import('/lib/panels.js').then((m) => (m.closeContextMenu(), true))`);
+    await evalJson(`import('/lib/edit/fieldpanels.js').then((m) => (m.closeContextMenu(), true))`);
     wren.ws.close();
   });
 

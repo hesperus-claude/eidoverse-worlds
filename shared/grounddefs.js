@@ -43,7 +43,7 @@ export function validateGroundPalette(t) {
 }
 
 // ------------------------------------------------------------ the verb args a choice writes
-// One recipe shared by client/lib/groundpanel.js and client/lib/editpanels.js, so the two never write different args for the same pick.
+// One recipe shared by client/lib/edit/groundpanel.js and client/lib/edit/panels.js, so the two never write different args for the same pick.
 
 /** The choice the panel starts from when nothing is dialled yet (the names
  *  groundpanel always preferred, else each table's first entry). */

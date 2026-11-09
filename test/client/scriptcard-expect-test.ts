@@ -1,19 +1,19 @@
-// scriptcard-expect-test — the editor's new-script card (client/lib/scriptcard.js) takes its `expect` from the thing as it
+// scriptcard-expect-test — the editor's new-script card (client/lib/edit/scriptcard.js) takes its `expect` from the thing as it
 // planned, not as it stands after the upload (house 6340433633: the planner picked a free action from the thing at
 // Create, and sendOps read expect after the upload's await, so a reaction someone added meanwhile was overwritten with
-// no refusal). Headless: happy-dom, editwrites and net stubbed (test/stubs/scriptcard-expect-stub.mjs).
+// no refusal). Headless: happy-dom, edit/writes.js and net stubbed (test/stubs/scriptcard-expect-stub.mjs).
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/scriptcard-expect-test.ts
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({ name: "scriptcard-expect-stubs", setup(b) {
-  for (const m of ["editwrites", "net"]) b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: here("../stubs/scriptcard-expect-stub.mjs") }));
+  for (const m of ["writes", "net"]) b.onResolve({ filter: new RegExp(`^\\.\\.?/${m}\\.js$`) }, () => ({ path: here("../stubs/scriptcard-expect-stub.mjs") }));
 } });
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 GlobalRegistrator.register();
 
 const S = await import("../stubs/scriptcard-expect-stub.mjs");
-const { openNewScript } = await import("../../client/lib/scriptcard.js");
+const { openNewScript } = await import("../../client/lib/edit/scriptcard.js");
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail?: unknown) => { if (ok) { pass++; console.log(`  ok  ${name}`); } else { fail++; console.log(`  FAIL ${name}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 400)}` : ""}`); } };
 

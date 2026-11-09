@@ -22,7 +22,7 @@ Object.defineProperty(HTMLSelectElement.prototype, "selectedOptions", {
   get() { return [...this.options].filter((o: HTMLOptionElement) => o.selected); }, configurable: true,
 });
 
-const { skinSelect, initDropdowns } = await import("../../client/lib/dropdown.js");
+const { skinSelect, initDropdowns } = await import("../../client/lib/edit/dropdown.js");
 
 const S = suite("dropdown");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

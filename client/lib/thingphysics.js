@@ -25,7 +25,7 @@
 import { THREE } from './core.js';
 import { bus } from './base.js';
 import { entities } from './world.js';
-import { outOfMyView } from './myview.js';
+import { outOfMyView } from './edit/myview.js';
 import { remotes, serverNow } from './remotes.js';
 import { colliders, suspendCollider } from './colliders.js';
 import { pushHostHook } from './autohooks.js';

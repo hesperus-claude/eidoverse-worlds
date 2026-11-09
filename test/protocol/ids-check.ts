@@ -212,16 +212,16 @@ await C("H4", "labelTwins marks only the things whose label another shares (the 
   const t = TR.labelTwins([{ id: "a", label: "Chair" }, { id: "b", label: "chair " }, { id: "c", label: "table" }, { id: "d" }]);
   return [t.has("a") && t.has("b") && !t.has("c") && !t.has("d"), [...t]]; });
 await C("H5", "the editor's Hierarchy hides ids (an unlabelled row says what it is), marks only sibling twins with a short handle; the inspector's name line carries the same #handle (over every id but the world's), no 'show id' button", () => {
-  const ep = read("client/lib/editpanels.js");
+  const ep = read("client/lib/edit/panels.js");
   return [/shownName = \(id\) => nameOnly\(id\) \?\? \(kindHint/.test(ep) && /handleOf\(id, all\)/.test(ep) && /badges\.unshift\(tw\)/.test(ep) && !/k: 'showid'/.test(ep) && !/showId/.test(ep) && !/'show id'/.test(ep)
     && /const idHandle = \(id\) => handleOf\(id, Object\.keys\(state\.st\.entities \?\? \{\}\)\.filter\(\(k\) => k !== WORLD_ID\)\)/.test(ep) && /k: 'copyid', label: `#\$\{idHandle\(id\)\}`/.test(ep) && /cls: 'sp-title'[^\n]*handleRow/.test(ep)
-    && !/const labelOf = \(id\) => \{ const l = nameOnly\(id\); return l \? \(hopts\.ids \? `\$\{l\}  \(\$\{id\}\)` : l\) : id; \};/.test(ep), "editpanels"]; });
+    && !/const labelOf = \(id\) => \{ const l = nameOnly\(id\); return l \? \(hopts\.ids \? `\$\{l\}  \(\$\{id\}\)` : l\) : id; \};/.test(ep), "edit/panels"]; });
 
 await C("H6", "a person's lock question names the locked thing by what they call it (its label, or what it is), never its opaque id", async () => {
   const RF = await imp("shared/protocol/refusal.js"); const id = "jyxc32e5nz242uonrboteprqbw";
   const r = { refused: { code: "locked", lock: id, by: "bob" } };
   const named = RF.lockBody(r, "kid", (x) => (x === id ? "“tbl”" : null)), bare = RF.lockBody(r, "kid");
-  const ep = read("client/lib/editwrites.js");
+  const ep = read("client/lib/edit/writes.js");
   return [named === "It rides “tbl”, which is locked by bob." && bare.includes(id) && /lockBody\(r, req\.args\?\.id, thingName\)/.test(ep), [named, bare]]; });
 
 // ---- G: the fixture seam ----

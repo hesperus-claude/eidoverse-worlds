@@ -1,7 +1,7 @@
 // myview — what YOU have hidden in your own view (the Hierarchy's 👁; "Hidden" is the local one). Never logged,
 // never sent, never seen by anyone else: a view filter, like Unity's scene-visibility eye (the eye means different
 // things in different engines; ours means exactly one). Kept per world in this browser.
-import { bus, CONFIG } from './base.js';
+import { bus, CONFIG } from '../base.js';
 
 const key = () => `ew-myhidden-${CONFIG.world ?? ''}`;
 let set = new Set();

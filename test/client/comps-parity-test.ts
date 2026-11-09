@@ -7,7 +7,7 @@
 // Hierarchy row reads (editPanelsDebug().hierFields() tree rows → crate.rename) must equal the label the Inspector reads
 // (inspFields() path flags.label). Before C7c the row read world.js's `comps` Map (synced by the realizer) and the Inspector
 // read the fold: two caches, updated at different moments (that Map is gone: world.js bagOf is the one record). Mutation that
-// MUST go red: give the row a cache beside the fold — in editpanels.js hierarchyFields, `const lab = bagOf(r.id)?.label;` →
+// MUST go red: give the row a cache beside the fold — in edit/panels.js hierarchyFields, `const lab = bagOf(r.id)?.label;` →
 // `const lab = ((globalThis.__lab ??= {})[r.id] ??= bagOf(r.id)?.label);` — the row then reads the old label while the
 // Inspector reads the new (verified red 2026-11-02).
 // Hygiene (memory reference_browser_probe_hygiene.md): wait on conditions, every gate prints its stage, teardown in finally.
@@ -36,10 +36,10 @@ try {
   check('the owner makes a crate (an Empty: no asset to download)', made?.ok === true, JSON.stringify(made?.refused));
   check('…it is realized', await becomes(`import('/lib/world.js').then((m) => !!m.entities.get('crate'))`));
   await evalJson(`import('/lib/scenegraph.js').then((m) => m.sceneSelect('crate')), true`);
-  check('…and selected', await becomes(`import('/lib/editpanels.js').then((m) => m.editPanelsDebug().selected === 'crate')`));
+  check('…and selected', await becomes(`import('/lib/edit/panels.js').then((m) => m.editPanelsDebug().selected === 'crate')`));
 
   // the probe: at the change event, read both surfaces' label synchronously
-  await evalJson(`Promise.all([import('/lib/state.js'), import('/lib/editpanels.js')]).then(([S, E]) => { window.__seen = []; S.onWorldChange((ev) => { if (ev.type !== 'change' || ev.id !== 'crate' || ev.comp !== 'label') return; const d = E.editPanelsDebug(); const row = d.hierFields().flatMap((f) => f.rows ?? []).find((r) => r.id === 'crate'); const insp = d.inspFields().find((f) => f.path === 'flags.label'); window.__seen.push({ row: row?.rename ?? null, insp: insp?.value ?? null }); }); return true; })`);
+  await evalJson(`Promise.all([import('/lib/state.js'), import('/lib/edit/panels.js')]).then(([S, E]) => { window.__seen = []; S.onWorldChange((ev) => { if (ev.type !== 'change' || ev.id !== 'crate' || ev.comp !== 'label') return; const d = E.editPanelsDebug(); const row = d.hierFields().flatMap((f) => f.rows ?? []).find((r) => r.id === 'crate'); const insp = d.inspFields().find((f) => f.path === 'flags.label'); window.__seen.push({ row: row?.rename ?? null, insp: insp?.value ?? null }); }); return true; })`);
   const set = await evalJson(`import('/lib/net.js').then((m) => m.sendRequest('set', { id: 'crate', component: 'label', value: 'tall crate' }))`);
   check('the owner renames it', set?.ok === true, JSON.stringify(set?.refused));
   check('the rename folds', await becomes(`import('/lib/net.js').then((m) => m.replica.st.entities['crate']?.c.label === 'tall crate')`));

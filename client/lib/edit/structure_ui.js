@@ -10,21 +10,21 @@
 // ONE request with `expect` on the building as this viewer saw it: if
 // someone else changed it since, the authority refuses (`changed`) rather than one
 // edit silently eating the other. Undo is the editor's one undo (Ctrl+Z: the
-// door's undo of MY act, editwrites.js), so it always lands on the building that
+// door's undo of MY act, writes.js), so it always lands on the building that
 // act changed, and keeps theirs where someone changed it since.
 
-import * as OP from '../../shared/requests.js';
-import { sendOps } from './editwrites.js';
-import { flashHint } from './ui.js';
-import { THREE, canvas, camera, scene } from './core.js';
-import { bus, report } from './base.js';
-import { state } from './state.js';
-import { planStructure, localizePoint, GRID_DEFAULTS } from '../../shared/structure.js';
-import { setCutaway } from './realize/structure.js';
+import * as OP from '../../../shared/requests.js';
+import { sendOps } from './writes.js';
+import { flashHint } from '../ui.js';
+import { THREE, canvas, camera, scene } from '../core.js';
+import { bus, report } from '../base.js';
+import { state } from '../state.js';
+import { planStructure, localizePoint, GRID_DEFAULTS } from '../../../shared/structure.js';
+import { setCutaway } from '../realize/structure.js';
 import {
   emptyStructure, pickEdge, pickCell, addWall, removeWall, setAperture,
   drawRoom, eraseRoom, setTile, pickWalledEdge,
-} from '../../shared/structure_edit.js';
+} from '../../../shared/structure_edit.js';
 
 const TOOLS = [   // [key, label, hint, icon] — icons.js glyphs (no emoji: the old 🚪 🪟 were the only colour in the bar)
   ['room', 'room', 'drag a rectangle: floor and walls right round it', 'square'],
@@ -300,7 +300,7 @@ export function initStructureUI() {
   // a building appearing or changing under us moves the lattice with it
   bus.on('entity', (ev) => { if (active && ev?.kind !== 'collider') refreshGrid(); });
 
-  // The tools' DOM is the Create panel (editpanels.js, docked beside the Hierarchy) and the viewport's
-  // armed-tool strip (editlayout.js): both read structureTools(), arm with setTool, undo with undo().
+  // The tools' DOM is the Create panel (panels.js, docked beside the Hierarchy) and the viewport's
+  // armed-tool strip (layout.js): both read structureTools(), arm with setTool, undo with undo().
   return true;
 }

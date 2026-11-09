@@ -17,7 +17,7 @@
 //   D   duplicate (Alt+D) is create {from: <thing>}: one act
 //   M   deleting two selected things is ONE batch act
 //   S   Save as blueprint is the authority's publish; its tile places a copy (create {from: <hash>})
-// The writes go through the real edit code (build.js, gizmo.js, inspect.js, editpanels.js); a few gestures are driven
+// The writes go through the real edit code (build.js, gizmo.js, inspect.js, edit/panels.js); a few gestures are driven
 // at their seams (TransformControls' own events, the panel's buttons, synthetic keydowns).
 // @ts-nocheck
 import fs from "node:fs";
@@ -111,13 +111,13 @@ try {
   }
   bob.send(JSON.stringify({ type: "join", hello: helloOf(), world: WORLD, id: "bob", avatar: "", replica: true })); await tryUntil("bob's snapshot names his id", () => BOB || undefined, { ms: 15000 });   // a fixed 500 ms raced the snapshot on Windows CI (40976310724): roles: with no id   // replica: a world speaks only to clients that fold its log (3c)
   check("(setup) the owner makes bob a builder", (await page(`const m = await import('/lib/net.js'); return (await m.sendRequest('set', { id: '@world', component: 'roles:${BOB}', value: { role: 'builder' } })).ok;`)) === true && /^u-/.test(BOB));
-  await evalJson(`import('/lib/build.js').then((m) => (m.setBuildMode(true), true))`);
+  await evalJson(`import('/lib/edit/build.js').then((m) => (m.setBuildMode(true), true))`);
   check("B2 build mode opens (the owner may build)", await waitFor(`document.body.classList.contains('build-mode')`));
 
   // ---- P: place from the ghost ----
   let n0 = myActs().length;
-  await page(`const b = await import('/lib/build.js'); await b.holdGhost('${CRATE}', 'crate'); return b.hasGhost();`);
-  await waitFor(`import('/lib/build.js').then((m) => m.hasGhost())`);
+  await page(`const b = await import('/lib/edit/build.js'); await b.holdGhost('${CRATE}', 'crate'); return b.hasGhost();`);
+  await waitFor(`import('/lib/edit/build.js').then((m) => m.hasGhost())`);
   await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 760, y: 470 });
   await sleep(300);
   const under = await evalJson(`(() => { const e = document.elementFromPoint(760, 470); return e ? e.tagName + '#' + e.id + '.' + e.className : null; })()`);
@@ -125,12 +125,12 @@ try {
   // boot splash and frames over the viewport
   await evalJson(`import('/lib/core.js').then((m) => (m.canvas.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 760, clientY: 470 })), true))`);
   check("P1 a click places it: ONE create act, stamped with me", await waitDisk(() => myActs().length === n0 + 1 && myActs().at(-1).e.verb === "create"),
-    { acts: myActs().slice(n0).map((a) => a.e.verb), refused: await evalJson(`__refused.map((r) => r.text)`), errs: await evalJson(`__errs`), ghost: await evalJson(`import('/lib/build.js').then((m) => m.hasGhost())`), under });
+    { acts: myActs().slice(n0).map((a) => a.e.verb), refused: await evalJson(`__refused.map((r) => r.text)`), errs: await evalJson(`__errs`), ghost: await evalJson(`import('/lib/edit/build.js').then((m) => m.hasGhost())`), under });
   const crate = (() => { const a = myActs().at(-1); return a?.e.body?.args?.id; })();
   check("P2 the thing is in the page (its own fold drew it)", !!crate && await waitFor(`import('/lib/world.js').then((m) => m.entities.has('${crate}'))`), crate);
 
   // ---- G: gizmo drag-release = one act with expect ----
-  await page(`(await import('/lib/scenegraph.js')).sceneSelect('${crate}'); (await import('/lib/build.js')).setTool('move'); return true;`);
+  await page(`(await import('/lib/scenegraph.js')).sceneSelect('${crate}'); (await import('/lib/edit/build.js')).setTool('move'); return true;`);
   check("G0 the gizmo attaches to it", await waitFor(`globalThis.__gizmo?.().attached === '${crate}'`));
   const start = disk().entities[crate].c.transform;
   // the drag adds 1 m to where the PAGE has the thing; a slow host may still be easing it in from where it was drawn, and
@@ -222,7 +222,7 @@ try {
     && (await bobReq("set", { id: "tbl", component: "lock", value: true })).ok);
   check("L0 the page has the cup on the table", await waitFor(`import('/lib/world.js').then((m) => m.entities.get('cup')?.userData?.mountedTo === 'tbl')`, 12000));
   n0 = myActs().length; const a0 = await evalJson(`__asked.length`);
-  await page(`(await import('/lib/inspect.js')).commitEdit('cup', 'pos.x', 0.4); return true;`);
+  await page(`(await import('/lib/edit/inspect.js')).commitEdit('cup', 'pos.x', 0.4); return true;`);
   check("L1 moving the cup on bob's locked table asks first: 'This is locked. Move anyway?'", await waitFor(`${dlgTitle} === 'This is locked. Move anyway?'`), await evalJson(dlgTitle));
   const body = await evalJson(`document.querySelector('#confirm-center #cc-body')?.textContent ?? ''`);
   check("L2 …saying in one line which thing is locked and by whom, no agent teaching (R, 10-04)", body === "It rides “tbl”, which is locked by bob."   /* the table by its label, never its id (R 10-17) */, body);
@@ -253,7 +253,7 @@ try {
     const dupOf3 = (st) => Object.keys(st.entities).find((k) => k !== crate && k !== dup && k !== IDS.of("cup") && st.entities[k].c.model === st.entities[crate].c.model);
     const armed = await waitDisk(() => !!dupOf3(disk())) && await waitFor(`import('/lib/world.js').then((m) => m.entities.has('${dupOf3(disk())}'))`);
     await pause("past the copy's 400 ms select, and its reply", 1500);
-    check("D3 a duplicate's late select doesn't replace what was picked after it (the copy landed and was drawn first)", armed && await evalJson(`import('/lib/scenegraph.js').then((m) => m.sceneSelected() === '${IDS.of("cup")}')`), { armed, selection: await evalJson(`import('/lib/editpanels.js').then((m) => m.selection())`) });
+    check("D3 a duplicate's late select doesn't replace what was picked after it (the copy landed and was drawn first)", armed && await evalJson(`import('/lib/scenegraph.js').then((m) => m.sceneSelected() === '${IDS.of("cup")}')`), { armed, selection: await evalJson(`import('/lib/edit/panels.js').then((m) => m.selection())`) });
     const st3 = disk(); const extra = Object.keys(st3.entities).filter((k) => !st1.entities[k] && st3.entities[k].c.model === st3.entities[crate].c.model);
     for (const x of extra) await page(`(await import('/lib/net.js')).sendRequest('delete', { id: '${x}' }); return true;`).catch(() => null);
     await waitDisk(() => extra.every((x) => !disk().entities[x])); }
@@ -261,7 +261,7 @@ try {
   // ---- M: multi-delete is one batch ----
   n0 = myActs().length;
   await page(`(await import('/lib/scenegraph.js')).sceneSelect('${crate}'); (await import('/lib/base.js')).bus.emit('edit-extend', '${dup}'); return true;`);
-  check("M0 two things selected", await waitFor(`import('/lib/editpanels.js').then((m) => m.selection().length === 2)`), await evalJson(`import('/lib/editpanels.js').then((m) => m.selection())`));
+  check("M0 two things selected", await waitFor(`import('/lib/edit/panels.js').then((m) => m.selection().length === 2)`), await evalJson(`import('/lib/edit/panels.js').then((m) => m.selection())`));
   await key("Delete");
   check("M1 Delete on both = ONE act, a batch of two deletes", await waitDisk(() => myActs().length === n0 + 1 && myActs().at(-1).e.verb === "batch" && myActs().at(-1).e.body.args.requests.length === 2), myActs().slice(n0).map((a) => a.e.body.args));
   // the act and its change are two appends (writes.js changeEntry): M1 waits for the act, so the change may not be on disk
@@ -308,7 +308,7 @@ try {
   check("H4 …and his unlock shows live", await waitFor(`${lockBtn("tbl")} && !${lockBtn("tbl")}.classList.contains('on')`));
 
   // ---- K: my own lock asks too: "This is locked. Move anyway?" with ✓ / ✕ / 🔓 ----
-  await page(`(await import('/lib/scenegraph.js')).sceneSelect('${crate}'); (await import('/lib/build.js')).setTool('move'); return true;`);
+  await page(`(await import('/lib/scenegraph.js')).sceneSelect('${crate}'); (await import('/lib/edit/build.js')).setTool('move'); return true;`);
   check("K0 the gizmo attaches to a thing I locked myself (the authority asks; the client no longer blocks the drag)", await waitFor(`globalThis.__gizmo?.().attached === '${crate}'`), await evalJson(`globalThis.__gizmo?.().attached ?? null`));
   const kStart = disk().entities[crate].c.transform;
   n0 = myActs().length;
@@ -347,8 +347,8 @@ try {
   // ---- V: a visitor (who can't lift locks) gets the refusal, no buttons ----
   { const r0 = await evalJson(`__refused.length`);
     await evalJson(`(async () => { const n = await import('/lib/net.js'); globalThis.__wasRights = n.net.myRights; n.net.myRights = { ...n.net.myRights, role: 'member', rank: 0, permissions: [] };
-      const t = (await import('/lib/editwrites.js')).compsOf('${crate}').transform;
-      globalThis.__vis = (await import('/lib/editwrites.js')).send({ verb: 'set', args: { id: '${crate}', component: 'transform', value: { ...t, pos: [t.pos[0] + 2, t.pos[1], t.pos[2]] } } }, { what: 'move ${crate}' });
+      const t = (await import('/lib/edit/writes.js')).compsOf('${crate}').transform;
+      globalThis.__vis = (await import('/lib/edit/writes.js')).send({ verb: 'set', args: { id: '${crate}', component: 'transform', value: { ...t, pos: [t.pos[0] + 2, t.pos[1], t.pos[2]] } } }, { what: 'move ${crate}' });
       return true; })()`);
     const refusedV = await waitFor(`__refused.length > ${r0} && __refused.at(-1).refused.code === 'locked'`);
     const dialogV = await evalJson(`!!document.querySelector('#confirm-center')`);
@@ -411,7 +411,7 @@ try {
     const fOk = !!at && !!A0 && !!A1;
     check("(setup) a press point on the pebble, and two pointer points over the plinth's top", fOk, { press, at, m0, m1, A0, A1 });
     if (fOk) {
-    await page(`(await import('/lib/build.js')).setTool('move'); return true;`);
+    await page(`(await import('/lib/edit/build.js')).setTool('move'); return true;`);
     await evalJson(`import('/lib/core.js').then((m) => (m.canvas.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: ${at?.[0]}, clientY: ${at?.[1]} })), true))`);
     check("F1 a press on the pebble selects it", await waitFor(`import('/lib/scenegraph.js').then((m) => m.sceneSelected() === 'pebble')`));
     const move = (m: number[]) => evalJson(`(dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: ${m?.[0]}, clientY: ${m?.[1]} })), true)`);
@@ -432,7 +432,7 @@ try {
     const pAfter = (await geo(0, 0)).P;
     check("F5 …and once the authority's echo is drawn, the pebble is where the drag left it", echoed && Math.hypot(...d(pAfter, p1)) < 0.02, { echoed, pAfter, p1 });
     // a mesh drag of a thing I locked asks too (the old client stopped it before the authority was asked)
-    check("(setup) I lock the pebble", (await page(`return (await (await import('/lib/editwrites.js')).lock('pebble', true)).ok;`)) === true);
+    check("(setup) I lock the pebble", (await page(`return (await (await import('/lib/edit/writes.js')).lock('pebble', true)).ok;`)) === true);
     n0 = myActs().length;
     await settle();
     const g2 = (await findPress())?.xy ?? at;
@@ -484,23 +484,23 @@ try {
   await evalJson(`document.querySelector('.sp-pop-search').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })), true`);
   check("I8 …Esc closes it", await waitFor(`!document.querySelector('.sp-pop')`));
   // G on a thing that rides another: the handles come up (R: "g/e/r doesn't always bring up the controls")
-  await page(`(await import('/lib/scenegraph.js')).sceneSelect('pebble'); (await import('/lib/build.js')).setTool('select'); return true;`);
+  await page(`(await import('/lib/scenegraph.js')).sceneSelect('pebble'); (await import('/lib/edit/build.js')).setTool('select'); return true;`);
   await key("KeyG"); await sleep(400);
   check("I9 G on the pebble (it rides another thing) brings up the move handles", await evalJson(`__gizmo().attached === 'pebble' && __gizmo().mode === 'translate'`), await evalJson(`({ a: __gizmo().attached, m: __gizmo().mode })`));
   await key("KeyE"); await sleep(400);
   check("I10 …and E the rotate handles", await evalJson(`__gizmo().attached === 'pebble' && __gizmo().mode === 'rotate'`), await evalJson(`({ a: __gizmo().attached, m: __gizmo().mode })`));
-  await page(`(await import('/lib/build.js')).setTool('select'); return true;`);
+  await page(`(await import('/lib/edit/build.js')).setTool('select'); return true;`);
   // the Transform card's padlock follows the lock (R: "a padlock next to Transform regardless of its lock status")
   const tfLock = `[...${insp}.querySelectorAll('.sp-group')].find((g) => /Transform/.test(g.textContent))?.querySelector('.sp-ico') != null`;
-  await page(`await (await import('/lib/editwrites.js')).lock('pebble', true); return true;`);
+  await page(`await (await import('/lib/edit/writes.js')).lock('pebble', true); return true;`);
   check("I11 a locked thing's Transform card shows the padlock", await waitFor(tfLock), await evalJson(`[...${insp}.querySelectorAll('.sp-group')].map((g) => g.innerHTML.slice(0, 80))`));
-  await page(`await (await import('/lib/editwrites.js')).lock('pebble', false); return true;`);
+  await page(`await (await import('/lib/edit/writes.js')).lock('pebble', false); return true;`);
   check("I12 …and unlocking takes it away", await waitFor(`!(${tfLock})`), await evalJson(`[...${insp}.querySelectorAll('.sp-group')].map((g) => g.innerHTML.slice(0, 80))`));
 
   // three-axis scale (R 10-04): the wire always had [x,y,z]; the page now edits, draws and keeps it
   const sLabels = await evalJson(`[...${insp}.querySelectorAll('.sp-row .sp-label')].map((l) => l.textContent).filter((t) => /scale/.test(t))`);
   check("I13 the Transform shows scale x / y / z", JSON.stringify(sLabels) === JSON.stringify(["scale x", "scale y", "scale z"]), sLabels);
-  await page(`(await import('/lib/inspect.js')).commitEdit('pebble', 'pos.sx', 2); return true;`);
+  await page(`(await import('/lib/edit/inspect.js')).commitEdit('pebble', 'pos.sx', 2); return true;`);
   check("I14 …editing scale x writes [2, y, z] to the log (one act)", await waitDisk(() => { const sc = disk().entities[IDS.of("pebble")]?.c.transform.scale; return sc && sc[0] === 2 && sc[1] !== 2; }), disk().entities[IDS.of("pebble")]?.c.transform);
   check("I15 …and the page draws it stretched, not uniform", await waitFor(`import('/lib/world.js').then((m) => { const s = m.entities.get('pebble').scale; return Math.abs(s.x - 2) < 1e-6 && Math.abs(s.y - 0.4) < 1e-6 && s.y === s.z; })`), await evalJson(`import('/lib/world.js').then((m) => m.entities.get('pebble').scale.toArray())`));
 
@@ -519,25 +519,25 @@ try {
 
 
   // transform space (R 10-04: "gimbal/object/world rotations... a way to switch between them")
-  await page(`(await import('/lib/scenegraph.js')).sceneSelect('pebble'); const B = await import('/lib/build.js'); B.setSpace('rotate', 'world'); B.setTool('select'); return true;`);
+  await page(`(await import('/lib/scenegraph.js')).sceneSelect('pebble'); const B = await import('/lib/edit/build.js'); B.setSpace('rotate', 'world'); B.setTool('select'); return true;`);
   await key("KeyE"); await sleep(300);
   const sp0 = await evalJson(`({ s: __gizmo().controls?.space, a: __gizmo().attached })`);
   await key("KeyE"); await sleep(400);
-  const sp1 = await evalJson(`import('/lib/build.js').then((B) => ({ tool: B.getTool(), space: B.getSpace('rotate'), gizmo: __gizmo().controls?.space }))`);
+  const sp1 = await evalJson(`import('/lib/edit/build.js').then((B) => ({ tool: B.getTool(), space: B.getSpace('rotate'), gizmo: __gizmo().controls?.space }))`);
   check("T1 E then E again: rotate switches to the thing's own axes, and the gizmo follows", sp0?.s === "world" && sp1?.tool === "rotate" && sp1?.space === "object" && sp1?.gizmo === "local", { sp0, sp1 });
   await key("KeyE"); await sleep(400);
-  check("T2 …and E once more goes back to world axes", await evalJson(`import('/lib/build.js').then((B) => B.getSpace('rotate') === 'world' && __gizmo().controls?.space === 'world')`));
+  check("T2 …and E once more goes back to world axes", await evalJson(`import('/lib/edit/build.js').then((B) => B.getSpace('rotate') === 'world' && __gizmo().controls?.space === 'world')`));
   await evalJson(`(document.querySelector('.edit-tool[data-tool="move"]')?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })), true)`);
   const menuRows = await evalJson(`[...document.querySelectorAll('.edit-space-pop .edit-menu-item')].map((r) => r.textContent)`);
   check("T3 right-click on the move tool lists its spaces", JSON.stringify(menuRows) === JSON.stringify(["● world axes", "○ object axes"]), menuRows);
   await evalJson(`[...document.querySelectorAll('.edit-space-pop .edit-menu-item')].find((r) => /object/.test(r.textContent))?.click(), true`);
-  check("T4 …picking 'object axes' arms move in the thing's own axes", await waitFor(`import('/lib/build.js').then((B) => B.getTool() === 'move' && B.getSpace('move') === 'object' && __gizmo().controls?.space === 'local')`), await evalJson(`import('/lib/build.js').then((B) => ({ t: B.getTool(), s: B.getSpace('move'), g: __gizmo().controls?.space }))`));
-  await page(`const B = await import('/lib/build.js'); B.setSpace('move', 'world'); B.setSpace('rotate', 'world'); B.setTool('select'); return true;`);
+  check("T4 …picking 'object axes' arms move in the thing's own axes", await waitFor(`import('/lib/edit/build.js').then((B) => B.getTool() === 'move' && B.getSpace('move') === 'object' && __gizmo().controls?.space === 'local')`), await evalJson(`import('/lib/edit/build.js').then((B) => ({ t: B.getTool(), s: B.getSpace('move'), g: __gizmo().controls?.space }))`));
+  await page(`const B = await import('/lib/edit/build.js'); B.setSpace('move', 'world'); B.setSpace('rotate', 'world'); B.setTool('select'); return true;`);
 
   // the pivot (research 52): handles sit at the pivot, and a turn goes ABOUT it (the thing swings round, not in place)
   check("(setup) a crate 'pv' with its pivot 1 m along its own x", (await bobReq("create", { id: "pv", model: CRATE, components: { transform: { pos: [10, 0, 10], q: [0, 0, 0, 1], scale: [1, 1, 1] }, pivot: { pos: [1, 0, 0] } } })).ok);
   await waitFor(`import('/lib/world.js').then((m) => !!m.entities.get('pv') && !!m.bagOf('pv')?.pivot)`, 12000);
-  await page(`(await import('/lib/scenegraph.js')).sceneSelect('pv'); (await import('/lib/build.js')).setTool('rotate'); return true;`);
+  await page(`(await import('/lib/scenegraph.js')).sceneSelect('pv'); (await import('/lib/edit/build.js')).setTool('rotate'); return true;`);
   check("PV1 the rotate handles sit at the pivot (11, 0, 10), not the origin", await waitFor(`(() => { const g = __gizmo(); return g.attached === 'pv' && g.viaProxy && Math.abs(g.proxyPos[0] - 11) < 1e-6 && Math.abs(g.proxyPos[2] - 10) < 1e-6; })()`), await evalJson(`__gizmo().proxyPos`));
   const nPv = myActs().length;
   await evalJson(`(() => { const c = __gizmo().controls; c.dispatchEvent({ type: 'dragging-changed', value: true });
@@ -548,15 +548,15 @@ try {
   const pvT = disk().entities[IDS.of("pv")]?.c.transform;
   check("PV3 …the crate swung round the pivot: its origin went from (10, 0, 10) to (11, 0, 11)", pvT && Math.abs(pvT.pos[0] - 11) < 1e-3 && Math.abs(pvT.pos[2] - 11) < 1e-3, pvT);
   check("PV4 …and the pivot itself stayed where it was (11, 0, 10)", await waitFor(`(() => { const g = __gizmo(); return Math.abs(g.proxyPos[0] - 11) < 1e-3 && Math.abs(g.proxyPos[2] - 10) < 1e-3; })()`), await evalJson(`__gizmo().proxyPos`));
-  await page(`(await import('/lib/build.js')).setTool('select'); return true;`);
+  await page(`(await import('/lib/edit/build.js')).setTool('select'); return true;`);
 
   // the pivot tool (P): drag the pivot itself; it snaps to the model's centre; the thing never moves
   check("(setup) a crate 'pt' with no pivot", (await bobReq("create", { id: "pt", model: CRATE, components: { transform: { pos: [14, 0, 10], q: [0, 0, 0, 1], scale: [1, 1, 1] } } })).ok);
   await waitFor(`import('/lib/world.js').then((m) => !!m.entities.get('pt'))`, 12000);
-  await page(`(await import('/lib/scenegraph.js')).sceneSelect('pt'); (await import('/lib/build.js')).setTool('select'); return true;`);
+  await page(`(await import('/lib/scenegraph.js')).sceneSelect('pt'); (await import('/lib/edit/build.js')).setTool('select'); return true;`);
   await key("KeyP"); await sleep(400);
   check("PT0 in build mode P is the pivot tool's alone: photo mode stays off (main's P has a guard there, as H and R do)", (await evalJson(`import('/lib/controller.js').then((c) => c.photoMode)`)) === false);
-  check("PT1 P arms the pivot tool: the handles sit at its origin (no pivot yet)", await waitFor(`import('/lib/build.js').then((B) => { const g = __gizmo(); return B.getTool() === 'pivot' && g.attached === 'pt' && g.viaProxy && Math.abs(g.proxyPos[0] - 14) < 1e-6 && Math.abs(g.proxyPos[2] - 10) < 1e-6; })`), await evalJson(`({ g: __gizmo().proxyPos, a: __gizmo().attached })`));
+  check("PT1 P arms the pivot tool: the handles sit at its origin (no pivot yet)", await waitFor(`import('/lib/edit/build.js').then((B) => { const g = __gizmo(); return B.getTool() === 'pivot' && g.attached === 'pt' && g.viaProxy && Math.abs(g.proxyPos[0] - 14) < 1e-6 && Math.abs(g.proxyPos[2] - 10) < 1e-6; })`), await evalJson(`({ g: __gizmo().proxyPos, a: __gizmo().attached })`));
   const ptBefore = JSON.stringify(disk().entities[IDS.of("pt")].c.transform);
   const nPt = myActs().length;
   const centre = await page(`const W = await import('/lib/world.js'); const M = await import('/lib/realize/models.js'); const S = await import('/lib/state.js');
@@ -566,13 +566,13 @@ try {
     c.dispatchEvent({ type: 'objectChange' }); c.dispatchEvent({ type: 'dragging-changed', value: false }); return JSON.stringify(mid.map((v) => Math.round(v * 1e4) / 1e4));`);
   check("PT2 releasing near the middle snaps the pivot to the model's centre: ONE pivot write", await waitDisk(() => myActs().length === nPt + 1 && JSON.stringify(disk().entities[IDS.of("pt")]?.c.pivot?.pos) === centre), { centre, pivot: disk().entities[IDS.of("pt")]?.c.pivot, acts: myActs().slice(nPt).map((a) => a.e.body?.args) });
   check("PT3 …and the crate itself did not move", JSON.stringify(disk().entities[IDS.of("pt")].c.transform) === ptBefore, [ptBefore, disk().entities[IDS.of("pt")].c.transform]);
-  await page(`(await import('/lib/build.js')).setTool('select'); return true;`);
+  await page(`(await import('/lib/edit/build.js')).setTool('select'); return true;`);
 
   // ---- MS: the multi-selection Inspector and the Hierarchy's Ctrl / Shift clicks (R, gym 10-17 20:39-20:44) ----
   {
     const rowEl = (id: string) => `[...${hier}.querySelectorAll('.sp-tree-row')].find((r) => r.dataset.id === ${JSON.stringify(id)})`;
     const clickRow = (id: string, mods: any = {}) => evalJson(`(() => { const m = ${rowEl(id)}?.querySelector('.sp-item-main'); if (!m) return false; m.dispatchEvent(new MouseEvent('click', { bubbles: true, ${Object.entries(mods).map(([k, v]) => `${k}: ${v}`).join(", ")} })); return true; })()`);
-    const selNow = () => evalJson(`import('/lib/editpanels.js').then((m) => m.selection())`);
+    const selNow = () => evalJson(`import('/lib/edit/panels.js').then((m) => m.selection())`);
     const activeNow = () => evalJson(`import('/lib/edit/selection.js').then((m) => m.active())`);
     const rowsNow = () => evalJson(`(async () => { const W = await import('/lib/world.js'); return __editPanels().rows.filter((id) => !!W.entities.get(id)); })()`);
     const same = (a: any, b: any) => JSON.stringify(a) === JSON.stringify(b);
@@ -668,7 +668,7 @@ try {
   await evalJson(`(() => { const b = document.querySelector('[data-frame="inspector"] .sp-scrub-speed'); b.click(); b.click(); return true; })()`);
   const tips = await evalJson(`[...document.querySelectorAll('[data-frame="inspector"] .sp-f-num')].filter((r) => !r.classList.contains('disabled')).map((r) => r.title)`);
   check("SF3 every editable number says its modifiers in its tooltip (Shift finer · Ctrl whole numbers)", tips?.length > 0 && tips.every((t) => /Shift finer/.test(t) && /Ctrl whole numbers/.test(t)), tips?.slice(0, 2));
-  const travel = await page(`const P = await import('/lib/panels.js'); const a = P.scrubTravel(300); P.setScrubFeel({ accel: false }); const l = P.scrubTravel(300); P.setScrubFeel({ accel: true }); return JSON.stringify([a, l]);`);
+  const travel = await page(`const P = await import('/lib/edit/fieldpanels.js'); const a = P.scrubTravel(300); P.setScrubFeel({ accel: false }); const l = P.scrubTravel(300); P.setScrubFeel({ accel: true }); return JSON.stringify([a, l]);`);
   check("SF4 accelerating travels further than linear on a long drag (300 px)", JSON.parse(travel)[0] > JSON.parse(travel)[1] * 2, travel);
 
   // keyhints (R 10-04): before = tooltip, during = the status line at the bottom
@@ -700,7 +700,7 @@ try {
   check("CD1 Ctrl+D = create {from: pt}: ONE act", await waitDisk(() => myActs().length === nD + 1 && myActs().at(-1).e.body.args.from === IDS.of("pt")), myActs().slice(nD).map((a) => a.e.body?.args));
   const me1 = await evalJson(`import('/lib/controller.js').then((m) => [m.myState.pos.x, m.myState.pos.y, m.myState.pos.z])`);
   check("CD2 …and the chord never counts as a held D, so it can't strafe the body (the walk reads the held set)", heldD === false && Math.hypot(me1[0] - me0[0], me1[2] - me0[2]) < 0.05, { heldD, me0, me1 });
-  // the copy reselects ITSELF 400 ms after it lands unless the selection changed since (editpanels duplicate: Sel.mark()):
+  // the copy reselects ITSELF 400 ms after it lands unless the selection changed since (edit/panels.js duplicate: Sel.mark()):
   // re-selecting pt while pt is still selected changes nothing, so clear first; then the late reselect stands down
   await page(`(await import('/lib/edit/selection.js')).clear(); (await import('/lib/scenegraph.js')).sceneSelect('pt'); return true;`);
   await waitFor(`import('/lib/scenegraph.js').then((m) => m.sceneSelected() === 'pt')`, 3000);
@@ -818,7 +818,7 @@ try {
   // ---- GR: the ground panel writes in a world (R 10-06: ground & grass panels broken). It sent v1 'terrain'/'grass'
   // verbs, which fromv1 had no spelling for, so the page refused them itself and nothing reached the authority. ----
   { const st4 = () => fold(entries());
-    const gpanel = `const d = document.createElement('div'); document.body.appendChild(d); (await import('/lib/groundpanel.js')).paintGround(d); window.__gp = d;
+    const gpanel = `const d = document.createElement('div'); document.body.appendChild(d); (await import('/lib/edit/groundpanel.js')).paintGround(d); window.__gp = d;
       window.__gbtn = (re) => [...window.__gp.querySelectorAll('button, .sp-btn')].find((b) => re.test(b.textContent)); return true;`;
     await page(gpanel);
     check("GR0 (setup) the ground panel paints, with its palette (async: wait for the button)", await waitFor(`!!window.__gbtn?.(/reshuffle/)`), await evalJson(`window.__gp?.textContent?.slice(0, 200)`));
@@ -941,7 +941,7 @@ try {
         const b = await n.sendRequest('create', { id: 'hphull-helm', components: { parent: { to: 'hphull' }, transform: { pos: [0, 0.5, 0] }, socket: { name: 'helm' }, station: { action: 'drive', input: { move: 'drive' } } } });
         return JSON.stringify([a.ok || (a.refused?.code + ": " + a.refused?.reason), b.ok || (b.refused?.code + ": " + b.refused?.reason)]);`);
       await evalJson(`(document.activeElement?.blur?.(), true)`);   // CP typed in the chat line: a key there is text
-      await evalJson(`import('/lib/build.js').then((m) => (m.setBuildMode(false), true))`);   // build mode's P is the pivot tool
+      await evalJson(`import('/lib/edit/build.js').then((m) => (m.setBuildMode(false), true))`);   // build mode's P is the pivot tool
       const footFree = await waitFor(`!document.body.classList.contains('build-mode')`);
       const photo = `import('/lib/controller.js').then((c) => c.photoMode)`;
       await key("KeyP"); const onFoot = await waitFor(photo, 2000); await key("KeyP"); const offAgain = await waitFor(`${photo}.then((p) => !p)`, 2000);
@@ -955,7 +955,7 @@ try {
       const startedOn = await page(`const c = await import('/lib/controller.js'); if (!c.photoMode) c.togglePhotoMode(); return c.photoMode;`);
       check("HP2 …and a photo mode started anyway (not by the key) is ended by the next frame at the helm", atHelm && startedOn === true && await waitFor(`${photo}.then((p) => !p)`, 3000), { startedOn, now: await evalJson(photo) });
       await page(`(await import('/lib/controller.js')).photoMode && (await import('/lib/controller.js')).togglePhotoMode(); await (await import('/lib/net.js')).sendRequest('delete', { id: 'hphull' }); return true;`);
-      await evalJson(`import('/lib/build.js').then((m) => (m.setBuildMode(true), true))`); }
+      await evalJson(`import('/lib/edit/build.js').then((m) => (m.setBuildMode(true), true))`); }
     // CL: nearbyClimb reads routes from the view; a change to one (disabled, moved) is seen (client/lib/climb.js)
     { const ok = await page(`return (await (await import('/lib/net.js')).sendRequest('create', { id: 'clrung', model: '${CRATE}', components: { climb: { points: [[0, 0, 0], [0, 3, 0]] } }, place: { at: [-9, 9] } })).ok ?? 'refused';`);
       const near = (dx: number) => `Promise.all([import('/lib/world.js'), import('/lib/climb.js'), import('/lib/core.js')]).then(([w, c, k]) => { const o = w.entities.get('clrung'); if (!o) return null; o.updateWorldMatrix(true, false);
@@ -1045,7 +1045,7 @@ try {
     // EK (R 10-15 23:09: "esc doesn't take you back out of fullscreen mode (f11). Right now it toggles your menus"): Esc never
     // hides or restores the panel set (Tab does); F11 is the PAGE's full screen, so the browser's own Esc leaves it; Esc still
     // closes the transient things. Out of build mode (build.js claims Esc there), with two panels open.
-    { await evalJson(`import('/lib/build.js').then((m) => (m.setBuildMode(false), true))`);
+    { await evalJson(`import('/lib/edit/build.js').then((m) => (m.setBuildMode(false), true))`);
       { await waitFor(`!document.body.classList.contains('edit-workspace')`); const inks = await evalJson(micInks);
         check("MIC3 outside build mode the same: live = the brand, hot = the attention gold", !inks?.edit && inks?.on === inks?.brand && inks?.ear === inks?.brand && inks?.hot === inks?.attn && inks?.off !== inks?.brand, inks); }
       await page(`const w = await import('/lib/windows.js'); const base = await import('/lib/base.js'); globalThis.__quiet = []; base.bus.on('esc-quiet', (d) => __quiet.push(d)); for (const f of w.allFrames()) f.hide(); w.getFrame('chat')?.show(); w.getFrame('settings')?.show(); document.activeElement?.blur?.(); return true;`);
@@ -1072,7 +1072,7 @@ try {
       await page(`Element.prototype.requestFullscreen = globalThis.__fsWas; return true;`);
       check("EK3 F11 is prevented (not the browser's F11) and asks the page's full screen (document.documentElement.requestFullscreen) once", f11.prevented && fsCalls === 1, { f11, fsCalls });
       // EK4 Esc still closes the transient things: a context menu goes, the panels stay
-      await page(`const p = await import('/lib/panels.js'); p.contextMenu(200, 200, [{ k: 'a', label: 'a' }, { k: 'b', label: 'b' }], () => {}); return true;`);
+      await page(`const p = await import('/lib/edit/fieldpanels.js'); p.contextMenu(200, 200, [{ k: 'a', label: 'a' }, { k: 'b', label: 'b' }], () => {}); return true;`);
       const menuUp = await evalJson(`!!document.querySelector('.sp-ctx')`);
       await press("Escape"); await sleep(150);
       check("EK4 Esc still closes an open context menu, and the panels stay where they were", menuUp && await evalJson(`!document.querySelector('.sp-ctx')`) && await evalJson(openIds) === before && await evalJson(`__quiet.join() === 'closed,restored'`), { menuUp, gone: await evalJson(`!document.querySelector('.sp-ctx')`), open: await evalJson(openIds), quiet: await evalJson(`__quiet`) }); }

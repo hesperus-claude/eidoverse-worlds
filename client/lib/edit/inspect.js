@@ -9,7 +9,7 @@
 //     live   → PREVIEW: the group's handler moves the realized object (a
 //              light brightens, a seat gizmo slides) — no log traffic;
 //     final  → COMMIT: editOps() turns the edit into the fewest door ops, sent as ONE request (shared/requests.js via
-//              editwrites.sendOps): one act, undone by the authority's undo; expect carries the values as the gesture began.
+//              writes.js sendOps): one act, undone by the authority's undo; expect carries the values as the gesture began.
 //
 //   registerHandler(group, fn(id, obj, k, value, opts) → handled?)
 //     evaluator modules install previews and viewport GESTURES here ('+ seat
@@ -21,27 +21,27 @@
 // until it retires; that panel also gets the schema groups, rendered by the
 // factory, through the same commit path.
 
-import { materialsOf } from './realize/material_draft.js';
-import { isMineMuted, allowUntrusted } from './mediaprefs.js';
+import { materialsOf } from '../realize/material_draft.js';
+import { isMineMuted, allowUntrusted } from '../mediaprefs.js';
 import { rotOrderFor, setRotOrder } from './viewprefs.js';
-import { entities } from './world.js';
-import { boxOf, previewMesh, previewLight } from './realize/models.js';
-import { state } from './state.js';
-import { net, sendDrag, replica } from './net.js';
-import { serverNow } from './serverclock.js';   // the sky's and roles' stamps are the authority's
-import { trustedOf } from '../../shared/drafts.js';
-import { enc } from '../../shared/protocol/names.js';
-import { THREE } from './core.js';
-import { renderDOM } from './panels.js';
-import { inspectSchema, editOps, fieldAt } from '../../shared/editschema.js';
-import { namedParts } from './parts.js';
-import { sameRotation } from '../../shared/euler.js';
-import { localOf } from '../../shared/hierarchy.js';
-import { lightOf } from '../../shared/components.js';
-import { WORLD_ID, worldSchema, worldEditOps } from '../../shared/worldentity.js';
-import * as Edits from './editwrites.js';   // slice 3b: component edits are requests
-import { effectLookup } from './realize/emitters.js';
-import { isOwner } from '../../shared/protocol/roles.js';
+import { entities } from '../world.js';
+import { boxOf, previewMesh, previewLight } from '../realize/models.js';
+import { state } from '../state.js';
+import { net, sendDrag, replica } from '../net.js';
+import { serverNow } from '../serverclock.js';   // the sky's and roles' stamps are the authority's
+import { trustedOf } from '../../../shared/drafts.js';
+import { enc } from '../../../shared/protocol/names.js';
+import { THREE } from '../core.js';
+import { renderDOM } from './fieldpanels.js';
+import { inspectSchema, editOps, fieldAt } from '../../../shared/editschema.js';
+import { namedParts } from '../parts.js';
+import { sameRotation } from '../../../shared/euler.js';
+import { localOf } from '../../../shared/hierarchy.js';
+import { lightOf } from '../../../shared/components.js';
+import { WORLD_ID, worldSchema, worldEditOps } from '../../../shared/worldentity.js';
+import * as Edits from './writes.js';   // slice 3b: component edits are requests
+import { effectLookup } from '../realize/emitters.js';
+import { isOwner } from '../../../shared/protocol/roles.js';
 const R2D = 180 / Math.PI;
 
 const handlers = new Map();      // group → [fn] — consulted in order; the first to return true handled it
@@ -62,7 +62,7 @@ registerHandler('light', (id, _obj, k, value, opts) => {
   return Number.isFinite(n) && previewLight(id, { [k]: n });
 });
 export function registerEditor(fn) { htmlEditors.push(fn); }
-/** editpanels installs the undo stack and the light coalescer at init —
+/** panels.js installs the undo stack and the light coalescer at init —
  *  importing build.js from here would close an import loop through
  *  scenegraph.js. */
 export function setEditHooks(h) { hooks = { ...hooks, ...h }; }

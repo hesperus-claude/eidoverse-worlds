@@ -71,7 +71,7 @@ const cases: [string, any, string[]][] = [
   ['a comp.collider array stays an Annotation', { model: L, pos: [0, 0, 0], yaw: 0, collider: ['box'], ...st0 }, ['Model:', 'Annotation:collider']],
   ['an Empty: nothing but a Transform', { pos: [1, 2, 3], yaw: 0.5, ...st0 }, []],
   ['an Empty with a scale, a q and a comp.light', { pos: [1, 2, 3], yaw: 0, q: [0, 0, 0, 1], scale: 2, light: { intensity: 4 }, placer: { id: 'p' }, ...st0 }, ['Light:light']],
-  // the rotate order is the VIEWER's (PROTOCOL §9.1: Euler channels are a view; client/lib/viewprefs.js keeps it), so the
+  // the rotate order is the VIEWER's (PROTOCOL §9.1: Euler channels are a view; client/lib/edit/viewprefs.js keeps it), so the
   // Transform card has none: a rotOrder a record still carries is an Annotation like any unknown key, bytes kept (#260 I242)
   ['a stored rotOrder is not part of the Transform: an Annotation, bytes kept', { model: L, pos: [0, 0, 0], yaw: 0, q: [0, 0.38, 0, 0.92], rotOrder: 'ZXY', lock: true, ...st0 }, ['Model:', 'Annotation:rotOrder', 'Lock:lock']],
   ['…on an Empty too', { pos: [0, 0, 0], yaw: 0, rotOrder: 'quat', ...st0 }, ['Annotation:rotOrder']],

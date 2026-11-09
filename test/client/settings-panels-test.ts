@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({ name: 'settings-stubs', setup(b) {
-  for (const m of ['core', 'base', 'governor', 'lightrig', 'materials', 'xrpanels', 'net', 'catalog', 'avatar', 'controller', 'capnotice', 'assets', 'mictoggle'])
+  for (const m of ['core', 'base', 'governor', 'lightrig', 'materials', 'xrpanels', 'net', 'edit/catalog', 'avatar', 'controller', 'capnotice', 'assets', 'mictoggle'])
     b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: here('../stubs/settings-panels-stub.mjs') }));
 } });
 

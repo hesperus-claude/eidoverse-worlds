@@ -1,7 +1,7 @@
 // editschema — what can be edited on a thing, and how, as a PURE FUNCTION of
 // its folded record (plus, for a host's sockets, the world it lives in: live.world). Dependency-free, shared verbatim by three surfaces:
 //
-//   desktop inspector   client/lib/editpanels.js renders the fields (panels.js)
+//   desktop inspector   client/lib/edit/panels.js renders the fields (edit/fieldpanels.js)
 //   VR quad             the same fields painted to a canvas (xrpanels.js)
 //   models              mcpl `inspect` prints them, `edit` commits them
 //
@@ -12,7 +12,7 @@
 // actually casting) but never a different truth.
 //
 // inspectSchema(ent, id)          → { groups: [{ group, verb, fields }] }
-//   fields are panels.js specs: { t, k, label, value, def?, … } with k a plain name (def: the
+//   fields are edit/fieldpanels.js specs: { t, k, label, value, def?, … } with k a plain name (def: the
 //   registry default a reset ↺ writes; an unwritten legacy value draws as the field's `absent` reading, which can differ)
 //   inside the group. Address a field from outside as "<group>.<k>"
 //   (pos.x · light.intensity · motion.amp · sockets.seat|rot|1 · comp.recipe).

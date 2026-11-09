@@ -7,7 +7,7 @@ import { CONFIG, angleDelta, bus } from './base.js';
 import { heightAt } from './terrain.js';
 import { resolveColliders, lastBlockedTop, lastContacts, findSeat, raySegment } from './colliders.js';
 import { bumpTick } from './hiddenbump.js';
-import { outOfMyView } from './myview.js';
+import { outOfMyView } from './edit/myview.js';
 import { colliderFor, deskEyeY, canMantle, mantleStep } from './bodyscale.js';   // this body's chosen size: capsule, eye, mantle
 // ONE walker (shared/mover.js): the stride, its speeds and the body's size are the mover's, the same the agent steps
 // with and the authority checks; this file keeps the keys, the camera and the collider pass. Water too: the mover

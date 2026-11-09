@@ -3,8 +3,8 @@
 // switchAvatar the palette's cards call.
 import { bus, wornNameOf } from './base.js';
 import { net } from './net.js';
-import { renderDOM } from './panels.js';
-import { switchAvatar } from './catalog.js';
+import { renderDOM } from './edit/fieldpanels.js';
+import { switchAvatar } from './edit/catalog.js';
 import { getMyAvatarName, getMe, myBodyPrefs, setMyBodyPref } from './mybody.js';
 import { BODY_SCALE_MIN, BODY_SCALE_MAX, PLATE_Y_MIN, PLATE_Y_MAX } from './bodyscale.js';
 

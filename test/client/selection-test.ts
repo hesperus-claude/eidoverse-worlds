@@ -11,9 +11,9 @@ import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({ name: 'selection-test-stubs', setup(b) {
-  for (const m of ['core', 'editwrites', 'ui'])
-    b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: here('../stubs/selection-test-stub.mjs') }));
-  b.onResolve({ filter: /^\.\/realize\/structure\.js$/ }, () => ({ path: here('../stubs/selection-test-stub.mjs') }));
+  for (const m of ['core', 'writes', 'ui'])
+    b.onResolve({ filter: new RegExp(`^\\.\\.?/${m}\\.js$`) }, () => ({ path: here('../stubs/selection-test-stub.mjs') }));
+  b.onResolve({ filter: /^\.\.?\/realize\/structure\.js$/ }, () => ({ path: here('../stubs/selection-test-stub.mjs') }));
 } });
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
@@ -23,7 +23,7 @@ GlobalRegistrator.register();   // structure_ui's init adds window listeners
 const { bus } = await import('../../client/lib/base.js');
 const Sel = await import('../../client/lib/edit/selection.js');
 const { state } = await import('../../client/lib/state.js');
-const SU = await import('../../client/lib/structure_ui.js');
+const SU = await import('../../client/lib/edit/structure_ui.js');
 
 const S = suite("selection");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

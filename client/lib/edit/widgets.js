@@ -1,8 +1,8 @@
 // widgets — the ONE field → widget table every panel surface reads.
 //
-// A panel declares FIELDS (panels.js's schema) and never owns bespoke DOM or paint. Three surfaces draw a field:
+// A panel declares FIELDS (fieldpanels.js's schema) and never owns bespoke DOM or paint. Three surfaces draw a field:
 // the desktop frame (DOM), the legacy VR quad (a 2D canvas in the panels' skin) and build mode's VR quad (the same
-// canvas under the VR floor edittheme.js sets). Every field type is ONE entry here, so no surface can lack a widget
+// canvas under the VR floor theme.js sets). Every field type is ONE entry here, so no surface can lack a widget
 // another has:
 //
 //   WIDGETS[t] = { dom(f, D), legacy(f, P), edit(f, P), editH?(f, S), row? }
@@ -10,8 +10,8 @@
 // dom builds the row's control into D.row and sets row.update; legacy and edit paint into P.g and push hit REGIONS
 // ({x, y, w, h, action, payload?, slider?}) that xrpanels.js resolves a laser UV against and dispatches exactly as the
 // DOM control dispatches. The SURFACE is the parameter: D is the desktop's (the row, its label, edit(), the frame's
-// stepper/pop/menu makers), P is a canvas surface's (its context, geometry, tokens and primitives; panels.js builds
-// the legacy one, editpaint.js the edit one). paintFields(fields, S) is the one canvas walk both share: the layout
+// stepper/pop/menu makers), P is a canvas surface's (its context, geometry, tokens and primitives; fieldpanels.js builds
+// the legacy one, paint.js the edit one). paintFields(fields, S) is the one canvas walk both share: the layout
 // (folds, deskOnly, a list's rows), the per-row label the surface paints, the disabled rule (a disabled field paints
 // but takes no hits) and the lookup. A type dropped from this table is gone from every surface at once, which is what
 // test/client/panels-schema-test.ts and test/client/edittheme-test.ts go red on together.
@@ -20,8 +20,8 @@
 // facts a widget reads (step, dp, unit, deg, min, max, options, def) are the descriptor's `ui` facts
 // (shared/descriptors.js) as editschema's rowOf hands them on; the shared readers of them are FACTS below.
 
-import { svg as strokeSvg, rsvg, has as hasIcon, fsvg, hasFill, hasLine, stroke as strokeIcon } from './icons.js';
-import { EDIT as T, EDIT_VR as V, pictoRuns, hasPicto } from './edittheme.js';
+import { svg as strokeSvg, rsvg, has as hasIcon, fsvg, hasFill, hasLine, stroke as strokeIcon } from '../icons.js';
+import { EDIT as T, EDIT_VR as V, pictoRuns, hasPicto } from './theme.js';
 import { KEYHINTS, withKeys } from './keyhints.js';
 
 export const R2D = 180 / Math.PI;
@@ -569,7 +569,7 @@ export const WIDGETS = {
         FACTS.ref(f));
       name.disabled = !!f.disabled;
       name.title = f.value ? `target: ${f.value} — click to re-pick` : 'click, then click the target';
-      name.onclick = () => edit(f.k);                       // arm / cancel (editpanels toggles)
+      name.onclick = () => edit(f.k);                       // arm / cancel (panels.js toggles)
       wrap.append(name);
       if (f.value != null && !f.arming) {
         const clr = el('button', 'sp-btn sp-ref-clear', '✕');

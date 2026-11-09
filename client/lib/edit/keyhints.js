@@ -2,10 +2,10 @@
 //   before: in the control's tooltip (what you COULD do, on hover)
 //   during: on the status line at the bottom while you're engaged (what the keys do RIGHT NOW)
 // test/client/keyhints-check.ts fails the build when code reads a modifier without a `// keys: <id>` tag naming an entry here,
-// or when an entry is never shown. Two import-free imports (markup.js, base.js): panels.js and friends stay cycle-free; ui.js
+// or when an entry is never shown. Two import-free imports (markup.js, base.js): fieldpanels.js and friends stay cycle-free; ui.js
 // listens on the bus. A `during` line is our own static markup, so it rides as markup (the bar shows plain text as text).
-import { markup } from './markup.js';
-import { bus } from './base.js';
+import { markup } from '../markup.js';
+import { bus } from '../base.js';
 export const KEYHINTS = {
   scrub:         { before: 'drag to change · Shift finer · Ctrl whole numbers · ↑/↓ step (Shift ×10) · click to type', during: '<kbd>Shift</kbd> finer · <kbd>Ctrl</kbd> whole numbers · <kbd>Esc</kbd> puts it back' },
   gizmo:         { before: 'drag a handle · hold Ctrl to snap (10 cm · 5° · 0.1×) · Esc cancels', during: 'hold <kbd>Ctrl</kbd> to snap (10 cm · 5° · 0.1×) · <kbd>Esc</kbd> cancels' },

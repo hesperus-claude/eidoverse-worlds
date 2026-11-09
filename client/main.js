@@ -27,7 +27,7 @@ import { initModelsRealizer, reconcileModels, residencyDebug, setResidencyFocus,
 import { initEnvironmentRealizer } from './lib/realize/environment.js';
 import { initSocialRealizer } from './lib/realize/social.js';
 import { initStructureRealizer } from './lib/realize/structure.js';
-import { initStructureUI } from './lib/structure_ui.js';
+import { initStructureUI } from './lib/edit/structure_ui.js';
 import { initCauses } from './lib/realize/livechat.js';
 // side-effecting: the `particles` component's host wires itself to the comp
 // and entity buses on import (it has no boot step of its own)
@@ -60,19 +60,19 @@ import {
   setPoseOverride, sendPuppet, sendAnim, builtIn,
 } from './lib/net.js';
 import { poseCommands } from './lib/posecommands.js';
-import { updateBuild, toggleBuildMode, isBuilding, editSurface } from './lib/build.js';
+import { updateBuild, toggleBuildMode, isBuilding, editSurface } from './lib/edit/build.js';
 // may I build here: the build switch (the authority's), else the role (an older server); unknown = no (strict)
 const mayBuildStrict = () => (Array.isArray(net.myRights?.permissions) ? net.myRights.permissions.includes('build') : isOwner(net.myRights));
-import { initPalette } from './lib/catalog.js';
-import { initConjure } from './lib/generate.js';
+import { initPalette } from './lib/edit/catalog.js';
+import { initConjure } from './lib/edit/generate.js';
 import { state as worldState } from './lib/state.js';
 import { micLive, earOn } from './lib/mictoggle.js'; // mic + headphone toggles beside the HUD, both off by default
 import { initAudioPanel } from './lib/audiopanel.js';
 import { initSceneGraph, sceneSelect } from './lib/scenegraph.js';
-import { initEditPanels } from './lib/editpanels.js';
-import { initEditLayout } from './lib/editlayout.js';
-import { initGizmo } from './lib/gizmo.js';
-import { initGripEdit } from './lib/gripedit.js';
+import { initEditPanels } from './lib/edit/panels.js';
+import { initEditLayout } from './lib/edit/layout.js';
+import { initGizmo } from './lib/edit/gizmo.js';
+import { initGripEdit } from './lib/edit/gripedit.js';
 import { initMaterialOverrides } from './lib/realize/material_draft.js';
 import { initWorldEdge } from './lib/edge.js';
 import { initXR, updateXR, bindXRSelf, isPresenting } from './lib/xr.js';

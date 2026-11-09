@@ -1,5 +1,5 @@
-// editpaint — the build-mode SURFACE for the VR quad (Hierarchy, Inspector, Console): the same field specs
-// panels.js renderCanvas paints, in build mode's look (edittheme.js), under the VR floor the spec sets:
+// paint — the build-mode SURFACE for the VR quad (Hierarchy, Inspector, Console): the same field specs
+// fieldpanels.js renderCanvas paints, in build mode's look (theme.js), under the VR floor the spec sets:
 //
 //   - every hit target >= EDIT_VR.minHit canvas px tall (≈ 3.8 cm at 900 px/m);
 //   - no line thinner than EDIT_VR.minLine (a 1-px line shimmers on a resampled quad);
@@ -13,12 +13,12 @@
 // that keep the floor (fill, box, icon, text through the pictograph filter, the sunken field, the quiet button, the
 // stepper) and the walk's two hooks (begin: ground + title; prep: a field's label and its value column).
 //
-// The contract with the rest of the VR seam is panels.js's: returns hit REGIONS in canvas px, each
+// The contract with the rest of the VR seam is fieldpanels.js's: returns hit REGIONS in canvas px, each
 // {x, y, w, h, action, payload?, slider?}, dispatching exactly what the legacy painter dispatches
 // (test/client/edittheme-test.ts holds the two to the same action set). Non-edit quads never come here.
 
-import { EDIT as T, EDIT_VR as V, pictoRuns } from './edittheme.js';
-import { stroke as strokeIcon, has as hasIcon, fillPath } from './icons.js';
+import { EDIT as T, EDIT_VR as V, pictoRuns } from './theme.js';
+import { stroke as strokeIcon, has as hasIcon, fillPath } from '../icons.js';
 import { paintFields, FACTS, R2D } from './widgets.js';
 
 const FONT = 'system-ui, sans-serif';

@@ -313,7 +313,7 @@ console.log("\nthe applied report through terrain (getGrassApplied)");
 
 console.log("\none report for every surface (source-level)");
 {
-  const bsrc = await Bun.file(here("../../client/lib/skypanel.js")).text();   // the grass⚙ row lives in the sky panel now
+  const bsrc = await Bun.file(here("../../client/lib/edit/skypanel.js")).text();   // the grass⚙ row lives in the sky panel now
   check("the browser grass⚙ row reads the SAME report (getGrassApplied) as code does",
     /getGrassApplied\(\)/.test(bsrc),
     "skypanel.js renders dial state from policy arithmetic only");

@@ -49,10 +49,10 @@ COEP is `credentialless`, not `require-corp`: the same isolation, by stripping c
 cross-origin subresource that lacks CORP headers. What the client loads cross-origin, and how each fares:
 
 - Draco decoder wasm from gstatic (assets.js): fine, gstatic sends `cross-origin-resource-policy: cross-origin`.
-- Orrery API via fetch(credentials:'include') (client/lib/generate.js): unaffected; COEP governs no-cors subresources only.
+- Orrery API via fetch(credentials:'include') (client/lib/edit/generate.js): unaffected; COEP governs no-cors subresources only.
 - Orrery thumbnails via `<img>`: a bare img is no-cors, so credentialless would strip the cookie; the call site uses
   `crossorigin="use-credentials"`.
 
-COOP `same-origin` severs window.opener, so Orrery's OAuth popup cannot postMessage back; client/lib/generate.js polls
+COOP `same-origin` severs window.opener, so Orrery's OAuth popup cannot postMessage back; client/lib/edit/generate.js polls
 /api/auth/me instead. The headers ride every response, not just the document: a worker script served without them is
 not isolated.

@@ -5,10 +5,10 @@
 // the sky lives in a closure with the clock rules (skypanel gather()) — not
 // duplicated here; the quad says 'preview' and the desk commits.
 import * as OP from '../../shared/requests.js';
-import { sendOps } from './editwrites.js';
+import { sendOps } from './edit/writes.js';
 import { bus } from './base.js';
 import { myState } from './controller.js';
-import { starterModels } from './catalog.js';
+import { starterModels } from './edit/catalog.js';
 import { defsRegistry } from './defs.js';
 import { previewSky, skyArgs } from './sky.js';
 import { registerXRPanel } from './xrpanels.js';
@@ -28,7 +28,7 @@ function fields() {
   ];
 }
 /** A model 1.5 m ahead, at your feet's height, facing the way you face — the hand-free place (a headset has no
- *  cursor to carry a ghost). One undo entry. Also the Create panel's VR body (editpanels.js). */
+ *  cursor to carry a ghost). One undo entry. Also the Create panel's VR body (edit/panels.js). */
 export function spawnAhead(lib) {
   const yaw = myState.yaw ?? 0;
   const p = [myState.pos.x + Math.sin(yaw) * 1.5, myState.pos.y, myState.pos.z + Math.cos(yaw) * 1.5];

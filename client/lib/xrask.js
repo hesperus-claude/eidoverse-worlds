@@ -1,5 +1,5 @@
 // xrask — the centre card's questions, inside a headset. confirmcenter.js is a DOM card, and a DOM card isn't drawn in
-// an immersive session, so a question nobody could see would hold every later undo (editwrites settled()). In VR the
+// an immersive session, so a question nobody could see would hold every later undo (edit/writes.js settled()). In VR the
 // same question rides a quad: by default a hidden xr-flagged DOM frame that domquad.js mirrors (as the VR keyboard
 // does), or on the canvas path (?domquads=0) a schema panel in xrpanels.js; showXRPanel picks whichever is live, and
 // either's buttons answer it. Refusals, which are toasts on the desk and therefore silent in a headset, show here too.
@@ -37,7 +37,7 @@ function settle(v) {
 function dispatch(action) { if (typeof action === 'string' && action.startsWith('c:')) settle(action.slice(2)); }
 registerXRPanel({ id: 'ask', title: 'question', fields, dispatch });   // the canvas-quad path (?canvasquads=1)
 // leaving the headset answers the open question with its cancel: nobody can see it now, and an unsettled ask holds every
-// later undo behind it (editwrites settled())
+// later undo behind it (edit/writes.js settled())
 bus.on('xr:state', (on) => { if (!on && pending) settle(pending.cancel); });
 /** the default path's frame: hidden on the desk (the centre card asks there), a quad in a headset */
 export function initXRAsk() {

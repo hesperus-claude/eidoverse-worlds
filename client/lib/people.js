@@ -14,7 +14,7 @@
 // The badge: none for a member, "guest" for someone without an account, else the role's name (badgeOf).
 import { CONFIG, bus, report } from './base.js';
 import { net, identities, guests, sendRequest, replica } from './net.js';
-import { contextMenu, closeContextMenu } from './panels.js';
+import { contextMenu, closeContextMenu } from './edit/fieldpanels.js';
 import * as R from '../../shared/protocol/roles.js';
 import { plainRefusal } from '../../shared/protocol/refusal.js';   // the door's words, its fix and names (PARITY)
 import { listOf, setListed, BLOCK_FOLLOW_WORDS } from './consent.js';
@@ -243,5 +243,5 @@ function openCanForm(display, surface) {
 // headset: in VR the same notice rides the XR quad (xrask.js), until pressed
 bus.on('warned', (m) => { import('./xrask.js').then(({ xrActive, chooseXR }) => (xrActive()
   ? chooseXR({ title: moderatorHeader(CONFIG.world), body: `${m.by} warned you: ${String(m.reason ?? '')}`, choices: [{ v: 'ok', label: 'I understand' }], cancel: 'ok' })
-  : import('./confirmcenter.js').then(({ confirmCenter }) => confirmCenter({ title: moderatorHeader(CONFIG.world), body: `${m.by} warned you: ${String(m.reason ?? '')}`, ok: 'I understand', cancel: 'Close' })))).catch((e) => report('warned', e)); });
+  : import('./edit/confirmcenter.js').then(({ confirmCenter }) => confirmCenter({ title: moderatorHeader(CONFIG.world), body: `${m.by} warned you: ${String(m.reason ?? '')}`, ok: 'I understand', cancel: 'Close' })))).catch((e) => report('warned', e)); });
 export { closeContextMenu };

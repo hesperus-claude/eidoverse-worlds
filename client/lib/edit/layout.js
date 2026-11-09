@@ -1,4 +1,4 @@
-// editlayout — build mode as a WORKSPACE (Blender's word): the same frames,
+// layout — build mode as a WORKSPACE (Blender's word): the same frames,
 // a different arrangement. Nothing is replaced; frames are docked into
 // columns while the mode is on and float again exactly where they were
 // when it ends. The shape is the one every shipping editor converged on:
@@ -14,28 +14,28 @@
 // stays: every edit is a logged sentence, so the chat pane is the edit history with the people in it.
 // Every other window is one Panels ▾ click away, never gone.
 
-import { worldEdgeWanted, setWorldEdgeShown } from './edge.js';
-import { register } from './actions.js';
-import { bus } from './base.js';
-import { getFrame, allFrames } from './windows.js';
+import { worldEdgeWanted, setWorldEdgeShown } from '../edge.js';
+import { register } from '../actions.js';
+import { bus } from '../base.js';
+import { getFrame, allFrames } from '../windows.js';
 import { setTool, getTool, undo, deselectAll, setBuildMode, removeKeyTargets, SPACES, getSpace, setSpace, holdGhost, holdPicture } from './build.js';
-import { THREE, scene } from './core.js';
-import { svg as iconSvg } from './icons.js';
+import { THREE, scene } from '../core.js';
+import { svg as iconSvg } from '../icons.js';
 import { withKeys, KEYHINTS } from './keyhints.js';
-import * as Edits from './editwrites.js';
+import * as Edits from './writes.js';
 import { structureTools, currentTool as structureTool } from './structure_ui.js';
-import { TABS, openingTab, useTab } from './edittabs.js';
-import { placeStatusChips } from './statuschips.js';
-import { replica } from './net.js';
-import { setFreeCam, freeCamState } from './controller.js';
-import { selection, openWorldCard } from './editpanels.js';
-import { flashHint } from './ui.js';
-import { LAYERS, LAYER_HINT } from '../../shared/layers.js';
+import { TABS, openingTab, useTab } from './tabs.js';
+import { placeStatusChips } from '../statuschips.js';
+import { replica } from '../net.js';
+import { setFreeCam, freeCamState } from '../controller.js';
+import { selection, openWorldCard } from './panels.js';
+import { flashHint } from '../ui.js';
+import { LAYERS, LAYER_HINT } from '../../../shared/layers.js';
 import { layerOn, setLayerOn } from './selectmask.js';
 import { isolating, setIsolate } from './myview.js';
 
 const LS = 'ew-edit-layout';
-// the left column's top pane is one frame at a time, picked by tab (edittabs.js TABS): B opens
+// the left column's top pane is one frame at a time, picked by tab (tabs.js TABS): B opens
 // on Build the first time, then on whichever tab this viewer used last (design §5)
 const DEF = { leftW: 300, rightW: 320, leftSplit: 0.55, leftTab: 'build', rightTab: 'inspector' };
 let L = { ...DEF };

@@ -2,8 +2,8 @@
 // (Chromium paints its OWN blue hover inside a native popup, out of CSS's reach). The <select> stays in the DOM,
 // hidden, as the value store: panels keep reading sel.value and listening for 'change' — a skin, not a rewrite. A
 // MutationObserver skins selects that panels build later.
-import { fsvg } from './icons.js';
-import { bus } from './base.js';
+import { fsvg } from '../icons.js';
+import { bus } from '../base.js';
 
 const SKIP = 'data-native';   // opt out: <select data-native>
 let openPop = null;

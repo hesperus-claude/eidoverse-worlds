@@ -1,7 +1,7 @@
 // Rows for the editor's History (and, later, its Credits facet): pure, so they can be tested without a browser.
 // A refused write is on the record as an act whose body carries refused {code} (authority.js logRefusal, R7): it reads as
 // an attempt, never as a deed.
-import { phraseOf } from '../../shared/credits.js';
+import { phraseOf } from '../../../shared/credits.js';
 export function worldHistoryRows(entries, nameOf) {
   return entries.filter((e) => e.kind === 'request').reverse().map((e) => {
     const refused = e.body?.refused?.code ?? null, who = nameOf(e.actor);
@@ -40,7 +40,7 @@ export function historyView(list, nameOf, { mode = 'time', who = null } = {}) {
   return { mode: 'time', rows };
 }
 
-/** A thing's history page merged into what the panel shows (editpanels' History; client-check HT4-HT6), against the
+/** A thing's history page merged into what the panel shows (panels.js' History; client-check HT4-HT6), against the
  *  authority's reply: `history {id, limit, before?}` → {entries: [{seq (the change entry's seq), diff (computed by the
  *  authority against the whole log, never against the page), …}], next: the last row's seq, or null at the beginning}; a
  *  `before` page holds the rows with seq < before. Recent by default, deeper on request.

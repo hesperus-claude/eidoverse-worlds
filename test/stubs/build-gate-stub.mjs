@@ -94,17 +94,17 @@ export const socketMouseDown = () => false;
 export const socketKeyDown = () => false;
 export const updateSocketDrag = () => {};
 
-// ---- xrask.js (editwrites): a headset is never presenting
+// ---- xrask.js (edit/writes.js): a headset is never presenting
 export const xrActive = () => false;
 export const chooseXR = async () => null;
 // ---- realize/structure.js (structure_ui): the cutaway switch, inert
 export const setCutaway = () => {};
-// ---- net.js / ui.js (editwrites): no replica, no request answered, hints as text
+// ---- net.js / ui.js (edit/writes.js): no replica, no request answered, hints as text
 export const replica = { st: null };
 export const replicaActive = () => false;
 export const sendRequest = async () => ({ ok: false, refused: { code: 'not-joined', reason: 'not in a world' } });
 export const toast = (t) => { hints.push(String(t)); };
-// ui.js's one status bar (claimStatus/releaseStatus, DESIGN-status-bar.md): build.js claims the selection line, editwrites
+// ui.js's one status bar (claimStatus/releaseStatus, DESIGN-status-bar.md): build.js claims the selection line, edit/writes.js
 // claims 'warn' for a refusal. A text claim is a hint the suite reads, as flashHint's are; a node claim (the selection) is not.
 export const claimStatus = (id, { content = null } = {}) => { if (content != null) hints.push(String(content)); };
 export const releaseStatus = () => {};

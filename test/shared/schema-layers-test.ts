@@ -145,6 +145,6 @@ const regUnit = (key: string, path: string, type?: string) => { const u = COMPON
 { const s = inspectSchema({ light: { kind: "point" }, label: "lamp" }, "lamp");
   const light = s.sections.list.find((x: any) => x.type === "Light");
   check("the inspector's Light card carries the registry's status (trial)", light?.status === "trial", j(light && { type: light.type, key: light.key, status: light.status }));
-  check("the inspector says what trial means (editpanels shows sec.status in the card's hint)", /sec\.status/.test(src("client/lib/editpanels.js"))); }
+  check("the inspector says what trial means (edit/panels.js shows sec.status in the card's hint)", /sec\.status/.test(src("client/lib/edit/panels.js"))); }
 
 S.done();

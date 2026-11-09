@@ -10,22 +10,22 @@
 // bar) are build.js exports — the modules call across the seam at gesture
 // time only, so the import cycle is eval-safe by construction.
 
-import * as OP from '../../shared/requests.js';
-import { sendOps } from './editwrites.js';
-import { THREE, camera } from './core.js';
-import { bus } from './base.js';
-import { modelName } from './assets.js';
-import { entities, metaOf, bags, bagOf, parentIdOf, childrenOf, findPart } from './world.js';
-import { socketsUnder } from '../../shared/sockbody.js';
-import { motionNode } from '../../shared/protocol/names.js';
-import { mouse } from './controller.js';
-import { flashHint, html } from './ui.js';
+import * as OP from '../../../shared/requests.js';
+import { sendOps } from './writes.js';
+import { THREE, camera } from '../core.js';
+import { bus } from '../base.js';
+import { modelName } from '../assets.js';
+import { entities, metaOf, bags, bagOf, parentIdOf, childrenOf, findPart } from '../world.js';
+import { socketsUnder } from '../../../shared/sockbody.js';
+import { motionNode } from '../../../shared/protocol/names.js';
+import { mouse } from '../controller.js';
+import { flashHint, html } from '../ui.js';
 import { engage, release } from './keyhints.js';
 import { setBuildMode, isBuilding, deselect,
   setInspectorHtml, hideInspector } from './build.js';
 import { registerHandler } from './inspect.js';
-import { sceneSelect } from './scenegraph.js';
-import { qMul, qFromYaw, qNorm } from '../../shared/rot.js';
+import { sceneSelect } from '../scenegraph.js';
+import { qMul, qFromYaw, qNorm } from '../../../shared/rot.js';
 
 const raycaster = new THREE.Raycaster();
 

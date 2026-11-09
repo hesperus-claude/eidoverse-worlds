@@ -1,4 +1,4 @@
-// scriptcard-expect-test substitutes this for scriptcard.js's editwrites.js and net.js: a viewer's state the test changes
+// scriptcard-expect-test substitutes this for scriptcard.js's edit/writes.js and net.js: a viewer's state the test changes
 // while the upload is out, and the requests the card sends, recorded.
 export const net = { myRights: { permissions: ['scripts'] } };
 export const T = { comps: {}, sent: [], uploadGate: null };

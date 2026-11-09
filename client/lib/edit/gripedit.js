@@ -9,16 +9,16 @@
 // fingers. So the ghost's points below are the right hand's, and the left's are the same with x negated; and a grip
 // mirrored across the thing's X plane is M·R·diag(-1, 1, 1) (M the reflection), which keeps the palm out and the index up.
 
-import { THREE, scene, camera, canvas } from './core.js';
-import { bus } from './base.js';
-import { entities } from './world.js';
-import { registerSystem } from './frameloop.js';
+import { THREE, scene, camera, canvas } from '../core.js';
+import { bus } from '../base.js';
+import { entities } from '../world.js';
+import { registerSystem } from '../frameloop.js';
 import { isBuilding, setPointerVeto, setEscapeHook } from './build.js';
-import * as Edits from './editwrites.js';
-import { sendRequest } from './net.js';
-import { plain } from './plainwords.js';
-import { flashHint } from './ui.js';
-import { checkGrabbable, HANDS, ROLES, GRASPS } from '../../shared/grab.js';
+import * as Edits from './writes.js';
+import { sendRequest } from '../net.js';
+import { plain } from '../plainwords.js';
+import { flashHint } from '../ui.js';
+import { checkGrabbable, HANDS, ROLES, GRASPS } from '../../../shared/grab.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
 // the right hand's joints in its palm frame (metres), from R's avatar; ring is between middle and little

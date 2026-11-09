@@ -25,7 +25,7 @@ import {
 } from './controller.js';
 import { camera } from './core.js';
 import { avatarMounts, mountTransform, bags, bagOf, socketWorldPos, setBodySeat, entities, seatSocket, socketsOn, parentIdOf } from './world.js';
-import { outOfMyView } from './myview.js';
+import { outOfMyView } from './edit/myview.js';
 import { sendAnim } from './net.js';
 import { makeRagdoll } from './bodysim.js';
 import { jointPositions } from './ragdoll.js';

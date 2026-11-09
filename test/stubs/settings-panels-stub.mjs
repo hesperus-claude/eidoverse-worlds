@@ -2,7 +2,7 @@
 // test/client/settings-panels-test.ts. ONE file answers for core.js, base.js, governor.js,
 // lightrig.js, xrpanels.js, net.js, catalog.js, avatar.js, controller.js, capnotice.js,
 // assets.js and mictoggle.js (the names never collide), so the suite drives the REAL
-// ui.js / windows.js / panels.js / presence.js / stylepanel.js / videopanel.js /
+// ui.js / windows.js / edit/fieldpanels.js / presence.js / stylepanel.js / videopanel.js /
 // profile.js / bodies.js / mybody.js against a recorder instead of a GPU.
 //
 // core-stub's bus is inert (`on() {}`); these panels are wired THROUGH the bus

@@ -17,8 +17,8 @@ GlobalRegistrator.register();
 (Element.prototype as any).setPointerCapture = function (id: number) { (this as any).__cap = id; };
 (Element.prototype as any).releasePointerCapture = function (id: number) { (this as any).__cap = undefined; };
 
-const P = await import("../../client/lib/panels.js");
-const { parseEntry, shapeKey, renderDOM, makeSchemaFrame, resolveDelta, getScrubFeel, setScrubFeel, scrubTravel } = await import("../../client/lib/panels.js");
+const P = await import("../../client/lib/edit/fieldpanels.js");
+const { parseEntry, shapeKey, renderDOM, makeSchemaFrame, resolveDelta, getScrubFeel, setScrubFeel, scrubTravel } = await import("../../client/lib/edit/fieldpanels.js");
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -165,7 +165,7 @@ console.log("\nshift = fine, ctrl = snap, soft limit bounds the drag, typing pas
   inp.value = "50"; inp.dispatchEvent(new Event("change"));
   check("typing exceeds the soft max", inp.value === "50", inp.value);
   inp.value = "-5"; inp.dispatchEvent(new Event("change"));
-  // typed is written AS TYPED, past either bound (panels.js sendTyped): the door's own check refuses an out-of-range edit
+  // typed is written AS TYPED, past either bound (edit/fieldpanels.js sendTyped): the door's own check refuses an out-of-range edit
   // and says why (editor-range-test), so the panel clamps nothing (#260 r3 I256)
   check("…and past the hard min too: typed is as typed (the door refuses and says why)", inp.value === "-5", inp.value);
 }

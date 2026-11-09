@@ -1,11 +1,11 @@
 // useprompt — "E  open “Gate”". The conventional affordance: Roblox's ProximityPrompt (E, within a few metres, the action's words on
 // screen), Unity/Unreal interact-on-E. The nearest thing within reach that offers an action (its reactions), preferring
 // what you face, shows on the hint bar beside the seat hint (localbody.js updateSeatHint asks usePromptHint when there's
-// no seat to offer); E uses it through the door, and a refusal reads in a person's words (editwrites showRefusal). Not in
+// no seat to offer); E uses it through the door, and a refusal reads in a person's words (edit/writes.js showRefusal). Not in
 // build mode (E rotates there), not while typing (controller.js filters), not in a headset (no hint bar there).
 import { THREE } from './core.js';
 import { bags, bagOf, entities } from './world.js';
-import { outOfMyView } from './myview.js';
+import { outOfMyView } from './edit/myview.js';
 import { bus } from './base.js';
 import { register as registerAction } from './actions.js';
 import { xrActive } from './xrask.js';

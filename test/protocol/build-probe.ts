@@ -8,7 +8,7 @@
 //       places it turned and sized, as ONE create
 //   SC  the Inspector's "Add Script…" makes a script: upload, then ONE act (script:<name> + its use reaction); a
 //       visitor's use runs it; the Inspector lists it
-// The writes go through the real edit code (structure_ui.js, build.js, scriptcard.js, editpanels.js); gestures are
+// The writes go through the real edit code (structure_ui.js, build.js, scriptcard.js, edit/panels.js); gestures are
 // driven at their seams (a mousedown on the canvas, synthetic keydowns, the card's own buttons), as client-check does.
 // @ts-nocheck
 import fs from "node:fs";
@@ -65,7 +65,7 @@ try {
   await waitFor(`import('/lib/net.js').then((m) => m.replicaActive())`);
   bob.send(JSON.stringify({ type: "join", hello: helloOf(), world: WORLD, id: "bob", avatar: "", replica: true })); await sleep(600);
   check("(setup) the owner makes bob a builder", (await page(`const m = await import('/lib/net.js'); return (await m.sendRequest('set', { id: '@world', component: 'roles:${BOB}', value: { role: 'builder' } })).ok;`)) === true);
-  await evalJson(`import('/lib/build.js').then((m) => (m.setBuildMode(true), true))`);
+  await evalJson(`import('/lib/edit/build.js').then((m) => (m.setBuildMode(true), true))`);
   check("(setup) build mode opens", await waitFor(`document.body.classList.contains('build-mode')`));
 
   // ---- ST: buildings ----
@@ -82,8 +82,8 @@ try {
     check("(setup) two buildings: house-a (the world's first) and house-b around the aim point", okA && okB && !!H, H);
     await waitFor(`import('/lib/world.js').then((m) => m.entities.has('house-b'))`);
     const A0 = JSON.stringify(disk().entities[NODE.get("house-a")].c.structure), B0 = JSON.stringify(disk().entities[NODE.get("house-b")].c.structure);
-    await page(`(await import('/lib/scenegraph.js')).sceneSelect('house-b'); const s = await import('/lib/structure_ui.js'); s.setStructureMode(true); s.setTool('wall'); return true;`);
-    check("ST0 the wall tool is armed in build mode", await waitFor(`import('/lib/structure_ui.js').then((m) => m.currentTool() === 'wall' && m.isStructureMode())`));
+    await page(`(await import('/lib/scenegraph.js')).sceneSelect('house-b'); const s = await import('/lib/edit/structure_ui.js'); s.setStructureMode(true); s.setTool('wall'); return true;`);
+    check("ST0 the wall tool is armed in build mode", await waitFor(`import('/lib/edit/structure_ui.js').then((m) => m.currentTool() === 'wall' && m.isStructureMode())`));
     let n0 = myActs().length;
     const press = () => evalJson(`import('/lib/core.js').then((m) => (m.canvas.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: ${SX}, clientY: ${SY} })), true))`);
     await press();
@@ -117,17 +117,17 @@ try {
       { written: entries().slice(nE).filter((e) => e.kind === "change").map((e) => e.body?.id), refused: await evalJson(`__refused.slice(-1).map((r) => r.text)`) });
     const panel = await evalJson(`[...document.querySelectorAll('button')].map((b) => b.textContent.trim()).filter((t) => /undo building/i.test(t))`);
     check("ST7 the Create panel has no second undo ('undo building edit'): Ctrl+Z is the one undo", Array.isArray(panel) && panel.length === 0, panel);
-    await page(`const s = await import('/lib/structure_ui.js'); s.setTool(null); (await import('/lib/build.js')).deselectAll(); return true;`);
+    await page(`const s = await import('/lib/edit/structure_ui.js'); s.setTool(null); (await import('/lib/edit/build.js')).deselectAll(); return true;`);
   }
 
   // ---- GH: turn and size before the click ----
-  { const tool0 = await evalJson(`import('/lib/build.js').then((m) => m.getTool())`);
-    await page(`const b = await import('/lib/build.js'); await b.holdGhost('${CRATE}', 'crate'); return b.hasGhost();`);
-    await waitFor(`import('/lib/build.js').then((m) => m.hasGhost())`);
+  { const tool0 = await evalJson(`import('/lib/edit/build.js').then((m) => m.getTool())`);
+    await page(`const b = await import('/lib/edit/build.js'); await b.holdGhost('${CRATE}', 'crate'); return b.hasGhost();`);
+    await waitFor(`import('/lib/edit/build.js').then((m) => m.hasGhost())`);
     await key("KeyE"); await key("KeyE"); await key("Period");
-    const pose = await evalJson(`import('/lib/build.js').then((m) => m.ghostPose?.() ?? null)`);
+    const pose = await evalJson(`import('/lib/edit/build.js').then((m) => m.ghostPose?.() ?? null)`);
     check("GH1 E E . turn it 30° (clockwise from above) and size it ×1.1 while it's in hand", pose && Math.abs(pose.yaw + Math.PI / 6) < 1e-6 && Math.abs(pose.scale - 1.1) < 1e-6, pose);
-    check("GH2 …E didn't permission the tool under it", (await evalJson(`import('/lib/build.js').then((m) => m.getTool())`)) === tool0);
+    check("GH2 …E didn't permission the tool under it", (await evalJson(`import('/lib/edit/build.js').then((m) => m.getTool())`)) === tool0);
     check("GH3 the status line names the keys while it's in hand", await evalJson(`__hints.some((h) => h != null && /turn/.test(String(h)) && /size/.test(String(h)))`), await evalJson(`__hints`));
     const n0 = myActs().length;
     await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: SX - 120, y: SY + 40 }); await sleep(200);

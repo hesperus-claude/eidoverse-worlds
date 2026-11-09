@@ -91,7 +91,7 @@ for (const [id, e] of ents) {
     const a = `${g.group}.${f.k}`;
     const replaced = /(^|\|)(type|rest)$/.test(f.k) && g.group === 'motion' || ['particles.out', 'picture.down', 'sound.silence', 'comp.+'].includes(a) || a.startsWith('comp.add:') || /\.json\|/.test(a)
       || (a === 'flags.lock' && addable.has('Lock'))
-      || a === 'flags.layer' || a === 'flags.clickthrough';   // the selection layer and clicks-go-through are rows of the Attributes tab (editpanels attributesFields), not a card (R 10-17 20:36)
+      || a === 'flags.layer' || a === 'flags.clickthrough';   // the selection layer and clicks-go-through are rows of the Attributes tab (edit/panels.js attributesFields), not a card (R 10-17 20:36)
     if (!owned.has(a) && !replaced && !(g.group === 'comp' && owned.has(`comp.${f.k}`))) probs.push(`${id}: ${a} is in no card`);
   }
 }

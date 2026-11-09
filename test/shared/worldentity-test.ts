@@ -1,5 +1,5 @@
 // worldentity-test — the world entity `@world` (design §3, shared/worldentity.js)
-// and the Build tab's memory (design §5, client/lib/edittabs.js).
+// and the Build tab's memory (design §5, client/lib/edit/tabs.js).
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/shared/worldentity-test.ts
 //
@@ -26,7 +26,7 @@ import { canon, RECORDS, addable, componentsOf } from '../../shared/components.j
 import { fieldAt, describeSchema } from '../../shared/editschema.js';
 import { terrainArgs, grassArgs, paletteDefaults } from '../../shared/grounddefs.js';
 import { WORLD_ID, worldComponents, worldOf, worldState, worldSchema, worldEditOps, worldPick, worldChoice, skyPresetOf, pickSky } from '../../shared/worldentity.js';
-import { TABS, openingTab, useTab, TAB_V } from '../../client/lib/edittabs.js';
+import { TABS, openingTab, useTab, TAB_V } from '../../client/lib/edit/tabs.js';
 import { viewState, emptyView } from '../../shared/protocol/view.js';
 import { translate } from '../../tools/import-v1/translate-v1.js';
 import { emptyState, applyInPlace, opsOf } from '../../shared/protocol/fold.js';
@@ -231,7 +231,7 @@ console.log('\n3. the cards: every field commits as door requests and reads back
 }
 
 // ------------------------------------------------------------ 4. the tab memory
-console.log('\n4. the left column\'s tab memory (edittabs.js):');
+console.log('\n4. the left column\'s tab memory (edit/tabs.js):');
 {
   check('two tabs, Build first', canon(TABS.map(([id]) => id)) === canon(['build', 'hierarchy']));
   check('nothing stored: B opens on Build', openingTab(null) === 'build' && openingTab(undefined) === 'build');
@@ -280,7 +280,7 @@ console.log('\n5. the text tier (mcpl/tools.ts): inspect, edit and hierarchy spe
 }
 
 // ------------------------------------------------------------ house review of #260, client/lib I95
-// Removing Weather (the Hierarchy row's ✕, editpanels.js removeEnv) wrote `weather.state: clear`: under a forecast that is
+// Removing Weather (the Hierarchy row's ✕, edit/panels.js removeEnv) wrote `weather.state: clear`: under a forecast that is
 // a manual override the next segment undoes (and the door refuses a weather pick under a forecast: section 1's KNOWN BUG),
 // so the Weather never went. `weather.remove` takes the weather off: the forecast stops too (a sky request that keeps
 // every sky field but the weather's), and Ctrl+Z (the door's undo) brings the forecast back. With no forecast it is the

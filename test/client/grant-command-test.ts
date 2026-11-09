@@ -1,6 +1,6 @@
 // grant-command-test — /grant changes a grant without losing what it doesn't name (house review of #260, client/lib I6, I42).
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/grant-command-test.ts
-// The real handlers.js and registry.js, with the door (editwrites send), the replica and the person lookup stood in.
+// The real handlers.js and registry.js, with the door (edit/writes.js send), the replica and the person lookup stood in.
 // Mutation (must go red): in handlers.js /grant build the non-forever value as {role, can, until} alone again (I6), or
 // drop the `!role && !cur` refusal (I42).
 import '../fixtures/reach-frame-fixture.ts';   // stands in for the renderer cone handlers.js reaches (avatar.js, reachnet.js)
@@ -21,7 +21,7 @@ const modules: any = {
   'thingphysics.js': { punt: noop, grab: noop, put: noop, drop: noop, throwHeld: noop }, 'chat.js': { logChat: (_w: string, t: string) => messages.push(t) },
   'ui.js': { toggleHelp: noop, flashHint: noop, toast: noop }, 'scenegraph.js': { sceneAttach: noop, sceneDetach: noop },
   'consent.js': { setPushable: noop, pushable: () => false }, 'localbody.js': { trySitOn: noop }, 'mybody.js': { getMe: () => null },
-  'editwrites.js': { send: async (req: any) => { sent.push(req); return { ok: true }; } }, 'stylepanel.js': { panelAlpha: () => 1, setPanelAlpha: noop },
+  'edit/writes.js': { send: async (req: any) => { sent.push(req); return { ok: true }; } }, 'stylepanel.js': { panelAlpha: () => 1, setPanelAlpha: noop },
 };
 for (const [name, exports] of Object.entries(modules)) mock.module(fileURLToPath(new URL('../../client/lib/' + name, import.meta.url)), () => exports as any);
 await import('../../client/lib/commands/handlers.js');

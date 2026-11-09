@@ -4,21 +4,21 @@
 // world. The log is history (every entry replays for every future joiner);
 // trying things out is not.
 
-import { sendOps } from './editwrites.js';
-import { bus, report } from './base.js';
-import { serverNow } from './serverclock.js';   // a server stamp is read on the authority's clock
-import { defsRegistry } from './defs.js';
-import { flashHint } from './ui.js';
+import { sendOps } from './writes.js';
+import { bus, report } from '../base.js';
+import { serverNow } from '../serverclock.js';   // a server stamp is read on the authority's clock
+import { defsRegistry } from '../defs.js';
+import { flashHint } from '../ui.js';
 import { selectRow } from './rows.js';
 import { previewSky, skyArgs, skyImpl, WEATHERS, CLOUDS, SKY_QUALITY, skyQuality, setSkyQuality,
-  CLOUD_QUALITY, getCloudChoice, setCloudQuality, cloudCap, skyInXR } from './sky.js';
+  CLOUD_QUALITY, getCloudChoice, setCloudQuality, cloudCap, skyInXR } from '../sky.js';
 import { GRASS_QUALITY, getGrassQuality, setGrassQuality,
-  getGrassDensity, getGrassShed, getGrassApplied } from './terrain.js';
-import { MODEL_QUALITY } from './lod_policy.js';
-import { loggedSky, skyPreviewing, skyRendering, skyDegraded, getCloudQuality } from './sky.js';
-import { effectiveClock } from '../../shared/forecast.js';
-import { stateLines } from './statelines.js';
-import { modelQuality, dialModelQuality } from './realize/models.js';
+  getGrassDensity, getGrassShed, getGrassApplied } from '../terrain.js';
+import { MODEL_QUALITY } from '../lod_policy.js';
+import { loggedSky, skyPreviewing, skyRendering, skyDegraded, getCloudQuality } from '../sky.js';
+import { effectiveClock } from '../../../shared/forecast.js';
+import { stateLines } from '../statelines.js';
+import { modelQuality, dialModelQuality } from '../realize/models.js';
 
 const SLIDERS = [
   ['hours', 'time', 0, 24, 0.1, 12],

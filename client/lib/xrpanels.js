@@ -1,5 +1,5 @@
 // xrpanels — frames as PHYSICAL SURFACES. A frame that declares its body as
-// FIELDS (panels.js schema) rides a canvas-textured quad in the headset; the
+// FIELDS (edit/fieldpanels.js schema) rides a canvas-textured quad in the headset; the
 // right-hand laser is the cursor; a UV-hit resolves to a hit REGION and fires
 // the SAME dispatcher the desktop frame calls. No DOM crosses the threshold.
 //
@@ -11,7 +11,7 @@
 import { THREE, renderer } from './core.js';
 import { quadMaterial } from './quadcolour.js';
 import { bus } from './base.js';
-import { renderCanvas, hitRegion } from './panels.js';
+import { renderCanvas, hitRegion } from './edit/fieldpanels.js';
 import { domQuadsEnabled, domQuadsEnter, domQuadsExit, domQuadsPick, domQuadsPress, domQuadsDrag, domQuadsRelease, domQuadsSetShown, domQuadsShown, domQuadShow, domQuadOpen, domQuadsGrab, domQuadRelease, domQuadsAt, domQuadsHideToggle, domQuadsHidden } from './domquad.js';   // the REAL frames on quads (default); ?canvasquads=1 keeps these canvases
 
 const PX_PER_M = 900;              // canvas pixels per world metre of quad
@@ -23,7 +23,7 @@ let shown = false;   // off by default in VR — the ring's 'panels' slot shows 
 const _rc = new THREE.Raycaster();
 const _m = new THREE.Matrix4();
 
-/** Opt a frame into VR. fields() → panels.js field specs (no closures);
+/** Opt a frame into VR. fields() → edit/fieldpanels.js field specs (no closures);
  *  dispatch(action, payload) is the frame's own edit function. */
 export function registerXRPanel(def) {
   if (!def?.id || typeof def.fields !== 'function' || typeof def.dispatch !== 'function') return false;

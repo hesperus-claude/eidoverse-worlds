@@ -1540,7 +1540,7 @@ export class WorldAgent {
     return m ? { ...e, parent: m } : { ...e };
   }
   /** A thing's components as this body's replica folds them now (a copy), or null: what a write planned from them pins
-   *  with expect (client/lib/editwrites.js compsOf). A purged component is the fold's REDACTED itself, not a copy: the
+   *  with expect (client/lib/edit/writes.js compsOf). A purged component is the fold's REDACTED itself, not a copy: the
    *  authority's expect counts a purged value equal to nothing, so a pin has to tell one apart and leave it out. */
   componentsOf(id: string): Record<string, unknown> | null {
     const c = this.replica?.st?.entities?.[id]?.c;

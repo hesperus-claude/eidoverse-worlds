@@ -5,9 +5,9 @@
 // (a click selects there), not in a headset, not over a person (bodydrag's capture listener takes that press first).
 // The cursor is an open hand over what a click would pick up, a pointing finger over any other use.
 import { THREE, camera, canvas } from './core.js';
-import { outOfMyView } from './myview.js';
+import { outOfMyView } from './edit/myview.js';
 import { bagOf, entities, socketsOn } from './world.js';
-import { contextMenu, closeContextMenu } from './panels.js';
+import { contextMenu, closeContextMenu } from './edit/fieldpanels.js';
 import { flashHint } from './ui.js';
 import { xrActive } from './xrask.js';
 import { nameOf } from './plainwords.js';

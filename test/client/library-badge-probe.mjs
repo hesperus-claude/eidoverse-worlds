@@ -46,7 +46,7 @@ try {
     for (let i = 0; i < 40 && !document.querySelector('#sec-build input[type=search]'); i++) await new Promise((res) => setTimeout(res, 100));
     const input = document.querySelector('#sec-build input[type=search]');
     // the empty box: the curated starters, carrying the catalog's rank like any search result (Greptile #207)
-    const { starterModels } = await import('./lib/catalog.js');
+    const { starterModels } = await import('./lib/edit/catalog.js');
     const stems = starterModels().map((m) => m.path.split('/').pop().replace(/\.glb$/, '').toLowerCase());
     const sj = await (await fetch(`/library-models?q=${encodeURIComponent(stems.join(' '))}`)).json();
     const want = new Map(starterModels().map((m) => [m.name, sj.find((h) => h.path === m.path)?.perf?.rank ?? null]));
@@ -131,10 +131,10 @@ try {
     const el = await card.asElement()?.$(sel);
     if (!el) { chipClicks[sel] = 'absent'; continue; }
     await el.click(); await pg.waitForTimeout(400);
-    chipClicks[sel] = await pg.evaluate(async () => { const b = await import('./lib/build.js'); const g = b.hasGhost(); b.cancelGhost(); return g; });
+    chipClicks[sel] = await pg.evaluate(async () => { const b = await import('./lib/edit/build.js'); const g = b.hasGhost(); b.cancelGhost(); return g; });
   }
   const focusAfterClick = await pg.evaluate(() => document.activeElement?.className ?? '');
-  const bodyClick = await pg.evaluate(async () => { const c = document.querySelector('#sec-build .grid .card'); c.querySelector('span').click(); await new Promise((r) => setTimeout(r, 1500)); const b = await import('./lib/build.js'); const g = b.hasGhost(); b.cancelGhost(); return g; });
+  const bodyClick = await pg.evaluate(async () => { const c = document.querySelector('#sec-build .grid .card'); c.querySelector('span').click(); await new Promise((r) => setTimeout(r, 1500)); const b = await import('./lib/edit/build.js'); const g = b.hasGhost(); b.cancelGhost(); return g; });
   console.log('   chip clicks → ghost?', JSON.stringify(chipClicks), '| card body → ghost?', bodyClick);
   check('a real click on the pill, a LOD/⚠ chip, or ↻ never starts a placement', Object.values(chipClicks).every((v) => v === false), chipClicks);
   check('…while a click on the card itself still does (the control)', bodyClick === true, bodyClick);
@@ -167,7 +167,7 @@ try {
         kb[`focused:${key}`] = await pg.evaluate(() => document.activeElement?.classList.contains('opt-rebuild'));
         await pg.keyboard.press(key === ' ' ? 'Space' : key); await pg.waitForTimeout(1200);
         kb[`posts:${key}`] = rebuilds.length - n0;
-        kb[`ghost:${key}`] = await pg.evaluate(async () => { const b = await import('./lib/build.js'); const g = b.hasGhost(); b.cancelGhost(); return g; });
+        kb[`ghost:${key}`] = await pg.evaluate(async () => { const b = await import('./lib/edit/build.js'); const g = b.hasGhost(); b.cancelGhost(); return g; });
       }
     }
   }

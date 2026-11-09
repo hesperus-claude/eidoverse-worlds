@@ -5,9 +5,9 @@
 //   2. one batch (one act, one Ctrl+Z):
 //        set {id, component: 'script:<name>', value: {src, scope, on, every?}}
 //        set {id, component: 'reactions', value: {<action>: {kind: 'script', script: <name>}}, merge: true}   (on use)
-// Pure: no DOM, no network (client/lib/scriptcard.js draws the card and sends; test/protocol/build-check.ts K runs these
+// Pure: no DOM, no network (client/lib/edit/scriptcard.js draws the card and sends; test/protocol/build-check.ts K runs these
 // requests through the real authority and sandbox).
-import { set } from "../../shared/requests.js";
+import { set } from "../../../shared/requests.js";
 
 /** A starting point that runs as it stands and shows the loop: use it, and it speaks. */
 export const TEMPLATES = Object.freeze({

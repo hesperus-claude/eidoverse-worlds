@@ -1,6 +1,6 @@
 // The editor's whole-world History must never show a refused attempt as something that happened (Commons parity audit:
 // "refused acts print as done"); the authority records a refused write as an act whose body carries refused {code}.
-import { worldHistoryRows, mergeHistory } from "../../client/lib/historyrows.js";
+import { worldHistoryRows, mergeHistory } from "../../client/lib/edit/historyrows.js";
 import { suite } from "../gate/suite.ts";
 const SU = suite("history-rows-check", { cap: Infinity }), { ok } = SU;
 const nameOf = (id: string) => ({ "u-a": "Ann", "u-b": "Bob" } as any)[id] ?? id;

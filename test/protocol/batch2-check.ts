@@ -14,7 +14,7 @@
 //   S  sound: src, the authority's clock (t0), the play reaction, ranges, the falloff that reaches silence, no start-paused
 //   M  media links: the tiers (store / trusted host / untrusted link / refused) and who may fetch
 //   L  look-at: the shape, the target, one driver per node, the turn, the editor's name for it
-//   C  Credits: History grouped by person (shared/credits.js, client/lib/historyrows.js)
+//   C  Credits: History grouped by person (shared/credits.js, client/lib/edit/historyrows.js)
 //   A  what an agent reads: help, schema, look's says
 //   K  kept (green at base and now)
 // @ts-nocheck
@@ -131,7 +131,7 @@ const MS = await import(TREE + "shared/mediasrc.js").catch(none);
 const SN = await import(TREE + "shared/sound.js");
 const LA = await import(TREE + "shared/lookat.js").catch(none);
 const CR = await import(TREE + "shared/credits.js").catch(none);
-const HR = await import(TREE + "client/lib/historyrows.js").catch(none);
+const HR = await import(TREE + "client/lib/edit/historyrows.js").catch(none);
 const TV1 = await import(TREE + "tools/import-v1/translate-v1.js");
 (globalThis as any).__LC = await import(TREE + "shared/libcredits.js").catch(none);
 const ONLY = opt("only")?.split(",") ?? null;
@@ -434,7 +434,7 @@ const cases: Case[] = [
       const people = CR.creditsOf?.(s.entries(), "gate") ?? null;
       return { opened: comp(s, "gate", "openable")?.open, who: people?.map((p: any) => p.by) }; },
     good: (o) => o.opened === true && JSON.stringify(o.who) === '["bob"]' },
-  { id: "C4", what: "History's filter modes (client/lib/historyrows.js): by person keeps one person's rows; biggest contributors ranks by deeds; a refused row is never a deed", run() {
+  { id: "C4", what: "History's filter modes (client/lib/edit/historyrows.js): by person keeps one person's rows; biggest contributors ranks by deeds; a refused row is never a deed", run() {
       const f = HR.historyView; if (!f) return { none: true };
       const nameOf = (id: string) => ({ "u-a": "Ann", "u-b": "Bob" } as any)[id] ?? id;
       const E = [

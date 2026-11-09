@@ -16,7 +16,7 @@
 // test/shared/descriptor-defaults-test.ts holds RECORDS and editschema to it.
 //
 // `ui` is the row's widget facts: t the widget (num, check, enum, color, text), step/dp/softMin/softMax/deg as
-// panels.js reads them. A row's HARD limits (min, max) and its unit are never written here: build() reads them from the
+// edit/fieldpanels.js reads them. A row's HARD limits (min, max) and its unit are never written here: build() reads them from the
 // registry's `ranges` and `units` (one description), and a soft slider end a card wants below or
 // above them is softMin/softMax (never enforced; the door's range is). def: false = the row offers no reset (the inspector never did); absent = what an UNWRITTEN value is
 // drawn as where it differs from the registry's default (a pendulum written before the authority materialized a period

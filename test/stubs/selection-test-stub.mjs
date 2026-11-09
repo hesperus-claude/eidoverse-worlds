@@ -1,4 +1,4 @@
-// selection-test substitutes this for structure_ui.js's hosted imports (core, editwrites, ui,
+// selection-test substitutes this for structure_ui.js's hosted imports (core, edit/writes.js, ui,
 // realize/structure). Structure mode stays off in the test, so nothing here is ever drawn.
 export const THREE = {};
 export const scene = { add() {}, remove() {} };

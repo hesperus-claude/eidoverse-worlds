@@ -201,7 +201,7 @@ document.addEventListener('pointerdown', (e) => {
 }, true);
 // frames live in [Z_LO..Z_HI]; chrome starts at 27 (#dock) and must stay above
 const Z_LO = 10, Z_HI = 25;
-// builder mode's workspace (editlayout.js): its columns are fixed chrome over the frames' band
+// builder mode's workspace (edit/layout.js): its columns are fixed chrome over the frames' band
 const inWorkspace = () => typeof document !== 'undefined' && document.body?.classList.contains('edit-workspace');
 let zTop = Z_LO;
 let warnedZ = false;
@@ -462,7 +462,7 @@ export function makeFrame(id, opts = {}) {
       }
     }
     root.style.zIndex = String(Math.min(++zTop, Z_HI));
-    // builder mode: the workspace's columns are chrome at z 26 (editlayout.js). While the workspace is up a floating
+    // builder mode: the workspace's columns are chrome at z 26 (edit/layout.js). While the workspace is up a floating
     // frame stacks above the columns, below the status strip (45) and the ∃ menu (50); it drops back into the band the
     // next time it is raised outside it.
     if (!docked && inWorkspace()) root.style.zIndex = String(30 + Math.min(13, zTop - Z_LO));

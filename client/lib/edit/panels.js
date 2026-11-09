@@ -1,58 +1,58 @@
-// editpanels — the hierarchy and the inspector as FIELDS (panels.js): one declaration is a desktop frame and a VR quad.
+// panels — the hierarchy and the inspector as FIELDS (fieldpanels.js): one declaration is a desktop frame and a VR quad.
 // Every action is a verb scenegraph.js already speaks; this file only decides what the rows are.
 // The inspector has two lanes: CHANNELS, every numeric value in one dense column (drag to scrub, click to type, `+=` `*=`),
 // and GROUPS, the full editors (colours, toggles, lists, the same numbers beside their meaning).
 // A number a motion comp drives shows its REST pose, tinted: `place` moves the base the motion composes onto.
 
-import * as OP from '../../shared/requests.js';
+import * as OP from '../../../shared/requests.js';
 import { worldHistoryRows, historyView, HISTORY_MODES, mergeHistory } from './historyrows.js';
-import { creditLine } from '../../shared/libcredits.js';
-import { THREE, scene } from './core.js';
-import { bus, CONFIG } from './base.js';
-import { serverNow } from './serverclock.js';   // a server stamp is read on the authority's clock
-import { entities, bagOf, avatarMounts } from './world.js';
-import { compEntries, compKeys } from '../../shared/protocol/view.js';
-import { requestDebug, sendRequest, replica, net } from './net.js';
-import { flashHint, html } from './ui.js';
+import { creditLine } from '../../../shared/libcredits.js';
+import { THREE, scene } from '../core.js';
+import { bus, CONFIG } from '../base.js';
+import { serverNow } from '../serverclock.js';   // a server stamp is read on the authority's clock
+import { entities, bagOf, avatarMounts } from '../world.js';
+import { compEntries, compKeys } from '../../../shared/protocol/view.js';
+import { requestDebug, sendRequest, replica, net } from '../net.js';
+import { flashHint, html } from '../ui.js';
 import { openGripEditor } from './gripedit.js';
-import { makeSchemaFrame, resolveDelta, resolveDeltaEach, getScrubFeel, setScrubFeel, SCRUB_SPEEDS } from './panels.js';
-import { registerXRPanel } from './xrpanels.js';
-import { treeData, sceneSelected, sceneSelect } from './scenegraph.js';
+import { makeSchemaFrame, resolveDelta, resolveDeltaEach, getScrubFeel, setScrubFeel, SCRUB_SPEEDS } from './fieldpanels.js';
+import { registerXRPanel } from '../xrpanels.js';
+import { treeData, sceneSelected, sceneSelect } from '../scenegraph.js';
 // a seated person's row in the hierarchy (not an entity: no drag, no lock, no selection)
 const OCC_ROW = 'occupant:';
-import * as Sel from './edit/selection.js';
-import { latestRead } from './edit/latestread.js';
-import { backoff } from './edit/backoff.js';
-import { state, onWorldChange } from './state.js';
-import { treeRows, kindHint, ancestors } from '../../shared/hierarchy.js';
-import { handleOf } from '../../shared/thingref.js';
+import * as Sel from './selection.js';
+import { latestRead } from './latestread.js';
+import { backoff } from './backoff.js';
+import { state, onWorldChange } from '../state.js';
+import { treeRows, kindHint, ancestors } from '../../../shared/hierarchy.js';
+import { handleOf } from '../../../shared/thingref.js';
 import { refreshOutline, setRemoveHook, holdGhost, holdBlueprint, getTool as transformTool, setTool as setTransformTool } from './build.js';
 import { armSocketPlacement, socketArmed, cancelSocketArm } from './socketedit.js';
-import { defsRegistry } from './defs.js';
-import { WORLD_ID, describeWorld, worldPick, worldChoice } from '../../shared/worldentity.js';
-import { WEATHERS } from '../../shared/forecast.js';
-import { copiesOf } from '../../shared/blueprint.js';
+import { defsRegistry } from '../defs.js';
+import { WORLD_ID, describeWorld, worldPick, worldChoice } from '../../../shared/worldentity.js';
+import { WEATHERS } from '../../../shared/forecast.js';
+import { copiesOf } from '../../../shared/blueprint.js';
 import { openNewScript, mayScript } from './scriptcard.js';
 import { structureTools, currentTool as structureTool, setTool as setStructureTool, newBuilding } from './structure_ui.js';
 import { starterModels } from './catalog.js';
-import { spawnAhead } from './worldquad.js';
-import { libLabels, modelName } from './assets.js';
-import { offIn } from './realize/models_field.js';
+import { spawnAhead } from '../worldquad.js';
+import { libLabels, modelName } from '../assets.js';
+import { offIn } from '../realize/models_field.js';
 import { schemaFor, commitEdit, commitMany, planEdit, keepView, setEditHooks, endGesture, foldRecord, mayShape } from './inspect.js';
-import { channels, fieldAt, ADD_WORDS, libLabel } from '../../shared/editschema.js';
+import { channels, fieldAt, ADD_WORDS, libLabel } from '../../../shared/editschema.js';
 import { askCenter, confirmCenter } from './confirmcenter.js';
-import { xrActive } from './xrask.js';
-import { frontOf, addOnFace } from './facemedia.js';
-import { lightCasting } from './lightgizmo.js';
-import { myState, frameOn } from './controller.js';
-import { reindexCollider } from './colliders.js';
-import * as Edits from './editwrites.js';
+import { xrActive } from '../xrask.js';
+import { frontOf, addOnFace } from '../facemedia.js';
+import { lightCasting } from '../lightgizmo.js';
+import { myState, frameOn } from '../controller.js';
+import { reindexCollider } from '../colliders.js';
+import * as Edits from './writes.js';
 import { isMineHidden, toggleMineHidden, showAllMine, myHiddenCount } from './myview.js';
-import { agoWords, touchWords } from '../../shared/protocol/refusal.js';
-import { recordComponents } from '../../shared/protocol/view.js';
-import { RANK, lockWord } from '../../shared/protocol/roles.js';
+import { agoWords, touchWords } from '../../../shared/protocol/refusal.js';
+import { recordComponents } from '../../../shared/protocol/view.js';
+import { RANK, lockWord } from '../../../shared/protocol/roles.js';
 import { KEYHINTS, withKeys } from './keyhints.js';   // these panels' writes are requests
-import { called } from './plainwords.js';
+import { called } from '../plainwords.js';
 
 const _wp = new THREE.Vector3();
 const round = (v, dp = 3) => +(+v).toFixed(dp);
@@ -97,7 +97,7 @@ let visibleRows = [];          // the rows as last painted, for ↑/↓
 // Its selection is edit/selection.js kind 'world' (or 'env:<key>'), exclusive with a thing selection.
 const worldSel = () => { const k = Sel.selection().kind; return k === 'world' || String(k).startsWith('env:'); };
 const envFocus = () => { const k = Sel.selection().kind; return String(k).startsWith('env:') ? k.slice(4) : null; };
-/** Create ▸ Environment (editlayout.js): select the world with one of its cards open and the Build tab's World presets
+/** Create ▸ Environment (layout.js): select the world with one of its cards open and the Build tab's World presets
  *  in view — the same places a click on the World row and on Build ▸ World lead to. */
 export function openWorldCard(key) {
   const g = key === 'weather' ? 'weather' : key; if (g && !isOpen(WORLD_ID, g)) toggleFold(WORLD_ID, g);
@@ -548,7 +548,7 @@ function filterFields(f, q) {
   return out;
 }
 
-/** One card row from the schema, by address (the panels.js spec plus its dispatch key). */
+/** One card row from the schema, by address (the fieldpanels.js spec plus its dispatch key). */
 function cardRow(schema, id, addr) {
   const nf = fieldAt(schema, addr); if (!nf) return null;
   const r = { ...nf, k: nf.commit ? `ed:${nf.commit}` : `ed:${addr}`, path: nf.commit ?? addr, ...(nf.t === 'num' ? { compact: true } : {}) };
@@ -777,7 +777,7 @@ function setEnabled(id, on) {
   if ((state.st.entities[id]?.disabled !== true) === on) { enabledSettle++; repaintAll(); return; }
   const r = commitEdit(id, 'flags.disabled', !on);
   if (r?.errors?.length) { flashHint(r.errors.join(' · '), 5000, 'attn'); enabledSettle++; repaintAll(); return; }
-  // the hint waits for the authority: a refusal says its own words (editwrites), and the boxes go back to the record
+  // the hint waits for the authority: a refusal says its own words (writes.js), and the boxes go back to the record
   Promise.resolve(r?.reply).then((x) => {
     if (x?.ok) flashHint(on ? `${thingName(id)} switched back on` : `${thingName(id)} switched off for everyone (Ctrl+Z switches it back on)`, 2600);
   }).finally(() => { enabledSettle++; repaintAll(); });
@@ -785,7 +785,7 @@ function setEnabled(id, on) {
 function inspectorDispatch(action, payload, field, opts = {}) {
   const id = worldSel() ? WORLD_ID : sceneSelected(); const obj = entities.get(id);
   if (action === 'fold') { toggleFold(id, payload); repaintAll(); return; }
-  // a scrubbed RUN of channels (Maya's channel box): one edit for all of them, FACE values, one Ctrl+Z (panels.js commitRun)
+  // a scrubbed RUN of channels (Maya's channel box): one edit for all of them, FACE values, one Ctrl+Z (fieldpanels.js commitRun)
   // the whole selection, or the world: never only the primary, and a World run commits too
   if (action === '__run' && id && payload && typeof payload === 'object') {
     const edits = Object.fromEntries(Object.entries(payload).map(([k, v]) => [String(k).replace(/^(ch|ed):/, ''), v]));
@@ -809,7 +809,7 @@ function inspectorDispatch(action, payload, field, opts = {}) {
   if (action === 'copyid' && id) { const cid = selection().includes(Sel.active()) ? Sel.active() : id;   // the name line's thing: the active one when several are selected
     try { void navigator.clipboard?.writeText(String(cid)); flashHint(`copied its id: ${cid}`); } catch { /* no clipboard: the tooltip shows it */ } return; }
   if (action === 'ed:grabbable.gripedit') { openGripEditor(id); return; }
-  if (action === 'ed:home.sethere') { void Edits.setHomeHere([id]); return; }   // the Home card's button: where it is now (editwrites)
+  if (action === 'ed:home.sethere') { void Edits.setHomeHere([id]); return; }   // the Home card's button: where it is now (writes.js)
   if (id === WORLD_ID && WORLD_PICKS[action]) { pickWorld(action, payload); repaintAll(); return; }   // the Terrain card's shape tiles
   if (id === WORLD_ID) {   // the world's cards: every field commits through inspect.js's @world path
     if (!action.startsWith('ed:') && !action.startsWith('ch:')) return;
@@ -967,7 +967,7 @@ function removeMany(ids) {
 // ---------------------------------------------------------------- build
 // Build tab (design §5): re-hosts of existing paths, never second implementations: Blueprints via build.js
 // holdGhost, Tools via build.js / structure_ui.js / socketedit.js, World via shared/worldentity.js worldPick.
-// Saved blueprints: the world's store (state.blueprints); Save as Blueprint = the authority's publish (editwrites).
+// Saved blueprints: the world's store (state.blueprints); Save as Blueprint = the authority's publish (writes.js).
 // VR has no mouse ray yet, so its quad offers Library (worldquad.js spawnAhead) and World only.
 const buildFolds = {};
 let libQ = '';            // the Library search box
@@ -986,7 +986,7 @@ const libTiles = (pics) => ({ t: 'tiles', k: 'place', value: null, empty: libQ ?
   options: libModels().map((m) => ({ v: m.path, label: m.name, ...(pics && m.preview ? { img: `/library/${m.preview}` } : {}),
     hint: `${pics ? 'a blueprint of one Model — click, then click the world to place it' : 'a blueprint of one Model — places it 1.5 m ahead of you'}${m.credits ? `\n${creditLine(m.credits)}` : ''}` })) });
 
-// the transform tools, as the rail draws them (editlayout.js TOOLS) — the same ids build.js setTool takes
+// the transform tools, as the rail draws them (layout.js TOOLS) — the same ids build.js setTool takes
 const TRANSFORM_TILES = [
   { v: 'select', label: 'select', icon: 'mousePointer2', hint: 'Q — click picks, a drag never moves' },
   { v: 'move', label: 'move', icon: 'move', hint: 'G — drag moves; Shift+drag raises' },
@@ -1223,10 +1223,10 @@ function attributesDispatch(action, payload, field, opts = {}) {
 // ---------------------------------------------------------------- mounting
 const PANELS = [
   { id: 'hierarchy', title: 'Hierarchy', theme: 'edit', fields: hierarchyFields, dispatch: hierarchyDispatch, frame: { x: 64, y: 60, w: 300, h: 380, minW: 220, minH: 160 } },   // x clears the dock rail (left:10 + 34px buttons + padding)
-  // docked as a tab beside the Hierarchy by editlayout.js (Build | Hierarchy); its VR body is its own field list
+  // docked as a tab beside the Hierarchy by layout.js (Build | Hierarchy); its VR body is its own field list
   { id: 'build', title: 'Build', theme: 'edit', fields: buildFields, dispatch: buildDispatch, vr: { fields: buildVRFields, dispatch: buildVRDispatch }, frame: { x: 64, y: 60, w: 300, h: 380, minW: 220, minH: 160 } },
   { id: 'inspector', title: 'Inspector', theme: 'edit', fields: inspectorFields, dispatch: inspectorDispatch, frame: { x: -330, y: 60, w: 320, h: 520, minW: 250, minH: 160 } },
-  // docked as a tab beside the Inspector by editlayout.js (Inspector | History)
+  // docked as a tab beside the Inspector by layout.js (Inspector | History)
   { id: 'history', title: 'History', theme: 'edit', fields: historyFields, dispatch: historyDispatch, frame: { x: -330, y: 60, w: 320, h: 520, minW: 250, minH: 160 } },
   // docked as a third tab (Inspector | Attributes | History): Maya's Attribute Editor to the Inspector's channel box
   { id: 'attributes', title: 'Attributes', theme: 'edit', fields: attributesFields, dispatch: attributesDispatch, frame: { x: -330, y: 60, w: 320, h: 520, minW: 250, minH: 160 } },
@@ -1344,7 +1344,7 @@ export function initEditPanels() {
   repaintAll();
   globalThis.__editPanels = editPanelsDebug;   // harness window (probes read it, nothing else does)
   globalThis.__editStep = (d) => { const sel = sceneSelected(); const i = visibleRows.indexOf(sel); hierarchyDispatch('step', d); return { sel, i, rows: [...visibleRows], after: sceneSelected(), has: entities.has(visibleRows[i + d]) }; };
-  import('./editlayout.js').then((m) => { globalThis.__editLayout = m.editLayoutDebug; });
+  import('./layout.js').then((m) => { globalThis.__editLayout = m.editLayoutDebug; });
   const show = (on) => {
     shown = !!on;
     for (const p of PANELS) { const sf = frames.get(p.id); if (!sf) continue; if (!on) sf.frame.hide(); else if (!p.optional) sf.frame.show(); }

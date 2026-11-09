@@ -24,7 +24,7 @@ const calls: string[] = [];
     measureText: (t: string) => ({ width: t.length * 8 }), fillStyle: "", strokeStyle: "", font: "", lineWidth: 1 };
 };
 
-const { renderCanvas, hitRegion, resolveDelta } = await import("../../client/lib/panels.js");
+const { renderCanvas, hitRegion, resolveDelta } = await import("../../client/lib/edit/fieldpanels.js");
 
 const S = suite("xrpanels");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);

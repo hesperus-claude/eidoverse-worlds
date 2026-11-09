@@ -4,8 +4,8 @@
 // the right-hand ray feeds sgSelect, grip alone grabs a panel by its background or title (never by a control),
 // and every radial-menu slot is verb-backed (agent parity). Never navigate mid-session.
 
-import { confirmCenter } from './confirmcenter.js';
-import { outOfMyView } from './myview.js';
+import { confirmCenter } from './edit/confirmcenter.js';
+import { outOfMyView } from './edit/myview.js';
 import { installRenderListTolerance, THREE, renderer, camera, scene, XR_BOOT, PREF_HEADSET_SEEN, xrPixelRatio } from './core.js';
 import { decideEntryFailure } from './xr_entry_policy.js';   // what a failed session request MEANS (#197)
 import { withXREyes } from './xrpass.js';   // a warm needs THREE'S two eyes: xr.getCamera() has none before a session

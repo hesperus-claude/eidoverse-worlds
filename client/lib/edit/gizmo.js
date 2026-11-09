@@ -5,20 +5,20 @@
 // release, others watching the drag at pose cadence. Rotate commits the full orientation q (design §5).
 // Things whose transform the schema makes read-only get no gizmo: a handle you can't drag is a lie.
 
-import { THREE, scene, camera, canvas } from './core.js';
-import { bus } from './base.js';
-import { entities, bagOf } from './world.js';
-import { sendDrag } from './net.js';
-import { registerSystem } from './frameloop.js';
-import { sceneSelected } from './scenegraph.js';
+import { THREE, scene, camera, canvas } from '../core.js';
+import { bus } from '../base.js';
+import { entities, bagOf } from '../world.js';
+import { sendDrag } from '../net.js';
+import { registerSystem } from '../frameloop.js';
+import { sceneSelected } from '../scenegraph.js';
 import { getTool, getSpace, isBuilding, refreshOutline, setPointerVeto, setEscapeHook } from './build.js';
-import * as Edits from './editwrites.js';   // slice 3b: a release is one request with expect
-import { reindexCollider } from './colliders.js';
+import * as Edits from './writes.js';   // slice 3b: a release is one request with expect
+import { reindexCollider } from '../colliders.js';
 import { engage, release } from './keyhints.js';
-import { boxOf } from './realize/models.js';
+import { boxOf } from '../realize/models.js';
 import { foldRecord } from './inspect.js';
-import { editOps, inspectSchema, fieldAt, poseEdits } from '../../shared/editschema.js';
-import * as OP from '../../shared/requests.js';
+import { editOps, inspectSchema, fieldAt, poseEdits } from '../../../shared/editschema.js';
+import * as OP from '../../../shared/requests.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { gripEditing } from './gripedit.js';
 
@@ -145,7 +145,7 @@ function endPivotDrag() {
     if (best) { p = best.h.map((v) => Math.round(v * 1e4) / 1e4); snapped = best.name; } }
   const data = p.every((v) => v === 0) ? null : { pos: p };   // back at the origin = no pivot
   Edits.sendOps([data ? OP.set(id, 'pivot', data) : OP.unset(id, 'pivot')], { what: `pivot of ${id}`, expect: false });
-  import('./ui.js').then((m) => m.flashHint(snapped ? m.html`pivot → <b>${snapped}</b>` : data ? 'pivot moved — the thing stays where it is' : 'pivot back at the origin', 2200));
+  import('../ui.js').then((m) => m.flashHint(snapped ? m.html`pivot → <b>${snapped}</b>` : data ? 'pivot moved — the thing stays where it is' : 'pivot back at the origin', 2200));
   bus.emit('pivot-set', { id, pos: p, snapped });
 }
 function endDrag() {
@@ -175,7 +175,7 @@ function endDrag() {
 function cancelDrag() {
   if (!start || !attachedId) return false;
   cancelled = true; Edits.revertPose(attachedId); refreshOutline();
-  import('./ui.js').then((m) => m.flashHint('cancelled — nothing written'));
+  import('../ui.js').then((m) => m.flashHint('cancelled — nothing written'));
   return true;
 }
 

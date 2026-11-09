@@ -14,7 +14,7 @@ plugin({
   setup(b) {
     b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here("../stubs/core-stub.mjs") }));
     b.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here("../stubs/core-stub.mjs") }));
-    // panels.js stays REAL — renderCanvas/hitRegion are the schema this seam speaks
+    // edit/fieldpanels.js stays REAL — renderCanvas/hitRegion are the schema this seam speaks
     b.onResolve({ filter: /^\.\/domquad\.js$/ }, () => ({ path: here("../stubs/xrpanels-domquad-stub.mjs") }));
     // quadcolour's node material is the WebGPU build's only: an identity here, as test/client/edittheme-test.ts has it
     b.onResolve({ filter: /^\.\/quadcolour\.js$/ }, () => ({ path: "quadcolour", namespace: "xrpanels-stub" }));

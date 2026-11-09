@@ -10,7 +10,7 @@ import { bus } from '../base.js';
 import { primeFiles } from '../assets.js';
 import { entities, bags, bagOf } from '../world.js';
 import { CONFIG } from '../base.js';
-import { registerEditor, registerHandler, commitEdit } from '../inspect.js';
+import { registerEditor, registerHandler, commitEdit } from '../edit/inspect.js';
 import { namedParts } from '../parts.js';
 import { toast, flashHint } from '../ui.js';
 import { normalizePicture, PICTURE_LIT, PICTURE_DESCRIPTION_MAX, PICTURE_STORE, DESCRIPTION_HINT } from '../../../shared/picture.js';
@@ -202,7 +202,7 @@ export const _hung = hung;
 // ---- the editor block: how a HUMAN hangs a picture -------------------------
 //
 // The scene panel's generic layer already edits the comp as raw JSON; this is
-// the semantic block (client/lib/inspect.js): a file door that lands the image
+// the semantic block (client/lib/edit/inspect.js): a file door that lands the image
 // in the store and fills `src`, the description with its bound, and lit. One verb per
 // gesture — `hang` commits the whole bag, `take down` commits null — and the
 // bag goes through normalizePicture FIRST so a refusal is a hint here, not a

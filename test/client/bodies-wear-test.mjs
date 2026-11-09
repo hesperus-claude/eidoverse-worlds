@@ -27,12 +27,12 @@ globalThis.localStorage = {
 plugin({
   name: 'bodies-stubs',
   setup(b) {
-    b.onResolve({ filter: /^\.\/mybody\.js$/ }, () => ({ path: here('../stubs/bodies-mybody-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/catalog\.js$/ }, () => ({ path: here('../stubs/bodies-inert-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/net\.js$/ }, () => ({ path: here('../stubs/bodies-net-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/panels\.js$/ }, () => ({ path: here('../stubs/bodies-inert-stub.mjs') }));
+    b.onResolve({ filter: /^\.\.?\/(edit\/)?mybody\.js$/ }, () => ({ path: here('../stubs/bodies-mybody-stub.mjs') }));
+    b.onResolve({ filter: /^\.\.?\/(edit\/)?catalog\.js$/ }, () => ({ path: here('../stubs/bodies-inert-stub.mjs') }));
+    b.onResolve({ filter: /^\.\.?\/(edit\/)?net\.js$/ }, () => ({ path: here('../stubs/bodies-net-stub.mjs') }));
+    b.onResolve({ filter: /^\.\.?\/(edit\/)?core\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
+    b.onResolve({ filter: /^\.\.?\/(edit\/)?base\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
+    b.onResolve({ filter: /^\.\.?\/(edit\/)?fieldpanels\.js$/ }, () => ({ path: here('../stubs/bodies-inert-stub.mjs') }));
   },
 });
 

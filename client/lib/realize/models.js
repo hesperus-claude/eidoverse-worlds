@@ -20,7 +20,7 @@
 
 import { THREE, scene, camera } from '../core.js';
 import { applyScale, entScale } from '../../../shared/scale3.js';
-import { isMineHidden, isolatedOut } from '../myview.js';
+import { isMineHidden, isolatedOut } from '../edit/myview.js';
 import { report, bus } from '../base.js';
 import { loadGLB, retainGLB, releaseGLB, evictIdleProtos, lodRecipeReady, gpuPressure,
   lodNegotiable, negotiationReady } from '../assets.js';
@@ -1071,7 +1071,7 @@ export function initModelsRealizer() {
     editing = !!on;
     for (const id of tracked.keys()) syncMarker(id);
   });
-  // a gesture the authority refused, or one cancelled with Esc (worlds, editwrites.js): the preview snaps back to the fold.
+  // a gesture the authority refused, or one cancelled with Esc (worlds, edit/writes.js): the preview snaps back to the fold.
   // A mounted child's pose is its mount's (parent-relative), which execMount skips when the linkage is unchanged.
   bus.on('pose-revert', ({ id }) => {
     const ent = state.st.entities[id]; const obj = entities.get(id);

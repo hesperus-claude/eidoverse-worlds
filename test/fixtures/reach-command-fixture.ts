@@ -14,8 +14,8 @@ export async function commandsFor(getMe:()=>any, messages:string[]) {
     'thingphysics.js':{punt:noop,grab:noop,put:noop,drop:noop,throwHeld:noop},'chat.js':{logChat:(_who:string,text:string)=>messages.push(text)},
     'ui.js':{toggleHelp:noop,flashHint:noop,toast:noop},'scenegraph.js':{sceneAttach:noop,sceneDetach:noop},
     'consent.js':{setPushable:noop,pushable:()=>false},'localbody.js':{trySitOn:noop},'mybody.js':{getMe},
-    // the door (editwrites send) and /panels' stylepanel: handlers.js imports both, and each reaches the whole edit UI
-    'editwrites.js':{send:async()=>({ok:true})},'stylepanel.js':{panelAlpha:()=>1,setPanelAlpha:noop},
+    // the door (edit/writes.js send) and /panels' stylepanel: handlers.js imports both, and each reaches the whole edit UI
+    'edit/writes.js':{send:async()=>({ok:true})},'stylepanel.js':{panelAlpha:()=>1,setPanelAlpha:noop},
   };
   for(const [name,exports] of Object.entries(modules))mock.module(fileURLToPath(new URL('../../client/lib/'+name,import.meta.url)),()=>exports as any);
   await import('../../client/lib/commands/handlers.js');

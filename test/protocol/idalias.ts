@@ -33,7 +33,7 @@ export function idAliases() {
 }
 
 /** The same names, inside a browser page (the headless probes): source to evaluate once in the page, after which every
- *  request any page code sends (net.js sendRequest, editwrites.send, a raw socket) goes out with its create ids as
+ *  request any page code sends (net.js sendRequest, edit/writes.js send, a raw socket) goes out with its create ids as
  *  placeholders and its names as minted ids, every reply's ids map is kept before the reply is handled (sockets read through onmessage;
  *  addEventListener('message') isn't wrapped), and globalThis.__id(name) reads a name as its id for the probe's own page code. Installed once per page (a second
  *  evaluation is a no-op); sockets opened before or after the install are both covered. */

@@ -125,7 +125,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["scheduler", "client/scheduler-test.ts", 1], // the one loader (scheduler.js): lanes, priorities, a slow cosmetic job never blocks the rest
   ["editor-range", "shared/editor-range-test.ts", 1], // D4a: the editor writes what was typed inside the door's range, and refuses outside it with nothing sent
   ["editschema", "shared/editschema-test.ts", 1], // the Inspector's schema: rows, edit ops, locks; it sat outside the gate and a stale lock expectation hid there since recut B2 (found 10-21)
-  ["worldentity", "shared/worldentity-test.ts", 1], // the world entity @world (worldentity.js) and the Build tab's memory (edittabs.js)
+  ["worldentity", "shared/worldentity-test.ts", 1], // the world entity @world (worldentity.js) and the Build tab's memory (edit/tabs.js)
   ["layers", "shared/layers-test.ts", 1], // a thing's selection layer (shared/layers.js), by default and by a builder's word
   ["selection", "client/selection-test.ts", 1], // one selection store (edit/selection.js) and its listener
   ["parts", "client/parts-test.ts", 1], // sub-object motion: motion.js's part tier
@@ -238,7 +238,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["client-b2", "protocol/batch2-probe.ts", 1],  // batch 2 in headless Chromium: a stage per component, and an untrusted link never fetched without the viewer's opt-in
   ["picture-note", "client/picture-note-test.ts", 1], // the picture block's status line: survives a repaint and a demote/promote, not a remove; an agreeing echo keeps it, a disagreeing one retires it
   ["access-panel", "protocol/access-panel-probe.ts", 1], // World Settings › Who may come in › Listed here in headless Chromium: listed rows, add by a name seen here or an exact identity, the authority's refusal in words (R 10-27)
-  ["lock-strength", "client/lock-strength-test.ts", 1], // review of PR #260 (editpanels.js:479): the Hierarchy row's padlock word is the lock the thing holds now: a builder's re-lock after an owner's reads as a builder's, and a refused ask is asked again
+  ["lock-strength", "client/lock-strength-test.ts", 1], // review of PR #260 (edit/panels.js:479): the Hierarchy row's padlock word is the lock the thing holds now: a builder's re-lock after an owner's reads as a builder's, and a refused ask is asked again
   ["swim-lists", "client/swim-lists-test.ts", 1], // review of PR #260 (watervolumes.js:123): swimming reads every water body and dry pocket, not only the ones the fog keeps
   ["build", "protocol/build-check.ts", 1],       // ship-list group B (10-07): building walls at the authority, nested blueprints, the editor's new script
   ["counter", "protocol/counter-check.ts", 1],   // PR #208 review's twelve-line list, as a counter button: publish/attach (§4.1), a script on sponsor rights (§8), the algebra (§7a) — C1…C12; blueprint-test.ts (tools/, run-client) is the pure half it leans on
@@ -345,7 +345,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["anim-backpressure", "server/anim-backpressure-test.ts", 1], // an anim skips a socket holding a backlog; a stop never does
   ["anim-wire", "mcpl/anim-wire-test.ts", 1], // an anim's replace flag through the relay: legacy replaces, an explicit merge merges, a puppet's owner rebroadcasts it as sent
   ["panels", "client/panels-test.ts", 1], // steppers per thing, focus keeps the panel, Tab adds to the hidden set
-  ["panels-schema", "client/panels-schema-test.ts", 1], // the schema panels (panels.js): rows, lists, row actions; a refresh held while an input is focused paints a tick after it blurs
+  ["panels-schema", "client/panels-schema-test.ts", 1], // the schema panels (edit/fieldpanels.js): rows, lists, row actions; a refresh held while an input is focused paints a tick after it blurs
   ["dock", "client/dock-test.ts", 1], // ui.js on the real module: the dock rail, the menu, pins, the waterfall's dismiss rules, the registerPanel seam
   ["perfscope", "client/perfscope-test.ts", 1], // the viewer-local cost overlay (perfscope.js) with real three: modes, solid vs overlay, hull and veil
   ["clickuse", "client/clickuse-test.ts", 1], // the mouse on things while holding one: the held thing offers put down, not pick up; a surface offers put here

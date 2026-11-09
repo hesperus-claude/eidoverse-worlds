@@ -6,7 +6,7 @@
 // @ts-nocheck
 import { inspectHarness } from "../protocol/inspectharness.ts";
 inspectHarness("server-clock-readers");
-const { worldLive } = await import("../../client/lib/inspect.js");
+const { worldLive } = await import("../../client/lib/edit/inspect.js");
 const { serverNow, noteRoundTrip, localNow } = await import("../../client/lib/serverclock.js");
 
 let failures = 0;

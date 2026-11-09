@@ -330,7 +330,7 @@ const cases: Case[] = [
   { id: "O1", what: "(R 14:41) the agent and the client speak the occupy family: no seatOf/seatName/mySeat/mayLeaveSeat/mySeatBody in agent.ts, no setSeatHook/inSitReach anywhere, seats.js/seatedit.js/seatbody.js renamed", run() {
       const ag = readText("mcpl/agent.ts"), tl = readText("mcpl/tools.ts"), ctl = readText("client/lib/controller.js"), sk = readText("shared/sockbody.js"), cu = readText("client/lib/clickuse.js");
       return { ag: /\b(seatOf|seatName|mySeat|mayLeaveSeat|mySeatBody)\b/.test(ag + tl), hooks: /\bsetSeatHook\b/.test(ctl) || /\binSitReach\b/.test(sk) || /\bseatOf\b/.test(cu),
-        files: ["client/lib/seats.js", "client/lib/seatedit.js", "client/lib/seatbody.js"].filter(exists), now: ["client/lib/occupants.js", "client/lib/socketedit.js", "client/lib/occupybody.js"].every(exists) }; },
+        files: ["client/lib/seats.js", "client/lib/seatedit.js", "client/lib/seatbody.js"].filter(exists), now: ["client/lib/occupants.js", "client/lib/edit/socketedit.js", "client/lib/occupybody.js"].every(exists) }; },
     good: (o) => !o.ag && !o.hooks && !o.files.length && o.now },
   { id: "O2", what: "…a socket with a station is a `station` (socketRole): inspect lists a host's sockets as station | snap | attach", run(s) {
       s.call("olive", "create-world", { title: s.name });
@@ -340,7 +340,7 @@ const cases: Case[] = [
       return { r: show(r), as: (r.sockets ?? []).map((x: any) => x.as) }; },
     good: (o) => o.r === "ok" && JSON.stringify(o.as) === '["station"]' },
   { id: "O3", what: "…the user-visible words: the editor's tool tile reads 'station', the toast says 'moved what you were occupying', '+ socket here'", run() {
-      const ep = readText("client/lib/editpanels.js"), lb = readText("client/lib/localbody.js"), es = readText("shared/editschema.js");
+      const ep = readText("client/lib/edit/panels.js"), lb = readText("client/lib/localbody.js"), es = readText("shared/editschema.js");
       return { tile: /label: 'station', icon: 'armchair'/.test(ep), toast: /moved what you were occupying/.test(lb) && !/moved the seat you were on/.test(lb), add: /'\+ socket here'/.test(es) && !/'\+ seat here'/.test(es) }; },
     good: (o) => o.tile && o.toast && o.add },
   // ---------------- S: stale agent-visible addresses ----------------

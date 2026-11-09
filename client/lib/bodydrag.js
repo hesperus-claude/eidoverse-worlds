@@ -31,7 +31,7 @@ import { JOINTS } from './ragdoll.js';
 import { makeRagdoll } from './bodysim.js';
 import { sendBodyDrag } from './net.js';
 import { flashHint, toast } from './ui.js';
-import { isBuilding } from './build.js';
+import { isBuilding } from './edit/build.js';
 
 const GRAB_RANGE = 5;        // how far a body may be from ME to grab (m)
 const STREAM_MS = 66;        // sim → owner cadence, matches presence

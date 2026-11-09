@@ -5,7 +5,7 @@
 
 import { makeSection } from './ui.js';
 import { bus } from './base.js';
-import { checkRow } from './rows.js';
+import { checkRow } from './edit/rows.js';
 import { alwaysNames, setAlwaysNames } from './namereveal.js';
 
 const LS = 'ew-style-tokens';

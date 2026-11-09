@@ -1,4 +1,4 @@
-// panels — schema-driven edit surfaces.
+// fieldpanels — schema-driven edit surfaces.
 //
 // A panel is a FRAME on desktop and a laser-clickable QUAD in VR, and the way
 // that stays true is that a panel never owns bespoke DOM: it declares FIELDS —
@@ -69,9 +69,9 @@
 // relative math: `+=2`, `-=.5`, `*=-1`, `/=2`, `+=10%`. Soft limits bound the
 // drag; hard limits bound everything.
 
-import { makeFrame } from './windows.js';
-import { parseEntry } from '../../shared/editschema.js';
-import { paintEdit } from './editpaint.js';
+import { makeFrame } from '../windows.js';
+import { parseEntry } from '../../../shared/editschema.js';
+import { paintEdit } from './paint.js';
 import { WIDGETS, FACTS, paintFields, el, put, trimNum, R2D } from './widgets.js';
 export { trimNum, WIDGETS } from './widgets.js';
 // a name from either set: the line icons (24 grid) or the filled ones (the eye is a filled-set name)
@@ -83,7 +83,7 @@ export { parseEntry };
 export function makeSchemaFrame(key, opts) {
   const frame = makeFrame(key, opts);
   frame.body.classList.add('schema-panel');
-  const ro = { icons: /\bedit\b/.test(opts?.className ?? '') };   // edit chrome draws pictographs as icons.js glyphs (edittheme.PICTO_ICON)
+  const ro = { icons: /\bedit\b/.test(opts?.className ?? '') };   // edit chrome draws pictographs as icons.js glyphs (theme.js PICTO_ICON)
   // inner scroller — see .schema-scroll in index.html: a scrollbar on the body
   // itself steals the edge-resize band's pixels
   const scroll = document.createElement('div');
@@ -543,7 +543,7 @@ function tokens() {
   };
 }
 export function renderCanvas(canvas, fields, { width = 512, rowH = 44, pad = 12, title = '', theme = null } = {}) {
-  if (theme === 'edit') return paintEdit(canvas, fields, { width, title });   // build mode's frames: their own look, under the VR floor (editpaint.js)
+  if (theme === 'edit') return paintEdit(canvas, fields, { width, title });   // build mode's frames: their own look, under the VR floor (paint.js)
   const C = tokens();
   const g = canvas.getContext('2d');
   const regions = [];

@@ -5,10 +5,10 @@
 import { THREE, scene } from './core.js';
 import { stroke as strokeIcon } from './icons.js';
 import { frameOf } from './colliders.js';
-import { outOfMyView } from './myview.js';
+import { outOfMyView } from './edit/myview.js';
 
 const FADE_IN = 0.25, HOLD = 0.6, FADE_OUT = 0.8;   // seconds
-const TINT = 0xb08ad8;   // edittheme's `mine`: the colour of "only you"
+const TINT = 0xb08ad8;   // edit/theme.js's `mine`: the colour of "only you"
 
 /** One step of a mark's opacity: touching, it rises to 1 over FADE_IN; untouched, it holds HOLD s, then falls over FADE_OUT. */
 function stepMark(m, touching, dt) {

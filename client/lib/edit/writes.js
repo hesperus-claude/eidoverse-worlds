@@ -1,4 +1,4 @@
-// editwrites — build mode's writes.
+// writes — build mode's writes.
 //
 // Every edit is a REQUEST, the same request an agent sends ({type: 'request', verb, args}), and the person waits for
 // the authority's answer: an act number to undo by, or a refusal in the same words an agent gets (shared/protocol/refusal.js).
@@ -14,18 +14,18 @@
 //                          authority refuses when everything it touched changed since; otherwise it redoes what's untouched
 //                          and says what it skipped (undo.js `skipped`; Figma's rule: never back over later work).
 //   del(ids), duplicate(ids), lock(id, on), publish(ids, name), copyBlueprint(hash, at)
-import { bus } from './base.js';
-import { net, sendRequest, replica, replicaActive, sendDrag } from './net.js';
-import { entities } from './world.js';
-import { enc, actorName } from '../../shared/protocol/names.js';
-import { idOut } from '../../shared/protocol/view.js';
-import * as OP from '../../shared/requests.js';
-import { refusalText, lockVerb, lockQuestion, lockChoices, lockBody } from '../../shared/protocol/refusal.js';
-import { plain, warnPlain, nameOf as thingName } from './plainwords.js';
+import { bus } from '../base.js';
+import { net, sendRequest, replica, replicaActive, sendDrag } from '../net.js';
+import { entities } from '../world.js';
+import { enc, actorName } from '../../../shared/protocol/names.js';
+import { idOut } from '../../../shared/protocol/view.js';
+import * as OP from '../../../shared/requests.js';
+import { refusalText, lockVerb, lockQuestion, lockChoices, lockBody } from '../../../shared/protocol/refusal.js';
+import { plain, warnPlain, nameOf as thingName } from '../plainwords.js';
 import { chooseCenter } from './confirmcenter.js';
-import { chooseXR, xrActive } from './xrask.js';
-import { flashHint, toast, claimStatus } from './ui.js';
-import { isOwner } from '../../shared/protocol/roles.js';
+import { chooseXR, xrActive } from '../xrask.js';
+import { flashHint, toast, claimStatus } from '../ui.js';
+import { isOwner } from '../../../shared/protocol/roles.js';
 
 export { replicaActive };
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));

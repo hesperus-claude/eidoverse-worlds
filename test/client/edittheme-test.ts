@@ -3,9 +3,9 @@
 //   bun test/client/edittheme-test.ts
 //
 // What this binds, all headless (a recording 2D context; three's non-GPU build via the core stub):
-//   A. ONE source of tokens: the `--e-*` block in client/index.html equals client/lib/edittheme.js,
+//   A. ONE source of tokens: the `--e-*` block in client/index.html equals client/lib/edit/theme.js,
 //      key for key — change one without the other and this goes red.
-//   B. The VR painter (panels.js renderCanvas, theme 'edit' → editpaint.js) keeps the VR floor:
+//   B. The VR painter (edit/fieldpanels.js renderCanvas, theme 'edit' → edit/paint.js) keeps the VR floor:
 //      every hit target >= 34 canvas px tall; no line < 2 px (stroke width after the transform, and
 //      no hairline fillRect); every glyph >= 17 px; no pictograph ever handed to fillText.
 //   C. It dispatches what the legacy painter dispatches (same actions and payloads), and a disabled
@@ -22,13 +22,13 @@ const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 plugin({
   name: "edittheme-stubs",
   setup(b) {
-    b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here("../stubs/core-stub.mjs") }));
-    b.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here("../stubs/core-stub.mjs") }));
-    b.onResolve({ filter: /^\.\/domquad\.js$/ }, () => ({ path: here("../stubs/xrpanels-domquad-stub.mjs") }));
+    b.onResolve({ filter: /^\.\.?\/core\.js$/ }, () => ({ path: here("../stubs/core-stub.mjs") }));
+    b.onResolve({ filter: /^\.\.?\/base\.js$/ }, () => ({ path: here("../stubs/core-stub.mjs") }));
+    b.onResolve({ filter: /^\.\.?\/domquad\.js$/ }, () => ({ path: here("../stubs/xrpanels-domquad-stub.mjs") }));
     // main's makePanel swaps the quad's material through quadcolour.js (a MeshBasicNodeMaterial: three's WebGPU
     // build only, absent from the headless three.module.js). D asks about the texture, which the swap keeps as
     // its map — so the swap is an identity here; its own colour is test/client/xr-quad-colour-probe.mjs's to measure.
-    b.onResolve({ filter: /^\.\/quadcolour\.js$/ }, () => ({ path: "quadcolour", namespace: "edittheme-stub" }));
+    b.onResolve({ filter: /^\.\.?\/quadcolour\.js$/ }, () => ({ path: "quadcolour", namespace: "edittheme-stub" }));
     b.onLoad({ filter: /.*/, namespace: "edittheme-stub" }, () => ({ contents: "export const quadMaterial = () => {};", loader: "js" }));
   },
 });
@@ -57,14 +57,14 @@ function recorder(rec: Rec) {
 let REC: Rec = { texts: [], strokes: [], hairlines: [] };
 (HTMLCanvasElement.prototype as any).getContext = function () { return (this.__rec ??= recorder(REC)); };
 
-const { EDIT, EDIT_VR, cssVar } = await import("../../client/lib/edittheme.js");
-const { renderCanvas } = await import("../../client/lib/panels.js");
+const { EDIT, EDIT_VR, cssVar } = await import("../../client/lib/edit/theme.js");
+const { renderCanvas } = await import("../../client/lib/edit/fieldpanels.js");
 
 const S = suite("edittheme");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const PICTO = /\p{Extended_Pictographic}/u;
 
-console.log("\nA. one source of tokens (index.html's --e-* block ≡ edittheme.js):");
+console.log("\nA. one source of tokens (index.html's --e-* block ≡ edit/theme.js):");
 {
   const html = readFileSync(here("../../client/index.html"), "utf8");
   const m = /body\.edit-workspace,\s*\.frame\.edit\s*\{([^}]*)\}/.exec(html);
@@ -179,41 +179,41 @@ console.log("\nE. no pictograph in edit chrome's own sources:");
 {
   const src = (p: string) => readFileSync(here(`../../client/lib/${p}`), "utf8");
   const strip = (s: string) => s.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
-  const layout = strip(src("editlayout.js"));
-  check("editlayout.js (top bar, tool rail): no pictograph in code", !PICTO.test(layout), (layout.match(/\p{Extended_Pictographic}/gu) ?? []).join(" "));
-  const sb = strip(src("structure_ui.js"));
+  const layout = strip(src("edit/layout.js"));
+  check("edit/layout.js (top bar, tool rail): no pictograph in code", !PICTO.test(layout), (layout.match(/\p{Extended_Pictographic}/gu) ?? []).join(" "));
+  const sb = strip(src("edit/structure_ui.js"));
   const tools = /const TOOLS = \[([\s\S]*?)\];/.exec(sb)?.[1] ?? "";
   check("the build bar's tool labels: no pictograph", tools.length > 0 && !PICTO.test(tools), (tools.match(/\p{Extended_Pictographic}/gu) ?? []).join(" "));
   // C13: the tree widget lives in widgets.js (WIDGETS.tree.dom), one table for every surface; the check keeps its name
-  const tree = /\n  tree: \{\n([\s\S]*?)\n    row: ROW,/.exec(src("widgets.js"))?.[1] ?? "";
-  check("panels.js tree rows (lock toggle): no pictograph", tree.length > 0 && !PICTO.test(strip(tree)), (strip(tree).match(/\p{Extended_Pictographic}/gu) ?? []).join(" "));
-  // bot #553: the scripts console's rows (editpanels consoleFields) reach the painter too; a glyph PICTO_ICON lacks is fillText'd
-  const cons = /function consoleFields\(\) \{([\s\S]*?)\n\}/.exec(src("editpanels.js"))?.[1] ?? "";
-  const { PICTO_ICON } = await import("../../client/lib/edittheme.js");
+  const tree = /\n  tree: \{\n([\s\S]*?)\n    row: ROW,/.exec(src("edit/widgets.js"))?.[1] ?? "";
+  check("edit/fieldpanels.js tree rows (lock toggle): no pictograph", tree.length > 0 && !PICTO.test(strip(tree)), (strip(tree).match(/\p{Extended_Pictographic}/gu) ?? []).join(" "));
+  // bot #553: the scripts console's rows (edit/panels.js consoleFields) reach the painter too; a glyph PICTO_ICON lacks is fillText'd
+  const cons = /function consoleFields\(\) \{([\s\S]*?)\n\}/.exec(src("edit/panels.js"))?.[1] ?? "";
+  const { PICTO_ICON } = await import("../../client/lib/edit/theme.js");
   const stray = (strip(cons).match(/\p{Extended_Pictographic}/gu) ?? []).filter((g) => !(g in PICTO_ICON));
-  check("editpanels.js consoleFields rows: no pictograph outside PICTO_ICON", cons.length > 0 && stray.length === 0, stray.join(" "));
+  check("edit/panels.js consoleFields rows: no pictograph outside PICTO_ICON", cons.length > 0 && stray.length === 0, stray.join(" "));
 }
 
 console.log("\nE2. every glyph edit chrome names exists (a missing icon paints NOTHING, silently):");
 {
   const icons = await import("../../client/lib/icons.js");
-  const { PICTO_ICON } = await import("../../client/lib/edittheme.js");
+  const { PICTO_ICON } = await import("../../client/lib/edit/theme.js");
   const src = (p: string) => { try { return readFileSync(here(`../../client/lib/${p}`), "utf8"); } catch { return ""; } };
   const names = new Set<string>(Object.values(PICTO_ICON) as string[]);
-  for (const p of ["editpaint.js", "widgets.js"]) {   // C13: the edit widgets' glyphs are named in widgets.js, the surface's in editpaint.js
+  for (const p of ["edit/paint.js", "edit/widgets.js"]) {   // C13: the edit widgets' glyphs are named in widgets.js, the surface's in edit/paint.js
     for (const m of src(p).matchAll(/icon\(g, ([^,]+),/g)) for (const q of m[1].matchAll(/'([A-Za-z0-9]+)'/g)) names.add(q[1]);
     for (const m of src(p).matchAll(/(?:quietButton\([^)]*|ACTION_ICON = \{[^}]*)'([A-Za-z0-9]+)'\)?/g)) names.add(m[1]);
   }
-  for (const m of src("editlayout.js").matchAll(/icon: '([A-Za-z0-9]+)'|iconSvg\('([A-Za-z0-9]+)'/g)) names.add(m[1] ?? m[2]);
-  for (const m of src("structure_ui.js").matchAll(/'([A-Za-z0-9]+)'\],|, '([A-Za-z0-9]+)'\);/g)) names.add(m[1] ?? m[2]);
-  for (const m of src("widgets.js").matchAll(/iconSvg\(r\.locked \? '([A-Za-z]+)' : '([A-Za-z]+)'/g)) { names.add(m[1]); names.add(m[2]); }
-  // the Hierarchy's environment rows (editpanels ENV) reach the canvas too (the World card's remove buttons, in VR); the
+  for (const m of src("edit/layout.js").matchAll(/icon: '([A-Za-z0-9]+)'|iconSvg\('([A-Za-z0-9]+)'/g)) names.add(m[1] ?? m[2]);
+  for (const m of src("edit/structure_ui.js").matchAll(/'([A-Za-z0-9]+)'\],|, '([A-Za-z0-9]+)'\);/g)) names.add(m[1] ?? m[2]);
+  for (const m of src("edit/widgets.js").matchAll(/iconSvg\(r\.locked \? '([A-Za-z]+)' : '([A-Za-z]+)'/g)) { names.add(m[1]); names.add(m[2]); }
+  // the Hierarchy's environment rows (edit/panels.js ENV) reach the canvas too (the World card's remove buttons, in VR); the
   // painter strokes the Lucide set and fills a Phosphor glyph (bot #313), so any of the three sets will do
-  for (const m of src("editpanels.js").matchAll(/icon: '([A-Za-z0-9]+)'/g)) names.add(m[1]);   // the Create panel's buttons and the ENV rows
+  for (const m of src("edit/panels.js").matchAll(/icon: '([A-Za-z0-9]+)'/g)) names.add(m[1]);   // the Create panel's buttons and the ENV rows
   const missing = [...names].filter((n) => !(icons.has(n) || icons.hasFill(n) || icons.hasLine(n)));
   check(`all ${names.size} named glyphs are in icons.js (any set)`, names.size >= 24 && missing.length === 0, "missing: " + missing.join(", ") + " · seen: " + [...names].join(","));
   // …and a Phosphor-only glyph on an edit button is PAINTED (filled in the button's colour), not silently skipped (bot #313)
-  const env = [...(/const ENV = \[([\s\S]*?)\];/.exec(src("editpanels.js"))?.[1] ?? "").matchAll(/icon: '([A-Za-z0-9]+)'/g)].map((m) => m[1]).filter((n) => !icons.has(n));
+  const env = [...(/const ENV = \[([\s\S]*?)\];/.exec(src("edit/panels.js"))?.[1] ?? "").matchAll(/icon: '([A-Za-z0-9]+)'/g)].map((m) => m[1]).filter((n) => !icons.has(n));
   REC = { texts: [], strokes: [], hairlines: [] }; const c = document.createElement("canvas");
   renderCanvas(c, env.map((ic, i) => ({ t: "btn", k: `envdel-${i}`, label: `remove ${ic}`, icon: ic })) as any, { width: 522, title: "world", theme: "edit" });
   const fills = REC.fills ?? [];

@@ -40,7 +40,7 @@ await cdp.send('Page.navigate', { url: `${BASE}/?name=wsbot&world=wsbench` });
   // the never-finishing boot splash steals elementFromPoint in headless
   await evalJson(`(() => { const s = document.querySelector('#splash'); if (s && !s.classList.contains('gone')) s.style.pointerEvents = 'none'; return true; })()`);
 }
-await waitFor(`import('/lib/build.js').then((m) => m.mayEdit())`, 10000);
+await waitFor(`import('/lib/edit/build.js').then((m) => m.mayEdit())`, 10000);
 await evalJson(`dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyB' })), true`);
 check('B opens the workspace', await waitFor(`!!document.querySelector('.edit-top') && !document.querySelector('.edit-top').hidden && document.body.classList.contains('edit-workspace')`, 10000));
 
@@ -126,31 +126,31 @@ console.log('\nBuild — the building tools and the library, docked beside the H
   check('"new building" and an honestly-named "undo building edit" (disabled: nothing to undo)', await evalJson(`!!${btn('new building')} && ${btn('^undo building edit$')}?.disabled === true && /separate from Ctrl.Z/.test(${btn('^undo building edit$')}.closest('.sp-row').title)`), await evalJson(`[...${create}.querySelectorAll('.sp-row')].map((r) => r.textContent.trim() + ' :: ' + r.title).join(' | ')`));
   check('the viewport strip is down while no tool is armed', await evalJson(`document.querySelector('.edit-toolstrip')?.hidden === true`));
   await evalJson(`[...${create}.querySelectorAll('.sp-tile')].find((t) => t.textContent.trim() === 'wall')?.click(), true`);
-  check('clicking the wall tile arms the wall tool', await waitFor(`import('/lib/structure_ui.js').then((m) => m.currentTool() === 'wall')`));
+  check('clicking the wall tile arms the wall tool', await waitFor(`import('/lib/edit/structure_ui.js').then((m) => m.currentTool() === 'wall')`));
   check('…the tile reads armed (and it alone: the transform tile yields the click)', await waitFor(`[...${create}.querySelectorAll('.sp-tile.on')].map((t) => t.textContent.trim()).join() === 'wall'`));
   check('…and the viewport strip names it, with its hint and the way out', await waitFor(`(() => { const s = document.querySelector('.edit-toolstrip'); return s && !s.hidden && /wall/.test(s.textContent) && /click an edge/.test(s.textContent) && /Esc to drop/.test(s.textContent); })()`), await evalJson(`document.querySelector('.edit-toolstrip')?.textContent`));
   check('…laid across the top of the VIEWPORT (between the columns, under the bar)', await evalJson(`(() => { const s = document.querySelector('.edit-toolstrip').getBoundingClientRect(), L = document.querySelector('.edit-left').getBoundingClientRect(), R = document.querySelector('.edit-right').getBoundingClientRect(); return Math.abs(s.left - L.right) <= 1 && Math.abs(s.right - R.left) <= 1 && s.top === 40 && s.height <= 32; })()`));
   await evalJson(`[...${create}.querySelectorAll('.sp-tile')].find((t) => t.textContent.trim() === 'wall')?.click(), true`);
-  check('the armed tile again drops it', await waitFor(`import('/lib/structure_ui.js').then((m) => m.currentTool() === null) && document.querySelector('.edit-toolstrip').hidden`));
+  check('the armed tile again drops it', await waitFor(`import('/lib/edit/structure_ui.js').then((m) => m.currentTool() === null) && document.querySelector('.edit-toolstrip').hidden`));
   await evalJson(`[...${create}.querySelectorAll('.sp-tile')].find((t) => t.textContent.trim() === 'door')?.click(), true`);
-  await waitFor(`import('/lib/structure_ui.js').then((m) => m.currentTool() === 'door')`);
+  await waitFor(`import('/lib/edit/structure_ui.js').then((m) => m.currentTool() === 'door')`);
   await evalJson(`dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', key: 'Escape' })), true`);
-  check('Esc drops an armed tool (and only that — build mode stays on)', await waitFor(`import('/lib/structure_ui.js').then((m) => m.currentTool() === null) && document.querySelector('.edit-toolstrip').hidden && import('/lib/build.js').then((b) => b.isBuilding())`), JSON.stringify(await evalJson(`import('/lib/build.js').then((b) => b.isBuilding())`)));
+  check('Esc drops an armed tool (and only that — build mode stays on)', await waitFor(`import('/lib/edit/structure_ui.js').then((m) => m.currentTool() === null) && document.querySelector('.edit-toolstrip').hidden && import('/lib/edit/build.js').then((b) => b.isBuilding())`), JSON.stringify(await evalJson(`import('/lib/edit/build.js').then((b) => b.isBuilding())`)));
   // Library: what the World panel's build section offers, here
   check('Library: add light, the search box, the starter models as picture tiles', await evalJson(`!!${btn('add light')} && !!${create}.querySelector('.sp-text[placeholder^="search the library"]') && ${create}.querySelectorAll('.sp-tiles-img .sp-tile img').length >= 8`), await evalJson(`${create}.querySelectorAll('.sp-tiles-img .sp-tile').length`));
   await evalJson(`${btn('add light')}?.click(), true`);
-  check('add light: a light in your hand', await waitFor(`import('/lib/build.js').then((m) => m.hasGhost())`), JSON.stringify(await evalJson(`(window.__errs ?? []).filter((e) => /ghost|light/i.test(e)).slice(-3)`)));
-  await evalJson(`import('/lib/build.js').then((m) => m.cancelGhost()), true`);
+  check('add light: a light in your hand', await waitFor(`import('/lib/edit/build.js').then((m) => m.hasGhost())`), JSON.stringify(await evalJson(`(window.__errs ?? []).filter((e) => /ghost|light/i.test(e)).slice(-3)`)));
+  await evalJson(`import('/lib/edit/build.js').then((m) => m.cancelGhost()), true`);
   await evalJson(`[...${create}.querySelectorAll('.sp-tiles-img .sp-tile')].find((t) => t.textContent.trim() === 'crate (red)')?.click(), true`);
-  check('a library tile puts the model in your hand (the ghost build.js carries)', await waitFor(`import('/lib/build.js').then((m) => m.hasGhost())`), JSON.stringify(await evalJson(`(window.__errs ?? []).filter((e) => /ghost|glb/i.test(e)).slice(-3)`)));
-  await evalJson(`import('/lib/build.js').then((m) => m.cancelGhost()), true`);
+  check('a library tile puts the model in your hand (the ghost build.js carries)', await waitFor(`import('/lib/edit/build.js').then((m) => m.hasGhost())`), JSON.stringify(await evalJson(`(window.__errs ?? []).filter((e) => /ghost|glb/i.test(e)).slice(-3)`)));
+  await evalJson(`import('/lib/edit/build.js').then((m) => m.cancelGhost()), true`);
   check('the VR body says the building tools are desktop-only, and offers the library and the World', await evalJson(`import('/lib/xrpanels.js').then((m) => { const f = m.xrPanelsDebug().fields.build ?? []; return f.includes('place') && !f.includes('stool') && !f.includes('ttool') && f.includes('info') && f.includes('wsky'); })`), JSON.stringify(await evalJson(`import('/lib/xrpanels.js').then((m) => m.xrPanelsDebug().fields.build)`)));
   await evalJson(`${tab('hierarchy')}?.click(), true`);
   check('back to the Hierarchy tab', await waitFor(`${shown('hierarchy')} && !(${shown('build')})`));
 }
 
 console.log('\nleaving:');
-await evalJson(`import('/lib/build.js').then((m) => m.setBuildMode(false)), true`);
+await evalJson(`import('/lib/edit/build.js').then((m) => m.setBuildMode(false)), true`);
 check('the workspace chrome is not painted any more (bar, rail, columns, tool strip)', await waitFor(`[...document.querySelectorAll('.edit-strip, .edit-col, .edit-split-v, .edit-toolstrip')].every((e) => getComputedStyle(e).display === 'none')`), JSON.stringify(await evalJson(`[...document.querySelectorAll('.edit-strip, .edit-col, .edit-split-v, .edit-toolstrip')].map((e) => e.className + ':' + getComputedStyle(e).display)`)));
 check('…the ∃ is back on the HUD, hit-testable, its glyphs beside it', await waitFor(`(() => { const h = document.querySelector('#hud').getBoundingClientRect(), m = document.querySelector('#micbtn').getBoundingClientRect(); const hit = document.elementFromPoint(h.left + h.width / 2, h.top + h.height / 2); return (hit === document.querySelector('#hud') || document.querySelector('#hud').contains(hit)) && m.left >= h.right && Math.abs((m.top + m.bottom) / 2 - (h.top + h.bottom) / 2) <= 2; })()`));
 check('…the glyphs wear the HUD ink again (not the editor grey)', await waitFor(`(() => { const g = document.querySelector('#micbtn svg g'); const p = document.createElement('i'); document.body.append(p); p.style.color = 'var(--dim)'; const dim = getComputedStyle(p).color; p.remove(); return !!g && getComputedStyle(g).stroke === dim; })()`, 3000));
@@ -158,7 +158,7 @@ check('…the glyphs wear the HUD ink again (not the editor grey)', await waitFo
 check('…and the wrench is titled plainly again', await waitFor(`document.querySelector('#dock button[data-toggles="edit"]')?.title === 'Builder mode · B'`, 3000), await evalJson(`document.querySelector('#dock button[data-toggles="edit"]')?.title`));
 
 const errs: string[] = (await evalJson(`window.__errs`)) ?? [];
-const mine = errs.filter((e) => /editpanels|editlayout|structure_ui|panels\.js|editpaint|mictoggle|worldquad|palette/.test(e));
+const mine = errs.filter((e) => /\/edit\/|mictoggle|worldquad|palette/.test(e));
 check('no page errors from the workspace', mine.length === 0, mine.slice(0, 3).join(' | '));
 
 console.log(`\n${tally.passed} passed, ${tally.failed} failed`);

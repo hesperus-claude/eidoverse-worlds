@@ -11,7 +11,7 @@ const { cdp, evalJson: evalRaw, cleanup, die, BASE } = await scratchBench('lock-
 const evalJson = pagedEval(evalRaw, ['crate', 'chest']);
 const { check, tally } = mkCheck();
 const waitFor = pageWaiter(evalJson, 20000);
-const rowOf = (id: string) => `import('/lib/editpanels.js').then((E) => E.editPanelsDebug().hierFields().flatMap((f) => f.rows ?? []).find((r) => r.id === '${id}') ?? null)`;
+const rowOf = (id: string) => `import('/lib/edit/panels.js').then((E) => E.editPanelsDebug().hierFields().flatMap((f) => f.rows ?? []).find((r) => r.id === '${id}') ?? null)`;
 const word = (id: string, w: string) => waitFor(`${rowOf(id)}.then((r) => r?.lockLevel === ${JSON.stringify(w)})`);
 const ask = (verb: string, args: string) => evalJson(`import('/lib/net.js').then((m) => m.sendRequest('${verb}', ${args}))`);
 const folded = (expr: string) => waitFor(`import('/lib/net.js').then((m) => { const e = m.replica.st.entities; return ${expr}; })`);

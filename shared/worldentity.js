@@ -136,7 +136,7 @@ const grassOp = (args) => (args == null ? OP.unset(WORLD_ID, 'grass') : OP.set(W
 
 // ---------------------------------------------------------------- the schema
 
-const SKY_NUMS = [   // the sky panel's sliders (client/lib/skypanel.js SLIDERS): key, label, min, softMax, step, default, unit
+const SKY_NUMS = [   // the sky panel's sliders (client/lib/edit/skypanel.js SLIDERS): key, label, min, softMax, step, default, unit
   ['hours', 'time of day', 0, 24, 0.1, 12, 'h'], ['rate', 'rate', 0, 48, 0.5, 0, '×'],
   // azimuth is stored in radians and shown in degrees; sun and fill were cut (knobs on the renderer's own rig)
   ['azimuth', 'sun azimuth', 0, 360, 5, 180, '°'], ['ambient', 'ambient', 0, 2.5, 0.05, 1],
@@ -164,7 +164,7 @@ export function describeWorld(st, now = 0, { presets = null, clock = true } = {}
 }
 
 /** The world entity's inspector schema — the same shape inspectSchema returns
- *  ({ id, groups, sections }), so editpanels' cards, the VR quad, describeSchema
+ *  ({ id, groups, sections }), so edit/panels.js' cards, the VR quad, describeSchema
  *  and fieldAt all read it unchanged. Addresses: sky.* weather.state terrain.*
  *  grass.* (grass.mow mows).
  *  @param live { now?: number, mayShape?: boolean } — mayShape false = this viewer

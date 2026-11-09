@@ -1,4 +1,4 @@
-// panels (client/lib/panels.js): one schema, two renderers. renderDOM builds the desktop rows and wires each control to
+// panels (client/lib/edit/fieldpanels.js): one schema, two renderers. renderDOM builds the desktop rows and wires each control to
 // edit(k, payload); renderCanvas paints the VR quad and returns hit REGIONS carrying the same (action, payload);
 // hitRegion turns a laser UV into one of them, snapping a slider to its step. The REAL module under happy-dom with a
 // recording 2D context. `BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/panels-schema-test.ts`
@@ -27,7 +27,7 @@ HTMLCanvasElement.prototype.getContext = function () {
   }) as any;
 };
 
-const { renderDOM, renderCanvas, hitRegion, makeSchemaFrame } = await import('../../client/lib/panels.js');
+const { renderDOM, renderCanvas, hitRegion, makeSchemaFrame } = await import('../../client/lib/edit/fieldpanels.js');
 
 const S = suite("panels-schema");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
@@ -109,7 +109,7 @@ console.log('PANELS — makeSchemaFrame holds a refresh while an input is focuse
   const inp = scroll.querySelector('input') as HTMLInputElement; inp.focus();
   set([{ t: 'text', k: 'a', label: 'a', value: 'two' }], edit);
   check('focused: the old input survives (caret kept)', scroll.querySelector('input') === inp && inp.value === 'one');
-  inp.blur();   // the queued state paints a tick after the blur (panels.js holdUntilBlur), so the focus move lands first
+  inp.blur();   // the queued state paints a tick after the blur (edit/fieldpanels.js holdUntilBlur), so the focus move lands first
   check('blur: the queued state paints', await tryUntil('the queued state paints', () => (scroll.querySelector('input') as HTMLInputElement)?.value === 'two', { ms: 2000, step: 5 })); }
 
 console.log('PANELS — renderCanvas: regions carry the same action/payload');
@@ -135,7 +135,7 @@ check('rows stack: every region lies inside the canvas', regions.every((r: any) 
 console.log('PANELS — every WIDGETS entry draws on every surface: the desktop, the legacy quad, the edit quad');
 {
   (globalThis as any).Option ??= function (text: string, value: string) { const o = document.createElement('option'); o.textContent = text; o.value = value; return o; };
-  const { WIDGETS } = await import('../../client/lib/widgets.js');
+  const { WIDGETS } = await import('../../client/lib/edit/widgets.js');
   // a sample per type, and the action(s) its quad target dispatches ([]: painted, takes no hit)
   const SAMPLE: Record<string, [any, string[]]> = {
     info: [{ t: 'info', k: 'i', label: 'i', value: 'v' }, []], log: [{ t: 'log', k: 'lg', lines: ['a'] }, []],

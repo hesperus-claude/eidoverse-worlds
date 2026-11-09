@@ -1,14 +1,14 @@
 // catalog — the world panel's catalog sections (the palette): the model library, the avatar roster, and the drag-in upload door.
 // This module is how a thing gets INTO your hand; build.js (ghost, select, drag, undo) is what your hand does with it.
 
-import { enc } from '../../shared/protocol/names.js';
-import * as OP from '../../shared/requests.js';
-import { sendOps } from './editwrites.js';
-import { TIER_COLORS } from '../../shared/perfrank.js';
-import { CONFIG, report, bus } from './base.js';
-import { libLabels } from './assets.js';
-import { makeSection, toast } from './ui.js';
-import { escapeHtml } from './markup.js';
+import { enc } from '../../../shared/protocol/names.js';
+import * as OP from '../../../shared/requests.js';
+import { sendOps } from './writes.js';
+import { TIER_COLORS } from '../../../shared/perfrank.js';
+import { CONFIG, report, bus } from '../base.js';
+import { libLabels } from '../assets.js';
+import { makeSection, toast } from '../ui.js';
+import { escapeHtml } from '../markup.js';
 import { holdGhost } from './build.js';
 import { paintGround } from './groundpanel.js';
 import { paintSky } from './skypanel.js';

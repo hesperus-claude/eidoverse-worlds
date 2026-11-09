@@ -318,7 +318,7 @@ async function browserOwnerPart() {
   mock.module(base + "materials.js", () => ({ applyOwnBodyShadow: async () => {} }));
   let onSwitch: any = null;   // catalog.js's switch seam, as it is: one handler, mybody.js's
   const catalog = { setMyAvatarPath() {}, wireAvatarSwitch(fn: any) { onSwitch = fn; }, switchAvatar: (p: string, n: string) => onSwitch?.(p, n) };
-  mock.module(base + "catalog.js", () => catalog);
+  mock.module(base + "edit/catalog.js", () => catalog);
 
   const controller: any = await import("../../client/lib/controller.js");
   const netmod: any = await import("../../client/lib/net.js");

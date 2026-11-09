@@ -594,7 +594,7 @@ Lesson: a direction-only signal (camera-centred domes, cloud shell hundreds of
 metres up, no visible parallax) should be baked, not re-marched 60×/s.
 
 **Cloud quality is a CLIENT preference and deliberately never a verb**
-`client/lib/sky.js:74-78`, `client/lib/build.js:1077-1088`
+`client/lib/sky.js:74-78`, `client/lib/edit/build.js:1077-1088`
 "how many cloud passes your GPU can afford has nothing to do with what the world
 looks like, and one person's laptop must not dictate everyone else's sky."
 Lesson: the split is world state vs. draw cost. Anything that only changes what
@@ -1414,7 +1414,7 @@ Lesson: a socket on an animated part must compose live-transform ∘ rest⁻¹, 
 must go through the full matrix so scale is honoured.
 
 **Socket reach must not oscillate with the swing**
-`client/lib/world.js:476-478`, `client/lib/build.js:380-382`
+`client/lib/world.js:476-478`, `client/lib/edit/build.js:380-382`
 "Ignores the part's motion on purpose: 'how far is the seat' should not oscillate
 with the swing." The editing gizmo is parented in the same rest frame for the
 same reason.
@@ -1583,7 +1583,7 @@ serve is replaced.
 
 **The density dial can silently no-op (#74)**
 `client/lib/flora_field.js:8-15`, `client/lib/terrain.js:80-101`,
-`client/lib/build.js:1116-1139`
+`client/lib/edit/build.js:1116-1139`
 "wireDensityDial returns early when a stroke's expected instanced attributes are
 absent (vegetation.js version skew), leaving the stroke without setDensity, and
 the composed dial optional-chains every child. Policy arithmetic then reports a
@@ -2090,7 +2090,7 @@ path here." 8KB.
 Lesson: a blind fold still needs a size gate.
 
 **The lock is an accident guard, not a rights system**
-`server/server.ts:761-780`, `client/lib/build.js:300-310`
+`server/server.ts:761-780`, `client/lib/edit/build.js:300-310`
 "anyone builder+ can toggle it, and the deliberate unlock (`data: null`) is exactly
 what converts an accident into an intent. Everything that doesn't relocate the thing
 stays open: sitting ON it (self-mount), use, motion, behaviors, other comps —
@@ -2102,7 +2102,7 @@ Lesson: an accident guard must bind the person who set it, and refusal-message
 ordering is part of the design.
 
 **A locked thing refuses locally before any preview exists to snap back**
-`client/lib/build.js:637-645`, `:312-320`
+`client/lib/edit/build.js:637-645`, `:312-320`
 The drag refuses at arm time; if a commit is refused, the preview is restored from
 the log.
 Lesson: never show a preview you know the server will refuse.
@@ -2126,7 +2126,7 @@ stray separator character made every held whisper unreachable, silently), and th
 failure mode is a private message that simply never arrives."
 Lesson: any composite key read and written in different functions gets one
 constructor. (This file's NUL separator is also why `grep -r` silently skips
-`client/lib/build.js` — docs/history/TEL0S_NOTES.md §2.)
+`client/lib/edit/build.js` — docs/history/TEL0S_NOTES.md §2.)
 
 **A stale SDP is worthless, so `rtc` has no pending queue**
 `server/server.ts:2623-2635`
@@ -2624,7 +2624,7 @@ Lesson: in an async event handler, handle the cases that need nothing async
 first, or one unrelated rejection disables the whole surface.
 
 **One broken editor must never take down the whole panel**
-`client/lib/inspect.js:29-30`
+`client/lib/edit/inspect.js:29-30`
 Lesson: registry-driven UI needs per-entry try/catch.
 
 ---
@@ -2897,7 +2897,7 @@ Lesson: measure the workaround against the thing it replaces before adopting it.
 ## 9. Misc — UI, voice, chat surfaces, tooling
 
 **Editing is a MODE, because looking is the default**
-`client/lib/build.js:51-60`
+`client/lib/edit/build.js:51-60`
 "It was always-live, on the theory that 'select anything, any time' is closer to the
 one-verb-surface ideal. In a world you look around by dragging, that theory is wrong:
 every camera drag that happens to start on an object picks it up and moves it, and
@@ -2907,19 +2907,19 @@ Lesson: when the same gesture serves navigation and manipulation, manipulation n
 a mode.
 
 **A press is a SELECT; travel is where a drag begins**
-`client/lib/build.js:607-609`, `:629-646`
+`client/lib/edit/build.js:607-609`, `:629-646`
 "otherwise clicking a thing to look at its label moved it." `DRAG_SLOP = 4` px.
 Lesson: the click/drag threshold is not optional for a 3D editor.
 
 **Pick from THIS event's coordinates**
-`client/lib/build.js:582-586`
+`client/lib/edit/build.js:582-586`
 "Relying on the last mousemove to have left `mouse` in the right place works for a
 real pointer and fails for anything that presses without moving first — a touch, a
 synthetic click, a tab that regained focus under the cursor."
 Lesson: read pointer position from the event that needs it.
 
 **Keep the grab offset**
-`client/lib/build.js:241-247`
+`client/lib/edit/build.js:241-247`
 "Without it the object teleports so that its ORIGIN sits under the cursor, which is
 both a jump and usually wrong — you grabbed a crate by its corner, not by its pivot."
 But "dropping onto a surface should still rest ON it, not float by the offset you
@@ -2927,13 +2927,13 @@ happened to grab at."
 Lesson: preserve the grab relationship horizontally, snap vertically.
 
 **A wall should not catch a chair**
-`client/lib/build.js:199-202`
+`client/lib/edit/build.js:199-202`
 Only faces with normal y > 0.6 are placement surfaces; a ray toward the horizon is
 clamped to 20m of placeable range (`:205-209`).
 Lesson: bound both the surface orientation and the distance.
 
 **Ray-to-point picking: a 7cm marker is unhittable by triangle raycast**
-`client/lib/build.js:412-427`, `client/lib/bodydrag.js:58-62`
+`client/lib/edit/build.js:412-427`, `client/lib/bodydrag.js:58-62`
 "a 7cm marker against a busy mesh is unhittable by triangle raycast and trivially
 hittable by distance-to-center. Tolerance grows a little with camera distance." Same
 trick for bodies: "a SkinnedMesh raycast tests the bind pose — a standing silhouette
@@ -2943,14 +2943,14 @@ Lesson: small deliberate targets and skinned bodies both want ray-to-point picki
 And markers must not be raycast INTO (`build.js:374-376`).
 
 **One merged comp entry per gesture — a naive write eats every other anchor**
-`client/lib/build.js:449-456`
+`client/lib/edit/build.js:449-456`
 "comp data replaces wholesale and a naive write would silently eat every OTHER anchor
 on the thing."
 Lesson: wholesale-replacement components require read-modify-write, with the inverse
 on the undo stack.
 
 **A click on a plank MID-SWING must not bake the swing's phase into the anchor**
-`client/lib/build.js:483-503`
+`client/lib/edit/build.js:483-503`
 "carry the hit point back through the part's displacement to where it sits at rest
 (the inverse of mountTransform's ride)." Only parts a motion comp actually names
 count: "naming arbitrary mesh nodes would freeze junk into the log."
@@ -2958,14 +2958,14 @@ Lesson: authoring against an animated thing must invert the animation before
 recording.
 
 **Undo is inverse ENTRIES**
-`client/lib/build.js:335-343`
+`client/lib/edit/build.js:335-343`
 "history stays append-only, which is what keeps the log replayable and the world
 forkable." Stack capped at 40. Undo works outside edit mode: "you may only notice
 the mistake after you have gone back to looking."
 Lesson: undo in an event-sourced world is a new entry, never a retraction.
 
 **Idly exploring the sky wrote 53 permanent entries**
-`client/lib/build.js:1002-1014`
+`client/lib/edit/build.js:1002-1014`
 "Presets and dropdowns used to send a verb on every click while the sliders only
 previewed — so idly exploring the sky wrote 53 permanent entries into one world's
 log, every one of which replays for every future joiner. The log is history; trying
@@ -2973,7 +2973,7 @@ things out is not." Everything previews; only ✓ commits.
 Lesson: in an append-only world, exploration must be local. One commit per intent.
 
 **A preset that stashed a slider key shadowed that slider for the session**
-`client/lib/build.js:1016-1029`
+`client/lib/edit/build.js:1016-1029`
 "`local` carries the NON-slider knobs… The sliders own their own keys and must WIN
 over local — otherwise a preset that stashed a slider key (hours) into local would
 shadow the time slider for the rest of the session: moving it wrote a.hours, but the
@@ -2982,12 +2982,12 @@ stale local.hours overrode it, so lighting stopped changing after you pressed du
 Lesson: define precedence between overlapping state bags explicitly, in one place.
 
 **Clearing a field stashes `undefined`, not `null`**
-`client/lib/build.js:1167-1171`
+`client/lib/edit/build.js:1167-1171`
 "the JSON the verb carries simply drops the keys (a null would linger in the fold)."
 Lesson: `undefined` deletes through JSON; `null` persists.
 
 **An empty search box shows curated starters, not the whole library**
-`client/lib/build.js:925-930`
+`client/lib/edit/build.js:925-930`
 "otherwise opening the panel greets you with four varieties of apocalyptic rubble."
 And previews matter: "Picking from a list of
 `stylized_yucca_joshua_tree_desert_cactus_plant.glb` is not picking; with the
@@ -3142,7 +3142,7 @@ Lesson: precision positioning needs a creep modifier.
 
 **Typing is never walking**
 `client/lib/controller.js:51-57`, `client/lib/chat.js:668`,
-`client/lib/build.js:895`
+`client/lib/edit/build.js:895`
 `e.stopPropagation()` on chat input; search inputs too.
 Lesson: every text field in a game world needs an explicit input firewall.
 
@@ -3489,7 +3489,7 @@ deck-length from the hull's center. Every slot competes, not just the first."
 Lesson: measure to the affordance, not to the entity origin.
 
 **Selecting a thing opens its row; selection must never be hostage to a fetch**
-`client/lib/build.js:135-138`, `client/lib/scenegraph.js:275-280`
+`client/lib/edit/build.js:135-138`, `client/lib/scenegraph.js:275-280`
 "the scene panel follows the mouse: selecting a thing opens its row… scrolled into
 view." And: "So paint now: selection must never be hostage to [an] async roster
 fetch."

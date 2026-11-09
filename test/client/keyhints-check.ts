@@ -1,7 +1,7 @@
 // test/client/keyhints-check.ts — no hidden keys in build mode (R 10-04: "SOOOO much hidden knowledge… needs to be tooltipped
 // somewhere for it to matter"). Fails when:
 //   1. build-mode code reads a modifier (e.shiftKey / ctrlKey / altKey / metaKey, key === 'Control'…) on a line without a
-//      `// keys: <id>` tag naming an entry in client/lib/keyhints.js (a read that is NOT build mode's, in a file that mixes
+//      `// keys: <id>` tag naming an entry in client/lib/edit/keyhints.js (a read that is NOT build mode's, in a file that mixes
 //      the two, says so: `// keys: none — <why>`);
 //   2. an entry has no words to show (`before` empty);
 //   3. an entry is never shown: no engage('<id>'), withKeys(…, '<id>') or KEYHINTS.<id> outside keyhints.js and outside
@@ -9,10 +9,10 @@
 //   bun test/client/keyhints-check.ts
 import fs from "node:fs";
 import path from "node:path";
-import { KEYHINTS } from "../../client/lib/keyhints.js";
+import { KEYHINTS } from "../../client/lib/edit/keyhints.js";
 
 const ROOT = path.resolve(import.meta.dir, "..", "..");
-const FILES = ["build", "gizmo", "panels", "editpanels", "editlayout", "socketedit", "structure_ui", "edittabs", "editpaint", "widgets", "controller"]   // controller: build mode's camera (bot #319)
+const FILES = ["edit/build", "edit/gizmo", "edit/fieldpanels", "edit/panels", "edit/layout", "edit/socketedit", "edit/structure_ui", "edit/tabs", "edit/paint", "edit/widgets", "controller"]   // controller: build mode's camera (bot #319)
   .map((f) => `client/lib/${f}.js`).filter((f) => fs.existsSync(path.join(ROOT, f)));
 const MOD = /\be\.(shiftKey|ctrlKey|altKey|metaKey)\b|\bkey\s*===\s*['"](Control|Shift|Alt|Meta)['"]/;
 let pass = 0, fail = 0;
@@ -26,7 +26,7 @@ for (const f of FILES) {
     if (MOD.test(line)) { if (!tag) untagged.push(`${f}:${i + 1}: ${line.trim().slice(0, 100)}`); else if (tag === "none" ? !/keys:\s*none\s+—\s*\S/.test(line) : !(tag in KEYHINTS)) badIds.push(`${f}:${i + 1}: ${tag}`); }
     const code = line.replace(/\/\/\s*keys:.*$/, "");
     for (const m of code.matchAll(/engage\(\s*['"](\w+)['"]|withKeys\([^)]*['"](\w+)['"]\s*\)|KEYHINTS\.(\w+)/g)) shownIds.add(m[1] ?? m[2] ?? m[3]);
-    // a map of tool → id feeding withKeys (editlayout's rail): every quoted id inside it counts
+    // a map of tool → id feeding withKeys (edit/layout.js's rail): every quoted id inside it counts
     if (/withKeys\(/.test(code)) {
       for (const m of code.matchAll(/,\s*['"](\w+)['"]\s*\)/g)) shownIds.add(m[1]);                              // nested: withKeys(withKeys(…), 'id')
       if (/\{[^}]*:\s*'\w+'/.test(code)) for (const m of code.matchAll(/:\s*'(\w+)'/g)) shownIds.add(m[1]);   // a tool → id map

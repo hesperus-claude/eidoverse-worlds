@@ -114,7 +114,7 @@ const part = { default: null };
 
 const DEFS = [
   { name: 'Transform', category: 'Core', builtin: true, summary: 'where it is: position, heading, size',
-    params: paramsOf('Transform', { yaw: { ...deg, default: 0 } }),   // no rotOrder: the rotate order is the viewer's (spec/PROTOCOL.md §9.1; client/lib/viewprefs.js)
+    params: paramsOf('Transform', { yaw: { ...deg, default: 0 } }),   // no rotOrder: the rotate order is the viewer's (spec/PROTOCOL.md §9.1; client/lib/edit/viewprefs.js)
     fallback: { text: 'at (x, y, z)' } },
   // Pivot (Roblox's PivotOffset): where it turns and scales from, in its own frame before scale. It never
   // moves the thing or changes how it draws: only the handles, the turn and the size go about it.

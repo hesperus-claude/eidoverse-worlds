@@ -891,7 +891,7 @@ fixture/tool matrix.
   R0–R4, both §C calls) IS NOW CLOSED.
 
 - **2026-08-29 — §24q: R4 — panels and defs round two, delivered
-  (20e998c…b7254d9).** Four gated slices. (1) NEW client/lib/rows.js —
+  (20e998c…b7254d9).** Four gated slices. (1) NEW client/lib/edit/rows.js —
   the house row builders (sliderTable/checkRow/selectRow/btn/btnRow/
   sectionHead + the SELECT_CSS skin), dumb on purpose: layout and
   wiring, never state, so reset stays write-then-repaint everywhere.

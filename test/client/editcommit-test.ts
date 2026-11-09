@@ -9,7 +9,7 @@
 // review round found (v1 computed an undo inverse from it; now it is sent as
 // expect, and the door refuses `changed` if someone wrote it since).
 // test/protocol/inspectharness.ts stubs the page (the realized world, the wire to the
-// scratch door, the dialogs); inspect.js, editwrites.js, the schema and the door are real.
+// scratch door, the dialogs); inspect.js, edit/writes.js, the schema and the door are real.
 //
 // the protocol port (2026-10-06): the client-side undo stack of inverses and the light coalescer are gone (undo is the door's,
 // by act; a lamp is a light COMPONENT edited with set). Each old inverse check became either the expect the request
@@ -18,8 +18,8 @@ import { inspectHarness } from "../protocol/inspectharness.ts";
 import { qFromEuler, sameRotation } from "../../shared/euler.js";
 import { qFromYaw } from "../../shared/rot.js";
 const H = inspectHarness("editcommit");
-const { commitEdit, registerHandler, endGesture, schemaFor } = await import("../../client/lib/inspect.js");
-const Edits = await import("../../client/lib/editwrites.js");
+const { commitEdit, registerHandler, endGesture, schemaFor } = await import("../../client/lib/edit/inspect.js");
+const Edits = await import("../../client/lib/edit/writes.js");
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -156,14 +156,14 @@ console.log("\nthe channel box (step 3): rotations undo by q, and the editor rea
   check("…and one Ctrl+Z brings both back", ub.ok && c("r1").model === "swing.glb" && c("r1").collider?.shape === "box", JSON.stringify([ub.refused, c("r1")]));
 }
 
-// house review of #260, client/lib I23: a scrubbed RUN of channels (panels.js commitRun → editpanels.js __run) went to
+// house review of #260, client/lib I23: a scrubbed RUN of channels (edit/fieldpanels.js commitRun → edit/panels.js __run) went to
 // commitMany for the primary thing only, and a World run was dropped. commitMany takes the multi-select (each thing from
 // its own record) and the world (worldEditOps over every field at once: two sky fields are ONE sky, where two planEdits
 // would each re-author the whole sky and the second undo the first) — one request, one Ctrl+Z, either way.
 // Mutation (must go red): make commitMany take only a single id again.
 console.log("\nI23. a scrubbed run edits the whole selection, and the world:");
 {
-  const { commitMany } = await import("../../client/lib/inspect.js");
+  const { commitMany } = await import("../../client/lib/edit/inspect.js");
   H.W.seed({ m1: { model: "chair.glb", pos: [0, 0, 5], yaw: 0 }, m2: { model: "chair.glb", pos: [3, 0, 5], yaw: 0 } }); H.sync();
   H.entities.set("m1", realized()); H.entities.set("m2", realized());
   const n0 = H.sent.length, u0 = Edits.stacks().undo.length;
