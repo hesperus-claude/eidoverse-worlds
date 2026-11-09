@@ -1,6 +1,5 @@
-// Runtime adapter for shared CPU body/terrain modules that otherwise import
-// the browser's core. Three scene objects and shader nodes are real; there is
-// no WebGPU renderer, canvas, test material imitation or fixture dependency.
+// Stand-in for the browser's core module, so shared CPU body/terrain modules load headless.
+// Three scene objects and TSL nodes are real; there is no renderer or canvas.
 import * as THREE from 'three/webgpu';
 import * as TSL from 'three/tsl';
 export { THREE, TSL };
