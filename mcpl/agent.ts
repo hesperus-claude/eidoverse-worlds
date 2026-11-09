@@ -3559,7 +3559,7 @@ export class WorldAgent {
       if (this.walkGate !== gate) return;
       if ("open" in t) { gate.mode = "open"; return; }
       if (!t.ok) { this.refuseWalk(t.refused); return; }
-      // the track moved the body (a visitor arrives at the spawn): the legs were planned from where it stood, so plan again from here (bot #453)
+      // the track moved the body (a visitor arrives at the spawn): the legs were planned from where it stood, so plan again from here
       const plan = this.walkPlan;
       if (plan && this.walkDone && Math.hypot(this.pos.x - from.x, this.pos.z - from.z) > 1) {
         const done = this.walkDone; this.walkDone = null; this.abandonWalk(); this.clip = "idle";
@@ -3636,7 +3636,7 @@ export class WorldAgent {
     return `named places here${f ? ` holding "${filter.trim()}"` : ""}, nearest first${at ? "" : " (seat unresolved: distances from where you boarded)"} (move {to: "<thing>/<place>"} or a place's name):\n${shown.map((x) => `  ${WorldAgent.placeLine(x)}`).join("\n")}`
       + (more ? `\n…and ${more} more, farther away — narrow it with move {to: "?<text>"} (e.g. "?${shown[shown.length - 1].ref.split("/")[0]}"): only places whose name or label holds that text` : "");
   }
-  /** look's listing (owner 22:43): the places this body can SEE — a ray from its eye to the place (a point, or a room's
+  /** look's listing: the places this body can SEE — a ray from its eye to the place (a point, or a room's
    *  middle a metre over its floor) unblocked by the placed models' fitted colliders (the same ones the feet use, #235)
    *  and the terrain — within PLACE_SIGHT_M, nearest first, at most PLACE_LOOK_MAX. Before the collision modules have
    *  loaded, distance alone decides (and the line says so). */
@@ -4245,7 +4245,7 @@ export class WorldAgent {
     // speech ends composing, by whichever route it's sent (say(), or act {verb: "say"}): the throttle clears, and whoever
     // keeps this body's typing dots up (the door's TypingRelay) lets them end with the bubble
     if (verb === "say") { this._typingUntil = 0; this.onSaid?.(); }
-    // holes r3 F2: the authority judges this body's water with the stature its mover is handed (in water: stature())
+    // the authority judges this body's water with the stature its mover is handed (in water: stature())
     if (verb === "move" && this.water && args.height === undefined) args = { ...args, height: this.stature() };
     const id = `v${++this.histId}`;
     return new Promise((resolve) => {
@@ -4395,7 +4395,7 @@ export class WorldAgent {
     this.ws.send(JSON.stringify({ type, ...extra }));
   }
 
-  /** Ask the world to mint this identity's media credential (#104 phase-1).
+  /** Ask the world to mint this identity's media credential (#104).
    *  Only the embodied primary may — which is this server. The answer arrives as
    *  a `relay-cred` frame on onMedia; a sidecar then publishes on it. */
   requestMediaCredential(scopes: { publish?: boolean; subscribe?: boolean } = {}) {
@@ -4929,8 +4929,7 @@ export class WorldAgent {
     const selfEff = selfOcc ? this.eff(this.name, nowMs) : null;
     const meKnown = !selfOcc || selfEff?.ok === true;
     const me = this.myPlace(nowMs) ?? this.pos;
-    // #101: an uncorrected seat composition is never silent — the same
-    // "(seat approximate: reason)" every renderer consumer declares.
+    // an uncorrected seat composition is never silent: the same "(seat approximate: reason)" every renderer declares
     const selfSeatNote = selfEff?.ok && selfEff.seat?.state === "approximate" ? ` (seat approximate: ${selfEff.seat.reason})` : "";
     const seated = selfOcc ? `, seated on ${this.socketName(selfOcc.to)}${selfEff?.ok && selfEff.moving ? ` (carried by its ${selfEff.moving})` : ""}${selfSeatNote}` : "";
     if (meKnown) {
