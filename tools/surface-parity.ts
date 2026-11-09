@@ -202,7 +202,7 @@ async function spawnServer(tree: string, label: string): Promise<Server> {
   // a copy with no custody is served read-only-ish, which is all a spectator needs
   for (const w of SELECTED) { const dir = WORLDS[w]!;
     cpSync(dir, join(worldsDir, w), { recursive: true });
-    for (const f of [".custody.json", ".directory.json"]) { const src = join(dir, ".", f); if (existsSync(src) && !existsSync(join(worldsDir, f))) copyFileSync(src, join(worldsDir, f)); }
+    for (const f of [".custody.json", ".directory.json"]) { const src = join(dir, "..", f); if (existsSync(src) && !existsSync(join(worldsDir, f))) copyFileSync(src, join(worldsDir, f)); }
   }
   const port = freePort(label === "old" ? 8960 : 8990), nonce = crypto.randomUUID(), log = join(scratch, `${label}-sequencer.log`);
   const p = Bun.spawn([process.execPath, join(tree, "server", "server.ts")], {
