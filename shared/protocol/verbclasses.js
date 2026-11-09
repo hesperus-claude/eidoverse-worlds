@@ -7,7 +7,7 @@ export const READ_ONLY = new Set(["help", "look", "inspect", "measure", "find", 
 
 
 // the door's reads: metered as reads and the only requests a spectator may send. The authority's reads (a spectator reads
-// scripts and effects too, since 2026-10-12), plus the door's own answers that write nothing: `wait` (the presence
+// scripts and effects too), plus the door's own answers that write nothing: `wait` (the presence
 // long-poll) and `whois` (the server's directory, answered before the authority). `inbox` is a body's but not a spectator's.
 export const WIRE_READS = new Set([...READ_ONLY, "wait", "whois"]);
 

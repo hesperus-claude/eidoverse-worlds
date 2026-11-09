@@ -92,7 +92,7 @@ const listOr1 = (v) => (Array.isArray(v) ? v : LAYER_DEFAULT);
 export const layerOf = (c) => listOr1(c?.collider?.layer);
 export const maskOf = (c) => listOr1(c?.collider?.mask);
 export const scans = (mask, c) => layerOf(c).some((x) => mask.includes(x));
-// a purged physical value is no body: the strict fold holds REDACTED there, and this layer follows it (review of #260)
+// a purged physical value is no body: the strict fold holds REDACTED there, and this layer follows it
 const purgedPhysical = (c) => [...PHYSICAL].some((k) => c[k] === REDACTED);
 // a place the record lost: a transform or parent purged, or stripped to its commit with no purge naming it (§12), on the
 // thing or on anything it hangs from. Its pose is unknown (§1), so nothing derives a place or a scale from it: it has no
@@ -188,19 +188,15 @@ export function simFolder(entries, { models = {}, from = null, purged = null } =
     }
   };
   const disagree = (x) => out.checks.disagree.push(x);
-  // Where a purge took what the engine read, the engine that wrote the log and this one differ from there on (a body skipped
-  // or seated otherwise moves what the engine allocates and what it collides with, and nothing later restores that), so
-  // nothing this engine computes is set beside the log: no digest, rest or in-flight check. out.unknownEpoch, until the
-  // next cut: a purged launch, or an engine view built while a body is lost to a purge (lostBody: a rest's transform
-  // purged, say, which the fold reads as gone where the engine that wrote the log kept it), the new epoch's own view
-  // included, so a cut leaves it unknown while such a body stands. out.unknownHold, to the log's end: a purged lift or
-  // catch hides which thing is held, and a hold outlives an epoch while its end can't be read from the log. Both ride in
-  // a cut (simSnapshotOf), so a folder resumed from one judges what an uninterrupted one does
+  // Where a purge took what the engine read, this engine and the one that wrote the log differ from there on, so nothing
+  // this one computes is set beside the log (no digest, rest or in-flight check). out.unknownEpoch, until the next cut: a
+  // purged launch, or a body lost to a purge (lostBody). out.unknownHold, to the log's end: a purged lift or catch hides
+  // which thing is held. Both ride in a cut (simSnapshotOf), so a resumed folder judges as an uninterrupted one does
   const unknown = () => out.unknownEpoch || out.unknownHold;
   // a value reads REDACTED only where the feed's purge map names it (without one, applyInPlace refuses a stripped value) or in
   // the state a cut starts from, so with neither the lost-body scan below is skipped
   const mayLose = (purged?.size ?? 0) > 0 || (!!from?.st && Object.values(from.st.entities).some((e) => Object.values(e.c).some((v) => v === REDACTED)));
-  // a thing in someone's hand is nowhere in the engine's world: no rebuild (terrain, epoch, relock) may seat it (review 64d26822 #3)
+  // a thing in someone's hand is nowhere in the engine's world: no rebuild (terrain, epoch, relock) may seat it
   const engineView = (s) => { const v = engineViewM(s, models); for (const id of out.lifted) delete v.entities[id];
     if (mayLose && !out.unknownEpoch && Object.keys(s.entities).some((id) => !v.entities[id] && !out.lifted.has(id) && lostBody(s, id, models))) out.unknownEpoch = true;
     return v; }, boxesFor = (s) => boxesForM(s, models);
@@ -256,7 +252,7 @@ export function simFolder(entries, { models = {}, from = null, purged = null } =
       if (!out.sim) return;
       let relock = false;
       for (const o of ops) { // P7, keyed by component
-        if (o.id === "@world") { // the ground itself changed: re-ground, release every body, rebuild colliders (her law)
+        if (o.id === "@world") { // the ground itself changed: re-ground, release every body, rebuild colliders
           if (o.comp === "terrain") { SE(out.sim, { seq, ts: clock, actor: e.actor, verb: "terrain", args: st.entities["@world"].c.terrain ?? { amplitude: 0 } }, engineView(st)); out.launched = {}; }   // removed: flat y = 0, as at boot, never the toolkit's default hills
           continue; }
         const shape = engineBox(st.entities[o.id]?.c.physics), model = libOf(st.entities[o.id]);
@@ -323,7 +319,7 @@ export function simFolder(entries, { models = {}, from = null, purged = null } =
     out.rested.sort((x, y) => x.tick - y.tick);
     return out;
   };
-  // the clock a pass bounded to `maxTicks` engine ticks may reach (DESIGN-physics-responsiveness §1): a stall catches up over
+  // the clock a pass bounded to `maxTicks` engine ticks may reach: a stall catches up over
   // several passes, never by a longer step (Covenant I/IV: the bits are the law's). null: no engine, nothing to bound.
   const capTs = (maxTicks) => { if (!out.sim) return null;
     // nothing in flight: advancing is one jump, so no bound (bounded, a heartbeat slower than maxTicks ticks fell behind for good)

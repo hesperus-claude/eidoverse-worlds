@@ -10,7 +10,7 @@ const ref = (doc) => ({ type: "id", doc });
 const target = (doc) => ({ type: "id|xz", doc });
 export const PLACE_MODES = ["on", "beside", "hang", "against", "near", "at"];
 // the verbs a batch takes as its children: batch's help and the batch's own refusal both name them from here, and
-// authority/verbs.js buildBatch has a builder for each (authority-check BT5 runs every one)
+// authority/verbs.js buildBatch has a builder for each (test/protocol/authority-check.ts runs every one)
 export const BATCH_OPS = ["create", "set", "delete", "place", "turn", "sky", "weather"];
 export const VERBSPEC = {
   place: {
@@ -179,7 +179,7 @@ const okType = (spec, v) => {
     case "enum": return spec.values.includes(v); default: return true;
   }
 };
-/** Is k one of a verb's OWN argument names? (`k in args` finds `toString`/`constructor` too: review of #260, #522/#538.) */
+/** Is k one of a verb's OWN argument names? (`k in args` finds `toString`/`constructor` too.) */
 export const ownArg = (args, k) => Object.hasOwn(args, k);
 export function validate(verb, a) {
   const T = Object.hasOwn(VERBSPEC, verb) ? VERBSPEC[verb] : null; if (!T) return null;

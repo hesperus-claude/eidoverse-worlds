@@ -1,8 +1,8 @@
-// shared/protocol/scriptaudit.js — a READER's view of behaviour results (research 41 §3.6, §3.7). It needs only the
+// shared/protocol/scriptaudit.js — a READER's view of behaviour results. It needs only the
 // log, the fold, the source blobs and the sandbox: never the authority. For every `script:<id>` act (verb `script`) it checks
 //   sponsor — the act's `sponsor` / `sponsorAt` equal the sponsor view of `script:<name>` at that point (§5 "Two views":
 //             whose rights admitted the LATEST write to the key in its current life). An authority that names someone else is caught.
-//   depth   — the number of behaviour acts in its cause chain (41 §3.9), recomputed here, and the limit (8 by default).
+//   depth   — the number of behaviour acts in its cause chain, recomputed here, and the limit (8 by default).
 //   seed    — seed = H(world ‖ act seq ‖ entity/script key).
 //   re-run  — fold to `head`, load `src`, re-run with the recorded event, ts (the frozen clock), seed and presence reads,
 //             drop no-ops (scriptrules.elide, the authority's own rule), and compare with the change entry the act caused and
@@ -121,7 +121,7 @@ export function auditScripts(L, getBlob, { run = null, depth: maxD = 8 } = {}) {
     const bodiesOf = (r) => jcs((r.bodies ?? []).map((x) => ({ kind: x.kind, to: `body:${x.to}` }))), sameB = bodiesOf(res) === jcs(b.bodies ?? []);   // as scriptrun records them
     if (sameW && sameS && sameU && sameB) { reran++; return; }
     if (whoReads(b.reads)) { skipped.push({ seq, why: WHO_WHY }); return; }
-    // an arrival's mismatch on a part both stand-ins agree on is named as one (review r10 M3): two stand-ins that agree can't prove
+    // an arrival's mismatch on a part both stand-ins agree on is named as one: two stand-ins that agree can't prove
     // it is the same for every identity, so it is never reported as plain `rerun` (a forgery): `rerun-anon` says it differs and the re-run can't know who came
     if (anonWho) { const r2 = rerun({ ...event, by: ARRIVAL_STAND_IN_2 });   // does a part depend on who came? two stand-ins agree → no
       const parts = !r2.ok || jcs(readShape(r2.reads)) !== jcs(readShape(res.reads)) ? [] : [[!sameW, "writes", norm(elide(st, stampMotions(st, r2.ops, a.ts))) === norm(want)], [!sameS, "says", jcs(r2.says) === jcs(res.says)],

@@ -110,14 +110,14 @@ export function request(w, actor, verb, args = {}) {
   const exit = enter(w, actor);
   // ONE clock per request (§2.1: ts is the authority's admission time). A wall clock read twice in one request could put a
   // rest's digest (computed where the engine stood at the first read) under a later ts, across a tick boundary, and every
-  // carrier re-folding the log would then call the authority's own digest wrong (physlive Q1).
+  // carrier re-folding the log would then call the authority's own digest wrong.
   const clock = w.now; const t0 = clock(); w.now = () => t0;
   try {
     if (!isIdentity(actor) || RESERVED.has(actor)) refuse("identity", `'${actor}' isn't an identity the authority can stamp`, "identities are a–z, 0–9 and '-', up to 64 (§3.1); system, sim and world are the authority's own");
     const h = Object.hasOwn(VERBS, verb) ? VERBS[verb] : undefined;   // never a prototype key (`constructor`, `__proto__`)
     if (h && !w.exists && !["create-world", "help"].includes(verb)) refuse("no-world", `there is no world called '${w.name}' yet`, `create-world {title: '…'} founds it (you become its owner); or pick a world that exists`);
     // §2.4: chain points are signed by the key genesis names (or the latest handoff). An authority holding another key would
-    // write lines its own verifier calls forged (a moved dir, a lost or swapped custody file): it refuses instead (R5).
+    // write lines its own verifier calls forged (a moved dir, a lost or swapped custody file): it refuses instead.
     if (h && w.exists && w.custody()?.sign && w.custody().sequencer() !== w.entries[0]?.body?.sequencer && !READ_ONLY.has(verb))
       refuse("custody", "this server doesn't hold the key that signs this world's log, so it can't write to it", "only this server's operator can fix this, by restoring the world's signing key or handing the world over to this server; asking again won't change it, and reads still work");
     if (h && w.exists && w.state().status !== "ok") refuse("unreadable", `this world's log can't be read here ('${w.state().status}': ${w.state().status === "unknown-version" ? "it's written in a protocol version this server doesn't read" : w.state().status === "unsupported-feature" ? "it requires a feature this server doesn't implement" : "its first entry isn't a genesis this server can read"}), and the authority won't act on a log it can't read`, "only this server's operator can fix this, by repairing the log or serving it with a server that reads its version; asking again won't change it until then");
@@ -127,8 +127,7 @@ export function request(w, actor, verb, args = {}) {
     // §F F-1: a feature's verb is refused until the world has declared the feature (genesis requires, or a requiresAdd before this seq)
     if (w.exists && FEATURE_VERBS.has(verb) && !declaredBefore(featureDecision(w.entries, KNOWN_FEATURES), FEATURE_VERBS.get(verb), w.entries.length))
       refuse("unsupported-feature", `'${verb}' belongs to the feature ${FEATURE_VERBS.get(verb)}, which this world hasn't declared`, "a world declares a feature in its genesis requires, or later by a governance requiresAdd; never after its first use");
-    // `leave` passes: it settles their own presence (the server sends it when it removes them; review 10-07: a kicked
-    // body and what it held were never released)
+    // `leave` passes: it settles their own presence (the server sends it when it removes a kicked body, so what it held is released)
     // an operator's recorded repair (operatorRepair) is not the person's own request: their sanctions and role here don't gate it
     if (w.exists && verb !== "help" && verb !== "leave" && CTX.operator !== actor && isBanned(w, actor)) refuse("banned", `${said(actor)} is banned from this world`, "the moderator log says so; ask a moderator");
     w.changedQ = []; w.sayQ = []; w.heldQ = [];
@@ -163,7 +162,7 @@ export function request(w, actor, verb, args = {}) {
 }
 // The refusal-code registry (refusalcodes.js): a code is one-way (it is written into signed entries), so
 // every code a reply carries must be registered. One the registry doesn't have is noted here (never refused: the asker gets
-// the refusal as given) and scars-check G1 fails on any it met.
+// the refusal as given) and test/protocol/scars-check.ts fails on any it met.
 const UNSEEN_CODES = new Set();
 const noteCode = (c) => { if (!isRefusalCode(c)) UNSEEN_CODES.add(String(c)); };
 /** Refusal codes a reply carried that the registry doesn't list (tests read it; empty when the registry is whole). */
@@ -173,7 +172,7 @@ export function unregisteredCodes() { return [...UNSEEN_CODES]; }
 // a request-local placeholder ('$table', JSON:API's lid); the authority mints an id for each before the request is
 // checked, substitutes it everywhere, and the reply maps them ({ids: {"$table": "<minted>"}}). A placeholder never
 // reaches the log. A chosen id on a create is refused; only a fork's copy (forkCopy) and tests' fixtureIds() keep ids
-// (ids-check G1 holds every runtime file to never calling fixtureIds).
+// (test/protocol/ids-check.ts holds every runtime file to never calling fixtureIds).
 let FIXTURE_IDS = false;
 /** Tests' fixtures seed known ids the way a fork's copy does (in-process only; never called by a runtime file). */
 export function fixtureIds(on = true) { FIXTURE_IDS = !!on; }
@@ -275,7 +274,7 @@ function expectCheck(w, list) {
     const lt = lastTouch(w, x.id, x.component);
     const why = !e ? `${x.id} is gone` : lt ? `${said(lt.actor)} changed it at ${lt.seq}` : "it isn't what you started from";
     // The refusal says THAT it changed, never WHAT it is now: expect runs before any rights check and a dry request is
-    // never logged, so an echoed value would be a traceless read of anything (attack-check H5a).
+    // never logged, so an echoed value would be a traceless read of anything.
     refuse("changed", `${x.id}.${x.component} changed since you started: ${why}`, "look again and redo it (nothing was written); or send it without expect to overwrite what's there",
       { id: x.id, component: x.component, ...(lt ? { by: lt.actor, at: lt.seq } : {}) });
   }
@@ -306,7 +305,7 @@ function guess(s, opts) {
 
 // ---------- the act index, undo: authority/undo.js ----------
 // ---------- blueprints, reads: authority/blueprints.js ----------
-// ---------- physics (design 20): authority/physics.js ----------
+// ---------- physics: authority/physics.js ----------
 // ---------- occupants: authority/occupants.js ----------
 // ---------- the verbs a body performs: authority/bodyverbs.js ----------
 // ---------- what a body does to a loose thing: authority/manipulate.js ----------

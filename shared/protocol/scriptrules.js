@@ -1,9 +1,9 @@
-// shared/protocol/scriptrules.js — the parts of scripts (research 41) that the AUTHORITY, the SANDBOX and an AUDITOR must agree on
+// shared/protocol/scriptrules.js — the parts of scripts that the AUTHORITY, the SANDBOX and an AUDITOR must agree on
 // byte for byte. Pure: no node: imports, no sandbox (the authority is imported by browsers; the sandbox is injected).
-//   LIMITS   the budgets an activation runs under (41 §3.10), named once.
+//   LIMITS   the budgets an activation runs under, named once.
 //   SOURCE   what a script's source blob is: {lang: "js", api: <API>, text}, stored by its sha256 name (§2.2).
-//   hygiene  refusals at install that teach (41 §3.12): Trojan Source, code hidden past column 1000, a BOM.
-//   seedOf   the activation's seed = H(world ‖ act seq ‖ entity/script key) (41 §3.7): what Math.random runs from.
+//   hygiene  refusals at install that teach: Trojan Source, code hidden past column 1000, a BOM.
+//   seedOf   the activation's seed = H(world ‖ act seq ‖ entity/script key): what Math.random runs from.
 //   elide    PROTOCOL §3d: dropping no-op writes in a SCRIPT batch is a stated rule, not free authority practice,
 //            because an audit re-run must drop exactly the same writes. In order, against the batch so far, by JCS.
 //   paramKey a component's `param.<name>` field: a number a script writes for something else to read (seat poses
@@ -17,7 +17,7 @@ export const LANG = "js";
 export const API = 2;
 export const LIMITS = Object.freeze({
   source: 65536,        // characters of source
-  fuel: 60,             // QuickJS interrupt-handler calls per activation: deterministic for one QuickJS build (41 §3.7).
+  fuel: 60,             // QuickJS interrupt-handler calls per activation: deterministic for one QuickJS build.
                         // 1e6 iterations of `x += i` ≈ 201 calls, so 60 ≈ 18–40 ms of dense work. Kept below the wall-clock
                         // backstop under load: fuel, not the clock, must stop runaway code (fuel is the same on every re-run)
   wallMs: 300,          // the wall-clock backstop per activation, host calls included (non-deterministic: a run that hits it
@@ -25,7 +25,7 @@ export const LIMITS = Object.freeze({
                         // native builtin can't outlast that. Generous on purpose: a loaded host can stall an innocent run
   memory: 24 << 20,     // bytes per activation's runtime
   stack: 256 << 10,     // bytes of native stack
-  calls: 64,            // host calls (reads) per activation (Decentraland's 40 in flight; 41 §3.10)
+  calls: 64,            // host calls (reads) per activation (Decentraland's 40 in flight)
   ops: 32,              // writes in one activation's batch
   says: 4,              // say entries per activation
   bodies: 4,            // body effects per activation
@@ -54,7 +54,7 @@ export function hygiene(text) {
   }
   return null;
 }
-/** Minified-looking source isn't refused, but the status view says so (41 §3.12). */
+/** Minified-looking source isn't refused, but the status view says so. */
 export const looksMinified = (text) => { const ls = text.split("\n").filter((l) => l.trim()); return ls.length > 0 && ls.some((l) => l.length > 400) && text.length / ls.length > 200; };
 
 export const seedOf = (worldId, actSeq, key) => sha256(`${worldId}|${actSeq}|${key}`);
