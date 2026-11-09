@@ -1,6 +1,4 @@
-// Filesystem idioms: the one write-then-rename helper, with an explicit mode, an injectable fs (so a caller's failure
-// atomicity is testable) and stale-tmp tolerance (a crash between write and rename leaves <path>.tmp; the next write
-// overwrites it).
+// Filesystem idioms: write-then-rename helpers. The fs is injectable so a caller's crash atomicity is testable.
 
 import fs, { writeFileSync, renameSync } from "node:fs";
 import { dirname } from "node:path";
@@ -12,8 +10,7 @@ export type AtomicFs = {
   renameSync: typeof renameSync;
 };
 
-/** Write-then-rename. The rename is the commit: readers never observe a
- *  half-written file, and a crash costs at most an orphan .tmp beside it. */
+/** Write-then-rename: readers never see a half-written file; a crash leaves at most an orphan .tmp, overwritten next time. */
 export function atomicWrite(
   path: string,
   data: string | Uint8Array,

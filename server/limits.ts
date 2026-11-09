@@ -34,7 +34,7 @@ export const LIMITS = {
   PAGE_DEFAULT: env("EW_PAGE_DEFAULT", 50),
   BC_RING: env("EW_BC_RING", 40),                  // crash breadcrumbs kept
 
-  // one websocket message, whole: past it the socket closes (Bun's default is 16 MB). The door's own cap on one log line is 1 MiB; a request that writes one fits with room for its envelope.
+  // one websocket message, whole: past it the socket closes (Bun's default is 16 MB). A 1 MiB log line (the door's cap) fits with its envelope.
   WS_MESSAGE_BYTES: env("EW_WS_MESSAGE_BYTES", 2 * 1024 * 1024),
 
   // receipts

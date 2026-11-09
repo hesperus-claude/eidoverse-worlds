@@ -1,13 +1,8 @@
 // server/reqcap.ts — one immutable capability per request (docs/decisions/TXN-CAPABILITY.md).
-//
-// A request is admitted under WHO the connection was when it arrived: its identity, account, spectator flag, operator
-// status, the credential's world narrowing, the door's decision, its role here, its leg (gen). capture() freezes that once;
-// recheck() asks, at each await→commit seam, whether the live connection and world still agree with it. Any difference is
-// a refusal (nothing written), never a silent commit under someone else's identity or a door that has since closed. The
-// authority receives cap.actorId — never actorOf(c) read again after an await (a re-join on the same socket reassigns it).
-//
-// Seams (the only awaits between admission and the authority's synchronous write; ctx.js says nothing in the authority
-// awaits): (1) requestwire.ts, when the per-connection queue reaches the request; (2) worldlog.ts request(), after warm().
+// capture() freezes who the connection was when the request arrived; recheck() asks at each await→commit seam whether the live
+// connection, door and role still agree, and any difference refuses (nothing written). The authority gets cap.actorId, never
+// the connection's actorId re-read after an await (a re-join on the same socket reassigns it).
+// Seams: requestwire.ts, when the per-connection queue reaches the request; worldlog.ts request(), after warm().
 import type { Client, World } from "./world.ts";
 import { isOperator } from "./operators.ts";
 import { entryFor, doorOfWorld } from "./access.ts";
@@ -37,8 +32,7 @@ export function recheck(cap: ReqCap, now = Date.now(), { role = true } = {}): st
   // identity: the same who (a re-join over the same socket reassigns actorId; the account is the socket's, checked all the same)
   if (c.actorId !== cap.actorId || (c.account ?? null) !== cap.account || !!c.spectator !== cap.spectator)
     return "this connection is someone else now (it joined again while the request waited); nothing was written";
-  // operator status (operator-repair's right, and the door's bypass)
-  // which way it went: a grant isn't a refusal sending again would meet (recheckFix reads the words)
+  // operator status (operator-repair's right, and the door's bypass); the words say which way it went (recheckFix reads them)
   if (isOperator(cap.account) !== cap.operator) return cap.operator
     ? "this account stopped being a server operator while the request waited (operator status changed); nothing was written"
     : "this account became a server operator while the request waited (operator status changed); nothing was written — send it again if you still mean it";

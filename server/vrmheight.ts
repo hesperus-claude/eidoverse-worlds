@@ -8,14 +8,10 @@ import { glbJson, rigMath } from "../shared/rig.js";
 
 const { stature } = rigMath(THREE);
 const memo = new Map<string, { v: string; h: number | null }>();
-/** A VRM's JSON describes its nodes and extensions, well under a megabyte for
- *  any real body; the meshes are in the binary chunk. A header claiming more is
- *  refused before anything is allocated or decoded. */
+/** A real body's JSON chunk is well under a megabyte (meshes are in the binary chunk); a header claiming more is refused before any allocation. */
 const MAX_JSON = 16 * 1024 * 1024;
 
-/** The header and JSON chunk of a GLB on disk. Its first 20 bytes say how long
- *  the JSON chunk is, and a length past MAX_JSON is refused. A short or foreign
- *  file reads as zeros past its end, which glbJson then refuses. */
+/** The header and JSON chunk of a GLB on disk. A short or foreign file reads as zeros past its end, which glbJson then refuses. */
 function headerAndJson(file: string): Uint8Array {
   const fd = openSync(file, "r");
   try {
@@ -30,17 +26,14 @@ function headerAndJson(file: string): Uint8Array {
   } finally { closeSync(fd); }
 }
 
-/** The file's stature in metres, or null when it has no humanoid head, isn't
- *  a GLB this reads, or can't be read just now. `v` is the file's version as
- *  the roster stamps it, so a re-export is read again. */
+/** The file's stature in metres, or null (no humanoid head, not a GLB, or unreadable just now). `v`: the roster's version stamp, so a re-export is read again. */
 export function vrmHeightFor(file: string, v: string): number | null {
   const hit = memo.get(file);
   if (hit?.v === v) return hit.h;
   let h: number | null;
   try { h = stature(glbJson(headerAndJson(file))); }
   catch (e) {
-    // a failed read (EMFILE, EIO, a file swapped mid-read) may pass, so it
-    // isn't remembered; a file that isn't a GLB this reads is, for its version
+    // a failed read (EMFILE, EIO, a swap mid-read) may pass later, so it isn't memoised; a non-GLB is, for its version
     if (typeof (e as { code?: unknown }).code === "string") return null;
     h = null;
   }

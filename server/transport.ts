@@ -1,7 +1,5 @@
-// Which voice transport is live, and the durable incarnation every credential
-// carries. Transport-NEUTRAL by construction: this module imports no adapter.
-//
-// Kept apart so asking "are we on the SFU?" never imports a transport implementation.
+// Which voice transport is live, and the durable incarnation every credential carries. Imports no adapter, so asking
+// "are we on the SFU?" never loads one.
 
 import { join } from "node:path";
 import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
@@ -17,11 +15,8 @@ export const voiceTransport = (): "sfu" | "off" =>
 export const relayEnabled = () => voiceTransport() !== "off";
 
 // ---- durable incarnation ----------------------------------------------------
-// Advanced atomically at every boot (tmp + rename; the entropy suffix keeps even a lost-file counter reuse
-// non-colliding). Every credential and admission check carries it, so a restart strands every old credential.
-// 🔴 SELF-INITIALISING: a process-unique value from the start, upgraded to the durable one when a server boots it.
-// A fixed sentinel would be one incarnation shared by every process that never boots (tests, tools): the credential
-// collision amendment 2 exists to prevent.
+// Advanced atomically at every boot; every credential carries it, so a restart strands every old one. Starts process-unique
+// (not a fixed sentinel: processes that never boot, like tests and tools, would otherwise share one incarnation).
 let incarnation = nextIncarnation(null, crypto.randomUUID().slice(0, 8));
 
 export function bootIncarnation(dir: string): string {

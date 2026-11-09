@@ -20,8 +20,7 @@ export function sourceTreeSha256(root) {
   }
   return h.digest("hex");
 }
-/** git's HEAD at `root` as a sourceRevision, and whether the tree differs from it: one git call (a git start is ~50 ms on
- *  Windows, and every translation runs this; inplace on Windows CI 11-05). */
+/** git's HEAD at `root` as a sourceRevision, and whether the tree differs from it. One git call: every translation runs this. */
 export function sourceRevisionOf(root) {
   const r = spawnSync("git", ["-C", root, "status", "--porcelain=v2", "--branch"], { encoding: "utf8" });
   const lines = r.status === 0 ? r.stdout.split("\n").filter(Boolean) : [];

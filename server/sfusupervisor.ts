@@ -1,10 +1,6 @@
-// Voice service health — amendment 2's "separate participant-leg death from relay-service death", for an in-process SFU.
-//
-// 🔴 Being in-process makes SFU death total, not impossible, so amendment 2's observable behaviour still applies:
-//   text/world service remains live · voice visibly becomes degraded · all old credentials become stale ·
-//   clients perform ONE clean fresh join · no duplicate participant, playback or `performed` receipt survives
-// A restart already advances the DURABLE incarnation (transport.ts), staling every prior credential; what this module
-// owes is a degraded STATE visible while the process lives (an SFU can be broken without being dead).
+// Voice service health: a participant leg dying is not the relay dying. When the in-process SFU can't do its job, text and
+// world service stay live, voice is visibly degraded, and clients make one clean fresh join. A restart already stales every
+// credential (transport.ts incarnation); this module owes the degraded state visible while the process lives.
 
 import { currentIncarnation } from "./transport.ts";
 
@@ -17,8 +13,7 @@ let notify: ((s: VoiceState, incarnation: string, reason: string) => void) | nul
 /** server.ts supplies the broadcast; the supervisor owns the decision. */
 export function onVoiceServiceChange(fn: typeof notify) { notify = fn; }
 
-/** Called by anything that discovers the SFU cannot do its job. Repeated
- *  faults update the reason (the LATEST fault is the one an operator needs). */
+/** Called by anything that finds the SFU can't do its job; repeated faults update the reason (the latest is the useful one). */
 export function markVoiceDegraded(why: string) {
   const wasDegraded = state === "degraded";
   state = "degraded"; reason = why;
@@ -26,14 +21,11 @@ export function markVoiceDegraded(why: string) {
     console.error(`[sfu] voice DEGRADED: ${why}`);
     try { notify?.(state, currentIncarnation(), reason); } catch { /* never recurse */ }
   }
-  // 🔴 NO SILENCE TIMER: a dead subsystem is silent forever. Recovery needs a POSITIVE receipt (markVoiceLive, when an
-  // owned negotiation completes end-to-end: offer → browser answer → setRemoteDescription OK).
+  // no silence timer: a dead subsystem is silent forever. Recovery needs a positive receipt (markVoiceLive).
 }
 
-/** A supervised recovery, on a POSITIVE health receipt only: a completed
- *  negotiation proves the SFU is usable. Clients rejoin under the CURRENT
- *  incarnation — which, after a process restart, is a new one, so no stale
- *  leg can be resurrected by a client that missed the transition. */
+/** Recovery on a positive receipt only: a completed negotiation (offer → answer → setRemoteDescription OK) proves the SFU
+ *  usable. Clients rejoin under the current incarnation, so no stale leg is resurrected. */
 export function markVoiceLive(why = "") {
   if (state === "live") return;
   state = "live"; reason = why;
