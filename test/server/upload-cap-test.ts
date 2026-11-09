@@ -14,7 +14,7 @@ const env: Record<string, string> = { JOIN_TOKEN: KEY, UPLOAD_CAP_MB: "1", SKIP_
 const door = await scratchSequencer("uploadcap", { serverEnv: env, prepare: (scratch) => { env.OPT_DIR = join(scratch, "opt"); mkdirSync(env.OPT_DIR); } });
 const OPT = env.OPT_DIR;
 const up = async (body: Uint8Array | ReadableStream<Uint8Array>) => {
-  const res = await fetch(`${door.BASE}/upload?${new URLSearchParams({ token: KEY, name: "cap.glb" })}`, { method: "POST", body });
+  const res = await fetch(`${door.BASE}/upload?name=cap.glb`, { method: "POST", body, headers: { authorization: `Bearer ${KEY}` } });
   return { status: res.status, text: await res.text() };
 };
 try {
