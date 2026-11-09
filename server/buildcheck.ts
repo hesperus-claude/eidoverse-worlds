@@ -1,6 +1,6 @@
 // buildcheck — what a model will be like to walk into, measured before anyone spawns it. Advisory: nothing here refuses an upload.
 // The model is fitted as a spawn of it would be (client/lib/colliders.js) and explored with the walking body's own rules
-// (mcpl/navgrid.ts, shared/mover.js MOVER.body) on a lattice over its footprint. From that: whether it is walk-in at all; its
+// (shared/navgrid.js, shared/mover.js MOVER.body) on a lattice over its footprint. From that: whether it is walk-in at all; its
 // floors and how much of each is reachable from outside; for each unreachable area the likely reason (too narrow, a rise too
 // high, a failed climb, no way in); suggested rooms, doors and stairs; the draw-call / triangle budget.
 // Runs in its own process (server/buildcheck-run.ts): it loads the collider module and can take seconds.
@@ -9,8 +9,8 @@ import { collisionTriangles } from "./geometry.ts";
 import { glbPerfOfFile } from "./glbperf.ts";
 import { rankOf, TIER_NAMES } from "../shared/perfrank.js";
 import { decideSupportClass } from "../shared/supportclass.js";
-import { makeNavGrid, NAV_CELL, NAV_STEP } from "../mcpl/navgrid.ts";
-import { placesFromModel } from "../mcpl/places.ts";
+import { makeNavGrid, NAV_CELL, NAV_STEP } from "../shared/navgrid.js";
+import { placesFromModel } from "../shared/places.js";
 import { MOVER } from "../shared/mover.js";
 
 export type Warning = { kind: string; message: string; at?: number[] };

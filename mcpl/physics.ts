@@ -26,7 +26,7 @@ import { leafForceFor, DEFAULT_LEAF_FORCE } from "../shared/leafforce.js";
 import { bodyFrame, fromBody } from "../shared/joints.js";
 // the walking capsule's dimensions — pure module, the browser controller's own numbers
 import { colliderFor } from "../client/lib/bodyscale.js";
-import { NAV_NUDGE, type NavProbe } from "./navgrid.ts";
+import { NAV_NUDGE, type NavProbe } from "../shared/navgrid.js";
 
 const HEADLESS_CORE = fileURLToPath(new URL("./headless-core.mjs", import.meta.url));
 
@@ -295,7 +295,7 @@ export function withoutColliders<T>(ids: Iterable<string>, fn: () => T): T {
   try { return fn(); } finally { for (const id of out) C.suspendCollider(id, false); }
 }
 
-/** The route planner's view of the world (navgrid.ts): the feet's own surfaceUnder and resolveColliders. Null while
+/** The route planner's view of the world (navgrid.js): the feet's own surfaceUnder and resolveColliders. Null while
  *  unloaded. */
 export function navProbe(heightAt: (x: number, z: number) => number): NavProbe | null {
   if (!simMods) { void loadSim(); return null; }

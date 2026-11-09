@@ -1,5 +1,5 @@
-// bun test/client/navgrid-rows-test.ts — routes on a world of built boxes (client/lib/colliders.js headless → mcpl/navgrid.ts),
-// and named places on scaled things (mcpl/places.ts destinationOf). A route ends where a body can stand or is refused
+// bun test/client/navgrid-rows-test.ts — routes on a world of built boxes (client/lib/colliders.js headless → shared/navgrid.js),
+// and named places on scaled things (shared/places.js destinationOf). A route ends where a body can stand or is refused
 // with its reason; a scaled thing scales its places' coordinates and extents, never the walking body's tolerances.
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
@@ -8,8 +8,8 @@ plugin({ name: "core-stub", setup(b) { b.onResolve({ filter: /^\.\/core\.js$/ },
 const { THREE } = await import(STUB);
 const { mergeGeometries } = await import("../../client/node_modules/three/examples/jsm/utils/BufferGeometryUtils.js");
 const C: any = await import("../../client/lib/colliders.js");
-const { makeNavGrid, NAV_NUDGE } = await import("../../mcpl/navgrid.ts");
-const P = await import("../../mcpl/places.ts");
+const { makeNavGrid, NAV_NUDGE } = await import("../../shared/navgrid.js");
+const P = await import("../../shared/places.js");
 const { mkCheck } = await import("../harness/harness.ts");
 const { check, tally } = mkCheck();
 

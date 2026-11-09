@@ -8,7 +8,7 @@ import { scratchWorld } from '../protocol/scratchworld.ts';
 import { COMPONENTS, statusOf, pinOf, refsOf, mapRefs, materialize } from '../../shared/protocol/componentspec.js';
 import { legacyHosts, liftHostOps } from '../../tools/import-v1/shapes.js';
 import { evalLookAt } from '../../shared/lookat.js';
-import { toWorld, toLocal } from '../../mcpl/places.ts';
+import { toWorld, toLocal } from '../../shared/places.js';
 import { translate } from '../../tools/import-v1/translate-v1.js';
 
 let pass = 0, fail = 0;

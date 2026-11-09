@@ -379,7 +379,7 @@ export async function summarizeGlb(absPath: string, opts: { solids?: boolean } =
 
 /** A model's triangles as one indexed soup in its ROOT frame (scene-reachable meshes only): what a browser's collider
  *  is fitted from, for agents fitting client/lib/colliders.js. Takes the BYTES GET /library/<lib> serves (decodes
- *  draco). Triangle lists only. `building` is a scene node's glTF-extras self-description (mcpl/places.ts), JSON-parsed
+ *  draco). Triangle lists only. `building` is a scene node's glTF-extras self-description (shared/places.js), JSON-parsed
  *  if stored as a string. null when unparseable. */
 export async function collisionTriangles(bytes: Uint8Array): Promise<{ positions: Float32Array; indices: Uint32Array; building?: unknown } | null> {
   const io = await getIO();

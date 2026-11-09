@@ -1,7 +1,7 @@
 // bun test/mcpl/places-test.ts — named places: walking to them, knowing you are in
 // them, and naming new ones after a building exists.
 //
-// mcpl/places.ts reads a thing's places from two sources: the model's own
+// shared/places.js reads a thing's places from two sources: the model's own
 // description of itself (a `building` object in its glTF extras — rooms,
 // doors, seats, arrivals) and its `places` component, which overrides it
 // name by name and which anyone with builder rank can change at any time.
@@ -17,12 +17,12 @@
 process.env.AGENT_BODY_ENGINE = "verlet";
 process.env.WORLD_TOKEN = "";
 const { FLOOR, UPPER, boxes, building, buildGlb } = await import("../fixtures/two-storey-fixture.ts");
-const P = await import("../../mcpl/places.ts");
+const P = await import("../../shared/places.js");
 const { scratchSequencer, mkCheck, sleep, legacyVerb, sceneId } = await import("../harness/harness.ts");
 const { tryUntil } = await import("../gate/wait.ts");
 const { check, tally } = mkCheck();
 
-console.log("places.ts (pure):");
+console.log("places.js (pure):");
 {
   const model = P.placesFromModel(building);
   check("a model's rooms, doors and arrivals become places (the outside arrival is its entrance)",

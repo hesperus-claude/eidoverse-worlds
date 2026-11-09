@@ -17,8 +17,8 @@ import { WorldAgent } from "../../mcpl/agent.ts";
 import { noWorldUrl } from "../harness/no-world.ts";
 import { tryUntil, pause } from "../gate/wait.ts";
 import { describeHere, planStructure } from "../../shared/structure.js";
-import { NAV_STEP } from "../../mcpl/navgrid.ts";
-import { destinationOf } from "../../mcpl/places.ts";
+import { NAV_STEP } from "../../shared/navgrid.js";
+import { destinationOf } from "../../shared/places.js";
 
 let failures = 0;
 const check = (label: string, ok: boolean, detail?: string) => {
@@ -400,7 +400,7 @@ console.log("\nthe feet keep the storey when the walk ends, after a tumble and a
   // a perch 2.65 m above the middle floor is the middle floor's, not the top's.
   // A places component names no seat (its kind is gone: shape audit 10-16; a
   // seat is a model's or a socket's), so the seat's destination is built by
-  // destinationOf's seat branch (mcpl/places.ts) from a seat-kind place on an
+  // destinationOf's seat branch (shared/places.js) from a seat-kind place on an
   // unscaled holder: 0.05 m under the hips, no floor above that.
   const perch = (_ag: any) => destinationOf({ id: "bench", pos: [0, 0, 0], yaw: 0, scale: 1 },
     { name: "perch", kind: "seat", at: [2.5, mid + 2.65, 1.5] } as any);
