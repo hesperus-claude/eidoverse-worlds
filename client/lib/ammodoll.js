@@ -1,41 +1,21 @@
-// ammodoll — the Bullet body engine, ported from socketteer/ragdoll-physics.
-// Same interface as Ragdoll — THE engine contract is stated on BodyEngineBase (bodyengine.js),
-// which both engines extend; shared measurement/format truths live in rigmeasure.js. "rapierdoll"
-// below is the retired third engine, whose laws this file keeps.
+// ammodoll — the Bullet (ammo.js) body engine, ported from socketteer/ragdoll-physics. Same interface as the verlet
+// Ragdoll: the engine contract is BodyEngineBase (bodyengine.js); measurement and the snapshot format are
+// rigmeasure.js's.
 //
-// The source's joint-limit tables, finger springs, tendon coupling and grab tuning were derived in
-// Blender, whose rigid-body engine IS Bullet, so the numbers transfer to ammo.js unchanged. What
-// does not transfer is the rig: here it is measured from the live VRM skeleton at construction —
-// box sizes from bone lengths (or mesh extents), masses from Dempster fractions, and every joint
-// frame built from an ANATOMICAL basis (Y along the bone = twist, X the flexion axis from the rig's
-// own forward/up; never from VRM node axes, which sit near-identity at rest).
+// The source's joint tables, finger springs, tendons and grab tuning were derived in Blender, whose rigid-body
+// engine is Bullet, so the numbers transfer unchanged. The rig does not: it is measured from the live VRM skeleton
+// at construction (box sizes from bone lengths or mesh extents, masses from Dempster fractions), and every joint
+// frame is built on an anatomical basis (Y along the bone = twist, X the flexion axis from the rig's own
+// forward/up; never VRM node axes, which sit near-identity at rest).
 //
-// Structural choices:
-//   • THE TORSO IS ONE RIGID BODY: spine joints cannot be defended at impact (a fold forms faster
-//     than any limit responds; measured 142° against a 25° cone). Head and limbs keep their joints.
-//   • REST-ALIGNED BODIES: each body's orientation is the rotation from its rest configuration to
-//     its live one (identity at rest), so limits mean "from rest". Joint anchor ORIGINS are mapped
-//     through the live transforms, for zero position error at build.
-//   • A JOINT MUST CONTAIN THE POSE IT WAS BORN IN: every angular bound is widened to admit the
-//     build pose plus slack, per axis, or the solver annihilates the difference on frame one.
+// Structure: a three-body trunk (pelvis, spine, chest); rest-aligned bodies (identity at rest, so limits mean
+// "from rest", with joint origins mapped through the live transforms); every joint widened to contain the pose it
+// was born in, or the solver annihilates the difference on frame one. Fingers are spring bodies (proximal and
+// intermediate only) with weak tendon springs between neighbours; the grab is a point constraint with a hard
+// impulse clamp. This ammo build binds no rotational motors, so limpness is damping and limit ERP.
 //
-// From the source, where it transfers:
-//   • the JOINTS table (rigdef.py) in degrees, re-expressed on the anatomical basis;
-//   • fingers as spring bodies (btGeneric6DofSpringConstraint, stiffness 12 / damping 0.9,
-//     equilibrium snapshotted at build), proximal and intermediate only — a distal link on a
-//     chain of 10 g bodies blows through its limit;
-//   • tendons: neighbouring fingers coupled by a weak orientation spring (stiffness 8) — explicit
-//     torques on ~1.6e-6 kg·m² of inertia NaN at every gain;
-//   • solver settings (30 iterations, split impulse, step (dt, 8, 1/120)), limit stiffness via
-//     btTypedConstraint::setParam (this ammo build does not bind getRotationalLimitMotor, so there
-//     are no muscle-tone motors: limpness is damping and limit ERP);
-//   • the grab: btPoint2PointConstraint with a hard impulse clamp (a distant pin pulls, never teleports);
-//   • body damping, friction 0.85, restitution 0.03.
-//
-// WASM lifetime discipline: every Ammo object this instance creates is tracked and destroyed in
-// dispose(); per-frame math reuses module-level temporaries.
-//
-// Tuning measurements: docs/research/ammodoll-tuning.md.
+// Every Ammo object this instance creates is tracked and destroyed in dispose(); per-frame math reuses module-level
+// temporaries. Tuning measurements: docs/research/ammodoll-tuning.md.
 
 import { THREE } from './core.js';
 import { heightAt, waterField } from './terrain.js';
@@ -48,13 +28,9 @@ import { BodyEngineBase } from './bodyengine.js';
 
 let AMMO = null;
 let ammoLoading = null;
-/** The real inertia of a set of child boxes, about the body origin.
- *
- *  btCompoundShape::calculateLocalInertia approximates from the AABB, and limb boxes here are
- *  ROTATED inside their compounds (bodies are rest-aligned, not bone-aligned), so it overstates
- *  twist inertia (4.75x on a forearm at 45°) and the tight twist stops don't hold. So: exact box
- *  tensor, rotated by the child's rotation, parallel-axis shifted, summed, mass split by volume.
- *  Bullet carries only a DIAGONAL local inertia, so the off-diagonal terms are dropped at the end.
+/** The real inertia of a set of child boxes about the body origin: exact box tensors, rotated, parallel-axis
+ *  shifted, summed, mass split by volume. (btCompoundShape::calculateLocalInertia approximates from the AABB and
+ *  overstates twist inertia on rotated limb boxes, so the twist stops don't hold.) Bullet keeps only the diagonal.
  */
 function boxesInertia(boxes, mass) {
   let vol = 0;
@@ -85,18 +61,13 @@ function boxesInertia(boxes, mass) {
   return { x: xx, y: yy, z: zz };
 }
 
-/** How far from a fall an interior's triangles are handed to Bullet: a
- *  tumble covers a few metres at most; a large building's far wings stay out. */
+/** How far from a fall an interior's triangles are handed to Bullet (a tumble covers a few metres). */
 const INTERIOR_REACH = 8;
-/** At most this many interior triangles go to Bullet for one fall, all
- *  interiors together: building them into Bullet is synchronous, and a dense
- *  model (exact collision admits up to a million) would hitch the frame or
- *  exhaust Ammo's heap. Past it, nearer (INTERIOR_NEAR), then a floor slab. */
+/** At most this many interior triangles per fall, all interiors together: building them is synchronous, and a dense
+ *  model would hitch the frame or exhaust Ammo's heap. Past it, nearer (INTERIOR_NEAR), then a floor slab. */
 export const INTERIOR_MAX_TRIS = 20_000;
 const INTERIOR_NEAR = 3;
-/** Things already warned about on the console (bounded): a fallback is said
- *  once per thing there, and always to the `ragdoll` debuglog topic, which
- *  keeps the last few. Constructor-time only — never per frame. */
+/** a fallback is said once per thing on the console (bounded), and always to the `ragdoll` debuglog topic */
 const fallbackWarned = new Set();
 function reportInteriorFallback(id, msg) {
   why('ragdoll', `interior fallback — ${msg}; its walls are left out of this fall`);
@@ -105,14 +76,9 @@ function reportInteriorFallback(id, msg) {
   console.warn(`[ammodoll] interior fallback — ${msg}; its walls are left out of the fall (further ones: lastWhy('ragdoll'))`);
 }
 
-/** An interior collider's triangles within `reach` of `at` (horizontally), in
- *  world space, flat [x,y,z, x,y,z, x,y,z, ...]. The collider's geometry is
- *  root-local (colliders.js buildExact); the entity's scale, rotation and
- *  position put it in the world, the same law colliders.js queries by. */
-/** Does a triangle's footprint (xz) overlap the square `reach` either side
- *  of `at`? Separating axes: the square's two, then the triangle's three
- *  edge normals. Not its corners being near — a big floor is two triangles
- *  whose corners can all be far from a body lying in the middle of it. */
+/** Does a triangle's footprint (xz) overlap the square `reach` either side of `at`? Separating axes (the square's
+ *  two, the triangle's three edge normals), not corner distance: a big floor is two triangles whose corners can
+ *  all be far from a body lying in the middle of it. */
 function overlapsSquare(v, at, reach) {
   const x0 = at.x - reach, x1 = at.x + reach, z0 = at.z - reach, z1 = at.z + reach;
   if (Math.max(v[0].x, v[1].x, v[2].x) < x0 || Math.min(v[0].x, v[1].x, v[2].x) > x1) return false;
@@ -133,13 +99,12 @@ function overlapsSquare(v, at, reach) {
   return true;
 }
 
+/** An interior collider's triangles within `reach` of `at` (horizontally), in world space, flat [x,y,z, …]. The
+ *  geometry is root-local (colliders.js buildExact); scale, rotation and position place it as colliders.js does.
+ *  Asked of the collider's BVH, stopping at `max`: a dense interior costs its budget, never its size. */
 export function interiorTriangles(c, at, reach, max = INTERIOR_MAX_TRIS) {
-  // Asked of the collider's own BVH, not by scanning every triangle: only
-  // the nodes near the fall are visited, and the walk stops at `max` — a
-  // dense interior costs its budget, never its size.
   const o = c.obj, s = o.scale?.x || 1, q = o.quaternion, p = o.position;
-  // the reach square in the thing's own frame (it turns about Y only: a
-  // circle of reach·√2 holds the square however it is turned)
+  // the reach square in the thing's own frame (a circle of reach·√2 holds it however the thing is turned about Y)
   const l = new THREE.Vector3(at.x - p.x, 0, at.z - p.z);
   if (q) l.applyQuaternion(q.clone().invert());
   l.divideScalar(s);
@@ -205,17 +170,15 @@ export async function ensureAmmo() {
 
 const DEG = Math.PI / 180;
 
-// Dempster's segment fractions (rigdef.py BODIES), torso rows summed because the torso is one
-// body here. Not mass from proxy volume: a 0.4 kg pelvis whips around like a bead.
+// Dempster's segment fractions (rigdef.py BODIES). Not mass from proxy volume: a 0.4 kg pelvis whips like a bead.
 const MASS_FRAC = {
-  torso: 0.14 + 0.14 + 0.16,   // kept for the degenerate no-spine-bones trunk
+  torso: 0.14 + 0.14 + 0.16,   // the degenerate no-spine-bones trunk
   pelvis: 0.14, spineSeg: 0.14, chestSeg: 0.16,   // rigdef.py's rows, used apart
   head: 0.081,
   upperArm: 0.028, lowerArm: 0.016, hand: 0.006,
   upperLeg: 0.100, lowerLeg: 0.047, foot: 0.015,
 };
-// Depth as a fraction of trunk half-width: a trunk is very nearly as deep as it is broad
-// (the source's proxy boxes: 0.096-0.110 of height deep against 0.093-0.125 wide).
+// trunk depth as a fraction of its half-width (the source's proxy boxes: nearly as deep as broad)
 const TRUNK_DEPTH = 0.88;
 const REAL_H = 1.70;            // rigdef.py: reference height for the mass budget
 const BODY_KG = 62.0;           // at REAL_H, scaled by (H/1.70)³
@@ -228,15 +191,12 @@ const FINGER_TENDON = 8.0;
 const ERP_LIMIT = 0.35;         // source default: how hard limits are held
 const BT_CONSTRAINT_STOP_ERP = 3; // this build's setParam id (source, verbatim)
 const ACTIVE_TAG = 1;
-// Bullet's own enum values. ammo.js does not export them as constants, and an
-// undefined global here bundles clean and throws at the first hair lock.
+// Bullet's own enum values (ammo.js does not export them)
 const CF_KINEMATIC = 2;            // btCollisionObject::CF_KINEMATIC_OBJECT
 const DISABLE_DEACTIVATION = 4;    // never sleep — a kinematic anchor must not
 
 const LIN_DAMP = 0.12;          // source setDamping(0.12, —)
-// 0.7, not the source's 0.45: ours tumbles, and at 0.45 the light extremities (hands, head) ring
-// at 1-12 rad/s indefinitely — the island never sleeps and the deadline captures mid-jitter.
-const ANG_DAMP = 0.7;
+const ANG_DAMP = 0.7;           // 0.7, not the source's 0.45: at 0.45 hands and head ring indefinitely and never sleep
 const ANG_DAMP_FINGER = 0.95;   // spring-driven 20 g boxes: dissipate hard
 const LIN_DAMP_FINGER = 0.3;
 const FRICTION = 0.85;
@@ -244,7 +204,7 @@ const RESTITUTION = 0.03;
 
 const FIXED_DT = 1 / 120;       // source stepSimulation(dt, 8, 1/120)
 const MAX_SUBSTEPS = 8;
-const SETTLE_V = 0.07;          // the house settle law (rapierdoll's numbers)
+const SETTLE_V = 0.07;          // the house settle law
 const SETTLE_W = 0.6;
 const SETTLE_TIME = 0.45;
 const DEADLINE = 8;
@@ -252,24 +212,12 @@ const ANG_CEIL = 20;            // rad/s backstop
 const BUILD_WIDEN = 0.12;       // rad of slack over the born excursion
 const PIN_TAU = 0.9;            // source: the shift-click pin, held firm
 const PIN_CLAMP_X = 8;          // × total mass
-// ...and the source's OTHER setting, for a hand rather than a nail: a nail-stiff grab overpowers
-// the joint stops.
+// the source's other setting, for a hand rather than a nail (a nail-stiff grab overpowers the joint stops)
 const GRAB_TAU = 0.4;
 const GRAB_CLAMP_X = 1.2;       // × total mass
 
-// Anatomical joint table — the source's rigdef.py JOINTS in degrees, re-keyed
-// to the basis built in _jointBasis(): Y = bone (twist), X = primary swing
-// (flexion where the joint has one), Z = X×Y (the other swing). Directional
-// entries carry `flex`/`ext` and a `want` (which way flexion moves the child's
-// tip); the sign of X's range is DERIVED from the built axis, never assumed —
-// the two sides of the body mirror, and a hard-coded sign is wrong on one.
-//   ref: what X is crossed against — 'fwd' | 'up' | 'palm' | 'pinky'
-/** Hair tuning, live. Dimensionless quantities (damping, the gravity FRACTION, the limit ramp)
- *  port from the source playground; mass goes as length cubed (the source is unit-scaled).
- *  Tune in-world and copy the table back out. */
+/** Hair tuning, live (retuneHair). Tuned in-world by eye: docs/research/ammodoll-tuning.md § Hair. */
 export const HAIR_TUNING = {
-  // TUNED IN-WORLD by eye, on a falling body, against a render that shows the sim
-  // (measurements: docs/research/ammodoll-tuning.md § Hair).
   mass: 0.003,      // kg per segment
   tension: 7.25,    // 6DOF angular spring stiffness
   damping: 0.31,    // both the spring's and the body's angular damping
@@ -278,43 +226,29 @@ export const HAIR_TUNING = {
   rootExp: 1.2,     // ramp exponent: lim = limit * (j/n)^rootExp
 };
 
-/** Wing tuning, live. Same shape and instrument as HAIR_TUNING, but far heavier segments, a limit
- *  small enough that a folded wing cannot pass through the back, and a linear ramp. The target:
- *  dead weight that swings from the shoulder and trails the body — neither flapping nor rigid. */
+/** Wing tuning, live (retuneWings). Same shape as HAIR_TUNING; the target is dead weight that swings from the
+ *  shoulder and trails the body. Measured: docs/research/ammodoll-tuning.md § Wings. */
 export const WING_TUNING = {
-  mass: 0.55,       // kg per segment. Wings this size on a real animal would be
-                    // lighter, being mostly air — but a 20 g plate a metre long
-                    // is all lever and no inertia, and reads as paper.
-  // MEASURED over 4 lean directions per row: what matters is the bend a wing KEEPS at rest; 8 is the
-  // knee (docs/research/ammodoll-tuning.md § Wings).
+  mass: 0.55,       // kg per segment (a 20 g plate a metre long is all lever and reads as paper)
   tension: 8,       // 6DOF angular spring stiffness
-  damping: 0.15,    // both the spring's and the body's angular damping. Bullet's
-                    // spring "damping" is a target-velocity GAIN, not
-                    // dissipation, so more of it means snappier, not calmer.
-  gravity: 1.0,     // fraction of world gravity: full, unlike hair's — a
-                    // wing is a big surface and if anything falls SLOWER.
-  // The RAMP: lim = limit * ((j+1)/n)^rootExp; linear beats steep on both fold and jitter
-  // (docs/research/ammodoll-tuning.md § Wings).
+  damping: 0.15,    // the spring's and the body's angular damping (Bullet's spring damping is a velocity gain: more = snappier)
+  gravity: 1.0,     // fraction of world gravity
   limit: 70,        // degrees at the outermost segment
-  rootExp: 1.0,     // ramp exponent — linear: the shoulder gets a third of the
-                    // range, the tip all of it.
+  rootExp: 1.0,     // ramp exponent: lim = limit * ((j+1)/n)^rootExp
 };
 
+// The anatomical joint table: the source's rigdef.py JOINTS in degrees on the basis addJoint builds (Y = bone/twist,
+// X = primary swing, Z = the other swing). Directional rows carry flex/ext and `want` (which way flexion moves the
+// child's tip); X's sign is derived from the built axis, since the two sides mirror. `ref`: what X is crossed
+// against. Tuned by hand in-world (debug.js retunes running constraints); a ragdoll with no muscle tone spends
+// all of a living spine's range. Twist 0 / z [0,0] lock an axis, exempt from the born-widening.
 export const JOINT_SPECS = {
-  // TUNED BY HAND, in-world, against a real body falling (the debug panel's "joint limits (live)"
-  // retunes running constraints). Departures from rigdef.py are deliberate: a ragdoll with no
-  // muscle tone spends all of a living spine's range.
-  //
-  // Two axes are LOCKED at zero (trunk twist, knee side-bend). A locked axis is
-  // exempt from the born-widening below, which would otherwise hand back
-  // ±BUILD_WIDEN of the freedom the zero was there to remove.
   spine: { ref: 'fwd', x: [-10, 10], twist: 0, z: [-4, 4] },
   chest: { ref: 'fwd', x: [-20, 20], twist: 0, z: [-6, 6] },
   head: { ref: 'fwd', x: [-33, 33], twist: 24, z: [-19, 19] },
   upperArm: { ref: 'fwd', x: [-85, 85], twist: 56, z: [-85, 85] },
   lowerArm: { ref: 'fwd', flex: 145, ext: 2, want: 'fwd', twist: 5, z: [-5, 5] },
   hand: { ref: 'palm', flex: 45, ext: 45, want: 'palm', twist: 8, z: [-15, 15] },
-  // the narrow hand-tuned row holds now that ranges are centred (docs/research/ammodoll-tuning.md § Upper-leg limits)
   upperLeg: { ref: 'fwd', flex: 90, ext: 8, want: 'fwd', twist: 0, z: [-13, 13] },
   lowerLeg: { ref: 'fwd', flex: 123, ext: 0, want: 'back', twist: 3, z: [0, 0] },
   foot: { ref: 'up', x: [-35, 35], twist: 12, z: [-12, 12] },
@@ -323,9 +257,8 @@ export const JOINT_SPECS = {
   thumb: { ref: 'pinky', flex: 55, ext: 10, want: 'pinky', twist: 12, z: [-25, 25] },
 };
 
-// The body cut is rigmeasure.js's SEGMENTS (one table for both engines). This engine's additions:
-// the torso rows share rigid bodies (TORSO_KEYS), hands and feet are extra segments, and the
-// fingers ride on the hands.
+// The body cut is rigmeasure.js's SEGMENTS (one table for both engines). Here the torso rows are the trunk bodies
+// (TORSO_KEYS), hands and feet are extra segments, and the fingers ride on the hands.
 const TORSO_KEYS = new Set(['hips|spine', 'spine|chest', 'chest|neck']);
 const CORE_SEGMENTS = SEGMENTS;
 const EXTRA_SEGMENTS = [
@@ -351,21 +284,15 @@ const CORE_JOINTS = [
   { at: 'leftFoot', parent: 'leftLowerLeg|leftFoot', child: 'leftFoot|leftToes', spec: 'foot' },
   { at: 'rightFoot', parent: 'rightLowerLeg|rightFoot', child: 'rightFoot|rightToes', spec: 'foot' },
 ];
-// VRM humanoid digit chains: [prox, mid, distal]. "little", not "pinky" —
-// the tendon chain below couples index→middle→ring→little exactly as the
-// source's TENDON_CHAIN does (thumb excluded: no shared tendon).
+// VRM humanoid digit names; the tendon chain couples them in this order (thumb excluded: no shared tendon)
 const FINGERS = ['Index', 'Middle', 'Ring', 'Little'];
 
-// Collision filter bits. The filter is an AND of BOTH directions ((groupA & maskB) && (groupB & maskA)),
-// and it FREEZES at addRigidBody: changing it later does nothing.
-//
-// THE BUDGET IS 15 BITS, NOT 32: ammo.js's IDL declares addRigidBody's group and mask as SHORT, so
-// anything above bit 14 is silently truncated (a group that truncates to 0 collides with nothing).
-// So: bit 0 statics, bits 1..12 the twelve core bodies that need self-collision (3 trunk + head +
-// 8 limb segments), bit 14 everything that only ever wants the ground. Hands and feet ride their
-// parent limb's bit.
+// Collision filter bits: (groupA & maskB) && (groupB & maskA), frozen at addRigidBody. ammo.js declares group and
+// mask as SHORT, so the budget is 15 bits: bit 0 statics, bits 1..12 the core bodies that self-collide (3 trunk +
+// head + 8 limb segments; hands and feet ride their parent limb's bit), bit 14 everything that only wants the
+// ground. A group above bit 14 truncates to 0 and collides with nothing.
 const G_STATIC = 1;
-const G_FINGER = 1 << 14;      // 16384 — the top bit a signed short can hold
+const G_FINGER = 1 << 14;
 const BODY_BITS = 12;
 const FILTER_MAX = 1 << 14;    // anything above this does not survive the call
 
@@ -385,9 +312,8 @@ const _q = new THREE.Quaternion();
 const _qp = new THREE.Quaternion();
 const _m4 = new THREE.Matrix4();
 
-/** Body world rotation → THREE, consumed IMMEDIATELY. Ammo's value-returning
- *  methods (getRotation among them) share one static temporary per method —
- *  two held results alias each other. Every rotation read goes through here. */
+/** Body world rotation → THREE. Ammo's value-returning methods (getRotation among them) share one static temporary
+ *  per method, so two held results alias: consume each immediately. */
 function quatOf2(body, out) {
   const r = body.getCenterOfMassTransform().getRotation();
   return out.set(r.x(), r.y(), r.z(), r.w());
@@ -403,19 +329,11 @@ function frameQuat(dir, out = new THREE.Quaternion()) {
   return out.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
 }
 
-/** Per-bone mesh extents, in each bone's OWN rest frame, read off the skin.
- *
- *  A bone's length is a fine proxy for a limb's flesh, but not for wings (a short bone can carry
- *  a long membrane, and a leaf bone has no length at all). A vertex times boneInverse × bindMatrix
- *  is where it sits in that bone's frame at bind time — pose-independent, so computed ONCE per
- *  avatar and cached. Vertices go to the bone that weights them most, only when that is decisive.
- *
- *  Returns Map(boneName -> {c, he}) in bone-local units, or an empty map when
- *  there is no skinned mesh to read — headless rigs have bones and no geometry,
- *  and the caller keeps its bone-length path for them.
- */
+/** Per-bone mesh extents in each bone's own bind frame, read off the skin once per avatar (and per `key`: hair and
+ *  wings match different bones). A bone's length is a fine proxy for a limb but not for a wing membrane or a leaf
+ *  bone. Vertices go to the bone that weights them decisively. Returns Map(boneName -> {c, he}); empty when there
+ *  is no skinned mesh (headless rigs), and the caller keeps its bone-length path. */
 function boneMeshExtents(avatar, key, match) {
-  // Keyed: two callers (hair and wings) with different matchers must not share one cached map.
   const cache = avatar.__boneExt ??= new Map();
   if (cache.has(key)) return cache.get(key);
   const out = new Map();
@@ -438,8 +356,7 @@ function boneMeshExtents(avatar, key, match) {
         const w = sw.getComponent(k, c);
         if (w > bw) { bw = w; bi = si.getComponent(k, c); }
       }
-      // 0.4 is "this vertex is decisively one bone's": below it the vertex
-      // straddles a joint and would stretch BOTH boxes past the real geometry.
+      // below 0.4 the vertex straddles a joint and would stretch both boxes
       if (bw < 0.4 || !want.has(bi)) continue;
       const name = want.get(bi);
       m.multiplyMatrices(o.skeleton.boneInverses[bi], o.bindMatrix);
@@ -450,9 +367,7 @@ function boneMeshExtents(avatar, key, match) {
     }
   });
   for (const [name, a] of acc) {
-    // a handful of stray vertices is not a shape; fall back rather than build a
-    // box out of noise
-    if (a.n < 24) continue;
+    if (a.n < 24) continue;   // a handful of stray vertices is not a shape
     out.set(name, {
       c: a.lo.clone().add(a.hi).multiplyScalar(0.5),
       he: a.hi.clone().sub(a.lo).multiplyScalar(0.5),
@@ -462,13 +377,9 @@ function boneMeshExtents(avatar, key, match) {
   return out;
 }
 
-/** A bone's mesh extent, carried out to world by its live matrix: the box
- *  centre and a single child box oriented with the bone. Returns null when
- *  there is nothing measured for that bone, and the caller keeps its fallback.
- *
- *  `floor` is the minimum half-extent on every axis — a membrane or a lock of
- *  hair can be millimetres thick, and a zero-depth box is a degenerate shape
- *  with no inertia about two of its axes. */
+/** A bone's mesh extent carried to world by its live matrix: the box centre and one child box oriented with the
+ *  bone; null when nothing was measured. `floor` is the minimum half-extent (a zero-depth box has no inertia about
+ *  two of its axes). */
 function extBox(nd, ext, floor = 0.01) {
   if (!ext) return null;
   nd.updateWorldMatrix(true, false);
@@ -516,7 +427,7 @@ export class AmmoRagdoll extends BodyEngineBase {
     avatar.root.updateMatrixWorld(true);
     const node = (j) => h?.getNormalizedBoneNode?.(j) ?? null;
 
-    // ---- live capture + neutral rest (rapierdoll's two-skeleton law) -------
+    // ---- live capture + neutral rest -------------------------------------
     const wanted = new Set(CORE_SEGMENTS.flat());
     for (const e of EXTRA_SEGMENTS) { wanted.add(e.a); wanted.add(e.b); }
     for (const side of ['left', 'right']) {
@@ -533,8 +444,7 @@ export class AmmoRagdoll extends BodyEngineBase {
     if (!live.chest && live.spine && live.neck) {
       live.chest = live.spine.clone().add(live.neck).multiplyScalar(0.5);
     }
-    // neck is optional in VRM, and both the head's body and its joint hang off
-    // it — a missing bone must not detach a head (rapierdoll's law)
+    // neck is optional in VRM, and the head's body and joint hang off it
     if (!live.neck && live.chest && live.head) {
       live.neck = live.chest.clone().lerp(live.head, 0.75);
     }
@@ -555,9 +465,8 @@ export class AmmoRagdoll extends BodyEngineBase {
     for (const [j, v] of Object.entries(restSrc)) {
       restP[j] = v.clone ? v.clone() : new THREE.Vector3(v.x, v.y, v.z);
     }
-    // rest covers only what the caller sampled (the 12 core joints, usually);
-    // hands, feet and fingers fill from the avatar's own neutral pose, or, on
-    // a stand-in without one, from the live skeleton
+    // rest covers only what the caller sampled (usually the core joints); hands, feet and fingers fill from the
+    // avatar's neutral pose, or from the live skeleton
     const restExtra = avatar.restBonePositions?.([...wanted]) ?? null;
     for (const j of wanted) {
       if (restP[j]) continue;
@@ -573,11 +482,9 @@ export class AmmoRagdoll extends BodyEngineBase {
     this.restP = restP;
 
     // ---- rig frame + scale --------------------------------------------------
-    this.rig = rigFrameOf(restP);   // measured, one derivation — rigmeasure.js
+    this.rig = rigFrameOf(restP);   // rigmeasure.js
     const rigUp = this.rig.up, rigLat = this.rig.lateral, rigFwd = this.rig.forward;
-    // VRM binds a T-pose with the palms DOWN, and rest here IS the bind pose
-    // (restBonePositions zeroes every humanoid rotation) — so the palm normal
-    // is the rig's down, and finger flexion curls toward it
+    // VRM binds a T-pose with the palms down and rest here is the bind pose, so the palm normal is the rig's down
     const palmN = rigUp.clone().negate();
 
     let hiUp = -Infinity, loUp = Infinity;
@@ -590,15 +497,11 @@ export class AmmoRagdoll extends BodyEngineBase {
     const massScale = BODY_KG * (H / REAL_H) ** 3;
     const span = restP.leftUpperArm && restP.rightUpperArm
       ? restP.leftUpperArm.distanceTo(restP.rightUpperArm) : H * 0.3;
-    // Trunk half-width: the shoulder-joint span is much narrower than a torso, so take the wider of
-    // it and the source's proxy-mesh proportion (pelvis/spine/chest 0.093-0.125 of height WIDE,
-    // 0.096-0.110 DEEP). With real inertia an undersized trunk is a floppy one.
+    // trunk half-width: the wider of the shoulder span and the source's proxy proportion (an undersized trunk is floppy)
     const torsoR = Math.max(0.05, span * 0.22, H * 0.055);
 
-    // ---- extrapolate missing tips so hands/feet can be bodies --------------
-    // rigdef's skeleton-only fallback sizes a box from the bone alone; a VRM
-    // without finger or toe bones still has a hand and a foot worth ~35% of
-    // the parent bone, pointing the way the parent was going
+    // ---- extrapolate missing tips so hands/feet can be bodies: a VRM without finger or toe bones still has a hand
+    // and a foot, ~35% of the parent bone, pointing the way the parent was going
     const extrapolate = (m, from, parentFrom, frac = 0.35) => {
       if (!m[from] || !m[parentFrom]) return null;
       const d = m[from].clone().sub(m[parentFrom]);
@@ -649,14 +552,10 @@ export class AmmoRagdoll extends BodyEngineBase {
     };
     const hips = live.hips ?? avatar.root.position;
     this.groundY = heightAt(hips.x, hips.z);
-    // TERRAIN-FOLLOWING GROUND: a single flat cuboid sampled at the hips buries heads wherever the
-    // field rises. Sample a grid around the fall and lay box TILES at the field's own heights; a flat
-    // world (every sample within 2cm) keeps the one-cuboid fast path. Beyond the grid, a wide apron
-    // at the LOWEST sampled height catches a long tumble without poking above a tile inside it.
+    // Terrain-following ground: box tiles at the field's own heights on a grid around the fall (a flat world keeps
+    // the one-cuboid fast path), plus a wide apron at the lowest sampled height for a long tumble. TILE bounds the
+    // stair-step error: 0.75m keeps a 40% grade within 15cm.
     {
-      // TILE bounds the stair-step error: a flat tile is slope×TILE/2 below the
-      // field at its uphill edge — 0.75m keeps a steep 40% grade within 15cm
-      // (a box half-width), and gentle meadows within a few cm.
       const GROUND_R = 12, TILE = 0.75;
       const tiles = [];
       let lo = this.groundY, flat = true;
@@ -678,13 +577,11 @@ export class AmmoRagdoll extends BodyEngineBase {
         }
       }
     }
-    // The spatial hash answers "what is near the fall", never the whole map (nearColliders, §14.2 6a).
+    // the boxes near the fall (nearColliders), placed as colliders.js places them
     for (const [, c] of nearColliders(hips.x, hips.z, 8)) {
       const obj = c.obj;
       if (!obj || c.interior || !c.box) continue;
       if (Math.hypot(obj.position.x - hips.x, obj.position.z - hips.z) > 8) continue;
-      // scale applies to the centre offset as well as the size, and rotation
-      // is part of where the box is (colliders.js's world-placement law)
       const sc = obj.scale ?? { x: 1, y: 1, z: 1 };
       const size = c.box.getSize(new THREE.Vector3()).multiply(_v.set(sc.x, sc.y, sc.z));
       const centre = c.box.getCenter(new THREE.Vector3())
@@ -696,11 +593,9 @@ export class AmmoRagdoll extends BodyEngineBase {
         centre, obj.quaternion ?? null, 0.8,
       );
     }
-    // ROOM-SCALE INTERIORS: their real triangles. An interior's box (skipped above) would seal the room
-    // solid, so the merged root-local triangles colliders.js keeps (entry.exact) near the fall go to
-    // Bullet in world space, one static triangle mesh per thing. Bounded (INTERIOR_MAX_TRIS across them
-    // all): too many within reach, and only those within INTERIOR_NEAR go; still too many, and the body
-    // gets the floor under it as a slab — no walls, but never no floor.
+    // Interiors: their real triangles (a box would seal the room solid), one static mesh per thing, bounded by
+    // INTERIOR_MAX_TRIS across them all. Too many within reach: only those within INTERIOR_NEAR; still too many: a
+    // floor slab under the body (no walls, but never no floor).
     let budget = INTERIOR_MAX_TRIS;
     this.interiorFallback = null;
     for (const [id, c] of nearColliders(hips.x, hips.z, 8)) {
@@ -740,7 +635,7 @@ export class AmmoRagdoll extends BodyEngineBase {
     const restTorsoMid = restP.hips.clone().add(topOf(restP)).multiplyScalar(0.5);
     const liveTorsoMid = live.hips.clone().add(topOf(live)).multiplyScalar(0.5);
 
-    // ---- rest-aligned orientation down the chain (rapierdoll's quatOf) -----
+    // ---- rest-aligned orientation down the chain ---------------------------
     const SEGKEYS = CORE_SEGMENTS.map((s) => s.join('|'));
     const parentSegOf = new Map();
     for (const J of CORE_JOINTS) {
@@ -764,11 +659,8 @@ export class AmmoRagdoll extends BodyEngineBase {
       return q;
     };
 
-    // ---- bodies ------------------------------------------------------------
-    // Each body is a compound of boxes. Box half-width is rigdef.py's own
-    // skeleton-only fallback (0.16 × bone length), trunk pieces excepted:
-    // trunk is VOLUME, its width comes from the shoulder span (rapierdoll's
-    // torsoR), not from however short its bones happen to be.
+    // ---- bodies: each a compound of boxes. Box half-width is rigdef.py's skeleton-only fallback (0.16 × bone
+    // length); the trunk's comes from the shoulder span (torsoR), not its bones.
     this.segs = new Map();          // segKey -> seg
     this._bodies = [];              // every dynamic body, build order
     this._cores = [];               // non-finger bodies (settle metrics)
@@ -796,13 +688,9 @@ export class AmmoRagdoll extends BodyEngineBase {
       const rb = keep(new AMMO.btRigidBody(ci));
       rb.setDamping(isFinger ? LIN_DAMP_FINGER : LIN_DAMP, isFinger ? ANG_DAMP_FINGER : ANG_DAMP);
       rb.setFriction(FRICTION);
-      // Rolling friction: a light foot box landing on a corner wobbles at the angular ceiling and holds
-      // settle off. Bullet's own damper for this; it needs a value on both bodies (statics carry 0.05).
-      rb.setRollingFriction(0.05);
+      rb.setRollingFriction(0.05);   // a light foot box landing on a corner would wobble forever; statics carry it too
       rb.setRestitution(RESTITUTION);
-      // Let it SLEEP once converged (source, verbatim): pinned awake, residual solver noise reads as
-      // extremities twitching forever. Bullet deactivates per island, so the doll settles together;
-      // every pin, impulse or seed calls activate() to wake it.
+      // sleep once converged (per island, so the doll settles together); every pin, impulse or seed wakes it
       rb.setSleepingThresholds(0.02, 0.05);
       rb.setActivationState(ACTIVE_TAG);
       this._bodies.push(rb);
@@ -814,19 +702,15 @@ export class AmmoRagdoll extends BodyEngineBase {
         for (const bx of boxes) r = Math.max(r, Math.hypot(bx.t.x, bx.t.y, bx.t.z) + Math.hypot(bx.he.x, bx.he.y, bx.he.z) * 0.6);
         this._waterR.set(rb, r);
       }
-      // Keep the child boxes for the debug overlay: the volumes are the one thing you cannot infer
-      // from the skeleton. See volumes().
-      this._vol.push({
+      this._vol.push({   // the debug overlay's volumes()
         body: rb,
         boxes: boxes.map((bx) => ({ he: bx.he.clone(), t: bx.t.clone(), q: bx.q.clone() })),
       });
       return rb;
     };
 
-    // a box spanning ra→rb in REST coordinates, expressed local to a body
-    // whose rest origin is `origin` (identity orientation at rest)
-    // minLen: the 0.04 floor is a LIMB's (no degenerate stubby boxes); hair passes its own, since
-    // inertia goes as length SQUARED and a lock of over-long bars is a stick.
+    // a box spanning ra→rb in rest coordinates, local to a body whose rest origin is `origin`. minLen: a limb's
+    // 0.04 floor; hair passes its own (over-long bars make a lock a stick).
     const boxFor = (origin, ra, rb2, halfW, halfD = halfW, minLen = 0.04) => {
       const dir = rb2.clone().sub(ra);
       const len = Math.max(dir.length(), minLen);
@@ -835,9 +719,8 @@ export class AmmoRagdoll extends BodyEngineBase {
     };
     const limbW = (ra, rb2) => Math.max(0.02, ra.distanceTo(rb2) * 0.16);
 
-    // The trunk is THREE bodies — pelvis, spine, chest — jointed by the source's own spine and chest
-    // limits, so the doll folds at the waist and the arm chains load a chest, not one half-mass slab.
-    // MASS_FRAC's three Dempster rows are used apart.
+    // the trunk is three bodies (pelvis, spine, chest) jointed by the source's spine and chest limits, so the doll
+    // folds at the waist and the arms load a chest, not a half-mass slab
     const segMeta = new Map();      // segKey -> { body, restOrigin }
     const TRUNK = [
       ['hips|spine', 'pelvis'], ['spine|chest', 'spineSeg'], ['chest|neck', 'chestSeg'],
@@ -877,8 +760,7 @@ export class AmmoRagdoll extends BodyEngineBase {
       });
       if (nextBit <= BODY_BITS) bodyIndex.set(body, nextBit++);
     }
-    // The trunk body other code asks for by name. Callers want "the thing the
-    // arms and head hang off", which is the chest once the trunk articulates.
+    // the trunk body other code asks for by name: what the arms and head hang off
     this.torsoBody = (segMeta.get('chest|neck') ?? segMeta.get('hips|spine'))?.body ?? null;
 
     // limb + head + hand/foot bodies
@@ -911,17 +793,13 @@ export class AmmoRagdoll extends BodyEngineBase {
       const w = part === 'head' ? Math.max(limbW(ra, rb2), torsoR * 0.55)
         : part === 'foot' ? Math.max(limbW(ra, rb2), 0.03)
           : limbW(ra, rb2);
-      // …and the skull is a VOLUME the head bone only anchors: VRM puts that bone at the skull base, so
-      // a neck-wide box ending there leaves face and crown hollow and a prone body sinks face-first.
-      // The box runs on past the bone to a height-scaled crown, and — what carries a prone head — its
-      // PERPENDICULAR half-extents grow to skull scale. Collision only — seg endpoints, .p and pins
-      // keep the true bone.
+      // VRM puts the head bone at the skull base, so the box runs on past it to a height-scaled crown (0.124 of
+      // height, less the bone) and its perpendicular extents grow to skull scale, or a prone body sinks face-first.
+      // Collision only: seg endpoints, .p and pins keep the true bone.
       const isHead = part === 'head';
       const boxEnd = isHead
         ? rb2.clone().addScaledVector(
           rb2.clone().sub(ra).normalize(),
-          // The skull runs on past the head bone — but only to a real crown (the proxy mesh measures a
-          // head 0.124 of height long), so the extension is what is LEFT after the bone itself.
           Math.min(0.16, Math.max(0.05, H * 0.124 - rb2.distanceTo(ra))))
         : rb2;
       const wHead = isHead ? Math.max(w, H * 0.05) : w;
@@ -940,14 +818,10 @@ export class AmmoRagdoll extends BodyEngineBase {
       if (nextBit <= BODY_BITS) bodyIndex.set(body, nextBit++);
     }
 
-    // ---- self-collision groups ---------------------------------------------
-    // Per-body membership bits; a pair is excluded (symmetrically — OR-of-both
-    // -directions law) when it is constraint-adjacent or DEEPLY overlapping at
-    // rest. This build does not bind setIgnoreCollisionCheck, so the filter is
-    // the only per-pair lever, and it freezes at addRigidBody — everything is
-    // computed before the bodies enter the world.
+    // ---- self-collision groups: a pair is excluded (symmetrically) when constraint-adjacent or deeply overlapping
+    // at rest. This build does not bind setIgnoreCollisionCheck, so the filter is the only per-pair lever, and it
+    // freezes at addRigidBody.
     {
-      // segment-vs-segment distance is rigmeasure.js's
       const segList = [...this.segs.values()];
       const adjacent = (x, y) => x.body === y.body
         || x.a === y.a || x.a === y.b || x.b === y.a || x.b === y.b;
@@ -962,25 +836,19 @@ export class AmmoRagdoll extends BodyEngineBase {
           const A2 = segList[i], B2 = segList[j2];
           if (A2.body === B2.body) continue;
           if (adjacent(A2, B2)) { exclude(A2.body, B2.body); continue; }
-          // deep at rest = buried, pumps contact energy every frame; grazing
-          // is fine (rapierdoll's threshold)
+          // deep at rest pumps contact energy every frame; grazing is fine
           if (segDistance(A2.restA, A2.restB, B2.restA, B2.restB) < (A2.r + B2.r) * 1.05) {
             exclude(A2.body, B2.body);
           }
         }
       }
-      // A HAND RIDES ITS FOREARM'S BIT, a foot its calf's: sixteen core bodies don't fit the twelve
-      // bits a short can spare (see G_FINGER). The forearm's mask skips the hand (adjacent) and itself,
-      // so forearm/hand do not collide; every other body sees one bit meaning "that arm, hand included".
+      // a hand rides its forearm's bit, a foot its calf's: sixteen core bodies don't fit twelve bits (see G_FINGER)
       for (const seg of this.segs.values()) {
-        // by KEY, not by a `part` field — the seg objects built from the table don't carry `part`
         if (!/^(left|right)(Hand|Foot)\|/.test(seg.key ?? '')) continue;
         const parent = [...this.segs.values()].find((s) => s !== seg && s.b === seg.a);
         if (parent && bodyIndex.has(parent.body)) bodyIndex.set(seg.body, bodyIndex.get(parent.body));
       }
-      // A SHARED BIT EXCLUDES IF ANY OF ITS BODIES DOES: otherwise the thigh's mask skips the calf but
-      // re-adds the calf's bit via the foot, and thigh/calf fight at the knee. Over-excluding is the
-      // safe direction.
+      // a shared bit excludes if any of its bodies does, or the thigh's mask re-adds the calf's bit via the foot
       const bitBodies = new Map();
       for (const [body, bit] of bodyIndex) {
         if (!bitBodies.has(bit)) bitBodies.set(bit, []);
@@ -996,26 +864,20 @@ export class AmmoRagdoll extends BodyEngineBase {
           mask |= (G_STATIC << 1) << obit;
         }
         const group = (G_STATIC << 1) << bit;
-        // Loud, because the failure is SILENT: an over-budget group truncates
-        // to zero on the way into wasm and the body simply stops colliding.
-        if (group > FILTER_MAX) {
+        if (group > FILTER_MAX) {   // the failure is silent otherwise: the group truncates to zero in wasm
           console.error(`[ammodoll] filter group ${group} exceeds the short budget `
             + `— this body will collide with nothing`);
         }
         this.world.addRigidBody(body, group, mask);
       }
-      // any core body past the bit budget joins ground-only (none today:
-      // torso + head + 8 limbs + 2 hands + 2 feet = 13 ≤ 1+12 bits)
+      // any core body past the bit budget joins ground-only (none today)
       for (const body of this._cores) {
         if (!bodyIndex.has(body)) this.world.addRigidBody(body, G_FINGER, G_STATIC);
       }
     }
 
-    // ---- joint frames: anatomy on the anatomical basis ---------------------
-    // Basis: Y = rest bone direction (twist), X = swing derived from the rig's
-    // own reference, Z = X×Y. ORIGIN through the LIVE transforms (zero position
-    // error at build), BASIS from rest (limits mean "from rest"): rest-aligned
-    // bodies make both true at once.
+    // ---- joint frames: Y = rest bone direction (twist), X = swing from the rig's own reference, Z = X×Y. Origin
+    // through the live transforms (zero position error at build), basis from rest (limits mean "from rest").
     this._constraints = [];
     this._springs = [];
     this.jointMeta = [];            // { name, spec, axisX/Y/Z world-at-rest, lo, hi }
@@ -1070,29 +932,22 @@ export class AmmoRagdoll extends BodyEngineBase {
       const lo = [xlo, -S.twist * DEG, S.z[0] * DEG];
       const hi = [xhi, S.twist * DEG, S.z[1] * DEG];
 
-      // born excursion per axis, in the joint basis — a joint must contain
-      // the pose it was born in.
-      // ⚠️ ONE getRotation() PER STATEMENT: ammo hands back a single static temporary per method, so
-      // two held results alias (rel would always be identity). Consume each into a THREE object first.
+      // born excursion per axis in the joint basis: a joint must contain the pose it was born in (one getRotation
+      // per statement: see quatOf2)
       quatOf2(parentBody, _q);
       quatOf2(childBody, _qp);
       const rel = _q.invert().multiply(_qp);
       const relF = basis.clone().invert().multiply(rel).multiply(basis);
       const eul = new THREE.Euler().setFromQuaternion(relF, 'XYZ');
       const born = [eul.x, eul.y, eul.z];
-      // ...but only a FRESH body is born into an arbitrary pose. A seeded body is a HANDOVER (the same
-      // tumble continuing elsewhere), and since every drag release builds a new doll, widening to its
-      // pose would RATCHET the limits outward. So on a handover the widening stops at BUILD_WIDEN past
-      // the anatomical table, and a joint that arrives outside its range is pushed back into it.
+      // A seeded body is a handover, and every drag release builds a new doll, so widening to its pose would
+      // ratchet the limits outward: on a handover the widening stops at BUILD_WIDEN past the table.
       const cap = seedVel ? BUILD_WIDEN : Infinity;
       const anatLo = lo.slice(), anatHi = hi.slice();
       for (let i = 0; i < 3; i++) {
-        // An axis the table LOCKS (lo === hi) stays locked: widening it would hand back ±BUILD_WIDEN of
-        // the freedom the zero removes (up a three-body trunk, most of a spine's worth of corkscrew).
+        // a locked axis (lo === hi) stays locked, but moves to the born angle (a lock the rig is born off would be
+        // annihilated on frame one); on a handover no further than BUILD_WIDEN from the table's zero
         if (anatHi[i] - anatLo[i] === 0) {
-          // …but a locked axis the rig is BORN off (§24t-8) would be annihilated on frame one, so the
-          // lock MOVES to the born angle: still zero freedom, no fight. On a handover it may sit no
-          // further than BUILD_WIDEN from the table's zero; a fresh build locks where it stands.
           lo[i] = hi[i] = Math.max(anatLo[i] - cap, Math.min(anatHi[i] + cap, born[i]));
           continue;
         }
@@ -1100,16 +955,13 @@ export class AmmoRagdoll extends BodyEngineBase {
         hi[i] = Math.min(anatHi[i] + cap, Math.max(hi[i], born[i] + BUILD_WIDEN));
       }
 
-      // CENTER THE RANGE ON THE FRAME. Bullet wraps the measured Euler angle to whichever
-      // representation violates least, so a wide one-sided range like the knee's (−145°, +7°) has a
-      // wrap midpoint near 111° — one contact impulse crosses it and the limit then HOLDS the joint on
-      // the wrong side. Rotating the PARENT frame by the range midpoint makes every range symmetric and
-      // pushes the wrap point to 180°.
+      // Centre the range on the frame: Bullet wraps the measured Euler angle, so a one-sided range like the knee's
+      // has a wrap point one impulse away, past which the limit holds the joint on the wrong side. Rotating the
+      // parent frame by the midpoint makes every range symmetric and pushes the wrap point to 180°.
       let mid = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
       let midQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(mid[0], mid[1], mid[2], 'XYZ'));
-      // …AND CONTAIN THE BORN POSE AS BULLET WILL MEASURE IT: Euler angles are not additive across
-      // axes, so re-measure in the centred frame and widen again until the range is a fixed point of
-      // its own centering (converges in 1–2 rounds; §24t-8).
+      // Euler angles are not additive across axes, so re-measure the born pose in the centred frame and widen
+      // again until the range is a fixed point of its own centering (1–2 rounds)
       for (let round = 0; round < 4; round++) {
         const eulC = new THREE.Euler().setFromQuaternion(midQ.clone().invert().multiply(relF), 'XYZ');
         const bornC = [eulC.x + mid[0], eulC.y + mid[1], eulC.z + mid[2]];
@@ -1130,8 +982,7 @@ export class AmmoRagdoll extends BodyEngineBase {
       }
       const basisA = basis.clone().multiply(midQ);
 
-      // frames: basis from rest anatomy (parent's carries the centering),
-      // origin from the live anchor
+      // frames: basis from rest anatomy (the parent's carries the centering), origin from the live anchor
       const mkFrame = (body, frameBasis) => {
         const tr = keep(new AMMO.btTransform());
         tr.setIdentity();
@@ -1155,9 +1006,7 @@ export class AmmoRagdoll extends BodyEngineBase {
           con.setStiffness(ax, FINGER_STIFFNESS);
           con.setDamping(ax, FINGER_DAMPING);
         }
-        // the bodies are BUILT in the relaxed pose, so snapshotting the
-        // current state is exactly the rest curl (source, verbatim)
-        con.setEquilibriumPoint();
+        con.setEquilibriumPoint();   // built in the relaxed pose, so the current state is the rest curl
         this._springs.push(con);
       }
       for (let ax = 3; ax < 6; ax++) con.setParam(BT_CONSTRAINT_STOP_ERP, ERP_LIMIT, ax);
@@ -1167,8 +1016,6 @@ export class AmmoRagdoll extends BodyEngineBase {
         name, spec, axisX: x.clone(), axisY: y.clone(), axisZ: z.clone(),
         lo: [...lo], hi: [...hi], born: [...born], mid: [...mid],
         parentBody, childBody, basisA, basisB: basis.clone(),
-        // retune() needs these: the constraint to talk to, and which way +X
-        // flexes on THIS side (derived from geometry at build, never assumed).
         con, positiveFlexes: S.flex != null ? xhi > 0 : null,
       });
       return con;
@@ -1183,7 +1030,7 @@ export class AmmoRagdoll extends BodyEngineBase {
     for (const J of CORE_JOINTS) {
       const pm = metaOf(J.parent), cm = metaOf(J.child);
       if (!pm || !cm || pm.body === cm.body) {
-        // a skipped joint is a DETACHED body part — the loudest possible physics failure; say so
+        // a skipped joint is a detached body part: say so
         if (cm && pm !== cm && this.segs.get(J.child)) {
           this.skipped.push(J.at);
           console.warn(`[ammodoll] no joint at ${J.at} — ${J.child} is unattached`);
@@ -1202,10 +1049,8 @@ export class AmmoRagdoll extends BodyEngineBase {
       });
     }
 
-    // ---- fingers: spring phalanges + tendons -------------------------------
-    // proximal and intermediate only (rigdef.py: the distal is the measured
-    // dead end); each spans its bone to the next; the thumb gets ONE body,
-    // Proximal→Distal, its metacarpal fused into the palm like the source's.
+    // ---- fingers: spring phalanges (proximal and intermediate only, as rigdef.py) + tendons. The thumb gets one
+    // body, Proximal→Distal, its metacarpal fused into the palm.
     this._fingerSegs = [];
     const fingerBodies = new Map();  // `${side}|${digit}|${lvl}` -> body
     const fingerQuat = new Map();    // same key -> rest→live orientation
@@ -1217,9 +1062,7 @@ export class AmmoRagdoll extends BodyEngineBase {
       if (ra.distanceTo(rb2) < 0.005) return;
       const restMid = ra.clone().add(rb2).multiplyScalar(0.5);
       const liveMid = live[aName].clone().add(live[bName]).multiplyScalar(0.5);
-      // rest-aligned DOWN THE CHAIN (rapierdoll's zero-roll law): each phalanx
-      // composes from its own parent — the proximal from the hand, the
-      // intermediate from the proximal — never two independent shortest arcs
+      // rest-aligned down the chain: each phalanx composes from its own parent, never two independent shortest arcs
       const qParent = (lvl === 2 ? fingerQuat.get(`${side}|${digit}|1`) : null)
         ?? quatOf(`${side}Hand|${side}MiddleProximal`);
       const liveLocal = live[bName].clone().sub(live[aName]).applyQuaternion(qParent.clone().invert());
@@ -1261,8 +1104,8 @@ export class AmmoRagdoll extends BodyEngineBase {
       addFingerBody(side, 'Thumb', 1,
         `${side}ThumbProximal`, `${side}ThumbDistal`, 'thumb', null);
     }
-    // tendons: a weak orientation spring between neighbouring fingers at the
-    // same level, all axes free (lower > upper = free), spring on X only
+    // tendons: a weak orientation spring between neighbouring fingers at the same level, all axes free (lower >
+    // upper = free), spring on X only
     for (const side of ['left', 'right']) {
       for (const lvl of [1, 2]) {
         for (let k = 0; k + 1 < FINGERS.length; k++) {
@@ -1283,11 +1126,10 @@ export class AmmoRagdoll extends BodyEngineBase {
       }
     }
 
-    // ---- BULLET HAIR (the source's per-lock sim, when the rig carries hair_rig.py's chains). Each
-    // Hair_<chain>_<idx> bone becomes a thin box chained by 6DOF springs to a kinematic anchor:
-    // angular limits ramp down each lock, the spring's equilibrium is the combed pose, gravity is
-    // fractional, CCD keeps fast tips from tunnelling. Collides with the world and the skull box only.
-    // LOCAL DRESSING: excluded from settle, snapshot and the pose wire.
+    // ---- Bullet hair, when the rig carries Hair_<chain>_<idx> bones: each becomes a thin box chained by 6DOF
+    // springs to a kinematic anchor, limits ramping down the lock, equilibrium the combed pose, fractional gravity,
+    // CCD against tunnelling. Collides with the world and the skull box only. Local dressing: excluded from settle,
+    // snapshot and the pose wire.
     this._hairSegs = [];
     {
       const headSeg = this.segs.get('neck|head');
@@ -1300,9 +1142,8 @@ export class AmmoRagdoll extends BodyEngineBase {
         chains.get(m[1]).push({ i: Number(m[2]), node: nd });
       }
       if (headSeg && chains.size) {
-        // The combed pose, captured ONCE per avatar and never re-derived: never rebuild a rig from a
-        // simulated pose (every drag release rebuilds, so a crumple would ratchet in). Stored on the
-        // AVATAR, not the doll, because the doll is what keeps being rebuilt.
+        // the combed pose, captured once per avatar (every drag release rebuilds the doll, and a rig rebuilt from a
+        // simulated pose would ratchet a crumple in)
         if (!avatar.__hairRest) {
           const rest = new Map();
           for (const [, list0] of chains) {
@@ -1310,8 +1151,7 @@ export class AmmoRagdoll extends BodyEngineBase {
           }
           avatar.__hairRest = rest;
         }
-        // ...and start combed, not mid-tumble — with updateMatrix: a springbone joint has
-        // matrixAutoUpdate false, so the bodies would otherwise be built at three-vrm's stale matrices.
+        // start combed; updateMatrix because a springbone joint has matrixAutoUpdate false
         for (const [nd0, q0] of avatar.__hairRest) {
           nd0.quaternion.copy(q0); nd0.updateMatrix();
         }
@@ -1319,8 +1159,7 @@ export class AmmoRagdoll extends BodyEngineBase {
         const headGroup = this._groupOf.get(headSeg.body) ?? G_STATIC;
         const R = Math.max(0.004 * H, 0.004);
         const hairExt = boneMeshExtents(avatar, 'hair', (n) => /^Hair_\d+_\d+$/.test(n));
-        // The source playground's DEFAULTS, not the finger constants (hair is built with isFinger=true).
-        const HT = HAIR_TUNING;      // live — see retuneHair()
+        const HT = HAIR_TUNING;      // live: retuneHair()
         const HAIR_LIM = HT.limit * DEG, HAIR_ROOT = HT.rootExp;
         const HAIR_GRAV = HT.gravity, HAIR_MASS = HT.mass;
         const HAIR_TENS = HT.tension, HAIR_DAMP = HT.damping;
@@ -1328,9 +1167,8 @@ export class AmmoRagdoll extends BodyEngineBase {
         this._hairAnchors = [];
         for (const [, list] of chains) {
           list.sort((x2, y2) => x2.i - y2.i);
-          // A KINEMATIC anchor per lock, not the dynamic head: springing every lock to the head makes a
-          // feedback loop (head jitter into all locks, their torques back into the head). A mass-0 box
-          // re-driven from the skeleton before each step is infinitely stiff, smooth, and one-way.
+          // a kinematic anchor per lock, re-driven from the head before each step: one-way, so lock torques never
+          // feed back into the head
           const rootW = list[0].node.getWorldPosition(new THREE.Vector3());
           const aShape = keep(new AMMO.btBoxShape(new AMMO.btVector3(R, R, R)));
           _bt1.setIdentity();
@@ -1343,8 +1181,7 @@ export class AmmoRagdoll extends BodyEngineBase {
           anchor.setActivationState(DISABLE_DEACTIVATION);
           this.world.addRigidBody(anchor, G_FINGER, 0);   // mask 0: touches nothing
           this._bodies.push(anchor);
-          // where the anchor sits in the HEAD's frame, so it can be carried
-          this._hairAnchors.push({
+          this._hairAnchors.push({   // where the anchor sits in the head's frame, so it can be carried
             anchor, head: headSeg.body, local: localOf(headSeg.body, rootW),
           });
           let parentBody = anchor;
@@ -1358,30 +1195,23 @@ export class AmmoRagdoll extends BodyEngineBase {
             const len = Math.max(aW.distanceTo(bW), 0.015);
             prevLen = len;
             const mid = aW.clone().add(bW).multiplyScalar(0.5);
-            // The lock's own measurements when the mesh offers them (see boneMeshExtents), the bone
-            // spacing otherwise (sparsely tessellated thin tips keep the constant).
+            // the lock's own mesh extents when the mesh offers them, the bone spacing otherwise
             const hx = extBox(nd, hairExt.get(nd.name), 0.004);
             const body = hx
               ? mkBody(HAIR_MASS, hx.center, new THREE.Quaternion(), hx.boxes, true)
               : mkBody(HAIR_MASS, mid, new THREE.Quaternion(),
                 [boxFor(mid, aW, bW, R, R, len)], true);
-            // Not the finger's 0.9: per Bullet's w *= (1-d)^dt that bleeds a swing ~2.5x faster than
-            // 0.6, and hair that cannot carry a swing reads as rigid.
-            body.setDamping(0.25, HAIR_DAMP);
-            // Hair does not bounce; it just stops. The LIMB defaults give stick-slip chatter on the scalp.
-            body.setFriction(0.3);
+            body.setDamping(0.25, HAIR_DAMP);   // hair that cannot carry a swing reads as rigid
+            body.setFriction(0.3);              // the limb defaults give stick-slip chatter on the scalp
             body.setRestitution(0.0);
             body.setRollingFriction(0.0);
             body.setCcdMotionThreshold(len * 0.5);
             body.setCcdSweptSphereRadius(R * 0.9);
-            // The ROOT segment does not collide with the head: it is born inside the head box, and a
-            // contact born penetrating cannot be resolved (split impulse only corrects down to 2cm; the
-            // rest becomes kinetic energy). The source excludes j===0 for the same reason.
+            // the root segment is born inside the head box, and a contact born penetrating becomes kinetic energy
             this.world.addRigidBody(body, G_FINGER,
               j2 === 0 ? G_STATIC : (G_STATIC | headGroup));
             _bv1.setValue(0, -9.81 * HAIR_GRAV, 0);
-            body.setGravity(_bv1);       // AFTER addRigidBody — the source's lesson
-            // No additive slack: BUILD_WIDEN is a limb-joint constant (it would add 6.88° to every hair joint).
+            body.setGravity(_bv1);       // after addRigidBody, or the world's gravity overwrites it
             const lim = HAIR_LIM * Math.pow((j2 + 1) / list.length, HAIR_ROOT);
             const mkF = (bdy) => {
               const tr = keep(new AMMO.btTransform());
@@ -1398,11 +1228,8 @@ export class AmmoRagdoll extends BodyEngineBase {
             _bv1.setValue(lim, lim, lim); con.setAngularUpperLimit(_bv1);
             for (let ax = 3; ax < 6; ax++) {
               con.enableSpring(ax, true);
-              // Bullet's spring "damping" is a target-velocity GAIN, not a dissipation term:
-              // velFactor = fps * damping / iterations.
               con.setStiffness(ax, HAIR_TENS);
               con.setDamping(ax, HAIR_DAMP);
-              // and no stop-ERP override: the source leaves hair limits at Bullet's default 0.2.
             }
             con.setEquilibriumPoint();
             this.world.addConstraint(con, true);
@@ -1417,23 +1244,18 @@ export class AmmoRagdoll extends BodyEngineBase {
           }
         }
         if (built) {
-          // Claim the hair from three-vrm for as long as this doll lives (see avatar.js's vrm.update):
-          // otherwise the springbones overwrite every bone we drive, one system later in the frame.
-          avatar.__simHair = true;
+          avatar.__simHair = true;   // claim the hair from three-vrm's springbones while this doll lives (avatar.js)
           console.log(`[ammodoll] bullet hair: ${chains.size} locks, ${built} segments`);
         }
       }
     }
 
-    // ---- BULLET WINGS. Same shape as the hair (box chains on a KINEMATIC anchor in a core body's
-    // frame, one-way, local dressing) and deliberately NOT sharing its code: every parameter that
-    // matters differs. While the body is alive avatar.js DRIVES the wings (WING_IDLE, after
-    // vrm.update); once it goes limp these chains take the same bones over — never two authors.
+    // ---- Bullet wings: the hair's shape (box chains on a kinematic anchor, one-way, local dressing), not its code,
+    // since every parameter differs. While the body is alive avatar.js drives the wings (WING_IDLE); once it goes
+    // limp these chains take the same bones over.
     this._wingSegs = [];
     this._wingAnchors = [];
     {
-      // The chest, not the clavicle: the arms hang off 'chest' in CORE_JOINTS
-      // for the same reason — there is no clavicle body in this cut of the rig.
       const chestSeg = this.segs.get('chest|neck') ?? this.segs.get('spine|chest');
       const wingNodes = [];
       avatar.root?.traverse?.((o) => {
@@ -1447,8 +1269,7 @@ export class AmmoRagdoll extends BodyEngineBase {
         wchains.get(m[1]).push({ i: m[2] ? Number(m[2]) : 0, node: nd });
       }
       if (chestSeg && wchains.size) {
-        // The AUTHORED pose, captured by avatar.js's _findWings before the flap ever ran. The live pose
-        // would make rest "wherever the flap was", different on every rebuild.
+        // the authored pose, captured by avatar.js _findWings before the flap ever ran
         if (!avatar.__wingRest) {
           const rest = new Map();
           for (const [, l0] of wchains) for (const it of l0) rest.set(it.node, it.node.quaternion.clone());
@@ -1490,18 +1311,13 @@ export class AmmoRagdoll extends BodyEngineBase {
             const len = Math.max(aW.distanceTo(bW), 0.03);
             prevLen = len;
             const mid = aW.clone().add(bW).multiplyScalar(0.5);
-            // THE BOX IS THE MESH, when the rig has one to read (see boneMeshExtents): extents in the
-            // bone's own frame, carried to world by its live matrix. The bone-length PLATE below is the
-            // fallback (headless fixtures); a plate, so a wing landing on its back can't lie flat inside
-            // the ground plane.
+            // the mesh's own extents when the rig has them (boneMeshExtents); a bone-length plate otherwise
             const ext = wingExt.get(nd.name);
             let center = mid, boxes;
             if (ext) {
               nd.updateWorldMatrix(true, false);
               center = ext.c.clone().applyMatrix4(nd.matrixWorld);
               boxes = [{
-                // a membrane can be millimetres thick, and a zero-depth box is
-                // a degenerate shape with no inertia about two of its axes
                 he: new THREE.Vector3(
                   Math.max(ext.he.x, 0.01), Math.max(ext.he.y, 0.01),
                   Math.max(ext.he.z, 0.01)),
@@ -1517,11 +1333,10 @@ export class AmmoRagdoll extends BodyEngineBase {
             body.setFriction(0.6);        // wings drag on the floor, not slide
             body.setRestitution(0.0);
             body.setRollingFriction(0.0);
-            // Wings meet the WORLD only, never the body they hang from: the root is born inside the
-            // torso box, and a folded wing wraps that side's arm and leg too. Statics only.
+            // statics only: the root is born inside the torso box, and a folded wing wraps that side's arm and leg
             this.world.addRigidBody(body, G_FINGER, G_STATIC);
             _bv1.setValue(0, -9.81 * WT.gravity, 0);
-            body.setGravity(_bv1);       // AFTER addRigidBody — the source's lesson
+            body.setGravity(_bv1);       // after addRigidBody
             const lim = WING_LIM * Math.pow((j2 + 1) / list.length, WT.rootExp);
             const mkF = (bdy) => {
               const tr = keep(new AMMO.btTransform());
@@ -1541,9 +1356,7 @@ export class AmmoRagdoll extends BodyEngineBase {
               con.setStiffness(ax, WT.tension);
               con.setDamping(ax, WT.damping);
             }
-            // Equilibrium is the pose the wing was BORN in, which the reset
-            // above guarantees is the authored one.
-            con.setEquilibriumPoint();
+            con.setEquilibriumPoint();   // the authored pose, by the reset above
             this.world.addConstraint(con, true);
             this._constraints.push(con);
             this._wingSegs.push({
@@ -1556,23 +1369,18 @@ export class AmmoRagdoll extends BodyEngineBase {
           }
         }
         if (built) {
-          // Wings are springbone chains too (import-tripo-avatar), so claim them from three-vrm as the
-          // hair does.
-          avatar.__simHair = true;
+          avatar.__simHair = true;   // wings are springbone chains too (tools/assets/import-tripo-avatar.ts)
           console.log(`[ammodoll] bullet wings: ${wchains.size} chains, ${built} segments`);
         }
       }
     }
 
-    // Hair and wings are the same KIND of thing to the step loop — hung from a carried kinematic
-    // anchor, written back to a raw bone, invisible to settle and the wire — joined once here.
-    // `?? []`: _hairAnchors is only assigned inside its build guard, so a hairless rig leaves it undefined.
+    // hair and wings are one kind of thing to the step loop (`?? []`: a hairless rig never assigns _hairAnchors)
     this._dressAnchors = [...(this._hairAnchors ?? []), ...this._wingAnchors];
     this._dressSegs = [...(this._hairSegs ?? []), ...this._wingSegs];
 
-    // ---- the drive table (rapierdoll's law: BOTH references from the live
-    // skeleton — refDir must be the direction the bone points in the pose
-    // refQuat describes, or every driven bone renders at twice its offset) ---
+    // ---- the drive table: both references from the live skeleton (refDir must be the direction the bone points
+    // in the pose refQuat describes, or every driven bone renders at twice its offset)
     this.drive = [];
     for (const seg of this.segs.values()) {
       const bn = node(seg.a);
@@ -1584,8 +1392,7 @@ export class AmmoRagdoll extends BodyEngineBase {
         bone: seg.a, child: seg.b, node: bn, parent: bn.parent,
         restDir: refDir.normalize(),
         restQuat: bn.getWorldQuaternion(new THREE.Quaternion()),
-        // ...and the BODY, plus the orientation it was born holding: these make roll recoverable (see
-        // step). q0 is identity on a fresh build; a seeded body is built mid-tumble.
+        // the body and the orientation it was born holding make roll recoverable (see step)
         body: seg.body,
         q0inv: quatOf2(seg.body, new THREE.Quaternion()).invert(),
       });
@@ -1647,11 +1454,8 @@ export class AmmoRagdoll extends BodyEngineBase {
 
     if (lean) this._topple(lean);
     this._syncP();
-    // How far the render root sits below the hips: a property of the RIG. Measured against the
-    // sim's own hips for a body that starts AT rest (absorbing the few mm of frame-one jump); but
-    // a seeded body, or a dragger's fresh doll of a body already lying down, does not start at rest.
-    // So keep the measurement only when it agrees with the rig constant (restP is the rest pose in
-    // world space with the root where it is now) within a few cm; otherwise use the rig constant.
+    // how far the render root sits below the hips: measured against the sim's hips for a body at rest, but a seeded
+    // or already-fallen body is not at rest, so the measurement is kept only when it agrees with the rig constant
     const restHipsY = this.restP?.hips?.y;
     const measured = (this.p.hips?.y ?? live.hips?.y ?? 0) - avatar.root.position.y;
     const constant = restHipsY != null ? restHipsY - avatar.root.position.y : measured;
@@ -1659,13 +1463,10 @@ export class AmmoRagdoll extends BodyEngineBase {
     this._measureHipsLocal(this.restP?.hips ?? null);   // sideways too (bodyengine.js)
   }
 
-  // ---------------------------------------------------------------- instruments
-  // (not used by the sim; the suite asserts on them — metrics that only ask
-  // "is it finite / did it settle" cannot see an anatomy failure)
+  // ---------------------------------------------------------------- instruments (test/client/ammodoll-test.ts)
 
-  /** Live per-axis joint angles against their bounds, in the joint basis. */
-  /** The collision volumes as the SOLVER holds them, in world space: `[{ p, q, he }]`, one entry
-   *  per box (bodies are compounds). The debug overlay's counterpart to the verlet's `caps`/`radius`. */
+  /** The collision volumes as the solver holds them, in world space: `[{ p, q, he }]`, one entry per box. The debug
+   *  overlay's counterpart to the verlet's `caps`/`radius`. */
   volumes() {
     const out = [];
     if (!AMMO) return out;
@@ -1687,10 +1488,9 @@ export class AmmoRagdoll extends BodyEngineBase {
     return out;
   }
 
-  /** Re-apply JOINT_SPECS to the LIVE constraints, no rebuild — the tuning dial, not the destination
-   *  (write tuned values into the table). The frames keep the midpoint they were BUILT with, which is
-   *  subtracted back so the numbers stay anatomical degrees; a range retuned far more asymmetric than
-   *  built sits nearer Bullet's wrap point than a fresh build would. */
+  /** Re-apply JOINT_SPECS to the live constraints, no rebuild (a tuning dial: write tuned values into the table).
+   *  The frames keep the midpoint they were built with, so a range retuned far more asymmetric sits nearer Bullet's
+   *  wrap point than a fresh build would. */
   retune() {
     if (!AMMO) return 0;
     let n = 0;
@@ -1743,8 +1543,7 @@ export class AmmoRagdoll extends BodyEngineBase {
     return this._wingSegs.length;
   }
 
-  /** Push HAIR_TUNING into the running hair, no rebuild: a lock already swinging changes under your
-   *  hand. Mass gets its inertia recomputed from the shape. */
+  /** Push HAIR_TUNING into the running hair, no rebuild. Mass gets its inertia recomputed from the shape. */
   retuneHair() {
     if (!AMMO || !this._hairSegs?.length) return 0;
     const HT = HAIR_TUNING;
@@ -1769,16 +1568,13 @@ export class AmmoRagdoll extends BodyEngineBase {
     return this._hairSegs.length;
   }
 
+  /** Live per-axis joint angles against their bounds, in anatomical coordinates (the centering midpoint added back). */
   jointAngles() {
     const out = [];
     for (const J of this.jointMeta) {
-      // one getRotation per statement — see quatOf2
       quatOf2(J.parentBody, _q);
       quatOf2(J.childBody, _qp);
       const rel = _q.invert().multiply(_qp);
-      // measure in the constraint's own frames (parent carries the range
-      // centering), then report in ANATOMICAL coordinates by adding the
-      // midpoint back — lo/hi here are the anatomical table values
       const relF = J.basisA.clone().invert().multiply(rel).multiply(J.basisB);
       const eul = new THREE.Euler().setFromQuaternion(relF, 'XYZ');
       const ang = [eul.x + J.mid[0], eul.y + J.mid[1], eul.z + J.mid[2]];
@@ -1790,8 +1586,7 @@ export class AmmoRagdoll extends BodyEngineBase {
     return out;
   }
 
-  /** The flexion axes as BUILT (rest/world coordinates) with their signed
-   *  ranges — the axis-roles surface the suite checks anatomy against. */
+  /** The flexion axes as built (rest/world coordinates) with their signed ranges. */
   flexAxes() {
     return this.jointMeta.map((J) => ({
       name: J.name, spec: J.spec,
@@ -1835,12 +1630,10 @@ export class AmmoRagdoll extends BodyEngineBase {
     }
   }
 
-  // impulse lives on BodyEngineBase — the cap (also applied in _topple above,
-  // which the constructor's lean rides through), the topple application and
-  // the clock restarts are the shared law.
+  // impulse() lives on BodyEngineBase
 
-  /** `firm` distinguishes a NAIL from a HAND — the source's two settings. A drag calls setPin on
-   *  every mousemove, and a nail (mass x8 at tau 0.9) hauls a limb through its joint stops. */
+  /** `firm` distinguishes a nail from a hand (the source's two settings): a drag calls setPin on every mousemove,
+   *  and a nail hauls a limb through its joint stops. */
   setPin(joint, target, firm = false) {
     if (this.done) return;
     if (!joint) {
@@ -1859,17 +1652,13 @@ export class AmmoRagdoll extends BodyEngineBase {
         this._pinCons.delete(joint);
         this.pins.delete(joint);
       }
-      // the lift ceiling is a LEASE, not a ratchet
-      if (this._pinCons.size === 0) this.rootStartY = this._rootBaseY;
+      if (this._pinCons.size === 0) this.rootStartY = this._rootBaseY;   // the lift ceiling is a lease, not a ratchet
       return;
     }
     let pin = this._pinCons.get(joint);
     if (!pin) {
-      // a p2p with a hard impulse clamp: a distant target PULLS the body at
-      // bounded force instead of teleporting it (the clamp is the source's
-      // whole grab feel, and its stability)
-      const anchor = (seg.a === joint ? seg.localA : seg.localB);
-      // seg.local* are rest-local = body-local (rest-aligned bodies)
+      // a point constraint with a hard impulse clamp: a distant target pulls at bounded force, never teleports
+      const anchor = (seg.a === joint ? seg.localA : seg.localB);   // rest-local = body-local (rest-aligned bodies)
       _bv1.setValue(anchor.x, anchor.y, anchor.z);
       const con = new AMMO.btPoint2PointConstraint(seg.body, _bv1);
       con.get_m_setting().set_m_impulseClamp(this.totalMass * (firm ? PIN_CLAMP_X : GRAB_CLAMP_X));
@@ -1886,13 +1675,10 @@ export class AmmoRagdoll extends BodyEngineBase {
     for (const body of this._bodies) body.activate();
   }
 
-  /** Drag-release handover, the house packed format (rigmeasure.js's
-   *  snapshotPacker — the parse on the far side may be the verlet's): joint
-   *  names + positions + endpoint velocities (v + ω × r from the centre of
-   *  mass). */
+  /** Drag-release handover in the house packed format (rigmeasure.js snapshotPacker; the far side may be the
+   *  verlet): joint names, positions and endpoint velocities (v + ω × r). */
   snapshot() {
-    // {j:[],p:[],v:[]} would be TRUTHY on `seedVel?.j` — say nothing instead
-    if (this._freed) return null;
+    if (this._freed) return null;   // an empty pack would still be truthy on `seedVel?.j`
     this._syncP();
     const pack = snapshotPacker();
     const seen = new Set();
@@ -1914,8 +1700,7 @@ export class AmmoRagdoll extends BodyEngineBase {
 
   /** Apply the water's force to every core part in it (see step). True when any part is wet. */
   _water() {
-    // a body's own water when it was given one (a headless agent: one process can host agents in several
-    // worlds, so the module's single field may be another world's); else the page's
+    // a body's own water when it was given one (a headless process can host agents in several worlds); else the page's
     const wf = this.waterSource ? this.waterSource() : waterField();
     if (!wf) return false;
     const t = wf.time();
@@ -1957,12 +1742,8 @@ export class AmmoRagdoll extends BodyEngineBase {
 
   step(dt) {
     if (this.done) return null;
-    // 0.05, not the source's 0.25: 8 substeps at 1/120 cover only 0.067s, and the rest would go to
-    // the solver as ONE residual step — on hair, which has no angular ceiling.
-    dt = Math.min(0.05, Math.max(0, dt || 0));
-    // Kinematic roots move BEFORE the step (the source's law): Bullet derives a
-    // kinematic body's velocity as (new - old)/dt, so moving one after the step
-    // hands the solver a stale offset and the chains get whipped.
+    dt = Math.min(0.05, Math.max(0, dt || 0));   // 8 substeps at 1/120 cover 0.067s; the rest would be one residual step
+    // kinematic anchors move before the step: Bullet derives their velocity as (new - old)/dt
     for (const ha of this._dressAnchors ?? []) {
       const t0 = ha.head.getCenterOfMassTransform();
       const o0 = t0.getOrigin();
@@ -1976,15 +1757,12 @@ export class AmmoRagdoll extends BodyEngineBase {
       ha.anchor.getMotionState().setWorldTransform(_bt1);
       ha.anchor.setWorldTransform(_bt1);
     }
-    // WATER (shared/buoyancy.js — the swimmer's law, part by part): every core part under the surface is
-    // buoyed by how much of it is submerged and dragged toward the water's own motion, so the body floats,
-    // rides the swell, drifts down a river and is pushed in by the surf. Bullet holds an applied force
-    // through every substep of the one stepSimulation, and frames are capped at 0.05 s above.
+    // water (shared/buoyancy.js, part by part): every submerged core part is buoyed and dragged toward the water's
+    // own motion. Bullet holds an applied force through every substep of the one stepSimulation.
     this.floating = dt > 0 && this._water();
     if (dt > 0) this.world.stepSimulation(dt, MAX_SUBSTEPS, FIXED_DT);
 
-    // angular ceiling: nothing anatomical rotates at 20 rad/s, and residual
-    // solver energy hides there first
+    // angular ceiling: nothing anatomical rotates at 20 rad/s
     for (const body of this._cores) {
       const w = body.getAngularVelocity();
       const m = Math.hypot(w.x(), w.y(), w.z());
@@ -1995,9 +1773,7 @@ export class AmmoRagdoll extends BodyEngineBase {
       }
     }
 
-    // settle is LINEAR AND ANGULAR, over the CORE bodies — fingers are 20 g
-    // springs and twitch at amplitudes the wire never sees; the source pinned
-    // them quiet with island sleeping, we keep them out of the metric instead
+    // settle is linear and angular, over the core bodies (fingers twitch at amplitudes the wire never sees)
     let maxSpeed = 0, maxSpin = 0;
     for (const body of this._cores) {
       const v = body.getLinearVelocity(), w = body.getAngularVelocity();
@@ -2007,11 +1783,8 @@ export class AmmoRagdoll extends BodyEngineBase {
     this.maxV = maxSpeed;
     this.maxW = maxSpin;
 
-    // the clock law is the base's; this engine's quiet test is linear AND
-    // angular, and any noise cancels (no hysteresis band — Bullet's velocities
-    // are the solver's own, not a positional estimate that flickers)
-    // A FLOATING body does not settle: the water keeps moving it, and freezing it mid-bob would leave it
-    // hanging over a trough. It floats until its owner gets up (or something lifts it out).
+    // the clock law is the base's. A floating body never settles: freezing it mid-bob would leave it hanging over a
+    // trough.
     this._settleTick(dt, !this.floating && this.maxV < SETTLE_V && this.maxW < SETTLE_W);
     if (this.floating) this.elapsed = 0;
 
@@ -2019,17 +1792,14 @@ export class AmmoRagdoll extends BodyEngineBase {
 
     this._followRoot();   // the body lies where it fell — see bodyengine.js
 
-    // bones: rest direction → live direction, world-reference, parents first
-    // (drive is in construction order: torso out to fingertips). The node's
-    // POSITION is never written — solver error must stretch a joint, not the
-    // mesh (the source drives fingers rotation-only for the same reason).
+    // bones, parents first (drive is in construction order). The node's position is never written: solver error
+    // must stretch a joint, not the mesh.
     const pose = {};
     for (const d of this.drive) {
       const bp = this.p[d.bone], cp = this.p[d.child];
       if (!bp || !cp) continue;
-      // The BODY's rotation, not the bone's direction: shortestArc(restDir, liveDir) is a pure swing
-      // and discards roll about the bone (a knee facing anywhere, no forearm pronation). Bodies are
-      // rest-aligned, so the body's rotation since build IS the bone's.
+      // the body's rotation, not a swing from the bone's direction (which would discard roll: a knee facing
+      // anywhere, no forearm pronation); bodies are rest-aligned, so the body's rotation since build is the bone's
       quatOf2(d.body, _q).multiply(d.q0inv).multiply(d.restQuat);
       d.parent.getWorldQuaternion(_qp).invert();
       _qp.multiply(_q);
@@ -2039,17 +1809,12 @@ export class AmmoRagdoll extends BodyEngineBase {
     this.pose = pose;
     this.avatar.setPose(pose);
 
-    // hair rides raw nodes, local only: world orientation = the body's
-    // rest→live rotation composed on the born orientation (rest-aligned
-    // bodies make that exact), then into parent-local
+    // hair and wings ride raw nodes: the body's rest→live rotation on the born orientation, into parent-local
     for (const hs of this._dressSegs ?? []) {
       quatOf2(hs.body, _q).multiply(hs.restWorldQ);
       hs.parent.getWorldQuaternion(_qp).invert();
       hs.node.quaternion.copy(_qp.multiply(_q));
-      // updateMatrix() IS THE WRITE. three-vrm sets `bone.matrixAutoUpdate = false` on every
-      // spring-bone joint and maintains the matrices itself, so a bare quaternion write never reaches
-      // the renderer. (Wing bones aren't springbone joints, but the write is the same.)
-      hs.node.updateMatrix();
+      hs.node.updateMatrix();   // a springbone joint has matrixAutoUpdate false: this is the write
     }
 
     if (this.settledFor >= SETTLE_TIME || this.elapsed >= DEADLINE) {
@@ -2061,21 +1826,15 @@ export class AmmoRagdoll extends BodyEngineBase {
     return pose;
   }
 
-  /** Free every WASM object this instance created — Bullet objects do not
-   *  garbage-collect. Safe to call twice; called automatically at capture. */
+  /** Free every WASM object this instance created (Bullet objects do not garbage-collect). Safe to call twice;
+   *  called automatically at capture. */
   dispose() {
     if (this._freed) return;
     this._freed = true;
-    // The hair is left WHERE THE SIM ENDED — dishevelled, deliberately. The combed shape is captured
-    // once on the avatar (__hairRest) and every rebuild snaps back to it, so a crumple never becomes
-    // the next tumble's rest.
     this.done = true;
-    // Hand the hair back ADOPTING the pose it is in: a doll disposed mid-tumble (letting go of a
-    // dragged body) must not leave the hair owned by a dead sim. Three-vrm resumes from the fallen
-    // shape (no snap) and the hair stays live; the authored shape returns when she gets up (_combHair).
+    // hand the hair back adopting the pose it is in (dishevelled, deliberately): three-vrm resumes from the fallen
+    // shape, and the authored shape returns when she gets up (avatar.js _combHair)
     this.avatar?._releaseHair?.({ adopt: true });
-    // Not springBoneManager.reset(): that snaps to the COMBED pose, and dispose() fires when a body
-    // settles. Ownership is released when she gets UP (avatar.js's _releaseHair, off setLimp).
     try {
       for (const c of this._constraints) this.world.removeConstraint(c);
       for (const [, pin] of this._pinCons) this.world.removeConstraint(pin.con);
