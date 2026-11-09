@@ -825,7 +825,7 @@ doesn't fold is refused, loudly. The worlds dir's key files are renamed to `.cus
   `store/images/<hash>.<ext>`, a picture source. The kind is read from the
   bytes, not the name; the store is inert — what hangs in a world is the
   `picture` component, gated by builder rank and locks.
-- `?as=audio&name=foo` + an MP3/Ogg/WAV/WebM/M4A body (≤20MB) →
+- `?as=audio&name=foo` + an MP3/Ogg/WAV/WebM/M4A body (≤ `UPLOAD_CAP_MB`, default 20 MB) →
   `store/audio/<hash>.<ext>`, a sound source for a `sound` component.
 - Scripts don't go through HTTP: `act {verb: "upload", args: {text}}`
   stores the source as a blob and returns its `src`.
