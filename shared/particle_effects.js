@@ -48,6 +48,8 @@
 // (a new shape type) is not skipped: that document isn't readable here.
 // RESERVED names (refused at upload, so they can't come to mean anything else): RESERVED_EMITTER, RESERVED_FIELDS below,
 // and the instance's `t0` (componentspec particles.reservedFields).
+// TRIAL: the effect document format is trial and expected to grow: additions are additive, and a breaking change ships
+// with a translator.
 //
 // Every number is bounded (EFFECT_LIMITS): a document runs on every visitor's machine, so its cost is checked at the door.
 import { sha256 } from './protocol/hash.js';
