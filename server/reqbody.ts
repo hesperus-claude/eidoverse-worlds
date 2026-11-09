@@ -1,4 +1,4 @@
-// server/reqbody.ts — a request body read under a byte cap (every body the server reads: hygiene whole-body).
+// server/reqbody.ts — a request body read under a byte cap; every body the server reads comes through here.
 /** The body's bytes, or null once it passes `cap` bytes (the rest is cancelled, never buffered). */
 export async function readCappedBytes(req: Request, cap: number): Promise<Uint8Array | null> {
   const r = req.body?.getReader(); if (!r) return new Uint8Array(0);

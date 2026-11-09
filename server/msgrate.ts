@@ -1,10 +1,6 @@
-// server/msgrate.ts — every message a connection sends spends from a token bucket (the shape of nginx's limit_req burst).
-//
-// Messages are counted when HANDLED, so a stall on the authority's thread lands a client's ordinary traffic in a clump; the
-// burst (two seconds' worth by default) absorbs a backlog the server caused, and a sustained flood still empties it.
-//
-// Over the limit, a REQUEST is still answered (refused 'rate') rather than dropped, because its client waits for a reply by
-// id; at most `rate` such answers a second, past which even a request is dropped, so a flood can't buy a stream of replies.
+// server/msgrate.ts — a per-connection token bucket for incoming messages (nginx limit_req shape).
+// Messages are counted when handled, so the burst (two seconds' worth by default) absorbs a clump the server's own stall caused.
+// Over the limit a request is still refused with a reply (its client waits by id), up to `rate` refusals a second; past that it is dropped.
 
 export type MsgBucket = { tokens: number; at: number; refusedWin: number; refused: number };
 

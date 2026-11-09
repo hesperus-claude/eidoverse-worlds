@@ -1,9 +1,7 @@
-// server/peer.ts — the client's address, from a trusted proxy only. Behind nginx every socket is 127.0.0.1 and the real
-// address rides X-Real-IP (deploy/nginx-show.conf). Honoured from ANY peer, a guest reaching the port directly could pick
-// a fresh address per connection (voiding every address-keyed sanction and limiter) or frame another visitor's. So the
-// header is read only when the socket peer is a trusted proxy:
-// loopback by default; TRUSTED_PROXIES=<comma-separated addresses> extends it (the proxy's own address, as requestIP sees it).
-// Every place that wants "who is this connection" uses this one function (routes.ts, upload.ts); nothing reads the header raw.
+// server/peer.ts — the client's address, trusting the proxy header only from a trusted proxy. Behind nginx every socket is
+// 127.0.0.1 and the real address rides X-Real-IP (deploy/nginx-show.conf); honoured from any peer, a direct guest could forge
+// one and void every address-keyed limiter. Trusted = loopback, plus TRUSTED_PROXIES=<comma-separated addresses>.
+// Everything that asks "who is this connection" goes through addressOf; nothing reads the header raw.
 const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 export const TRUSTED_PROXIES: ReadonlySet<string> = new Set([...LOOPBACK, ...String(process.env.TRUSTED_PROXIES ?? "").split(",").map((s) => s.trim()).filter(Boolean)]);
 export const isTrustedProxy = (peer: string | null | undefined, trusted: ReadonlySet<string> = TRUSTED_PROXIES) => !!peer && trusted.has(peer);
@@ -17,8 +15,7 @@ export function clientAddress(req: { headers: { get(h: string): string | null } 
   if (isTrustedProxy(peer, trusted)) {
     if (header === "x-real-ip") { const real = req.headers.get("x-real-ip")?.trim(); if (real) return real; }
     else {
-      // appended hop by hop, and its left end is whatever the client sent: the address is the rightmost hop that isn't one
-      // of our own trusted proxies (the one the last of them saw), never the first
+      // the client controls the left end; the address is the rightmost hop that isn't one of our trusted proxies
       const hops = (req.headers.get("x-forwarded-for") ?? "").split(",").map((h) => h.trim()).filter(Boolean);
       for (let i = hops.length - 1; i >= 0; i--) if (!trusted.has(hops[i]!)) return hops[i]!;
     }
