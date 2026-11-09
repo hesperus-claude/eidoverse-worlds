@@ -1,6 +1,7 @@
 {
   "name": "eido-voicebot",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "description": "Show voice: world say verbs → ElevenLabs TTS → Discord voice channel",
   "scripts": {
