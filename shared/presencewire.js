@@ -1,6 +1,6 @@
-// Presence (present / away / busy) on the embodied plane: one small field on the pose packet, no new message type,
-// relayed by the server as sent (its fence, server/posecheck.ts, normalises only the voice and body fields below) and
-// remembered for late joiners with the settled pose. Shared by client and server so both agree on the vocabulary.
+// presencewire — the small fields on the pose packet beyond the pose itself: presence (present / away / busy), voice
+// state, body size, sample time, and the reserved state-sync sample. Relayed by the server as sent (server/posecheck.ts
+// normalises the voice and body fields) and remembered for late joiners with the settled pose. Shared by client and server.
 export const PRESENCE_STATES = ['present', 'away', 'busy'];
 
 export function presenceWire(state) {
@@ -13,8 +13,8 @@ export function applyPresenceWire(target, sample) {
   return true;
 }
 
-// Voice state on the same packet: `mic` — this body's microphone is live; `hear` — it is hearing voices (receiving AND
-// not hushed). Optional booleans: absent means UNKNOWN (undefined), never "can't hear you"; anything else is dropped.
+// Voice state: `mic` (this body's microphone is live), `hear` (it is receiving voices and not hushed). Optional
+// booleans: absent means UNKNOWN, never "can't hear you".
 export function voiceWire(v) {
   const o = {};
   if (typeof v?.mic === 'boolean') o.mic = v.mic;
@@ -30,10 +30,8 @@ export function applyVoiceWire(target, sample) {
   return did;
 }
 
-// This body's size and nameplate lift: `scale` — the wearer's size multiplier (body, eyes, stride and collider grow
-// together); `plateY` — metres the nameplate hangs above the measured crown, at authored size. Sent only when not the
-// default, so ABSENCE MEANS DEFAULT (1 and 0). Every receiver clamps (scale 0.5–2, plateY −0.3…+0.8 m); non-finite reads
-// as the default.
+// Body size and nameplate lift: `scale` (the wearer's size multiplier), `plateY` (metres the nameplate hangs above the
+// crown). Sent only when not the default, so ABSENCE MEANS DEFAULT (1 and 0); every receiver clamps.
 export const BODY_SCALE_MIN = 0.5, BODY_SCALE_MAX = 2;
 export const PLATE_Y_MIN = -0.3, PLATE_Y_MAX = 0.8;
 const clampTo = (v, lo, hi, dflt) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt);
@@ -60,9 +58,9 @@ export function applyBodyWire(target, sample) {
 }
 
 // ---- one time base (spec/PHYSICS.md §5.1) ----
-// A presence sample may carry `t`, its CAPTURE time on the authority's clock (a client converts with serverNow), and
-// `seq`, the sender's sample count. Absent, a receiver draws the sample at its frame's t. A capture time is used only
-// when sane against the carrying frame (not after it, not older than STALE_MS).
+// A presence sample may carry `t`, its CAPTURE time on the authority's clock, and `seq`, the sender's sample count.
+// Absent, a receiver draws the sample at its frame's t. A capture time counts only when sane against the carrying frame
+// (not after it, not older than SAMPLE_STALE_MS).
 export const SAMPLE_STALE_MS = 1000;
 export function sampleTime(pose, frameT) {
   const t = pose?.t;
@@ -71,8 +69,7 @@ export function sampleTime(pose, frameT) {
 
 // ---- the state-sync lane's sample (spec/PHYSICS.md §4.3) ----
 // What a live simulation authority streams for a THING it simulates (never a body). Reserved: the server refuses it
-// until live authority exists. Absolute and latest-wins (no deltas), so it can move to unreliable datagrams unchanged.
-// Rest is never a sample: it is a reliable settlement, logged.
+// until live authority exists. Absolute and latest-wins (no deltas). Rest is never a sample: it is a logged settlement.
 //   id     the thing                         by     the identity simulating it (u-…)
 //   aseq   authority sequence (touch, rest)  oseq   ownership sequence (grab); oseq beats aseq (Fiedler 2018)
 //   t      capture time, authority's clock   p      position, world frame, m      q   orientation, unit quaternion

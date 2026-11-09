@@ -1,4 +1,4 @@
-// shared/requests.js — the authority requests an edit plans, in the protocol's terms.
+// requests — the authority requests an edit plans, in the protocol's terms.
 // Every planner (editschema, hierarchy, blueprint, the client's gestures, the agent's tools) builds these, and every
 // sender sends them as they are: {verb, args}, one per change, or one `batch` for one gesture (= one act = one undo).
 // Ids and component names arrive as the VIEW shows them (shared/protocol/view.js decodes the translator's x-- escapes)
@@ -20,9 +20,8 @@ export const set = (id, component, value, { merge = false } = {}) =>
 export const unset = (id, component) => ({ verb: "delete", args: { id: E(id), component: encName(String(component)) } });
 /** remove a thing (and its children with it: the authority's rule). */
 export const remove = (id) => ({ verb: "delete", args: { id: E(id) } });
-/** use a thing (its reactions: a swing's push, a door's open). */
-/** use a thing. With no action the authority does the thing's one action, or names what it offers (never 'use' by default:
- *  a thing that offers 'push' doesn't 'use'). */
+/** use a thing (its reactions: a swing's push, a door's open). With no action the authority does the thing's one action,
+ *  or names what it offers. */
 export const use = (id, action = null, args = null) => ({ verb: "use", args: { id: E(id), ...(action != null ? { action: String(action) } : {}), ...(args ? { args } : {}) } });
 /** make a thing. components: {name: value}; the transform is whole (missing parts default). The authority mints its id
  *  (writers never choose ids): pass null, or a placeholder ('$lamp') when the same request (a batch) refers to it
@@ -53,10 +52,9 @@ export function transformOf(ent, patch = {}) {
 /** move/turn/scale a thing (local to its parent if it has one). */
 export const setTransform = (ent, id, patch) => set(id, "transform", transformOf(ent, patch));
 
-/** ride `to`: parent + the local pose (local to `to`). `socket` names one of `to`'s sockets (a socket child: PLAN-sockets-
- *  entities): the thing then rides THAT, and with no pose given lands on it (the socket's own frame: identity). So does
- *  a `to` that is itself a socket. Otherwise, with no pose, the carrier's origin. A socket name `to` doesn't have throws
- *  (nothing is sent). Re-parenting to the parent it already has is just the pose. `world` is the view ({entities}). */
+/** ride `to`: parent + the local pose. `socket` names one of `to`'s socket children: the thing then rides THAT, and with
+ *  no pose lands on it (identity). Otherwise, with no pose, the carrier's origin. A socket `to` doesn't have throws.
+ *  Re-parenting to the parent it already has is just the pose. `world` is the view ({entities}). */
 export function parent(world, id, to, { socket = null, pos = null, q = null, yaw = null } = {}) {
   const E0 = world?.entities ?? {};
   const ent = E0[id] ?? null;
@@ -74,8 +72,8 @@ export function parent(world, id, to, { socket = null, pos = null, q = null, yaw
 /** stop riding: drop the parent and stand at a world pose (the caller computes it: hierarchy.worldPose). */
 export const unparent = (ent, id, worldPatch) => batch([unset(id, "parent"), set(id, "transform", transformOf({ ...ent, parent: null }, worldPatch))]);
 
-/** a socket child of `host` (PLAN-sockets-entities): `socket` {name, part?, accepts?, radius?} at a pose local to the
- *  host (scale 1), with a `station` when a person attaches there. One create; `id` null or a placeholder ('$seat'). */
+/** a socket child of `host`: `socket` {name, part?, accepts?, radius?} at a pose local to the host (scale 1), with a
+ *  `station` when a person attaches there. One create; `id` null or a placeholder ('$seat'). */
 export const addSocket = (host, socket, { id = null, pos = null, q = null, station = null } = {}) =>
   create(id, { transform: { ...(pos ? { pos } : {}), ...(q ? { q } : {}), scale: [1, 1, 1] }, components: { parent: { to: E(host) }, socket, ...(station ? { station } : {}) } });
 /** one request for one gesture: a single op as itself, several as one batch (nested batches flattened). */
