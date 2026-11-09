@@ -1,8 +1,7 @@
 // WorldAgent — a headless world participant: the MCPL's body.
-// Owns its avatar exactly like the browser client owns a human's: simulated
-// position/yaw/speed ticked at 10Hz, pose intent streamed to the sequencer,
-// terrain replicated (terrain.js eval'd in Bun) so feet agree with
-// every renderer. No GPU here — rendering is the retina's job (see server.ts).
+// Owns its avatar as the browser client owns a human's: position/yaw/speed ticked at 10Hz, pose intent streamed to
+// the sequencer, terrain replicated so feet agree with every renderer. No GPU: pictures come from the world's /snap
+// (tools.ts screenshot).
 
 import { bodyOf } from "../shared/components.js";
 import { CLASSES, REACH_NOTE_MS, namedPointClass, pointClass } from "../shared/protocol/consent.js";
@@ -30,8 +29,7 @@ import { makeNavGrid, NAV_SUBSTEP, NAV_NUDGE, NAV_STEP, type NavProbe, type NavT
 import { placesOf, inRegion, names, destinationOf, toLocal, frameVolume, type Place, type Destination, type PlaceHolder } from "./places.ts";
 import { collisionTriangles } from "../server/geometry.ts";
 import { colliderOf } from "../shared/components.js";
-// FLIGHT. The same deterministic integrator the browser bench and the capture
-// path run -- one function, every runtime, per the spec's Q2 ruling.
+// FLIGHT: the same deterministic integrator the browser runs (shared/flight.js), one function in every runtime.
 import {
   makeConfig as flightConfig, initialState as flightState, step as flightStep,
   bodyDown as flightDown, bodyRecovered as flightRecovered, takeOff as flightTakeOff,
@@ -88,9 +86,8 @@ const unknownLimb = (raw: unknown, done: string) =>
 import { decideSupportClass, CERT_MAX_WORLD } from "../client/lib/supportclass.js";
 import { lyingFrame } from "../shared/rot.js";
 import { isFiniteVec3 } from "./shape.ts";
-// The same pure sky fold + weather derivation the browser client and the
-// sequencer run — text-tier perception must land on the SAME hour and
-// weather every renderer shows (issue #29's shared-fact boundary).
+// the same sky fold + weather derivation the browser and the sequencer run: perception lands on the hour and weather
+// every renderer shows
 import { foldSkyEntry, describeSky, effectiveSky, effectiveClock, dayPhase, hoursAt } from "../shared/forecast.js";
 // the world: this process folds the authority's own stream and reads the VIEW of that fold, like the browser
 import { makeReplica } from "../shared/protocol/replica.js";
@@ -99,9 +96,7 @@ import { diffView } from "../shared/viewdiff.js";
 import { emptyView, idOut } from "../shared/protocol/view.js";
 import { hear } from "../shared/chatwindow.js";
 import * as OP from "../shared/requests.js";
-// The `particles` component's meaning, shared verbatim with the browser host:
-// a renderer client and a resident who perceives by reading must agree about
-// what is burning (#25's shared-facts boundary).
+// the `particles` component's meaning, shared with the browser: both agree about what is burning
 import { describeParticles, emitterTransition, transitionLine } from "../shared/particles.js";
 import { saysOf } from "../shared/says.js";
 import { readOut, openAction } from "../shared/a11y.js";
@@ -152,7 +147,7 @@ const GRAVITY = 16;
 const RAGDOLL_ROOT_DROP = 0.7;   // client/lib/controller.js: vy -= 16 * dt
 /** Why fold_wings can't judge a body whose bones haven't been read. */
 const BONES_NOT_KNOWN = "this body's bones aren't known (its model hasn't loaded, or couldn't be read), so whether it has wings can't be checked";
-/** shared/flight.js's refusals (main #245) name the fix as an act — "unfold them first", "land first" — and the browser
+/** shared/flight.js's refusals name the fix as an act — "unfold them first", "land first" — and the browser
  *  has those acts by those names; here they are other tools' presets, so the reply names the call that does it. */
 const flightFixInOurTools = (reason: string) => String(reason)
   .replace(/unfold them first/, 'open them first (anim {stop: "wings-folded"})')
@@ -182,8 +177,8 @@ const WORLD_READ_MS = 10_000;
 /** How long a walk waits for placed geometry still loading before it is refused (see walkTo); covers a fetch's own
  *  timeout plus some queueing. */
 const WALK_READY_MS = 15_000;
-/** The world entity (places that belong to no thing live on it), and how far and how many places look lists (owner
- *  22:40/22:43: only what you can see, nearest first; move {to: "?"} lists them all, nearest 200; "?<text>" narrows). */
+/** The world entity (places that belong to no thing live on it), and how far and how many places look lists (only
+ *  what you can see, nearest first; move {to: "?"} lists them all, nearest 200; "?<text>" narrows). */
 const WORLD_ENTITY = "@world", PLACE_SIGHT_M = 30, PLACE_LOOK_MAX = 12, PLACE_LIST_MAX = 200;
 /** A thing with no entrance is walked up to: stopped this far short of its origin (its footprint unknown) / out from its
  *  footprint's nearest point (metres; the body's own, not the thing's). */
@@ -243,7 +238,7 @@ type Entity = { id: string; model: string; pos: number[]; yaw: number; actor: st
   comp?: Record<string, any> };
 type Person = { id: string; avatar: string; pose: Pose | null; declares?: string | null; observedAt?: number | null; bodyGeneration?: number };
 
-// ---- walking through buildings (#218, Sage; ported onto the one walker 10-15) ----
+// ---- walking through buildings (#218) ----
 /** What a walk's feet stand on: the terrain (followed live, tick by tick), or one identified floor of one structure at a
  *  fixed height. */
 type WalkSupport = { kind: "terrain"; height: number } |
@@ -350,7 +345,7 @@ const fillOf = (t: { area: number; x: number[]; z: number[] }) => {
  *  catwalk) is abstained on by design and a body falls to terrain instead. */
 const DECK_FILL = 0.45;
 
-// A canned "knocked over" pose for headless agents, which cannot simulate.
+// A canned "knocked over" pose, for when the ragdoll sim (physics.ts) is unavailable.
 /** One bone of a held pose: a rotation, or {q, t, s} (shared/humanoid.js poseChannels). */
 type PoseValue = number[] | { q?: number[]; t?: number[]; s?: number[] | number };
 
@@ -482,7 +477,7 @@ export class WorldAgent {
    *  name: resolveSeat). Others' come from their frames; mine rides my frames. */
   bodySeats = new Map<string, { to: string }>();
   myOccupancy: { to: string; pose?: string; at?: number } | null = null;
-  /** A host's sockets: its socket children (PLAN-sockets-entities), [{id, name, sock}] in child order — the one reader
+  /** A host's sockets: its socket children, [{id, name, sock}] in child order — the one reader
    *  look, attach and the seat lines share. */
   socketsOf(host: string) {
     // the same records the composition reads (entities, and mounts: a thing's fold parent)
@@ -541,9 +536,9 @@ export class WorldAgent {
         const lean = Array.isArray(m.spec?.lean) && m.spec.lean.length === 3 && m.spec.lean.every(Number.isFinite) ? m.spec.lean : null;
         const by = this.nameOfActor(String(m.from ?? "")) ?? String(m.from ?? "someone"); this.knockDown(by, lean, `(${by} knocks you over)`); }
       else if (m.type === "body") text = `reached your body (${m.kind}${m.spec?.point ? `, ${m.spec.point}` : ""}): the world let it (consent: ${m.consent})`;
-      else if (m.type === "vacated") {   // review r9 M3: an edit by someone else moved the seat I sat on, and the authority let me go
+      else if (m.type === "vacated") {   // an edit by someone else moved the seat I sat on, and the authority let me go
         if (vacatedFromMine(m, this.myOccupancy)) { const on = this.socketName(m.socket); this.setOccupant(null);
-          // stand where the authority let me go (its track of my body starts again there, r9 M2)
+          // stand where the authority let me go (its track of my body starts again there)
           const at = vacatedAt(m); if (at) { this.pos.x = at[0]; this.pos.y = at[1]; this.pos.z = at[2]; }
           text = `moved ${on}, the seat you were on, so you are standing where it was${typeof m.why === "string" ? ` (${m.why})` : ""}`; } }
       else if (m.type === "body-revoked") text = `withdrew consent for ${m.class}: what you were doing to their body has ended`;
@@ -725,9 +720,8 @@ export class WorldAgent {
    *  restarts, cannot drift, and compares directly with what the world hands out. */
   lastSeq = -1;
   private pendingHistory = new Map<string, (m: any) => void>();
-  /** The world's protocol facts, from the snapshot ({dialect, v} from genesis, its head and world id). Building tools route through
-   *  request()/sendOps() and WAIT for the authority's reply, so a refusal reaches the agent (PARITY (d)1). null until joined. */
-  /** the join snapshot's protocol line (D5): {dialect, v, world: the id, name: the directory, seq} */
+  /** The join snapshot's protocol line: {dialect, v, world: the id, name: the directory, seq}; null until joined. Building
+   *  tools go through request()/sendOps() and WAIT for the authority's reply, so a refusal reaches the agent. */
   snapshot: { dialect: string; v: number; world: string; name: string; seq: number } | null = null;
   /** The world's own fold, from the join cut and the authority's `log` stream (shared/protocol/replica.js). */
   private replica: any = null;
@@ -770,9 +764,7 @@ export class WorldAgent {
    *  behind the same door as a join). */
   get readHeaders(): Record<string, string> { const k = this.agentToken || process.env.WORLD_TOKEN || ""; return k ? { authorization: `Bearer ${k}` } : {}; }
   get httpBase(): string {
-    // Proper URL surgery, not string surgery: a WORLD_URL carrying a query
-    // string (…/ws?token=…) used to defeat the old `/\/ws$/` replace and
-    // send /snap + terrain fetches to a malformed URL (reported by digi/FC).
+    // URL surgery, not string surgery: a WORLD_URL carrying a query string (…/ws?token=…) defeats a regex replace
     const u = new URL(this.url);
     u.protocol = u.protocol === "wss:" ? "https:" : "http:";
     u.pathname = u.pathname.replace(/\/ws$/, "");
@@ -1089,14 +1081,10 @@ export class WorldAgent {
             resolve();
             break;
           case "puppet":
-            // A headless agent has no renderer, so honouring a puppet means
-            // re-broadcasting it as its own presence (pose → held pose; anim →
-            // re-sent as ours). Ragdoll can't be simulated here (no skeleton), so it
-            // slumps into a fixed collapsed pose; a renderer-backed body does the sim.
+            // A headless agent has no renderer, so honouring a puppet means re-broadcasting it as its own presence
+            // (pose → held pose; anim → re-sent as ours; ragdoll → knockDown: the real tumble, or the canned slump).
             if (msg.ragdoll) {
-              // {lean:[x,y,z]} m/s says which way the shove sends them — a
-              // headless body cannot tumble, but it CAN land where the shove
-              // was taking it: displaced downwind, then the slump.
+              // {lean:[x,y,z]} m/s says which way the shove sends them
               this.knockDown(msg.by,
                 (msg.ragdoll as { lean?: number[] })?.lean ?? null,
                 "knocks you over");
