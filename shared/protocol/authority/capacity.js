@@ -12,7 +12,7 @@ import { RESERVED, entryBy } from "./rights.js";
 // account-less people TOGETHER at most capacity.guestEntities (a guest is a fresh identity per connection, so a
 // per-identity budget can't hold). Only a write that adds entities is refused (full). capacity.avatar isn't enforced.
 // CAPACITY is this server's default per absent field, CAPACITY_CEILING the most an owner may set: server policy
-// (PROTOCOL §9.2), reported by schema. entities 10 000 is what scale-check C2 fills under budget; 50 000 is not measured.
+// (PROTOCOL §9.2), reported by schema. entities 10 000 is what test/protocol/scale-check.ts fills under budget.
 export const CAPACITY = { entities: 10000, guestEntities: 500, avatar: 2000 };
 export const CAPACITY_CEILING = { entities: 50000, guestEntities: 50000, avatar: 5000 };
 const capacityOf = (st) => { const ok = (x) => Number.isInteger(x) && x >= 0;

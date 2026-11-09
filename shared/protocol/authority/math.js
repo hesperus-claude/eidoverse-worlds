@@ -51,7 +51,7 @@ function solids(st, id) {
     for (const x of [lo[0], hi[0]]) for (const y of [lo[1], hi[1]]) for (const z of [lo[2], hi[2]]) { const p = qrot(t.q, [x * t.scale[0], y * t.scale[1], z * t.scale[2]]); cs.push(p.map((v, i) => v + t.pos[i])); }
     return { min: [0, 1, 2].map((i) => Math.min(...cs.map((c) => c[i]))), max: [0, 1, 2].map((i) => Math.max(...cs.map((c) => c[i]))) }; });
 }
-// Oriented boxes + the separating-axis test (F21): world-AABBs of rotated solids fatten into false overlaps.
+// Oriented boxes + the separating-axis test: world-AABBs of rotated solids fatten into false overlaps.
 function obbs(st, id) {
   const e = st.entities[id]; const m = geomE(e); if (!m) return [];
   const t = worldT(st, id); const boxes = m.solids ?? [boxOfM(m)];

@@ -21,8 +21,7 @@ import { isSocketC, socketsOf, socketRole } from "./sockets.js";
 import { backward, creatorOf, effective, lockStrength, madeBy, roleOf } from "./rights.js";
 import { shieldOf } from "./bodyconsent.js";
 import { actionsOf, offersFor, pivotOf } from "./use.js";
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// the layers above this one, reached through UP (ctx.js; a leaf may not import them: authority-layers-check)
 const danglingRefs = (...a) => UP.danglingRefs(...a);
 const guess = (...a) => UP.guess(...a);
 const historyDiff = (...a) => UP.historyDiff(...a);

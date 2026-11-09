@@ -21,8 +21,7 @@ import { actIndexOf } from "./undo.js";
 import { heldEvent } from "./scriptrun.js";
 import { occupiedRefuse, occupantOn } from "./occupants.js";
 import { body, dist, facingOf, gripPoint, gripOf, heldQ, lawOf, solidAt } from "./physics.js";
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// the layers above this one, reached through UP (ctx.js; a leaf may not import them: authority-layers-check)
 const actOf = (...a) => UP.actOf(...a);
 const admit = (...a) => UP.admit(...a);
 const changeEntry = (...a) => UP.changeEntry(...a);
@@ -211,7 +210,7 @@ function stampHomes(ctx, ops) {
     const setsH = ops.some((o) => o.comp === "home" && o.id === id);
     const h = homeOf(after.entities[id].c.home), was = homeOf(ctx.st.entities[id]?.c.home);
     let home = null;
-    const born = ops.some((o) => o.op === "create" && o.id === id);   // a copy or an instance goes home to where it was made, not to its source's home (review 10-06)
+    const born = ops.some((o) => o.op === "create" && o.id === id);   // a copy or an instance goes home to where it was made, not to its source's home
     if (!h || (born && !sameHome(after, id, h))) home = homeHere(after, id);
     else if (!setsH && was && sameHome(ctx.st, id, was) && !sameHome(after, id, was)) home = homeHere(after, id);
     if (!home) continue;
@@ -258,7 +257,7 @@ function launch(w, actor, a, verb, g = null) {
   if (a.w !== undefined && !(Array.isArray(a.w) && a.w.length === 3 && a.w.every((n) => Number.isFinite(n) && Math.abs(n) <= 1000))) refuse("shape", "w is [x, y, z]: spin in rad/s about world axes (each within ±1000)", "e.g. w: [0, 6.28, 0] turns once a second about up");
   if (a.t !== undefined && !Number.isFinite(a.t)) refuse("shape", "t is a time on the authority's clock (ms)", "leave it out if you don't know it");
   // q as let go (PHYSICS §4.2): the launch carries it, so a client that predicts its own throw folds the same inputs
-  // bit for bit (DESIGN-physics-responsiveness §3). A unit quaternion, else refused.
+  // bit for bit. A unit quaternion, else refused.
   if (a.q !== undefined) { if (!(Array.isArray(a.q) && a.q.length === 4 && a.q.every(Number.isFinite) && Math.abs(Math.hypot(...a.q) - 1) < 1e-3)) refuse("shape", "q is the thing's orientation as let go: a unit quaternion [x, y, z, w]", "leave it out to use the hold's");
     h.pose.q = a.q.map(noNeg0); }
   else h.pose.q = heldQ(w, h);   // let go as it was carried: turned with the body since it was taken
@@ -275,8 +274,8 @@ function launch(w, actor, a, verb, g = null) {
   h.pose.pos = relPos;   // admitted and planned: the hold now releases from here
   const act = w.append(actOf(w, actor, verb, a, { handled: h.handled }));
   const seq = w.append({ kind: "physics", actor, cause: act, verb: "launch", body: { id: a.id, p: L.p, yaw: qYaw(h.pose.q), ...(ENGINES[spec.engine].rotates ? { q: L.q } : {}), v, ...(a.w !== undefined ? { w: L.w } : {}), handled: h.handled } });
-  // R 10-10 evening: what rests on it (a tray's load, or a stack settled onto it) flies too, from where the hand has it,
-  // with the same velocity. Left as children they were carried rigidly by the thrown crate and sank with it into the ground.
+  // what rests on it (a tray's load) flies too, from where the hand has it, with the same velocity: left as children they
+  // would be carried rigidly by the thrown crate and sink with it into the ground
   const occupants = []; { const st = w.state(); const t = worldT(st, a.id);
     const at = scratch(st, [...(st.entities[a.id].c.parent ? [delOp(a.id, "parent")] : []), setOp(a.id, "transform", { pos: h.pose.pos.slice(), q: h.pose.q ?? t.q, scale: t.scale })]);
     // each occupant leaves with the tray's velocity at ITS spot (v + w × r: the rim of a tumbling tray moves faster than its

@@ -12,8 +12,7 @@ import { isSocketC } from "./sockets.js";
 import { RESERVED, admits, may, rankOf, roleOf } from "./rights.js";
 import { reactionCap } from "./use.js";
 import { idOut } from "../view.js";
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// the layers above this one, reached through UP (ctx.js; a leaf may not import them: authority-layers-check)
 const guess = (...a) => UP.guess(...a);
 const holdsRefs = (...a) => UP.holdsRefs(...a);
 const isNum = (...a) => UP.isNum(...a);
@@ -134,9 +133,9 @@ function buildUndo(ctx, a, w) {
   const groups = [], skipped = [];
   const keys = new Map();
   const madeHere = new Set(flat.filter((o) => o.op === "create").map((o) => o.id)); // undone as one unit: the whole thing goes
-  // review r8 M1: what the act's delete cleared in others' things (clearRefsTo, the authority's follow-up) comes back as a
-  // follow-up too: a value that named a thing this act removed, put back exactly as it was (touchedBy has already skipped
-  // it if anyone changed it since), so the referrer's lock or key can't veto the undo any more than it could the delete
+  // what the act's delete cleared in others' things (clearRefsTo, the authority's follow-up) comes back as a follow-up
+  // too, put back exactly as it was (touchedBy skips it if anyone changed it since), so the referrer's lock or key can't
+  // veto the undo any more than it could the delete
   // Only an op the target entry itself marks as a follow-up (its `cascade`) is restored as one: the
   // asker's own write in the same batch is theirs, and putting it back meets their rights and the locks now, like any undo.
   const goneHere = new Set(flat.filter((o) => o.op === "delete" && o.comp === undefined).map((o) => o.id));
@@ -175,8 +174,7 @@ function buildUndo(ctx, a, w) {
       if (old === undefined) { if (now.entities[id] && comp in now.entities[id].c) { const g = delOp(id, comp); if (leftoverFU(o)) g[FOLLOW_UP] = true; groups.push([...leftoversBack(id, comp), g]); } }
       else if (now.entities[id]) {
         if (!refRestore(o)) { const g = setOp(id, comp, old); if (leftoverFU(o)) g[FOLLOW_UP] = true; groups.push([...leftoversBack(id, comp), g]); }
-        // a follow-up restore names what this undo brings back; a reference to anything else gone since stays cleared (holes r10 L1:
-        // a second delete no longer refuses the whole undo)
+        // a follow-up restore names what this undo brings back; a reference to anything else gone since stays cleared
         else { const since = new Set(refsOf(comp, old).map((r) => r.id).filter((x) => !now.entities[x] && !goneHere.has(x)));
           const nv = since.size ? withoutRefs(id, comp, old, since) : old;
           if (since.size) (ctx.notes ??= []).push({ id, component: comp, kept: [...since], why: `${[...since].join(", ")} ${since.size > 1 ? "are" : "is"} gone since, so ${since.size > 1 ? "their references stay" : "its reference stays"} cleared` });
@@ -193,7 +191,7 @@ function buildUndo(ctx, a, w) {
       skipped.push({ id: o.id, component: o.comp, why: `putting it back would land it on ${hit}, which ${said(who)} has placed since`, by: who }); groups.splice(i, 1); } }
   return { groups, skipped }; };
   // An act the import's tail lift-sockets rewrote (its value before is the old world's spelling, which the door refuses) can't be undone
-  // in part: the whole request refuses, naming the act and its ops (Mica 11-05, #23 ruling 1)
+  // in part: the whole request refuses, naming the act and its ops
   const isLift = (i) => { const e = E[i], c = E[e.cause]; return e.actor === "system" && isE(c) && c.kind === "request" && c.verb === "lift-sockets" && c.actor === "system"; };
   const liftedOps = (res) => { const lifts = X.changes.slice(firstAfter(X.changes, res.seq)).filter(isLift); if (!lifts.length) return [];
     const ops = opsQuiet(res), hit = [];
@@ -205,7 +203,7 @@ function buildUndo(ctx, a, w) {
   const refuseLifted = (seq) => { const r = X.resultOf.get(seq); const ops = r === undefined ? [] : liftedOps(E[r]); if (!ops.length) return;
     refuse("undo-unavailable", `act ${seq} was imported, and the import rewrote ${ops.map((o) => `op ${o.index} (${o.id}${o.component ? ` ${o.component}` : ""})`).join(", ")} into today's spelling: its old value can't be put back, so nothing is undone`,
       "change it yourself; history shows the imported act and the lift that rewrote it", { cause: "migration-transformed", act: seq, ops }); };
-  // an act whose result leaves every thing it touched as it was (set then delete of a component it lacked) changed nothing: not undoable (review 2.20)
+  // an act whose result leaves every thing it touched as it was (set then delete of a component it lacked) changed nothing: not undoable
   const changedNothing = (seq) => { const r = X.resultOf.get(seq); if (r === undefined) return false;
     return [...new Set(opsQuiet(E[r]).map((o) => o.id))].every((id) => JSON.stringify(entityBefore(w, id, r, X)) === JSON.stringify(entityBefore(w, id, r + 1, X))); };
   const pick = (pred) => { for (let k = mine.length - 1; k >= 0; k--) if (pred(mine[k])) return E[mine[k]]; return undefined; };

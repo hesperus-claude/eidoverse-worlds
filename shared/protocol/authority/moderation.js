@@ -42,7 +42,7 @@ function personLift(w, actor, a, verb, recs, { strict, power = verb }) {
   if (a.who === actor) refuse("rank", `you can't lift a ${verb} on yourself`, "ask someone ranked above whoever made it");
   // a lift ends every record of its kind in force, so it must be allowed over each one (stacked sanctions);
   // with none in force (never made, or already ended) it answers ok and changes nothing: no record is logged, and nobody is
-  // told (server-check CM4: "a second unban changes nothing, and tells nobody anything"). Returns whether any was in force
+  // told. Returns whether any was in force
   const inForce = Array.isArray(recs) ? recs : recs ? [recs] : [];
   for (const rec of inForce) {
   if (roleOf(st, actor) === "owner" || rec.actor === actor) continue;

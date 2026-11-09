@@ -14,8 +14,7 @@ import { readback, delOp, holdsCustody, isE, opsQuiet, scratch, setOp } from "./
 import { aabb, descendants, localFrom, worldT } from "./math.js";
 import { groundOf, groundReady, hitsIx, near, spatial, spend, supportBelow, supportUnder } from "./spatial.js";
 import { zonesOf, waterVolumes, worldLevelAt } from "../../zone.js";
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// the layers above this one, reached through UP (ctx.js; a leaf may not import them: authority-layers-check)
 const actEntry = (...a) => UP.actEntry(...a);
 const admit = (...a) => UP.admit(...a);
 const boundsOf = (...a) => UP.boundsOf(...a);
@@ -99,20 +98,12 @@ function settleSim(w) {
     }
   }
 }
-// A deploy changes the versions a server carries: a world the old server stamped names a version this one may not
-// carry, carried() calls it foreign, and nothing would fly until an owner rewrote physics-engine. The authority restamps
-// it itself, as system, at the first act or heartbeat after load, when all of these hold:
-//   - this server carries an engine of that NAME, under another version (stampOf: the one it would stamp today);
-//   - that version was STAMPED (no version typed: by an authority, or by this restamp), never named by the owner: a
-//     version the owner chose is the owner's word (phys-check pc-k), and stays foreign;
-//   - nothing is held in presence right now (a hand lets go soon; the cut tries again at the next act). A flight does NOT
-//     hold it back: this server can't compute it, so the cut ends it where the fold has it, and
-//     the act names what it ended. The log is read from the epoch's start for those: a launch whose body has no rest under
-//     it is in flight; a purged launch (readback null) is a flight whose body is unknown, counted, not named.
-// Otherwise it does nothing and the world stays foreign (the owner can still restamp by hand, force: true). Checked once
-// per world object and spec (a heartbeat doesn't re-read the log), except while a hold is what blocks it.
-// What only the world's engine computes, refused when this server doesn't carry it: never quietly
-// replaced by a settlement, and named, so the person knows what to change.
+// A deploy changes the versions a server carries, and a world stamped with an old one would be foreign (nothing flies)
+// until an owner rewrote physics-engine. The authority restamps it itself, as system, at the first act or heartbeat after
+// load, when: this server carries an engine of that NAME under another version; that version was STAMPED by an authority,
+// never typed by the owner (the owner's word stays foreign); and nothing is held in presence (it tries again later). A
+// flight does NOT hold it back: the cut ends it where the fold has it and names it in the act. Otherwise the world stays
+// foreign (the owner may restamp by hand, force: true). Checked once per world object and spec.
 export function refuseForeign(spec, what) {
   refuse("foreign-engine", `this world runs ${spec.engine}, which this server doesn't carry: ${what}, and only that engine computes it`,
     `put it down or leave it be; an owner can set one this server carries: set {id: '@world', component: 'physics-engine', value: {engine: '${Object.keys(ENGINES)[0]}'}}`);
@@ -214,7 +205,6 @@ function heldQ(w, h) { const y = facingOf(w, h.by); const q = h.pose?.q;
 function gripOf(w, actor, id) {
   const h = w.presence.holds[id];
   // gone first: a delete releases the hold itself, so a put of a deleted thing must say it's gone, not 'not-holding'
-  // (attack-check L1low)
   if (!w.state().entities[id]) { if (h) { delete w.presence.holds[id]; w.savePresence(); } refuse("gone", h?.by === actor || !h ? `${id} isn't here any more (it was deleted)` : `${id} was deleted`, "your hand is empty now"); }
   if (!h || h.by !== actor) refuse("not-holding", `you aren't holding ${id}${h ? ` (${said(h.by)} is)` : ""}`, `grab {id: '${id}'} first`);
   return h;
@@ -239,18 +229,11 @@ function solidAt(w, st, p, except = new Set(), cands = null, box = bodyBox(p)) {
 // an open openable (a whole door, not a cabinet's part) is out of the way: the fix above says "through a door someone
 // opens", and every browser's collider follows the drawn leaf (client/lib/openable.js reindexes it at rest)
 const openNow = (st, id) => { const o = st.entities[id]?.c.openable; return !!o && typeof o === "object" && o.open === true && !o.part; };
-// THE GROUND under a body (owner 10-15 22:34; holes review H2). In a world with terrain (and water), each point of a step is
-// judged with the MOVER's floor law (shared/mover.js floorStep: the walker's own), on the ground the walker walks on: the
-// terrain heightfield, and any placed top the body could step (or haul out) onto from where it is. The law says where the
-// feet end up, whether the water's rule holds (then the box is the swimmer's: bodyBox with the level), and refuses a floor
-// that is a wall from here (a terrain bank too high above the water, a cliff). A move is longer than a stride (an agent asks
-// for 2 m at once), so its points are judged as a chain of sub-strides, each from the last; and a body that swam earlier in
-// the move may also be judged from where it last swam (one stride from there to here, the mover's haul-out), so a sweep
-// point that lands part-way up a rim doesn't refuse what the walker's stride over it accepts. A flat world (no terrain
-// component) skips all of this: its ground is y 0 and dry, as before.
-// The sub-strides are at least MOVER.track.sweep (5 cm) apart in the ground plane (the sweep's own points are closer
-// where y changes: its spacing is 3-D): the floor law is a stride's law, and a chain of millimetre steps would walk up
-// any wall the ground draws as steep-but-continuous (the terrain law's flatten edge is 1 cm wide, not 0).
+// THE GROUND under a body. In a world with terrain (and water), each point of a step is judged with the MOVER's floor law
+// (shared/mover.js floorStep) on the terrain heightfield and any placed top it could step onto: where the feet end up,
+// whether the water's rule holds (then the box is the swimmer's), and a floor that is a wall from here is refused. A move
+// is judged as a chain of sub-strides at least MOVER.track.sweep apart (millimetre steps would walk up any steep slope),
+// and a body that swam earlier in the move is also judged from where it last swam (the haul-out). A flat world skips this.
 // @world's level at p as the browser's walk reads it: none in a pocket that keeps it out (zone.js worldLevelAt)
 const ZONES = new WeakMap();
 function levelAt(st, lv, p) {

@@ -12,7 +12,7 @@ const ownersOf = (st) => { const c = st.entities?.["@world"]?.c ?? {}; return Ob
 // §2.3: an empty owner list means NOBODY above member. A world may declare a default role for strangers
 // (`default-role`, what an imported world's `roles['*']` becomes); absence means member (a new world writes builder at founding).
 // a guest (no account) is never given the world's default role: it's for people who proved who they are. An owner
-// may still grant a guest a role by its id (H4)
+// may still grant a guest a role by its id
 // …unless the world opts guests in (`default-role.guests`): explicit, default member, never above the default role
 function roleOf(st, actor, anon = CTX.isAnon(actor)) {
   const c = wcOf(st); if (!c) return "member";

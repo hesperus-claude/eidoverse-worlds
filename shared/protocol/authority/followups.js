@@ -18,8 +18,7 @@ import { aabb, ancestors, descendants, localFrom, qYaw, satCost, satDepth, world
 import { familyOf, groundOf, groundReady, near, spatial, spend, supportBelow, supportUnder } from "./spatial.js";
 import { backward, entryBy } from "./rights.js";
 import { admit } from "./gate.js";
-// the layers above this one (a leaf may not import them: authority-layers-check), reached through UP (ctx.js), which
-// authority.js binds at load
+// the layers above this one, reached through UP (ctx.js; a leaf may not import them: authority-layers-check)
 const boundsOf = (...a) => UP.boundsOf(...a);
 const changeEntry = (...a) => UP.changeEntry(...a);
 const outsideWorld = (...a) => UP.outsideWorld(...a);
@@ -116,8 +115,8 @@ function stampShapes(ctx, ops) {
   const after = scratch(ctx.st, ops); const simOn = !!after.entities["@world"]?.c["physics-engine"];
   const ids = new Set();
   for (const o of ops) if ((o.op === "set" || o.op === "delete") && o.comp && (o.comp === "physics" || o.comp === "model" || o.comp === "collider" || o.comp === "mesh")) ids.add(o.id);
-  // a thing that moves by its motion or opens is a KINEMATIC collider (PHYSICS §3.3; shape audit 10-16): the stamp says so
-  // (eidosim carries kinematic as static, so behaviour is unchanged; the record no longer says "never moves")
+  // a thing that moves by its motion or opens is a KINEMATIC collider (PHYSICS §3.3): the stamp says so (eidosim carries
+  // kinematic as static)
   for (const o of ops) if (o.op === "set" && o.comp && (o.comp === "motion" || o.comp.startsWith("motion:") || o.comp === "openable")) ids.add(o.id);
   const moves = (id) => { for (let k = id, n = 0; k && n < 33; k = after.entities[k]?.c.parent?.to, n++) { const c = after.entities[k]?.c; if (!c) break;
     if (c.openable !== undefined || Object.keys(c).some((x) => x === "motion" || x.startsWith("motion:"))) return true; } return false; };
@@ -182,7 +181,7 @@ const hashOfModel = (m) => { if (typeof m !== "string") return null; const a = e
   let h = null; try { h = CTX.cat.get(m)?.sha256; } catch { h = null; } return typeof h === "string" && /^[0-9a-f]{64}$/.test(h) ? `sha256:${h}` : null; };
 function stampModelHash(ctx, ops) {
   const ids = new Set(); for (const o of ops) if ((o.op === "set" || o.op === "delete") && o.comp === "model") ids.add(o.id);
-  // a fork's copy carries what its parent holds (review r8 H2): a hash measured since, or none, is the parent's to stamp
+  // a fork's copy carries what its parent holds: a hash measured since, or none, is the parent's to stamp
   if (!ids.size || CTX.forking) return ops;
   const after = scratch(ctx.st, ops); const out = ops.slice();
   for (const id of ids) {
@@ -216,7 +215,7 @@ function lastTouch(w, id, comp, { editsOnly = false, authored = false } = {}) {
     const ops = opsQuiet(e), fu = authored ? cascadeOf(e) : null;
     for (let k = ops.length - 1; k >= 0; k--) { const o = ops[k]; if (o.id !== id) continue;
       if (o.op === "create" || o.comp === comp || (o.op === "delete" && o.comp === undefined)) {
-        // a follow-up set put a value back (an undo's restore, review r10 M2): it also steps over the follow-up delete it reverses
+        // a follow-up set put a value back (an undo's restore): it also steps over the follow-up delete it reverses
         if (fu?.has(k)) { if (o.op === "set") { restored = true; continue; } if (o.op === "delete" && restored) { restored = false; continue; } return null; }
         // authored: whose rights wrote it (a handler's author, a script's sponsor), not who invoked it: a handler that writes
         // its own thing's reactions installs its author's handler, never the invoker's (null when a purge erased whose)
@@ -232,7 +231,7 @@ function touchedOf(w, id, comps, horizon = TOUCH_HORIZON) {
     seen++; oldest = i; const fu = cascadeOf(e);
     opsQuiet(e).forEach((o, k) => { if (o.id !== id) return;
       const hit = o.op === "create" ? [...want] : want.has(o.comp) ? [o.comp] : [];
-      // a follow-up (a reference cleared by a delete, review r9 H1) says so: `by` caused it, but didn't author the value
+      // a follow-up (a reference cleared by a delete) says so: `by` caused it, but didn't author the value
       for (const c of hit) { out[c] = { seq: i, by: e.actor, who: said(e.actor), ts: e.ts, ...(o.op === "create" ? { created: true } : {}), ...(fu.has(k) ? { followUp: true } : {}) }; want.delete(c); } }); }
   for (const c of want) out[c] = { beyond: oldest ?? 0 };   // not found in the window: "unchanged since before #N"
   return out;

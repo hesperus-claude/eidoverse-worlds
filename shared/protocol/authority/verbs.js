@@ -1,7 +1,7 @@
 // shared/protocol/authority/verbs.js — the verb table's own bodies, in the groups authority.js spreads into VERBS in
 // their table order: FOUNDING_VERBS (create-world), SCHEMA_VERBS (schema), WRITE_VERBS (create, set, delete, place,
 // turn, publish, update), SAY_VERBS (say, undo, caption), BATCH_VERBS (sky, weather, batch, fork-copy), and
-// buildBatch (refactor split, 2026-10-17; moved from authority.js's VERBS table unchanged). Only schema's did-you-mean reads UP (its guess).
+// buildBatch. Only schema's did-you-mean reads UP (its guess).
 import { cowState, applyCow, DIALECT, VERSION, emptyState, keyOk, utf8Len } from "../fold.js";
 import { checkRequires, KNOWN_FEATURES } from "../features.js";
 import { valueCheck } from "./checks.js";
