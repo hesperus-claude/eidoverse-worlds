@@ -20,14 +20,12 @@ import { REMOVED_VERBS } from "../shared/protocol/verbspec.js";
 import { serverBans, saveServerBans, banKey, ADDR_BAN_MS, bansLiftedBy, serverBansText, takePending, notPersisted } from "./moderation.ts";
 import { isOwner } from "../shared/protocol/roles.js";
 
-/** Who a presence message (puppet, bodydrag, typing) is FOR (security pass 3, H2). A sender that knows the
- *  identity names it by its opaque actor id (`targetActor` / `toActor` — every arrive carries one); then that identity's
- *  embodied leg is the target, whatever name anyone wears, and an actor who isn't here is simply not here (the name
- *  beside it is NOT a fallback: that would hand the message to whoever wears the name). A sender with no actor id (an
- *  agent, an older client) still reaches by name — names are unique among the people here and, for accounts, across
- *  the directory (server.ts join). A display name can't be shaped like an actor id (refused at join). */
+/** Who a presence message (puppet, bodydrag, typing) is for. A sender that knows the identity names it by its opaque actor id
+ *  (`targetActor` / `toActor`); then that identity's embodied leg is the target whatever name anyone wears, and the name beside
+ *  it is not a fallback. A sender with no actor id (an agent, an older client) still reaches by name, which is unique among
+ *  the people here. A display name can't be shaped like an actor id (refused at join). */
 const ACTOR_ID = /^u-[a-z2-7]{20}(?:[a-z2-7]{4})?$/;
-/** The world's body-default as it stands now ({} when unset): the relay never reads the authority's synced copy (review full-260 #1). */
+/** The world's body-default as it stands now ({} when unset): the relay never reads the authority's synced copy. */
 const liveBodyDefault = (live: any) => live.state?.()?.entities?.["@world"]?.c?.["body-default"] ?? {};
 
 /** Body consent at the server (PROTOCOL §5): a presence act on someone else's body is checked against THEIR consent
@@ -67,7 +65,7 @@ export type MsgCtx = {
  *  page's length, so readHistory's ceiling would never stop it). */
 const pageLimit = (v: unknown): number => { const n = Number(v ?? LIMITS.PAGE_DEFAULT); return Number.isInteger(n) && n >= 1 ? Math.min(LIMITS.PAGE_MAX, n) : LIMITS.PAGE_DEFAULT; };
 
-/** A moment, not a fact: a socket still holding a backlog skips it rather than queueing another 64 KB (security review M5). */
+/** A moment, not a fact: a socket still holding a backlog skips it rather than queueing another 64 KB. */
 export function relayLossy(w: Pick<World, "clients">, msg: unknown, except?: Client) {
   const data = JSON.stringify(msg);
   for (const t of w.clients) if (t !== except && (t.ws.getBufferedAmount?.() ?? 0) <= FRAME_SKIP_BUFFERED) t.ws.send(data);
@@ -186,8 +184,8 @@ export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
     const addressed = { type: "bodydrag", by: c.id, ...(c.actorId ? { byActor: c.actorId } : {}) };
     // a grab takes someone's body (move, L6): their consent and reach, at the server; the owner decides whether to accept it
     if (msg.grab != null) { const why = bodyRefusal(c, tc, "displace"); if (why) { ws.send(JSON.stringify({ type: "error", error: why })); return; } }
-    // A non-grab release ends the drag even after move consent closes; its final sample and nails need the same live
-    // displace consent as any other effect, so a refused release carries only the end (house 6340433633 Q3).
+    // a non-grab release ends the drag even after move consent closes; its final sample and nails need live displace consent,
+    // so a refused release carries only the end
     else if (!(c.actorId && c.actorId === tc.actorId)) {
       const nail = msg.unpin != null || msg.pinAt != null || msg.pins != null;
       const endAlone = () => { if (msg.end != null) tc.ws.send(JSON.stringify({ ...addressed, end: true })); };
@@ -353,12 +351,12 @@ export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
     // — so these are messages, gated on SERVER_OPERATORS and persisted in
     // .bans.json (same posture as .sessions.json). Replies come back as
     // `mod` messages; refusals as `error`, like everything else.
-    if (!isOperator(c.account)) {   // SERVER_OPERATORS names ACCOUNTS (security review C3), never a typed name
+    if (!isOperator(c.account)) {   // SERVER_OPERATORS names accounts, never a typed name
       ws.send(JSON.stringify({ type: "error", error: "server moderation is for this server's operators (SERVER_OPERATORS) — per-world /ban is the world owner's tool" }));
       return;
     }
     if (msg.type === "server-bans") {
-      ws.send(JSON.stringify({ type: "mod", text: serverBansText() }));   // pre-account bans listed too (R 10-28: moderation.ts restoreBans)
+      ws.send(JSON.stringify({ type: "mod", text: serverBansText() }));   // pre-account bans listed too (moderation.ts restoreBans)
       return;
     }
     // an account selector keeps its whole length (an aid1 account carries its issuer's URL); a name is cut to ID_LEN
@@ -380,10 +378,9 @@ export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
       ws.send(JSON.stringify({ type: "mod", text: (gone.length ? `${id} is no longer banned server-wide` : `${id} was not banned server-wide`) + (unsaved ? ` (${notPersisted(unsaved)})` : "") }));
       return;
     }
-    // server-ban (security review 10-18 H1): a ban is filed against what the DOOR checks — the target's proven account, or a
-    // guest's hashed address — never a display name alone (findBan matches account/addr; a name-keyed record bound nothing until
-    // a restart rewrote it). Present anywhere: their account (or, a guest, their address); absent: every account the directory
-    // knows under that name. Nothing to bind → refused, said plainly.
+    // server-ban: filed against what the door checks (the target's proven account, or a guest's hashed address), never a display
+    // name alone. Present anywhere: their account (a guest: their address); absent: every account the directory knows under
+    // that name. Nothing to bind → refused, said plainly.
     const named = dir.accountsNamed(id);   // reads the directory fresh: a bind another writer made since is seen
     const byIdentity = isMinted(id) ? dir.entry(id)?.subs ?? [] : [];   // a u- identity (whois) binds its accounts
     const present = [...worlds.values()].flatMap((w) => [...w.clients]).filter((o) => fold(o.id) === fold(id) || (typeof msg.id === "string" && o.account === msg.id) || (isMinted(id) && o.actorId === id));

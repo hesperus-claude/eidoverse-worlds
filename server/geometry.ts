@@ -4,7 +4,7 @@
 
 import { statSync } from "node:fs";
 import { solidsFromTriangles } from "./solids.ts";
-// the support classifier both runtimes share (#84); this file only supplies vertices
+// the support classifier both runtimes share; this file only supplies vertices
 import { gridAccumulator, SPARSE_MIN_CELLS, TOPGRID_VERSION, TOPGRID_MAX_JSON, LIE_GRID,
   CERT_SPREAD, CERT_SUBSAMPLE } from "../client/lib/supportclass.js";
 
@@ -231,7 +231,7 @@ export async function summarizeGlb(absPath: string, opts: { solids?: boolean } =
 
   const ok = Number.isFinite(min[0]);
 
-  // ---- the box-top lie probe (#84) -----------------------------------------
+  // ---- the box-top lie probe -----------------------------------
   // Same math as the browser's collider decide(), over EVERY vertex (sampling would change the verdict); only for
   // shapes that could be floor-shaped at some in-world scale.
   let lie: number | undefined;
