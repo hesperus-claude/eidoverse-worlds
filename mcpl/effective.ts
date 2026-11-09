@@ -14,7 +14,7 @@ export type EffectiveView = {
   /** The folded entity, or undefined when `id` is not a thing (a body, or unknown). */
   entity(id: string): { pos: number[]; yaw?: number; scale?: number; scale3?: number[]; q?: number[]; comp?: Record<string, any> } | undefined;
   /** The live mount record for `id` (thing OR body), or undefined when unmounted. A body's seat is a socket entity
-   *  ({to: <socket id>}: PLAN-sockets-entities); a thing's mount is its fold parent (offset/q local to it). */
+   *  ({to: <socket id>}); a thing's mount is its fold parent (offset/q local to it). */
   mount(id: string): { to: string; offset?: number[]; yaw?: number; q?: number[] } | undefined;
   /** The SERVER-JUDGED seat verdict for this body's avatar (as /avatars serves it). Absent reads as "no profile":
    *  this module never defaults or rederives a contact. */
@@ -86,8 +86,7 @@ function resolve(id: string, view: EffectiveView, nowMs: number, depth: number, 
     return { ok: false, why: `socket "${ownSock.name}" rides part "${ownSock.part}" of ${m?.to ?? "its host"} — ${PART_UNAVAILABLE}`, link: m?.to ?? id };
 
   // ---- mounted: the parent's frame is the truth, recursively -----------------
-  // A mounted entity's own root motion is inert, as in the renderer (motion.js tickMotion skips mountedTo):
-  // the mount chain wins; own motion resumes on dismount. Pinned by test.
+  // A mounted entity's own root motion is inert, as in the renderer (client/lib/motion.js): the mount chain wins.
   if (m) {
     if (!m.to || m.to === id) return { ok: false, why: "malformed mount (no parent)", link: id };
     const parent = resolve(m.to, view, nowMs, depth - 1, seen);
@@ -113,7 +112,6 @@ function resolve(id: string, view: EffectiveView, nowMs: number, depth: number, 
     let pos: [number, number, number] = [parent.pos[0] + d[0], parent.pos[1] + d[1], parent.pos[2] + d[2]];
     // Seat profile correction, bodies only: contact plane onto the socket plane along WORLD up (a seated body renders
     // upright). contactY is at the AUTHORED size and scales by the occupant's own body size, never the parent's.
-    // No mixer here, so seatGateCore's contract half is the truth; parity with the renderer is pinned by test.
     let seat: { state: "profiled" | "approximate"; reason?: string } | undefined;
     if (isBody) {
       const station = (view.entity(m.to) as any)?.station;   // what a body does at the socket
@@ -157,8 +155,7 @@ function resolve(id: string, view: EffectiveView, nowMs: number, depth: number, 
     const pv = (e as any)?.pivot?.pos; const s3 = Array.isArray((e as any).scale3) ? (e as any).scale3 : [scale, scale, scale];
     const r = evalWholeMotion({ pos: e.pos, yaw: yaw0, ...(fin4(e.q) ? { q: e.q } : {}), ...(Array.isArray(pv) && pv.length === 3 ? { pivot: pv.map((v: number, i: number) => v * s3[i]) } : {}) }, motion, nowMs);   // the same hinge the renderer swings about
     if (!r.ok) return { ok: false, why: r.why, link: id };
-    // part-carrying motion returns the base unmoved (parts swing, roots
-    // stand still) — report the chain as still in that case
+    // part-carrying motion leaves the root still (parts swing): report the chain as still
     const rootMoved = typeof motion.part !== "string";
     return { ok: true, pos: r.pos as [number, number, number], yaw: r.yaw,
       quat: r.quat as [number, number, number, number], scale, scale3,
