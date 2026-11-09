@@ -16,7 +16,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { mapGrassArgs, presetStrokes, hexToMultiplier, isLegacyArgs } from "../../client/lib/flora_args.js";
+import { mapGrassArgs, presetStrokes, hexToMultiplier, isLegacyArgs } from "../../shared/flora_args.js";
 import { composeField, retireField } from "../../client/lib/flora_field.js";
 import { bladeLodIndex, bladeCoarseIndex, BLADE_VERTS, BLADE_INDICES,
   BLADE_COARSE_INDICES } from "../../client/lib/flora_lod.js";

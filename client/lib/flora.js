@@ -4,7 +4,7 @@
 //
 // This file owns the DOM/THREE-bound hosting. The pure logic lives beside it
 // so it can be unit-tested without a browser:
-//   flora_args.js  — legacy makeGrass-bag mapping + preset/variety strokes
+//   shared/flora_args.js — legacy makeGrass-bag mapping + preset/variety strokes (the authority uses it too)
 //   flora_field.js — field composition + retirement lifecycle
 //   flora_lod.js   — blade-LOD index subsets for tiled strokes (§17b)
 // All are covered by test/client/flora-test.ts.
@@ -14,13 +14,12 @@ import { primeFiles } from './assets.js';
 import { colliders } from './colliders.js';
 import { myState } from './controller.js';
 import { remotes } from './remotes.js';
-import { mapGrassArgs, presetStrokes } from './flora_args.js';
+import { mapGrassArgs, presetStrokes } from '../../shared/flora_args.js';
 import { composeField } from './flora_field.js';
 import { bladeLodIndex, bladeCoarseIndex } from './flora_lod.js';
 import { densityCount } from './grass_quality.js';
 import { pushHostHook } from './autohooks.js';
 
-export { mapGrassArgs, presetStrokes } from './flora_args.js';
 export { retireField } from './flora_field.js';
 
 // ---- module ----------------------------------------------------------------

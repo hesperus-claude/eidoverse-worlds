@@ -1,7 +1,7 @@
 // Used outside this repo: the native-renderer bridge imports projectFlora from here; keep it until that moves.
 // Same seeded placement/biome definitions as Three.js; geometry and draw budget
 // are renderer-specific. This module never mutates folded state.
-import { mapGrassArgs, presetStrokes } from '../client/lib/flora_args.js';
+import { mapGrassArgs, presetStrokes } from '../shared/flora_args.js';
 import { placeInstances, placeRows, placeExplicit, resetFloraOccupancy } from '../shared/flora-placement.js';
 import presets from '../defs/flora/_presets.json';
 import grass from '../defs/flora/grass.json';
