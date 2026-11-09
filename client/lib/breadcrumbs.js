@@ -1,4 +1,4 @@
-// bc — crash breadcrumbs (?bc=1), streamed over the live world socket: the server rings the last 40 per client and
+// breadcrumbs — crash breadcrumbs (?bc=1), streamed over the live world socket: the server rings the last 40 per client and
 // prints them when the socket dies — the one observer a renderer crash can't take down (same-origin tabs share the
 // renderer, and a dying renderer's localStorage writes can be discarded). Dev-only.
 // A leaf on purpose: imports net.js only. avatar.js reads globalThis.__ewBC rather than importing — keep it that way,

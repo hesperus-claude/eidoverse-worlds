@@ -1,4 +1,4 @@
-// conjure — the Orrery panel: prompt → image candidates (you pick one) →
+// generate — the conjure (Orrery) panel: prompt → image candidates (you pick one) →
 // 3D mesh → into the world, with the queue and progress visible in-world.
 //
 // Orrery (orrery.animalabs.ai) is the multistage 3D prompting service (gpt-image turnarounds → Tripo mesh →

@@ -1,4 +1,4 @@
-// frame — the loop as an explicit system list (TEL0S_NOTES §6, §14.2 6b).
+// frameloop — the loop as an explicit system list (TEL0S_NOTES §6, §14.2 6b).
 //
 // Systems REGISTER, in order, and the loop runs the list: each tick is timed into a rolling average (EW.frame() prints
 // the bill), carries an enable flag and a frame stride the governor may set (every=2 runs at half rate), and is fenced

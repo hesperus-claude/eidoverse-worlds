@@ -1,4 +1,4 @@
-// seatedit — the seat-anchor authoring grammar (split from build.js, §R4).
+// socketedit — the seat-anchor authoring grammar (split from build.js, §R4).
 //
 // Sockets are child entities of their host (PLAN-sockets-entities), shown in build mode as gold gizmos: click to
 // select, drag to refine, Q/E to face, Del to remove. Each commit is one write to the socket child itself.

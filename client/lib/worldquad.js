@@ -1,4 +1,4 @@
-// world — the desk's world frame as a VR quad, on the same-source pattern:
+// worldquad — the desk's world frame as a VR quad, on the same-source pattern:
 // spawn the curated starters through the SAME verb build.js sends (same id
 // minting, same undo entry), and preview the sky presets through the SAME
 // previewSky the desk's preset buttons call. The desk's 'log to world' for

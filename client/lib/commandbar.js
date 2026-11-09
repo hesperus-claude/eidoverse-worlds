@@ -1,4 +1,4 @@
-// lantern — one line for everything: type to talk, `/` for commands, or a word ("sky", "wave", "mute") for the
+// commandbar — the lantern: one line for everything: type to talk, `/` for commands, or a word ("sky", "wave", "mute") for the
 // matching ACTIONS, with their keys shown so the keys teach themselves.
 //
 // Ctrl/Cmd+K or the resting line bottom-centre opens it; Enter-to-chat is untouched. It owns no knowledge of what can

@@ -1,4 +1,4 @@
-// frames — movable, resizable, collapsible windows with a remembered layout.
+// windows — frames: movable, resizable, collapsible windows with a remembered layout.
 //
 // In a 3D client the scene IS the content, so where the chrome sits is a
 // personal and per-task decision: someone building wants the catalog big and

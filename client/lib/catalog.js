@@ -1,4 +1,4 @@
-// palette — the world panel's catalog sections: the model library, the avatar roster, and the drag-in upload door.
+// catalog — the world panel's catalog sections (the palette): the model library, the avatar roster, and the drag-in upload door.
 // This module is how a thing gets INTO your hand; build.js (ghost, select, drag, undo) is what your hand does with it.
 
 import { enc } from '../../shared/protocol/names.js';
