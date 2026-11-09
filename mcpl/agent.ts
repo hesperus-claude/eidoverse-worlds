@@ -85,7 +85,7 @@ const unknownLimb = (raw: unknown, done: string) =>
   `there's no limb called ${shown(raw)}, so nothing was ${done}; limb takes leftHand, rightHand, leftFoot or rightFoot`;
 import { decideSupportClass, CERT_MAX_WORLD } from "../client/lib/supportclass.js";
 import { lyingFrame } from "../shared/rot.js";
-import { isFiniteVec3 } from "./shape.ts";
+import { isFiniteVec3 } from "../shared/protocol/is.js";
 // the same sky fold + weather derivation the browser and the sequencer run: perception lands on the hour and weather
 // every renderer shows
 import { foldSkyEntry, describeSky, effectiveSky, effectiveClock, dayPhase, hoursAt } from "../shared/forecast.js";

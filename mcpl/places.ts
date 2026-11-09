@@ -22,6 +22,8 @@
 //
 // Pure: callers hand in entities and their model metadata.
 
+import { isFiniteVec3 } from "../shared/protocol/is.js";
+
 export type Vec3 = [number, number, number];
 export type Place = {
   name: string;
@@ -34,7 +36,6 @@ export type Place = {
 // The thing a place belongs to: pos, q ([x, y, z, w]) or yaw, and scale (a number or [x, y, z]).
 export type PlaceHolder = { id: string; pos: number[]; yaw?: number; q?: number[]; scale?: number | number[]; name?: string };   // name: how a reader calls it (its unique label, else its handle)
 
-const finite3 = (v: unknown): v is Vec3 => Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n));
 const NAME = /^[A-Za-z0-9_][A-Za-z0-9_ .:'-]{0,47}$/;
 
 /** Defaults from a model's `building` description (glTF extras). */
@@ -43,7 +44,7 @@ export function placesFromModel(meta: any): Map<string, Place> {
   if (!meta || typeof meta !== "object") return out;
   const add = (p: Place) => { if (NAME.test(p.name) && !out.has(p.name)) out.set(p.name, p); };
   for (const r of Array.isArray(meta.rooms) ? meta.rooms : []) {
-    if (typeof r?.id !== "string" || !finite3(r.min) || !finite3(r.max)) continue;
+    if (typeof r?.id !== "string" || !isFiniteVec3(r.min) || !isFiniteVec3(r.max)) continue;
     const min: Vec3 = [Math.min(r.min[0], r.max[0]), Math.min(r.min[1], r.max[1]), Math.min(r.min[2], r.max[2])];
     const max: Vec3 = [Math.max(r.min[0], r.max[0]), Math.max(r.min[1], r.max[1]), Math.max(r.min[2], r.max[2])];
     // a room's floor is its own min y; a declared level/floor wins when given
@@ -53,15 +54,15 @@ export function placesFromModel(meta: any): Map<string, Place> {
     add({ name: r.id, label: typeof r.name === "string" ? r.name : undefined, kind: "region", min, max, source: "model" });
   }
   for (const p of Array.isArray(meta.portals) ? meta.portals : []) {
-    if (typeof p?.id !== "string" || !finite3(p.center)) continue;
+    if (typeof p?.id !== "string" || !isFiniteVec3(p.center)) continue;
     add({ name: p.id, kind: "door", at: p.center, label: p.id.replace(/_/g, " "), source: "model" });
   }
   for (const s of Array.isArray(meta.seats) ? meta.seats : []) {
-    if (typeof s?.id !== "string" || !finite3(s.pos)) continue;
+    if (typeof s?.id !== "string" || !isFiniteVec3(s.pos)) continue;
     add({ name: s.id, kind: "seat", at: s.pos, label: s.id.replace(/_/g, " "), source: "model" });
   }
   for (const a of Array.isArray(meta.arrivals) ? meta.arrivals : []) {
-    if (typeof a?.id !== "string" || !finite3(a.pos)) continue;
+    if (typeof a?.id !== "string" || !isFiniteVec3(a.pos)) continue;
     add({ name: a.id === "outside" ? "entrance" : `arrive_${a.id}`, kind: "point", at: a.pos, source: "model" });
   }
   return out;
@@ -75,8 +76,8 @@ export function placesFromComponent(data: unknown): Map<string, Place | null> {
     if (!NAME.test(name)) continue;
     if (v === null) { out.set(name, null); continue; }
     const label = typeof v?.label === "string" ? v.label.slice(0, 80) : undefined;
-    if (finite3(v?.at)) out.set(name, { name, label, kind: "point", at: v.at, source: "component" });   // a stored `kind` is ignored
-    else if (finite3(v?.min) && finite3(v?.max)) {
+    if (isFiniteVec3(v?.at)) out.set(name, { name, label, kind: "point", at: v.at, source: "component" });   // a stored `kind` is ignored
+    else if (isFiniteVec3(v?.min) && isFiniteVec3(v?.max)) {
       const min: Vec3 = [0, 1, 2].map((k) => Math.min(v.min[k], v.max[k])) as Vec3;
       const max: Vec3 = [0, 1, 2].map((k) => Math.max(v.min[k], v.max[k])) as Vec3;
       out.set(name, { name, label, kind: "region", min, max, source: "component" });
