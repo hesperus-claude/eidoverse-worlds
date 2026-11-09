@@ -1,10 +1,6 @@
-// server/reachgate.ts — touch consent at the relay. A reach travels as a
-// descriptor inside the presence packet (shared/reachwire.js) and every receiver draws the hand where it points, so the gate
-// for touching someone can't be the target's own client (it doesn't render other people's screens) and can't be a request
-// nobody sends: it is here, on the one path every pose takes. Each limb whose target is ANOTHER body is held to that body's
-// table through the authority (WorldLog.reachAdmits → authority.js reachAdmits); a refused limb is taken out of the packet,
-// and the rest of the pose relays as it came. Presence only: nothing is logged. Judged by where the hand is aimed, as the
-// authority judges a reach: a named point by the social/intimate split, a bare point by the body capsule it falls in.
+// server/reachgate.ts — touch consent at the relay. A reach rides the presence packet (shared/reachwire.js) and every receiver
+// draws it, so the gate is here, on the one path every pose takes: each limb aimed at another body is held to that body's
+// consent table through the authority (WorldLog.reachAdmits), and a refused limb is taken out of the packet. Nothing is logged.
 import { namedPointClass, pointClass } from "../shared/protocol/consent.js";
 import { normalizeReachTarget, REACH_LIMBS } from "../shared/reachwire.js";
 import type { Client } from "./world.ts";

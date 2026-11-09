@@ -1,11 +1,9 @@
 // server/upgrade.ts — opening a world saved in an older format: the join's structured refusal, and the operator's upgrade.
 // world-upgrade-review {id, world} → {type, id, ok, world, report, hash, warning?}: the CLI's dry run (nothing written).
-// world-upgrade {id, world, approved} → {type, id, ok, world, backup, report, rollback, people, warning?}: the CLI's in-place translation, bound to
-// that hash (a verified backup first: server/backups.ts). Both run tools/world.ts itself: the translation has one code path.
-// A server operator (SERVER_OPERATORS) or the world's owner, by a proven account: an owner main's records bind to
-// that account ("bound"), or one main recorded no account for whose name the account's is ("name", provisional):
-// the access index (worldindex.ts ownerIn, server/ownerrecognise.ts). An ownerless world's upgrader becomes its owner (--claim); a recognised owner is bound to them (report.claim). The translation binds an owner to the account main
-// recorded for them; when no owner is bound, both replies carry `warning` and the server log says so (docs/operator/TRANSLATING-OLD-WORLDS.md).
+// world-upgrade {id, world, approved} → {type, id, ok, world, backup, report, rollback, people, warning?}: the CLI's in-place
+// translation, bound to that hash, after a verified backup (server/backups.ts). Both run tools/world.ts: one code path.
+// Allowed to a server operator or the world's recognised owner (worldindex.ts ownerIn, server/ownerrecognise.ts); an ownerless
+// world's upgrader becomes its owner (--claim). When no owner is bound, both replies carry `warning` (docs/operator/TRANSLATING-OLD-WORLDS.md).
 import fs from "node:fs";
 import path from "node:path";
 import { WORLDS_DIR, BACKUPS_DIR, OPT_DIR, ROOT } from "./config.ts";
@@ -56,13 +54,11 @@ async function takeUpgrade({ c, ws }: Ctx, msg: Any, type: string, shape?: () =>
   const refuse = (code: string, reason: string, fix?: string) => { ws.send(JSON.stringify({ type, id, ok: false, refused: { code, reason, ...(fix ? { fix } : {}) } })); return null; };
   const who = provenWho(c, msg), account = who?.account ?? null, operator = isOperator(account);
   const world = String(msg.world ?? "");
-  // §F F-3 (Mica 11-05): an old world is said only to the operator and its recognised owner (access.ts toldOf); to anyone
-  // else, as a world that isn't there. A guest is neither, so is answered at once, for any name
+  // an old world is admitted to only the operator and its recognised owner (access.ts toldOf); to anyone else it isn't there
   const unavailableHere = () => { const u = unavailable(world.slice(0, 64)); return refuse(u.code, u.message); };
   if (!account) return unavailableHere();
   const bad = shape?.(); if (bad) return refuse("shape", bad[0], bad[1]);   // before the rate slot: a malformed request runs nothing
-  // the rate next: an owner check runs the CLI, so it is spent on the slot; and a slot
-  // spent only on an old world's name would tell a stranger it is there)
+  // the rate next: an owner check runs the CLI, so it spends a slot
   const now = Date.now(), mine = (recent.get(account) ?? []).filter((t) => now - t < RATE_MS);
   if (mine.length >= RATE_N) return refuse("rate", `at most ${RATE_N} upgrade requests in ${RATE_MS / 60_000} minutes`, "try again later");
   recent.set(account, [...mine, now]);   // taken in the same turn as the check, before the await below

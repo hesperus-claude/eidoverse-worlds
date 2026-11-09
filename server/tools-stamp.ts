@@ -1,22 +1,10 @@
-// tools-stamp — WHICH tools a verdict was measured with, so a tool upgrade re-asks the verdicts it could change.
-//
-// The derivation key is three parts (the research note, §3: Bazel's action digest + salt, Gradle's "the task type and
-// its classpath", Unity's importer version): the canonical PARAMETERS (lodRecipeFor / KTX2_RECIPE), a manual
-// GENERATION (LOD_GEN — semantics a parameter cannot express), and the IMPLEMENTATION's version. The first two were
-// already in the recipe; this is the third. It rides the verdict STAMP, not the recipe: the recipe is in every
-// variant URL and filename, so a tool bump there would rename every variant and make every client refetch every LOD
-// for bytes that are still correct. A built variant is a valid answer under the tools that made it; what a better
-// tool can overturn is a REFUSAL (a size gate, an ineffective or unpreservable reduce, the GPU gate) — so only those
-// are re-asked (store-variants.ts verdictStands). Content verdicts (a skinned body, 900 verts under the floor, no raster
-// images) are facts about the file and stand.
-//
-// What the CLI actually runs: gltf-transform (core/functions/extensions), meshoptimizer (the reducer), draco3dgltf (the
-// encoder), sharp (the copy gltf-transform ITSELF loads — resolveNestedSharp, the one-libvips rule — or "absent"), and
-// the KTX encoder binary, identified by basename + size + mtime of its real file, never by running `--version` (the
-// probe must not execute a stand-in encoder; a test's fake counts its calls).
-//
-// DOM-free; no heavy imports (the route reads this on the sequencer thread). Memoized for a minute, so an encoder
-// installed while the server runs is noticed without a restart.
+// tools-stamp — which tools a verdict was measured with, so a tool upgrade re-asks the verdicts it could change.
+// The stamp is the third part of the derivation key, beside the recipe's parameters and LOD_GEN. It rides the verdict stamp,
+// not the recipe: a tool bump in the recipe would rename every variant and make every client refetch bytes that are still
+// correct. Only refusals are re-asked (store-variants.ts verdictStands); a built variant stands under the tools that made it.
+// The tools: gltf-transform, meshoptimizer, draco3dgltf, gltf-transform's own sharp (or "absent"), and the KTX encoder binary
+// identified by basename + size + mtime, never by running it. No heavy imports (the route reads this on the sequencer thread);
+// memoised for a minute, so an encoder installed while the server runs is noticed.
 
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -29,8 +17,7 @@ export function findKtx2Encoder(): string | null {
   if (env && existsSync(env)) return env;
   const which = Bun.which("toktx") ?? Bun.which("ktx");
   if (which) return which;
-  // the docs/operator/KTX2-ENCODER.md recipe lands here (bin+lib siblings for
-  // @rpath) — a PATH-less install must not silently exit-3 the sweep
+  // where the docs/operator/KTX2-ENCODER.md recipe installs it
   const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
   for (const p of [`${home}/.local/ktx/bin/toktx`, `${home}/.local/ktx/bin/ktx`])
     if (home && existsSync(p)) return p;

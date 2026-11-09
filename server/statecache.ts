@@ -1,6 +1,5 @@
-// server/statecache.ts — a DERIVED cache of a world's strict fold beside its log, so a boot folds only the tail (WISHLIST "State
-// snapshots", step 1). The log is the truth: on any doubt the caller folds from genesis. Never served; backups, forks, resets and
-// rollbacks never carry it (the destination derives its own). The later signed in-log checkpoint (§2) is a different thing.
+// server/statecache.ts — a derived cache of a world's strict fold beside its log, so a boot folds only the tail. The log is
+// the truth: on any doubt the caller folds from genesis. Never served or carried by backups, forks, resets or rollbacks.
 import fs from "node:fs";
 import path from "node:path";
 import { REDACTED, checkEntry, opsOf, applyInPlace, cloneState, worldIdOf, jcs, sha256, isE } from "../shared/protocol/fold.js";

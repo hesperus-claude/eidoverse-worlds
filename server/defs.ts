@@ -1,6 +1,5 @@
-// The def registry. Instance content as data: defs/<domain>/<name>.json, validated against the shared contract at load,
-// served whole at GET /defs. A def that fails validation is refused LOUDLY (boot/reload log) and the rest keep serving.
-// The registry rescans on a short TTL, so an edited def shows on the next client boot without a restart.
+// The def registry: defs/<domain>/<name>.json, validated against the shared contract at load, served whole at GET /defs.
+// A def that fails validation is refused loudly and the rest keep serving. Rescans on a short TTL, so an edit needs no restart.
 
 import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
