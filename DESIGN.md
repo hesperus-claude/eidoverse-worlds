@@ -158,14 +158,15 @@ raycasts real seat pans). Everything is walkable-on / grabbable / placeable by
 virtue of being physical. A scanned stool is sittable the moment it arrives.
 Physicality is the universal interface between species.
 
-**Layer 1 — composed behaviors (authorable by anyone).** Trigger→action pairs
-from a fixed vocabulary. Triggers: proximity, touch/use, sit, timer, phrase,
-region enter/leave. Actions: play clip, move, particles, sound, say, give,
-teleport, flip state. Composable from the panel UI or by request; the vocabulary
-is data, so it's live-editable.
+**Layer 1 — reactions (built); composed behaviors (not built).** Built: an
+entity's `reactions` component maps a use to one of a fixed set of handlers
+(`toggle`, `set`, `impulse`, `script`, pinned in the registry); new behaviour is
+a script. Not built: a composable trigger→action vocabulary (proximity, sit,
+timer, phrase, region enter/leave → play clip, move, particles, sound, say,
+give, teleport), authorable by anyone from the panel UI or by request.
 
 **Layer 2 — scripts.** Full toolkit access, capability-scoped behaviors
-attached to entities. **Layer 2 exists to extend Layer 1**: someone writes the
+attached to entities. **Layer 2 exists to extend Layer 1** (not built yet): someone writes the
 fishing-rod behavior once, publishes it as a new Layer-1 behavior with knobs;
 thereafter anyone attaches "fishable" to any pond with no code.
 
@@ -216,7 +217,7 @@ asset manifest. Everything arrives through the log, at runtime:
 - Ingestion is an in-world service (the fetch_model pipeline live; the
   reality pipeline: phone video → video-to-3D → hierarchy-of-meshes GLB →
   `importPlace`), used while standing in the world.
-- Layer-1 behaviors are data (hot); Layer-2 scripts are modules with an
+- Reactions are data (hot); Layer-2 scripts are modules with an
   install/pause/adopt lifecycle (hot); platform updates are a client
   reconnect (the world never restarts — state is the log).
 
