@@ -1,6 +1,6 @@
 // core — the PRESENTATION substrate: renderer, scene, camera, canvas, the base lights and stage floor, and the
 // eidoverse module-host contract. The renderer-free substrate (bus, CONFIG, report, colours, helpers) lives in
-// base.js (RENDERER-SEAM move 2), so modules that never touch the GPU import THAT.
+// base.js (docs/design/RENDERER-SEAM.md), so modules that never touch the GPU import THAT.
 //
 // Import rule: core imports nothing from the client except base.js (which imports nothing at all). The module graph
 // stays acyclic at load time even where the runtime call graph is circular.
@@ -48,10 +48,9 @@ canvas.tabIndex = -1;
 canvas.style.outline = 'none';
 document.body.prepend(canvas);
 
-// MSAA stays the default everywhere (§22n measured ~4 ms/frame at 2× retina; §22r reverted to ON, since a vanished AA
-// reads as a rendering bug); ?msaa=0 is the opt-out. ?webgl=1 forces three's WebGL 2 backend (the path a browser
-// without WebGPU takes on its own). Both are renderer-construction choices, applied on the next load: the URL param
-// wins for a session, the persisted preference (video settings) otherwise.
+// MSAA stays on by default (~4 ms/frame at 2× retina, but a vanished AA reads as a rendering bug); ?msaa=0 is the
+// opt-out. ?webgl=1 forces three's WebGL 2 backend. Both are renderer-construction choices, applied on the next load:
+// the URL param wins for a session, the persisted preference (video settings) otherwise.
 export const PREF_MSAA = 'ew-msaa', PREF_BACKEND = 'ew-backend';
 // The stored headset bit is HISTORY, not presence, and it expires — the meaning lives in headset_seen.js so it can be
 // driven directly; core.js just supplies the stored value.
@@ -194,7 +193,7 @@ scene.add(ground);
 // monochrome grid. GridHelper draws every line in ONE buffer, so its bright centre lines lose the depth test where a
 // dark line crosses at the same y and come out dashed — so the grid is all dark, and the two axis lines are their own
 // object, a hair higher, drawn after it.
-export const grid = new THREE.GridHelper(160, 80, 0x242c36, 0x242c36);   // a shade under the plane (0x2a3440), lighter than the 0x1e2328 it was
+export const grid = new THREE.GridHelper(160, 80, 0x242c36, 0x242c36);   // a shade under the plane (0x2a3440)
 export const axisLines = new THREE.LineSegments(
   new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-80, 0, 0), new THREE.Vector3(80, 0, 0), new THREE.Vector3(0, 0, -80), new THREE.Vector3(0, 0, 80)]),
   new THREE.LineBasicMaterial({ color: 0x6a7078 }));

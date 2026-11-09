@@ -1,25 +1,16 @@
-// inspect — the client's half of shared/editschema.js.
-//
-// WHAT can be edited on a thing, and what it writes, is declared ONCE, as a
-// pure function of the folded record (shared/editschema.js) — the desktop
-// inspector, the VR quad and a model's `inspect`/`edit` tools all read it.
-// This module is the part only a client with a live scene can add:
+// inspect — the client's half of shared/editschema.js. WHAT can be edited on a thing is declared once there, as a pure
+// function of the folded record; this module adds what only a live client can:
 //
 //   commitEdit(id, key, value, {live})
-//     live   → PREVIEW: the group's handler moves the realized object (a
-//              light brightens, a seat gizmo slides) — no log traffic;
-//     final  → COMMIT: editOps() turns the edit into the fewest door ops, sent as ONE request (shared/requests.js via
-//              writes.js sendOps): one act, undone by the authority's undo; expect carries the values as the gesture began.
+//     live   → PREVIEW: the group's handler moves the realized object; no log traffic;
+//     final  → COMMIT: editOps() plans the ops, sent as ONE request (writes.js sendOps): one act, one undo; `expect`
+//              carries the values as the gesture began.
 //
 //   registerHandler(group, fn(id, obj, k, value, opts) → handled?)
-//     evaluator modules install previews and viewport GESTURES here ('+ seat
-//     here' arms a click-to-place; a row click selects a gizmo). Returning
-//     true means "done, don't commit" — a live preview always is; a final
-//     edit usually isn't, and falls through to editOps.
+//     realize modules install previews and viewport gestures here. Returning true means "done, don't commit": a live
+//     preview always is; a final edit usually falls through to editOps.
 //
-// The html+wire form (registerEditor) survives for the World›Scene section
-// until it retires; that panel also gets the schema groups, rendered by the
-// factory, through the same commit path.
+//   registerEditor(fn) / editorsFor(ctx): the html+wire editors the look-mode scene panel (scenegraph.js) still uses.
 
 import { materialsOf } from '../realize/material_draft.js';
 import { isMineMuted, allowUntrusted } from '../mediaprefs.js';
@@ -39,7 +30,7 @@ import { sameRotation } from '../../../shared/euler.js';
 import { localOf } from '../../../shared/hierarchy.js';
 import { lightOf } from '../../../shared/components.js';
 import { WORLD_ID, worldSchema, worldEditOps } from '../../../shared/worldentity.js';
-import * as Edits from './writes.js';   // slice 3b: component edits are requests
+import * as Edits from './writes.js';
 import { effectLookup } from '../realize/emitters.js';
 import { isOwner } from '../../../shared/protocol/roles.js';
 const R2D = 180 / Math.PI;
@@ -56,27 +47,21 @@ registerHandler('mesh', (id, _obj, k, value, opts) => {
   if (k === 'shape') cur.shape = String(value); else if (/^size\.[xyz]$/.test(k) && Number.isFinite(n)) { cur.size = [...(Array.isArray(cur.size) ? cur.size : [1, 1, 1])]; cur.size['xyz'.indexOf(k.slice(5))] = n; } else return false;
   return previewMesh(id, cur);
 });
-// a light card's brightness / range slider shows on the light while dragged (SWEEP-3 N4); the release commits through editOps
+// a light card's brightness / range slider shows on the light while dragged; the release commits through editOps
 registerHandler('light', (id, _obj, k, value, opts) => {
   if (!opts?.live || (k !== 'intensity' && k !== 'range')) return false; const n = Number(value);
   return Number.isFinite(n) && previewLight(id, { [k]: n });
 });
 export function registerEditor(fn) { htmlEditors.push(fn); }
-/** panels.js installs the undo stack and the light coalescer at init —
- *  importing build.js from here would close an import loop through
- *  scenegraph.js. */
+/** panels.js installs hooks at init (casting: lightgizmo.js lightCasting); importing it here would close an import loop. */
 export function setEditHooks(h) { hooks = { ...hooks, ...h }; }
 
-/** The view record of a placed thing (view.js viewOf): what the gizmo and the euler hint still read (C7c moves them). */
+/** The view record of a placed thing (shared/protocol/view.js viewOf): what the gizmo and the euler hint read. */
 export const foldRecord = (id) => state.st.entities?.[id] ?? null;
-/** The fold record of a placed thing — exactly what the schema reads (C7b: shared/editschema.js takes `c`). Frozen in
- *  dev; never written here. */
+/** The fold record's components — exactly what shared/editschema.js reads. Never written here. */
 export const recordFor = (id) => replica.st?.entities?.[enc(String(id))]?.c ?? null;
-// The Rotate channels' hint (shared/euler.js): the Euler triple THIS viewer
-// last composed for a thing, so its channels read back exactly as typed
-// (the branch past 90°, the inner channel at gimbal lock). Only honoured
-// while the folded q is still the one it was composed for — anyone else's
-// turn (a gizmo, a peer, an undo) voids it. Client memory, never stored.
+// The Rotate channels' hint (shared/euler.js): the Euler triple THIS viewer last composed for a thing, so its channels
+// read back as typed (past 90°, at gimbal lock). Honoured only while the folded q is still the one it was composed for.
 const eulerHints = new Map();   // id → { order, e, q }
 function eulerHint(id, rec) {
   const h = eulerHints.get(id);
@@ -84,8 +69,7 @@ function eulerHint(id, rec) {
   const order = rotOrderFor(id);
   // a child's channels read its RELATIVE q (the mount's), so that is the q the hint is for
   const q = rec ? localOf(rec, state.st.entities).q : null;
-  // not deleted on a mismatch: the repaint right after a commit reads the fold
-  // BEFORE the echo lands, and the hint is for the q that is about to arrive
+  // not deleted on a mismatch: the repaint after a commit reads the fold BEFORE the echo lands
   return q && h.order === order && sameRotation(h.q, q, 1e-12) ? h.e : undefined;
 }
 /** What only a live client knows about a thing: the schema AND the commit path read the same. */
@@ -96,26 +80,23 @@ export function liveFor(id) {
     euler: eulerHint(id, foldRecord(id)),
     // this viewer's rotate order (viewprefs.js): how the channels read, never sent
     rotOrder: rotOrderFor(id),
-    // the hierarchy reads the whole fold: a child's local pose, its parent's
-    // socket, the Parent field's children, and the in-place parenting maths
+    // the hierarchy reads the whole fold: a child's local pose, its parent's socket, the in-place parenting maths
     world: state.st.entities ?? {},
     // the model's own box (the pivot's centre / base snaps)
     box: boxOf(id),
-    // batch 2: this viewer's own choices about a thing's media (mediaprefs.js): never logged
+    // this viewer's own choices about a thing's media (mediaprefs.js): never logged
     mutedForMe: isMineMuted(id), untrusted: allowUntrusted(),
     // the stored particle effects this viewer has (emitters.js): an effect's params are the inspector's knobs
     effects: effectLookup,
-    // the ladder's second rung: what this world trusts (@world.trusted-components), and whether this viewer may change it (the owner)
+    // what this world trusts (@world.trusted-components), and whether this viewer may change it (the owner)
     trusted: trustedHere(), mayTrust: mayTrust(),
   };
 }
 const trustedHere = () => trustedOf(replica.st?.entities?.['@world']?.c);
 export const mayTrust = () => (net.myRights?.role === undefined ? undefined : isOwner(net.myRights));
-// The world entity `@world` (design §3, shared/worldentity.js): an alias of
-// state.sky/terrain/grass, edited through the sky/weather/terrain/grass verbs.
-// Those are owner-rank: false = this viewer is known not to be the owner
-// (server operators fold to owner), undefined = not known yet.
-// shaping the world's look is the editWorld switch; the owner's on an older server
+// The world entity `@world` (shared/worldentity.js): state.sky/terrain/grass as one entity, edited through the sky /
+// weather / terrain / grass verbs. mayShape: the editWorld permission (the owner's, on an older server); false = known
+// not allowed, undefined = rights not known yet.
 export const mayShape = () => { const r = net.myRights; if (Array.isArray(r?.permissions)) return r.permissions.includes('editWorld'); return r?.role === undefined ? undefined : isOwner(r); };
 export const worldLive = () => ({ now: serverNow(), mayShape: mayShape(), trusted: trustedHere(), mayTrust: mayTrust() });
 export function schemaFor(id) {
@@ -147,8 +128,8 @@ export const keepView = (id, plan) => { if (plan?.rotOrder) setRotOrder(id, plan
 /** Does this plan write a transform (a move/turn/scale)? The euler hint follows the pose. */
 const movesPose = (ops) => ops.some((o) => (o.verb === 'batch' ? o.args.requests : [o]).some((x) => x.args?.component === 'transform'));
 
-// a scrubbed transform is a live drag for everyone else (E2: the same presence lane the gizmo uses, so co-builders see the
-// number move and the claim badge); the release's commit sends the last sample with end
+// a scrubbed transform is a live drag for everyone else (the presence lane the gizmo uses); the release sends the last
+// sample with `end`
 function dragOut(id, obj, end) {
   obj.updateWorldMatrix(true, false);
   const p = obj.getWorldPosition(new THREE.Vector3()), q = obj.getWorldQuaternion(new THREE.Quaternion());
@@ -175,23 +156,17 @@ export function commitEdit(id, key, value, opts = {}) {
   if (live) return { ok: true, live: true };
   const baseComps = gesture?.id === id ? gesture.comps : null;   // the components before the drag began
   gesture = null;
-  // planEdit holds the two seam rules: the panel's steppers speak WIRE units (a deg field commits radians) while
-  // editOps' contract — a model's — is the FACE, converted once there (else degrees land as radians);
-  // and a raw-JSON box cleared and blurred must not delete the component — 'remove <type>' (null) is the deliberate act.
   const { ops, errors, euler, asks, rotOrder } = planEdit(id, key, value);
   keepView(id, { rotOrder });
-  // one edit is ONE request (a batch when it took several ops): one act, one Ctrl+Z, and it waits for the authority;
-  // expect names what it changes as this viewer saw it (a scrubbed field: as the scrub began)
+  // one edit is ONE request: one act, one Ctrl+Z; expect names what it changes as this viewer saw it (a scrub: as it began)
   const reply = ops.length ? Edits.sendOps(ops, { what: `${key} of ${id}`, base: baseComps ? { [id]: baseComps } : null, revert: () => Edits.revertPose(id) }) : null;
   if (euler) eulerHints.set(id, euler); else if (movesPose(ops)) eulerHints.delete(id);
   return { ok: !errors.length, errors, ops, reply, ...(euler ? { euler } : {}), ...(asks?.length ? { asks } : {}) };   // reply: the authority's answer (a promise)
 }
 
-/** Several channels of one thing in ONE request (so one undo step): {'pos.x': 0, 'pos.y': 0, …}, FACE values (degrees
- *  for rotate), as editOps takes them. The transform's reset keys use it. */
-// `id` may be an array (a multi-select: each thing edited from its own record) or WORLD_ID (worldEditOps over every field
-// at once, so two fields of one component are one write, not two that each set the whole of it): a scrubbed run of
-// channels edits whatever the Inspector shows. Either way ONE request, one Ctrl+Z.
+/** Several channels in ONE request (one undo step): {'pos.x': 0, 'pos.y': 0, …}, FACE values (degrees for rotate).
+ *  `id` may be an array (a multi-select: each thing from its own record) or WORLD_ID (worldEditOps over every field at
+ *  once). The transform's reset keys and a scrubbed run of channels use it. */
 export function commitMany(id, edits, what) {
   if (id === WORLD_ID) {
     const { ops, errors } = worldEditOps(state.st, edits, worldLive());
@@ -211,14 +186,12 @@ export function commitMany(id, edits, what) {
   return { ok: !errors.length, errors, ops };
 }
 
-/** Every editor as html+wire for the legacy section: the registered html
- *  editors, then the schema's component groups rendered by the factory. */
+/** Every editor as html+wire for the look-mode scene panel: the registered html editors, then the schema's groups. */
 export function editorsFor(ctx) {
   const out = [];
   for (const fn of htmlEditors) { try { const e = fn(ctx); if (e) out.push(e); } catch { /* skip it */ } }
   const schema = schemaFor(ctx.id);
-  // picture/sound keep their reviewed html blocks here (the registered editors
-  // above) until this panel retires; the build-mode inspector renders the groups
+  // picture/sound have html editors above; pos/flags/comp are the build-mode inspector's
   schema.groups.filter((g) => !['pos', 'flags', 'comp', 'picture', 'sound'].includes(g.group)).forEach((g, i) => {
     const host = `data-fe="${i}"`;
     out.push({

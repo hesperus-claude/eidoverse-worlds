@@ -6,18 +6,16 @@
 //   * the governor never touches the cloud tier (the resident's ⚙ choice; a sky rebuild is the most expensive
 //     operation the client has).
 //
-// The ladder, in shed order (recovery unwinds it back-to-front, so pixels —
-// shed late — return first, and content comes back last):
+// The ladder (LEVERS), in shed order; recovery unwinds it back-to-front, so pixels return first and content last:
 //
-//   casters   distant objects stop casting shadows (castShadow is in no
-//             pipeline key — free toggles, §12.1)
-//   slots     the light-slot cap drops (idle slots are uniform zeros)
-//   emitters  per-emitter instance counts thin (auto → med → low)
-//   grass     the meadow thins (instanced count — no rebuild)
-//   lod       far placed objects fetch their reduced tier sooner (the policy's
-//             edge halves; swaps happen on the residency sweep)
-//   pixels    render scale, −0.25 steps to 0.7
-//   detail    LOD bias 2 (far bodies at half rate) + shadow map 1024
+//   casters    the shadow-caster budget halves toward 2 (castShadow is in no pipeline key: a free toggle, §12.1)
+//   lights     the light-slot cap drops by one (idle slots are uniform zeros)
+//   emitters   per-emitter instance counts thin (auto → med → low)
+//   cosmetics  the 'autos' system (cloud drift, grass wind, billboards) runs at half rate
+//   grass      the meadow thins (instanced count, no rebuild)
+//   lod        far placed objects fetch their reduced tier sooner (lod_policy.js shed; swaps on the residency sweep)
+//   pixels     render scale, −0.25 steps to 0.7
+//   detail     LOD bias 2 (far bodies at half rate) + shadow map 1024
 //
 // Pacing: a shed needs 3 consecutive slow seconds (<26 fps) and resets the counter, one lever per window, so a hitch
 // cannot cascade the ladder. A restore needs 5 consecutive smooth seconds (>52 fps). The band between counts toward
@@ -126,8 +124,7 @@ if (avatarDetail !== 'auto') setLodBias(AVATAR_DETAILS[avatarDetail]);
 // ---- the resident's master switch -------------------------------------------
 // 'keep full detail': the governor never sheds and the cruise never steps pixels (a builder wants the world as it is).
 // Turning it on hands back everything already shed, at once. Persisted; loading grace and the calm signal still run.
-// It overrides all the levers, INCLUDING the emergency pixels rung a pinned render scale still yields to. Whether it
-// should outrank that crisis rule is an open question; record the decision here.
+// It overrides every lever, including the emergency pixels rung a pinned render scale still yields to.
 const FD_KEY = 'ew-full-detail';
 let fullDetail = (() => { try { return localStorage.getItem(FD_KEY) === '1'; } catch { return false; } })();
 export const getFullDetail = () => fullDetail;
@@ -204,9 +201,8 @@ const LEVERS = [
     },
   },
   {
-    // the first system-stride lever (§14.2 6b): the cosmetic per-frame
-    // hooks — cloud drift, grass wind, emitter billboards — at half rate.
-    // 30Hz wind is a degrade nobody reports; a lost frame is.
+    // the cosmetic per-frame hooks (cloud drift, grass wind, emitter billboards) at half rate: 30 Hz wind is a
+    // degrade nobody reports; a lost frame is
     name: 'cosmetics',
     shed() {
       if (getSystemEvery('autos') >= 2) return false;
@@ -280,8 +276,7 @@ const LEVERS = [
       shedDetail = true;
       if (avatarDetail === 'auto') setLodBias(2);   // far bodies animate at half rate
       if (shadowsOn() && sun.shadow.mapSize.width > 1024) {
-        // mapSize is uniform + texture realloc, not pipeline shape (§12.1)
-        // — which is exactly what makes this lever two-way at last
+        // mapSize is a uniform + texture realloc, not pipeline shape (§12.1): no recompile either way
         sun.shadow.mapSize.set(1024, 1024);
         sun.shadow.map?.dispose();
         sun.shadow.map = null;
@@ -304,12 +299,10 @@ const LEVERS = [
 let shedDetail = false;
 let grassDial = 1;
 
-// ---- the cruise lever (§22j — reopens §17d with evidence) -------------------
-//
-// The dead band was meant as neutral ground, but a pixel-bound machine lives there: measured, every grass shader ran
-// 60 fps at 1× render scale and ~30 at 2×, and resolution was the only lever that moved it (§22i). So pixels alone
-// also answers a SUSTAINED mid-band cruise, gentler than the emergency ladder: an 8 s streak (vs 3) and a floor of
-// 70% of BASE (vs the emergency 0.7 absolute). Restore is the shared +0.125 above 52 fps. ?cruise=off disables it.
+// ---- the cruise lever (§22j) ------------------------------------------------
+// A pixel-bound machine lives in the dead band (26–52 fps), and resolution is the only lever that moves it. So pixels
+// alone also answers a SUSTAINED mid-band cruise, gentler than the emergency ladder: an 8 s streak (vs 3) and a floor
+// of 70% of BASE (vs the emergency 0.7 absolute). Restore is the shared +0.125 above 52 fps. ?cruise=off disables it.
 const CRUISE = (CONFIG.params.get('cruise') ?? 'on') !== 'off';
 const cruiseFloor = () => Math.max(0.7, residentBase() * 0.7);
 const cruiseActive = () => CRUISE && renderScale === 'auto' && !fullDetail;   // a pinned scale is the resident's word
@@ -358,12 +351,11 @@ export function governPerformance(fps) {
   // …but the headset's cap holds while loading too (entering VR mid-load is the usual cold entry). Only ever lowers it.
   else if (renderer.xr?.isPresenting) setShare(Math.min(budgetStats().share, XR_SHARE_CAP));
   if (loadingBusy()) {
-    // freeze BOTH directions and reset every streak: a storm-dip shed and a
-    // splash-smooth restore are both answers to loading, not to the machine
+    // freeze BOTH directions and reset every streak: a storm-dip shed and a splash-smooth restore are both answers
+    // to loading, not to the machine
     if (!grace) { grace = true; graceDipped = false; }
     if (fps > 0 && fps < 26 && !graceDipped) {
-      // one history line per grace spell, only when grace actually swallowed
-      // a would-be slow second — the story without the 1Hz flap spam
+      // one history line per grace spell, and only when grace swallowed a would-be slow second
       graceDipped = true;
       if (history.length < 60) history.push(`⏸ grace held ${Math.round(fps)}fps @${Math.round(performance.now() / 1000)}s`);
     }

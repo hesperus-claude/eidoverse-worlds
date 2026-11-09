@@ -7,8 +7,8 @@
 // client: Orrery pushes finished GLBs to the sequencer's /upload, and we place the returned store path.
 //
 // Generating needs your Orrery identity (its own allowance metering); bringing the RESULT into the world is a set of
-// @world `assets:<path>`, which the authority admits only with the generate permission (gate.js). Image approval is
-// Orrery's chain pause (select: "starred"): clicking a thumbnail stars it and the chain resumes into mesh generation.
+// @world `assets:<path>`, which the authority gates on the gen permission. Image approval is Orrery's chain pause:
+// clicking a thumbnail stars it and the chain resumes into mesh generation.
 //
 // ?orrery=<http(s) base: origin + path> (or localStorage ew-orrery-url) overrides the service for
 // dev — a MOCK_APIS Orrery instance makes the whole flow testable offline.
@@ -50,8 +50,7 @@ const api = async (path, opts = {}) => {
 };
 
 // ---------------------------------------------------------------- job store
-// Jobs are chains; the list is local (your queue, not the world's). Survives
-// reloads so a 10-minute mesh doesn't need the tab babysat.
+// Jobs are Orrery chains; the list is local (your queue, not the world's) and survives reloads.
 
 const JOBS_KEY = 'ew-conjure-jobs';
 let jobs = [];
@@ -152,9 +151,8 @@ async function paint(body) {
         const cfg = await api('/api/auth/config');
         if (!isHttpUrl(cfg.login_url)) throw new Error('orrery sent a login link that is not http(s)');
         const w = window.open(cfg.login_url, 'orrery-auth', 'width=520,height=680');
-        // Do not depend on postMessage from the popup: under COOP `same-origin` (needed for cross-origin isolation) a
-        // cross-origin popup has a null opener and `w` is a severed proxy. The message path stays as an optimisation;
-        // POLLING /api/auth/me (a CORS fetch, which credentialless leaves alone) is what completes sign-in.
+        // under COOP `same-origin` a cross-origin popup can't postMessage back reliably (the message path stays as a
+        // fast path): POLLING /api/auth/me is what completes sign-in
         let done = false;
         // ONE idempotent teardown shared by every exit (success, timeout, abandon)
         const cleanup = () => {
@@ -182,8 +180,7 @@ async function paint(body) {
           if (ev.data === 'orrery:signed-in') finish();
         };
         addEventListener('message', onMsg);
-        // 90s at 2s intervals: long enough for a slow Discord sign-in, bounded
-        // so a user who abandons the popup does not leave a timer running.
+        // 90 s at 2 s intervals: long enough for a slow sign-in; an abandoned popup leaves no timer running
         let tries = 0;
         const poll = setInterval(async () => {
           if (done) return;

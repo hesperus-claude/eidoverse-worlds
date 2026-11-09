@@ -1,21 +1,14 @@
-// paint — the build-mode SURFACE for the VR quad (Hierarchy, Inspector, Console): the same field specs
-// fieldpanels.js renderCanvas paints, in build mode's look (theme.js), under the VR floor the spec sets:
+// paint — the build-mode canvas SURFACE for the VR quad: the same field specs fieldpanels.js renderCanvas paints, in
+// build mode's look (theme.js), under the VR floor (EDIT_VR):
 //
-//   - every hit target >= EDIT_VR.minHit canvas px tall (≈ 3.8 cm at 900 px/m);
-//   - no line thinner than EDIT_VR.minLine (a 1-px line shimmers on a resampled quad);
-//   - every glyph of text >= EDIT_VR.minText px, and no pictograph handed to fillText (the canvas
-//     emoji trap: a glyph the viewer's fonts lack paints NOTHING) — they are icons.js paths;
-//   - nothing hover-only: a headset has no hover, so what desktop shows on hover is always drawn;
-//   - checkbox, select, button, field: the SAME shapes the CSS draws.
+//   - every hit target >= minHit px tall; no line thinner than minLine; text >= minText px;
+//   - no pictograph reaches fillText (a glyph the viewer's fonts lack paints NOTHING): they become icons.js paths;
+//   - nothing hover-only: a headset has no hover;
+//   - the SAME shapes the CSS draws.
 //
-// The widgets themselves are widgets.js's (WIDGETS[t].edit, one table with the desktop's and the legacy quad's);
-// what lives here is the surface they draw on: the geometry (row height, label column, value column), the primitives
-// that keep the floor (fill, box, icon, text through the pictograph filter, the sunken field, the quiet button, the
-// stepper) and the walk's two hooks (begin: ground + title; prep: a field's label and its value column).
-//
-// The contract with the rest of the VR seam is fieldpanels.js's: returns hit REGIONS in canvas px, each
-// {x, y, w, h, action, payload?, slider?}, dispatching exactly what the legacy painter dispatches
-// (test/client/edittheme-test.ts holds the two to the same action set). Non-edit quads never come here.
+// The widgets are widgets.js's (WIDGETS[t].edit); this file is the surface they draw on: geometry, primitives (fill,
+// box, icon, text, field, quietButton, stepper) and the walk's hooks (begin, prep). Returns hit REGIONS in canvas px,
+// {x, y, w, h, action, payload?, slider?}, as fieldpanels.js's legacy painter does (test/client/edittheme-test.ts).
 
 import { EDIT as T, EDIT_VR as V, pictoRuns } from './theme.js';
 import { stroke as strokeIcon, has as hasIcon, fillPath } from '../icons.js';
@@ -100,7 +93,7 @@ function enumLines(g, f, avail) {
   return lines;
 }
 
-// ---------------------------------------------------------------- primitives (the VR floor lives here)
+// ---------------------------------------------------------------- primitives
 function fill(g, c, x, y, w, h) { g.fillStyle = c; g.fillRect(x, y, w, h); }
 function box(g, x, y, w, h, bg, edge, r = 3) {
   pathRound(g, x + 1, y + 1, w - 2, h - 2, r);
@@ -115,7 +108,7 @@ function pathRound(g, x, y, w, h, r) {
 function icon(g, name, cx, cy, size, color, lw = V.minLine) {
   g.save(); g.translate(cx, cy);
   if (hasIcon(name)) { g.strokeStyle = color; strokeIcon(g, name, size, lw); }
-  else { g.fillStyle = color; fillPath(g, name, size); }   // a Phosphor glyph (the ENV rows' sun/sparkle/mountains/plant) is filled, not dropped (bot #313)
+  else { g.fillStyle = color; fillPath(g, name, size); }   // a filled-set glyph is filled, not dropped
   g.restore();
 }
 /** Text through the pictograph filter: a mapped emoji becomes its icon; the rest is fillText, ellipsised to maxW.

@@ -1,8 +1,6 @@
-// panels — the hierarchy and the inspector as FIELDS (fieldpanels.js): one declaration is a desktop frame and a VR quad.
-// Every action is a verb scenegraph.js already speaks; this file only decides what the rows are.
-// The inspector has two lanes: CHANNELS, every numeric value in one dense column (drag to scrub, click to type, `+=` `*=`),
-// and GROUPS, the full editors (colours, toggles, lists, the same numbers beside their meaning).
-// A number a motion comp drives shows its REST pose, tinted: `place` moves the base the motion composes onto.
+// panels — build mode's panels (Hierarchy, Build, Inspector, Attributes, History, Console) as FIELDS (fieldpanels.js):
+// one declaration is a desktop frame and a VR quad. This file decides what the rows are and what a row's action does;
+// the writes are writes.js's and inspect.js's. A number a motion comp drives shows its REST pose, marked.
 
 import * as OP from '../../../shared/requests.js';
 import { worldHistoryRows, historyView, HISTORY_MODES, mergeHistory } from './historyrows.js';
@@ -70,10 +68,10 @@ function toggleFold(id, g) {
 let arming = null;   // the child id waiting for a row click to name its parent
 // a ref field awaiting a target, { id, key } (e.g. 'look.target'): the next pick, tree row or world, commits that id
 let armingRef = null;
-// a need awaiting the viewer (design §3, shared/editschema.js), { id, ask }: answering re-commits the same address
+// a need awaiting the viewer (shared/editschema.js `asks`), { id, ask }: answering re-commits the same address
 let pendingAsk = null;
 let filter = '';     // the hierarchy's filter text: non-matches hide, ancestors of a match stay (dimmed)
-// ids whose children are folded: this viewer's, per world, never on the wire (design §5); a selection unfolds its ancestors
+// ids whose children are folded: this viewer's, per world, never on the wire; a selection unfolds its ancestors
 const HFOLD_LS = () => `ew-hier-fold:${CONFIG.world ?? ''}`;
 const collapsed = new Set((() => { try { const v = JSON.parse(localStorage.getItem(HFOLD_LS()) || '[]'); return Array.isArray(v) ? v.map(String) : []; } catch { return []; } })());
 // with 'list components' on, things start FOLDED; opening one is remembered here (per viewer, like the folds)
@@ -93,7 +91,7 @@ function revealPath(id) {
 let visibleRows = [];          // the rows as last painted, for ↑/↓
 
 // ---------------------------------------------------------------- the world entity
-// `@world` (design §3, shared/worldentity.js) is the fold's sky/terrain/grass as one entity, not in `entities`.
+// `@world` (shared/worldentity.js) is the fold's sky/terrain/grass as one entity, not in `entities`.
 // Its selection is edit/selection.js kind 'world' (or 'env:<key>'), exclusive with a thing selection.
 const worldSel = () => { const k = Sel.selection().kind; return k === 'world' || String(k).startsWith('env:'); };
 const envFocus = () => { const k = Sel.selection().kind; return String(k).startsWith('env:') ? k.slice(4) : null; };
@@ -109,8 +107,8 @@ function selectWorld(env = null) {
   Sel.set([WORLD_ID], env ? `env:${env}` : 'world');
   repaintAll();
 }
-// the palettes the World tiles offer — defs (defs/sky/_presets.json, defs/ground/_palette.json),
-// authoring conveniences only: a pick writes concrete verb args, never a preset's name
+// the palettes the World tiles offer (defs/sky/_presets.json, defs/ground/_palette.json): a pick writes concrete verb
+// args, never a preset's name
 let skyPresets = null, groundPal = null;
 function loadWorldDefs() {
   defsRegistry().then((reg) => { skyPresets = reg.skyPresets ?? null; groundPal = reg.groundPalette ?? null; repaintAll(); }).catch(() => { /* the tiles say the palette is missing */ });
@@ -214,8 +212,9 @@ function syncOutlines() {
 }
 
 // ---------------------------------------------------------------- scripts roster
-// the behavior runtime for 📜 badges and the Behaviors group: the same world_debug an agent reads, polled while up
-let behaviors = [];   // the world's scripts (the authority's status view, via world_debug {behaviors}): {id: "<thing>/<name>", attach, status, …}
+// the world's scripts, for the Hierarchy's badges, the Scripts group and the Console: the same world_debug an agent
+// reads, polled while the panels show
+let behaviors = [];   // {id: "<thing>/<name>", attach, status, …}
 /** The authority ops that remove one script: script:<name> on its thing, or an imported world's carried behaviour record. */
 const unbindOps = (id) => { const s = String(id); const i = s.indexOf('/');
   return s.startsWith('imported-behavior:') ? [OP.unset('@world', s)] : i > 0 ? [OP.unset(s.slice(0, i), `script:${s.slice(i + 1)}`)] : []; };
@@ -322,7 +321,7 @@ function hierarchyFields() {
         { k: 'fold:all-open', label: '  expand all' }, { k: 'fold:all-shut', label: '  collapse all' }] },
     // never lose track of what you hid. On the Options line, not its own: a line that comes and goes jumps the scroll
     ...(myHiddenCount() ? [{ t: 'btn', k: 'myshowall', label: `${myHiddenCount()} hidden in your view · show all`, bar: true, hint: 'things you hid with the eye: only your view, nobody else is affected' }] : []),
-    // pinned: the world entity, first row under the filter, never filtered out (design §3), like Blender's Scene Collection
+    // pinned: the world entity, first row under the filter, never filtered out (Blender's Scene Collection)
     worldRowFields(),
     { t: 'tree', k: 'sel', rows, settle: enabledSettle, rootDrop: 'drop here: no parent', empty: q ? `nothing matches "${filter}"` : only ? `nothing ${ONLY[hopts.only].none}` : 'nothing placed yet — press B in the world to place things' },
   ];
@@ -395,8 +394,8 @@ function hierarchyDispatch(action, payload, _field, opts = {}) {
   repaintAll();
 }
 
-/** Drag-reparent `id` onto `onto` (null = root), keeping its world pose: the Parent field's edit (shared/
- *  hierarchy.js parentVerbs). Refusals are shown before sending; ONE undo step however many verbs. */
+/** Reparent `id` onto `onto` (null = root), keeping its world pose: the parent.to edit (shared/editschema.js).
+ *  Refusals are shown before sending; ONE undo step however many ops. */
 function reparent(id, onto) {
   if (!id || !foldRecord(id)) return;
   if (onto === id) return;
@@ -406,26 +405,22 @@ function reparent(id, onto) {
   return r;
 }
 
-/** A copy of a thing (nudged pose, same components and carrier) from ordinary verbs: ONE undo entry. Locks are
- *  not copied. */
-// copies are independent: the second copy of the same unlinked thing suggests a blueprint instead
+/** A copy of a thing: the authority's create {from: id}, one act. Copies are independent: the second copy of the same
+ *  unlinked thing suggests a blueprint instead. */
 const dupCount = new Map();
 function duplicate(id) {
   const rec = foldRecord(id); const obj = entities.get(id);
   if (!rec || !obj) return;
   const n = (dupCount.get(id) ?? 0) + 1; dupCount.set(id, n);
   const nudge = n === 2 && !rec?.['copy-of'] ? html` · copies are <b>independent</b>: for copies that stay in step, <b>Save as blueprint</b> and place them from Build ▸ Blueprints` : '';
-  // the authority copies it, and what's attached to it: create {from: id}, one act
   const since = Sel.mark();
   Edits.duplicate(id).then((r) => { const nid = r.ok && r.refs?.[0]?.id; if (!nid) return;
     const out = Edits.idOut(nid); flashHint(html`<b>${called(out)}</b> — a copy of ${called(id)}${nudge}`, nudge ? 8000 : 4000); setTimeout(() => { if (entities.has(out) && Sel.mark() === since) sceneSelect(out); }, 400); });
 }
 
-// a lock's strength is its setter's rank now (recut B2): the authority's inspect says it (lock.rank); this only keeps
-// the padlock honest, the authority decides
-// asked ONCE per lock (a refused ask again after a backoff), not per component change: authorityInspect keys on the whole
-// bag, so a dragged locked thing re-asked every frame and tripped the rate limit (client-check D1, 10-20). Dropped when the
-// lock changes or goes; a demotion after that can leave it stale, which is fine: the authority decides, the padlock only asks.
+// a lock's strength is its setter's rank: the authority's inspect says it (lock.rank); this only keeps the padlock
+// honest, the authority decides. Asked ONCE per lock (again after a backoff on a refusal), not per component change,
+// and dropped when the lock changes or goes.
 const lockStrength = new Map(), lockAsk = backoff();
 const lockStrengthOf = (id) => {
   if (!bagOf(id)?.lock) return RANK.builder;
@@ -494,8 +489,8 @@ function restPose(id, obj) {
     : { pos: [round(obj.position.x), round(obj.position.y), round(obj.position.z)], yaw: round(obj.rotation.y, 4), scale: round(obj.scale?.x ?? 1) };
 }
 
-/** Channels EVERY selected thing has: the ACTIVE one's value, '—' where they differ; flags intersect too.
- *  Top line '<name> #<handle> + N more' (hover names the others, never a raw id). */
+/** The multi-selection Inspector: channels EVERY selected thing has (the ACTIVE one's value, '—' where they differ),
+ *  flags, remove. */
 function multiFields(ids) {
   const act = ids.includes(Sel.active()) ? Sel.active() : ids[0];
   const order = [act, ...ids.filter((x) => x !== act)];   // the active one's values lead
@@ -556,8 +551,8 @@ function cardRow(schema, id, addr) {
   if (nf.t === 'list') r.rows = (nf.rows ?? []).map((x) => ({ ...x, actions: (x.actions ?? []).map((a) => ({ ...a, k: `ed:${addr.slice(0, addr.indexOf('.'))}.${a.k}` })) }));
   return r;
 }
-/** The cards (design §5): one per component, each owning its fields by their
- *  group.k address — a thing's (inspectSchema) and the world's (worldSchema) alike. */
+/** The cards: one per component, each owning its fields by group.k address — a thing's (inspectSchema) and the
+ *  world's (worldSchema) alike. */
 function pushCards(f, schema, id, opts = {}) {
   const { locked = false, afterTransform = [], away = null } = opts;
   const touched = id !== WORLD_ID ? authorityInspect(id)?.touched ?? {} : {};
@@ -613,8 +608,8 @@ function worldFields() {
   return shown;
 }
 
-// who made it is never stored (L2: a view over the log): ask the authority's `inspect`, as an agent does (derived.madeBy),
-// per thing, re-asked when its components change (the key); it also says who last changed each component, and when
+// who made it is never stored: ask the authority's `inspect`, as an agent does (derived.madeBy), per thing, re-asked
+// when its components change (the key); it also says who last changed each component, and when
 const inspectCache = new Map();
 const pacedRead = latestRead(250);   // the Inspector's and the History's re-reads: one in flight per thing, the newest wins
 function authorityInspect(id) {
@@ -728,23 +723,21 @@ function inspectorFields() {
     // the cards' foot: this thing's latest change in one line, the doorway to History (which lives beside the Inspector)
     const lc = lastChange(id);
     if (lc) f.push({ t: 'btn', k: 'history', label: `last change: ${lc} — History ›`, hint: 'the most recent change to this thing, from the world log. History lists them all, newest first; each card\'s tooltip says who last set it' });
-  } else {
+  } else {   // a schema without sections (an older authority): the channels lane, then the groups
   // CHANNELS — the numeric lane: every num in the schema, transform first
   f.push({ t: 'group', k: 'channels', label: `Channels${locked ? ' 🔒' : ''}${obj.userData.mountedTo ? ' (mounted)' : ''}`, open: isOpen(id, 'channels') });
   for (const c of channels(schema)) {
     f.push({ ...c, k: `ch:${c.key}`, path: c.key, label: c.group === 'pos' ? c.label : `${c.group} · ${c.label ?? c.k}`, compact: true });
   }
 
-  // GROUPS — flags, then every component group the schema declares, then the
-  // raw-JSON floor for types no group speaks for, then scripts
+  // GROUPS — flags, then every component group the schema declares, then the raw-JSON floor
   const groupOf = (name) => schema.groups.find((g) => g.group === name);
   const addGroup = (g, key, title) => {
     if (!g) return;
     const name = String(title ?? g.label ?? g.group);
     f.push({ t: 'group', k: `g:${key}`, label: name.charAt(0).toUpperCase() + name.slice(1), open: isOpen(id, `g:${key}`) });
     for (const nf of g.fields) {
-      // numbers read the same everywhere on desktop: scrub or type, no ± (the quad keeps its steppers)
-      // a field may name its own commit address (a typed group's JSON hatch commits comp.<type>)
+          // a field may name its own commit address (a typed group's JSON hatch commits comp.<type>)
       const row = { ...nf, k: nf.commit ? `ed:${nf.commit}` : nf.k != null ? `ed:${g.group}.${nf.k}` : undefined, path: nf.commit ?? (nf.k != null ? `${g.group}.${nf.k}` : undefined), ...(nf.t === 'num' ? { compact: true } : {}) };
       if (nf.t === 'ref') row.arming = !!armingRef && armingRef.id === id && armingRef.key === `${g.group}.${nf.k}`;
       if (nf.t === 'list') row.rows = (nf.rows ?? []).map((r) => ({ ...r, actions: (r.actions ?? []).map((a) => ({ ...a, k: `ed:${g.group}.${a.k}` })) }));
@@ -931,7 +924,7 @@ async function refreshWatch() {
 }
 function consoleFields() {
   const f = [{ t: 'list', k: 'cwatch', empty: 'no scripts in this world — a script is a script:<name> component on a thing (docs/guide/SCRIPTS.md)',
-    rows: behaviors.map((b) => ({ id: b.id, label: b.id,   // words, not glyphs: the VR painter has no icon for these (bot #553)
+    rows: behaviors.map((b) => ({ id: b.id, label: b.id,   // words, not glyphs: the VR painter has no icon for these
       sub: [running(b) ? 'running' : (b.status ?? 'paused'), b.attach ? `on ${b.attach}` : 'world', b.timers ? `${b.timers} timer${b.timers === 1 ? '' : 's'}` : null].filter(Boolean).join(' · '),
       active: b.id === watching,
       actions: [...(b.attach ? [{ k: 'cgoto', label: 'select' }] : []), { k: 'unbind', label: 'remove', danger: true }] })) }];
@@ -965,10 +958,9 @@ function removeMany(ids) {
 }
 
 // ---------------------------------------------------------------- build
-// Build tab (design §5): re-hosts of existing paths, never second implementations: Blueprints via build.js
-// holdGhost, Tools via build.js / structure_ui.js / socketedit.js, World via shared/worldentity.js worldPick.
-// Saved blueprints: the world's store (state.blueprints); Save as Blueprint = the authority's publish (writes.js).
-// VR has no mouse ray yet, so its quad offers Library (worldquad.js spawnAhead) and World only.
+// Build tab: re-hosts of existing paths, never second implementations: Blueprints via build.js holdGhost, Tools via
+// build.js / structure_ui.js / socketedit.js, World via shared/worldentity.js worldPick, Save as Blueprint via the
+// authority's publish (writes.js). The VR quad offers Blueprints (worldquad.js spawnAhead) and World only.
 const buildFolds = {};
 let libQ = '';            // the Library search box
 let libHits = null;       // search results; null = the curated starters (an empty box shows those, as catalog.js does)
@@ -1002,11 +994,9 @@ const blueprintFields = (pics) => [
   libTiles(pics),
   ...savedFields(pics),
 ];
-/** The world's blueprints (state.blueprints), oldest first with version and copy count. A pick carries a copy as
- *  the ghost (build.js holdBlueprint), or in VR places one 1.5 m ahead. */
 function savedFields(pics) { return savedFieldsHere(); }
-/** This world's blueprints are @world blueprints:<hash> (the authority's publish writes them); a copy is the authority's
- *  create {from: hash, at} 1.5 m ahead, and Save as blueprint is the authority's publish {from, name} on the selection. */
+/** This world's blueprints (@world blueprints:<hash>, written by the authority's publish): a pick places a copy 1.5 m
+ *  ahead (create {from: hash, at}); Save as blueprint is publish {from, name} on the selection. */
 function savedFieldsHere() {
   const lib = Edits.blueprints(); const sel = selection();
   return [
@@ -1273,7 +1263,7 @@ export function initEditPanels() {
   // the Transform title's 'N m away' follows you: twice a second, repaint only when the whole metres changed (an in-place update)
   setInterval(() => { if (!lastAway || document.hidden || !frames.get('inspector')?.frame?.el?.getClientRects().length) return; const id = sceneSelected(); const o = id === lastAway.id ? entities.get(id) : null;
     if (!o) { lastAway = null; return; } if (Math.round(o.getWorldPosition(_wp).distanceTo(myState.pos)) !== lastAway.m) repaintAll(); }, 500);
-  bus.on('selection', () => { const id = sceneSelected(); if (id) revealPath(id); });   // before the paint: a selected child shows, its ancestors unfold (design §5)
+  bus.on('selection', () => { const id = sceneSelected(); if (id) revealPath(id); });   // before the paint: a selected child's ancestors unfold
   for (const ev of ['entity', 'comp', 'mount', 'build-mode', 'selection', 'structure-tool', 'tool', 'your-rights', 'log-applied', 'view-prefs']) bus.on(ev, repaintAll);   // view-prefs: this viewer's rotate order   // log-applied: a world's library lives on @world, which the realizers never touch
   // the world entity's components are the fold's sky / terrain / grass: repaint when a world verb folds
   // …and the Build panel's saved blueprints when a record is published

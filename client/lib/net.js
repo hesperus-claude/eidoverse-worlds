@@ -3,18 +3,15 @@
 
 import { CONFIG, report, bus, nameFromJoinAck, LAST_WORLD_KEY, TAB_WORLD_KEY, pickWorld, rememberedWorlds, isWorldName } from './base.js';
 import { avatarMounts } from './mounts.js';   // not world.js: that pulls core.js (the renderer) into lite
-// The world as data (TEL0S_NOTES §11.2): every snapshot and live entry folds
-// here, synchronously, through shared/protocol/replica.js (the sequencer's own
-// fold); the realizers project it into the scene. EW.foldParity() measures drift.
+// every snapshot and live entry folds here, synchronously, through shared/protocol/replica.js (the authority's own
+// fold); state.js hands the realizers the view of it (parity.js foldParity measures drift)
 import { hydrate as shadowHydrate, reset as shadowReset, state as shadowState, applyView } from './state.js';
 import { hear } from '../../shared/chatwindow.js';
 import { refusalText } from '../../shared/protocol/refusal.js';
 import { helloOf, refusalWords } from '../../shared/protocol/hello.js';
 import { pending, P } from './scheduler.js';
-// The realizers (TEL0S_NOTES §11.4) own the scene: state verbs realize FROM the
-// fold; fold-inert causes dispatch over the bus as 'live-entry' (livechat.js
-// listens; emitted, not imported, to stay out of the net → chat → net cycle).
-
+// chat lines (fold-inert) go over the bus as 'live-entry' (realize/livechat.js listens; emitted, not imported, to
+// stay out of the net → chat → net cycle)
 import { wingFoldPresence } from '../../shared/wingpresence.js';
 import { presenceWire, voiceWire, bodyWire } from '../../shared/presencewire.js';
 import { serverNow, localNow, noteRoundTrip, clockRtt, noteServerFloor, onClockDoubt } from './serverclock.js';
@@ -23,18 +20,15 @@ import { logChat, noteTyping, noteHistoryContext, resyncChatAfter, moderatorHead
 import { markPhase, refuseBoot, waitBoot } from './boot.js';
 import { showOldFormat } from './upgradeview.js';
 import { OLD_FORMAT_SPLASH } from '../../shared/oldformat.js';
-// this client folds the authority's own stream (shared/protocol/replica.js) and derives the view the realizers draw from it,
-// locally; build mode sends requests (edit/writes.js) and waits for the authority.
 import { makeReplica } from '../../shared/protocol/replica.js';
 import { redialer, REDIAL } from '../../shared/redial.js';
 import { actorName } from '../../shared/protocol/names.js';
-// the fold's records are frozen on a dev host (a reader that writes into one throws where it stands, C7); a visitor's
+// the fold's records are frozen on a dev host (a reader that writes into one throws where it stands); a visitor's
 // browser skips the walk
 export const replica = makeReplica({ freeze: CONFIG.dev });
 /** Is this client in a world (it has adopted the authority's cut)? */
 export const replicaActive = () => replica.active;
-// The wire takes a notifier instead of importing ui.js. Default logs, so a
-// dropped-connection notice never itself goes missing.
+// a notifier instead of importing ui.js; the default logs, so a dropped-connection notice never goes missing
 let toast = (m, kind) => console.log(`[net:${kind ?? 'info'}] ${m}`);
 
 export const net = {
@@ -50,12 +44,10 @@ let restoredPose = false;
 let hydrating = false;
 let pendingLive = [];
 let lastSeq = -1;
-// when to dial again after a close (shared/redial.js: exponential with full jitter, up to a minute; the agent's rule too).
-// Reset only by a join the server ACCEPTED (the snapshot): a socket that opens and is refused again keeps backing off.
+// when to dial again after a close (shared/redial.js); reset only by a join the server accepted (the snapshot)
 const redial = redialer();
 
-// Supplied by main.js so net can read/write body state without importing the
-// controller (which imports ui, which imports assets…).
+// supplied by main.js, so net reads body state without importing the controller
 let hooks = {
   myAvatarPath: () => '',
   myState: null,
@@ -65,10 +57,8 @@ let hooks = {
   myVoice: () => null,   // { mic, hear } — main.js reads the HUD glyphs' own state (mictoggle.js)
 };
 
-// The participant registry, the asset ledger and the capture renderer are INJECTED, like
-// the hooks: importing remotes.js / assets.js / capture.js would drag the engine into the
-// lite client. `let` bindings with the original names, so call sites read as imports.
-// Defaults are inert; main.js and lite.js (participants_lite.js) wire explicitly.
+// The participant registry, the asset ledger and the capture renderer are injected too: importing remotes.js /
+// assets.js / capture.js would drag the engine into the lite client. Defaults are inert; main.js and lite.js wire them.
 let remotes = new Map();
 let ensureRemote = async () => null;
 let dropRemote = () => null;
@@ -76,12 +66,8 @@ let pushPose = () => {};
 let noteServerTime = () => {};
 let noteSpeaking = () => {};
 let forgetBytes = () => {};
-// reachnet.js reaches the engine through landmarks.js. Only sendPose() reads this, and
-// a client with no body never sends a pose (hooks.myState is null, which returns early
-// above) — so undefined here is both safe and correct: absence means "let go".
-let myReachBag = () => undefined;
-// A client with no renderer must still ANSWER a snap — the asker is blocked on the
-// reply id — so the default is an honest error, not silence.
+let myReachBag = () => undefined;   // only sendPose reads it; undefined means "let go"
+// a client with no renderer must still answer a capture (the asker is blocked on the reply id)
 const noRenderer = async () => ({ error: 'this client has no renderer' });
 let capture = noRenderer;
 let warnedNoRenderer = false;
@@ -100,27 +86,25 @@ export function wireNet(h) {
 
 // Every write is a request (sendRequest below; edits go through edit/writes.js sendOps). No verb crosses the wire.
 
-/** People present, by the name they show → the identity the world knows them by (u-…, from the authority's directory;
- *  the server sends it on arrive and in the join roster). A role, a ban or a rollback goes to THIS, never to a typed
- *  name. */
+/** People present, by the name they show → the identity the world knows them by (u-…; sent on arrive and in the
+ *  join roster). A role, a ban or a rollback goes to this, never to a typed name. */
 export const identities = new Map();
 /** A person's name: as they show it here, else as the world last named them, else their id (the people panels read this). */
 export const presentName = (id) => { for (const [n, v] of identities) if (v === id) return n; return null; };
 export const personName = (id) => presentName(id) ?? net.names?.[id] ?? replica.nameOf?.(id) ?? id;
-/** A presence message names its person by IDENTITY too: the server routes it to that identity, and
- *  a name someone else wears never catches it. `key` is the field the server reads (targetActor / toActor). */
+/** A presence message names its person by identity too (`key`: targetActor / toActor), so a name someone else wears
+ *  never catches it. */
 const actorFor = (name, key) => { const a = name ? identities.get(name) : null; return a ? { [key]: a } : {}; };
-// A message about someone's BODY or to them (puppet, bodydrag, typing) goes only to an identity: sent without one the
-// server routes it by name (messages.ts presenceTarget), and a name is whatever someone else chose to wear.
+// a message about someone's body or to them (puppet, bodydrag, typing) goes only to a known identity: without one
+// the server routes by name (server/messages.ts presenceTarget)
 const hasActor = (name) => !!(name && identities.get(name));
 /** Display ids of people here without an account (the server marks them on arrive/present): the 'guest' badge. */
 export const guests = new Set();
 /** Who is muted here now, by identity → until (the server's mod-state: the muted glyph). */
 net.modMuted = {};
 export const identityOf = (name) => (name === CONFIG.name ? net.you ?? null : identities.get(name) ?? null);
-/** Say something in the world (the authority's `say`). Resolves with the authority's reply. Never silent: a
- *  line typed while the connection is down is QUEUED and sent when the world is back, and a refused say (the rate
- *  limit, a ban, too long) is shown to the person in plain words. */
+/** Say something in the world (the authority's `say`). Never silent: a line typed while the connection is down is
+ *  queued and sent when the world is back, and a refused say is shown to the person in plain words. */
 const sayQueue = [];   // {args, resolve}: says typed while reconnecting, sent in order on the next snapshot
 const SAY_QUEUE_MAX = 20;
 const excerpt = (t) => { const s = String(t ?? '').replace(/\s+/g, ' ').trim(); return `“${s.length > 40 ? `${s.slice(0, 39)}…` : s}”`; };
@@ -138,9 +122,8 @@ function sayRefusalWords(r, text) {
 function sendSay(args) {
   return sendRequest('say', args).then((r) => { if (!r?.ok) logChat('*', sayRefusalWords(r, args.text)); return r; });
 }
-/** extra: to (addressed, still public); spoken/utt/t0 (the words were voice-performed: the authority logs the trio, display only);
- *  live: true for a transcript of speech (stt.js), which is never queued for a reconnect: sent later it would publish
- *  after the mic went off, with nothing to check it again, so offline it is dropped. */
+/** extra: to (addressed, still public); spoken/utt/t0 (voice-performed: the authority logs the trio, display only);
+ *  live (a speech transcript, stt.js): never queued for a reconnect, since it would publish after the mic went off. */
 export function say(text, extra = {}) {
   const args = { text: String(text ?? ''), ...(extra.to ? { to: extra.to } : {}),
     ...(extra.spoken === true && Number.isSafeInteger(extra.utt) ? { spoken: true, utt: extra.utt, ...(Number.isFinite(extra.t0) ? { t0: extra.t0 } : {}) } : {}) };
@@ -166,18 +149,16 @@ export function sendAnim(data) {
     net.ws.send(JSON.stringify({ type: 'anim', ...data }));
   }
 }
-/** Ask another body to hold a pose or play an animation. `merge`: pose only
- *  the bones sent, over what they already hold (a null bone releases it);
- *  without it the pose replaces theirs whole. */
+/** Ask another body to hold a pose or play an animation. `merge`: pose only the bones sent (a null bone releases
+ *  it); without it the pose replaces theirs whole. */
 export function sendPuppet(target, { pose = null, merge = false, anim = null, ragdoll = null } = {}) {
   if (net.joined && net.ws?.readyState === 1 && hasActor(target)) {
     net.ws.send(JSON.stringify({ type: 'puppet', target, ...actorFor(target, 'targetActor'), pose, ...(merge ? { merge: true } : {}), anim, ragdoll }));
   }
 }
 
-/** Ask the world for a page of its own history (a join is folded, so older
- *  lines are reached by asking). No socket or no answer within 8 s rejects,
- *  so a caller can tell it from an empty page. */
+/** Ask the world for a page of its chat history. No socket or no answer within 8 s rejects, so a caller can tell it
+ *  from an empty page. */
 const pendingHistory = new Map();
 let histId = 0;
 export function requestHistory(opts = {}) {
@@ -190,8 +171,7 @@ export function requestHistory(opts = {}) {
   });
 }
 
-/** The world's flight recorder: why things bounced (denials, rejections,
- *  rate limits, reaction outcomes). Same request shape as history. */
+/** The world's flight recorder: why things bounced. Same request shape as history. */
 export function requestDebug(opts = {}) {
   if (!net.joined || net.ws?.readyState !== 1) return Promise.resolve({ events: [] });
   const reqId = `d${++histId}`;
@@ -216,18 +196,16 @@ export function sendWorldFound(name, title) {
   } else logChat('*', 'not connected — try again in a moment');
 }
 
-/** Erase the current world back to zero (server: owner-only, archived not
- *  destroyed). Carries the world's own name as the confirmation the server
- *  demands — the caller is responsible for having made the user type it. */
+/** Erase the current world back to zero (server: owner-only, archived not destroyed). The world's own name is the
+ *  confirmation the server demands; the caller has made the person type it. */
 export function sendWorldReset() {
   if (net.joined && net.ws?.readyState === 1) {
     net.ws.send(JSON.stringify({ type: 'world-reset', name: CONFIG.world }));
   } else logChat('*', 'not connected — try again in a moment');
 }
 
-/** Moderation messages that are not world verbs: 'world-bans' (list this
- *  world's bans — people holding a moderation power: owner, mute/kick/ban/pauseScripts), 'server-ban' / 'server-unban' / 'server-bans'
- *  (server operator only; the server enforces). Replies arrive as `mod` messages. */
+/** Moderation messages that are not world verbs: 'world-bans' (moderators), 'server-ban' / 'server-unban' /
+ *  'server-bans' (server operator only). Replies arrive as `mod` messages. */
 export function sendMod(type, extra = {}) {
   if (net.joined && net.ws?.readyState === 1) {
     net.ws.send(JSON.stringify({ type, ...extra }));
@@ -251,8 +229,7 @@ export function sendTyping(to, state) {
   if (net.joined && net.ws?.readyState === 1 && (!to || hasActor(to))) net.ws.send(JSON.stringify({ type: 'typing', to, ...actorFor(to, 'toActor'), ...(state ? { state } : {}) }));
 }
 
-/** Transient, never-logged relay — used while a build drag is in flight so
- *  other people see the object moving before the single committed `place`. */
+/** Transient, never-logged: a build drag in flight, so others see the object moving before the committed edit. */
 export function sendDrag(id, pos, yaw, q = null, { end = false, scale = null } = {}) {
   if (net.joined && net.ws?.readyState === 1) {
     net.ws.send(JSON.stringify({ type: 'drag', id, pos, yaw, ...(q ? { q } : {}), ...(scale ? { scale } : {}), ...(end ? { end: true } : {}) }));
@@ -264,24 +241,18 @@ export function sendDrive(id, pos, q) {
   if (net.joined && net.ws?.readyState === 1) net.ws.send(JSON.stringify({ type: 'drive', id, pos, q }));
 }
 
-/** This page's presence session: one id for as long as the page lives, sent
- *  with every join, so listeners can tell a reconnect (the same page, whose
- *  utterance counter goes on) from a new page (whose counter starts again).
- *  index.html's early socket sends the first join, with the same id. */
+/** This page's presence session: one id for as long as the page lives, sent with every join (index.html's early
+ *  socket too), so listeners can tell a reconnect from a new page. */
 const PAGE_SESSION = (globalThis.__ewPageSession ??= globalThis.crypto?.randomUUID?.()
   ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
 
 export function sendJoin() {
   const id = CONFIG.renderer ? `renderer-${CONFIG.name}`
     : CONFIG.spectate ? `retina-${CONFIG.name}` : CONFIG.name;
-  // ?renderer asks to be a renderer; only a client that can render is one (the server
-  // takes the flag at its word and routes snapshots to it). A client with no capture
-  // renderer wired (lite.js) claims neither flag: on a door key it is admitted as an
-  // invisible spectator; on the renderers' credential it is refused (4003,
-  // tools/access-test.ts 11b). Its id keeps the renderer- prefix.
-  //
-  // This reads `capture` when the join is SENT. main.js wires it before start() opens
-  // the socket (test/client/renderer-join-test.ts pins that order).
+  // ?renderer asks to be a renderer; only a client with a capture renderer wired is one (the server takes the flag at
+  // its word). lite.js claims neither flag: a door key admits it as a spectator, the renderers' credential refuses
+  // it (4003). `capture` is read when the join is sent; main.js wires it before start() opens the socket
+  // (test/client/renderer-join-test.ts).
   const rendering = CONFIG.renderer && capture !== noRenderer;
   if (CONFIG.renderer && !rendering && !warnedNoRenderer) {
     warnedNoRenderer = true;
@@ -307,9 +278,8 @@ export function sendJoin() {
 let requestSeq = 0;
 const pendingRequests = new Map();   // id → {resolve, timer}
 /** One request; resolves with the authority's own reply ({ok, …} or {ok: false, refused: {code, reason, fix}}).
- *  Never rejects: a lost socket or a timeout is a refusal the caller shows like any other. When the request was sent
- *  and no answer came (a timeout, or the socket dropping after it went), the refusal also carries mayHaveLanded: true,
- *  since the authority may have done what it asked; one never sent (not connected) doesn't. */
+ *  Never rejects: a lost socket or a timeout is a refusal like any other, carrying mayHaveLanded: true when the
+ *  request did go out. */
 export function sendRequest(verb, args = {}, { timeoutMs = 15000 } = {}) {
   if (!(net.joined && net.ws?.readyState === 1)) return Promise.resolve({ ok: false, refused: { code: 'offline', reason: 'not connected to the world', fix: 'wait for the connection to come back, then try again' } });
   const id = ++requestSeq;
@@ -319,8 +289,7 @@ export function sendRequest(verb, args = {}, { timeoutMs = 15000 } = {}) {
     net.ws.send(JSON.stringify({ type: 'request', id, verb, args }));
   });
 }
-// The socket closed: no reply can come on it (request ids don't carry over to the next one), so every request still in flight
-// is answered now, not by its 15 s timer (which held the body track that long after a reconnect, then spoke a stale timeout)
+// the socket closed: no reply can come on it, so its in-flight requests are answered now, not by their timers
 function failPending(ws = null) {
   for (const [id, p] of pendingRequests) { if (ws && p.ws !== ws) continue; pendingRequests.delete(id); clearTimeout(p.timer);
     p.resolve({ ok: false, refused: { code: 'offline', reason: `the connection dropped before the authority answered '${p.verb}'`, fix: 'it may have landed: look before trying again', mayHaveLanded: true } }); }
@@ -330,18 +299,17 @@ function onReply(msg) {
   pendingRequests.delete(msg.id); clearTimeout(p.timer);
   p.resolve(msg.reply ?? { ok: false, refused: { code: 'no-reply', reason: 'the authority sent no reply body' } });
 }
-/** The authority's fresh entries: fold them (replica.ingest), then hand state.js the new view of that fold (it tells the
- *  realizers what changed, in the protocol's terms). Chat lines take the chat path (they aren't world state). */
+/** The authority's fresh entries: fold them (replica.ingest), then hand state.js the new view (it tells the realizers
+ *  what changed). Chat lines take the chat path: they aren't world state. */
 function onLog(msg) {
   if (!replica.active) return;
   // each entry's ts was the authority's clock no later than now: a floor that catches a clock step before the next ask
   for (const e of msg.entries ?? []) noteServerFloor(e?.ts);
   const r = replica.ingest(msg.entries ?? [], msg.from ?? -1, msg.names);
   if (r.resync) { console.warn(`[replica] can't continue this client's cut (${r.why}): asking for a fresh snapshot`); rejoin(); return; }
-  // a chat line: into the window (the shared rule), then the live causes (bubbles, voice, chat log).
-  // Numbered seq × 1000, as the server numbers it in its window and history.
+  // a chat line: into the window (shared/chatwindow.js), then the live causes (bubbles, voice, chat log). Numbered
+  // seq × 1000, as the server numbers its window and history; the spoken trio rides along for chat to place by t0.
   for (const x of r.says) {
-    // the spoken trio (validated at the authority) rides along: chat merges a spoken utterance and places it by t0
     const e = { seq: x.seq * 1000, ts: x.ts, actor: x.actor, verb: 'say', args: { text: x.text, ...(x.to ? { to: x.to } : {}), ...(x.spoken ? { spoken: true, utt: x.utt, ...(x.t0 !== undefined ? { t0: x.t0 } : {}) } : {}) } };
     hear(shadowState.st, { actor: e.actor, text: x.text, ts: e.ts, seq: e.seq });
     if (hydrating) pendingLive.push(e);
@@ -365,20 +333,18 @@ function narrate(d, actor) {
 }
 
 let lastPoseSent = 0;
-/** Targeted ragdoll-drag traffic (grab / sim stream / release). Presence
- *  semantics: fire-and-forget, never logged. The target's client decides. */
+/** Targeted ragdoll-drag traffic (grab / sim stream / release): presence, never logged. The target's client decides. */
 export function sendBodyDrag(target, payload) {
   if (net.joined && net.ws?.readyState === 1 && hasActor(target)) {
     net.ws.send(JSON.stringify({ type: 'bodydrag', target, ...actorFor(target, 'targetActor'), ...payload }));
   }
 }
 
-// XR: the wire carries the AVATAR's actual yaw (root + its own chase of the head) and the look
-// pitch while presenting; remotes turn with the head.
+// XR: while presenting the wire carries the avatar's actual yaw and the look pitch (xr.js)
 let poseOverride = null;
 export const setPoseOverride = (fn) => { poseOverride = fn; };
-// spec/PHYSICS.md §5.1: one time base. Each sample carries its capture time on the authority's clock (once a round trip
-// has measured it: a one-way guess runs late) and this sender's own count; the clock is re-measured every CLOCK_MS.
+// spec/PHYSICS.md §5.1: each pose sample carries its capture time on the authority's clock (once a round trip has
+// measured it) and this sender's own count; the clock is re-measured every CLOCK_MS
 let poseSeq = 0, clockTimer = null;
 const CLOCK_MS = 10_000;
 function askClock() { if (net.ws?.readyState === 1) net.ws.send(JSON.stringify({ type: 'clock', t0: localNow() })); }
@@ -405,29 +371,20 @@ export function sendPose(now) {
     pose.clipTimeSlot = avatar.currentSlot;
     pose.clipRate = avatar.current.paused ? 0 : avatar.current.timeScale ?? 1;
   }
-  if (ov?.xr) pose.xr = ov.xr;   // C18: tracked head/hands, facing-relative (xrbody.js) — presence, never the log
+  if (ov?.xr) pose.xr = ov.xr;   // tracked head/hands, facing-relative (xrbody.js): presence, never the log
   if (s.anim) { pose.anim = s.anim; s.anim = null; } // an anim played once (pose.anim): sent once
-  // what I press while I hold a thing (grabbable's presence tier: every receiver draws its fx while this rides;
-  // absent = not pressing). Never logged: a use.down/up that changes the world is a request of its own
-  if (s.useHeld) pose.use = s.useHeld;
-  // full-body orientation and a locomotion bag (docs/reference/UNDERWATER-PRESENCE.md): presence only, optional, never authority
+  if (s.useHeld) pose.use = s.useHeld;   // what I press while holding a thing (receivers draw its fx); a use that changes the world is a request
+  // full-body orientation and locomotion (docs/reference/UNDERWATER-PRESENCE.md): presence only, never authority
   if (s.q) pose.q = s.q;
   if (s.locomotion) pose.locomotion = s.locomotion;
-  if (s.climb) pose.climb = s.climb;   // on a climb route: {host, progress} (shared/climb.js), resolved by every receiver through the host
-  // A held custom pose rides the presence packet (and therefore lastPose, so
-  // late joiners see it) — but never the log. `null` explicitly clears it.
-  if (s.pose !== undefined) pose.pose = s.pose;
-  // Persistent body pins (bodydrag nails) ride presence the same way: state
-  // of a BODY, visible to everyone, never the log. Null clears.
-  if (s.pins !== undefined) pose.pins = s.pins;
-  // Reach descriptors (shared/reachwire.js): a relation, not bones — every
-  // receiver re-solves it live. Rides while active; absence means let go.
-  const reach = myReachBag();
+  if (s.climb) pose.climb = s.climb;   // on a climb route: {host, progress} (shared/climb.js), resolved by each receiver through the host
+  if (s.pose !== undefined) pose.pose = s.pose;   // a held pose rides presence (so late joiners see it), never the log; null clears
+  if (s.pins !== undefined) pose.pins = s.pins;   // bodydrag nails, likewise
+  const reach = myReachBag();   // shared/reachwire.js: a relation each receiver re-solves live; absence means let go
   if (reach !== undefined) pose.reach = reach;
-  // my seat rides every frame while I sit (presence; world.js setBodySeat): {to: <socket id>}; absence means standing
+  // my seat while I sit (world.js setBodySeat): the socket, the pose I chose from its menu and when, and my input
+  // where the socket routes it (socksignals.js); absence means standing
   const seat = avatarMounts.get(CONFIG.name);
-  // …with the pose I chose from its menu (and when: a sync group follows the latest), and my input where the socket
-  // routes it (throttle/steer, aimYaw/aimPitch: signals every client computes my pose from; client/lib/socksignals.js)
   if (seat?.to) pose.seat = { to: seat.to, ...(seat.pose ? { pose: seat.pose, at: seat.at ?? 0 } : {}),
     ...(seat.in && Object.keys(seat.in).length ? { in: Object.fromEntries(Object.entries(seat.in).map(([k, v]) => [k, Math.round(v * 1000) / 1000])) } : {}) };
   if (clockRtt() !== null) pose.t = Math.round(serverNow());
@@ -437,14 +394,9 @@ export function sendPose(now) {
 
 // ---------------------------------------------------------------- connecting
 
-/** Re-assert a KNOWN body verbatim, plus whatever one-shot rides along.
- *
- *  sendPose() SAMPLES a live body; a client with no body has nothing to sample, and a
- *  pose composed from defaults clobbers every field it doesn't know to carry (a lite
- *  `wave` stood you up out of a sit). A pose is the resident's WHOLE public body, not a
- *  delta, so the renderer-free path sends back the server's settled pose (the join
- *  snapshot's `restore`) unchanged, adding only the one-shot.
- *
+/** Send a known pose verbatim. A pose is the whole public body, not a delta, so a client with no body to sample
+ *  (lite) sends back the server's settled pose (the snapshot's `restore`) plus its one-shot, rather than one composed
+ *  from defaults.
  *  @returns {boolean} whether it went out. */
 export function sendPoseExact(pose) {
   if (!net.joined || net.ws?.readyState !== 1) return false;
@@ -464,21 +416,17 @@ let everJoined = false;   // has this page been let in at all (a snapshot arrive
 let worldSaved = false;   // has this join remembered its world yet (rememberWorld)
 let browserSaved = false;   // has this PAGE written the browser's last world (once: see rememberWorld)
 
-/** Has anyone made anything here: a thing, ground, grass or sky. A join to a name
- *  nobody has used FOUNDS that world (server.ts admitJoin), so a mistyped ?world=
- *  is let in to an empty one; main.js warns about it on arrival. An empty world is
- *  not remembered: a bare link must not keep leading to a typo. */
+/** Has anyone made anything here. A join to an unused name founds that world (server.ts admitJoin), so a mistyped
+ *  ?world= is let into an empty one; an empty world is not remembered, so a bare link stops leading to a typo. */
 export const builtIn = (st) => {
   if (!st) return false;
   for (const _ in st.entities ?? {}) return true;   // one is enough: no key list built over a big world
   return st.terrain != null || st.grass != null || st.sky != null || st.water != null;
 };
 
-/** The world a person is IN: where a bare link brings this browser next time
- *  (base.js pickWorld). Written once something is built here, so a refused or empty
- *  ?world= is never remembered. Watchers and renderers write nothing. The tab's memory
- *  is refreshed on every join; the BROWSER's once per page, so an old tab waking from
- *  sleep can't take the last world back from the tab the person moved on to. */
+/** Where a bare link brings this browser next time (base.js pickWorld). Written once something is built here;
+ *  watchers and renderers write nothing. The tab's memory refreshes on every join, the browser's once per page, so
+ *  an old tab waking from sleep can't take the last world back. */
 function rememberWorld() {
   if (worldSaved || CONFIG.spectate || CONFIG.renderer || !builtIn(shadowState.st)) return;
   worldSaved = true;   // decided for this join either way, so live entries stop asking
@@ -489,16 +437,13 @@ function rememberWorld() {
   try { localStorage.setItem(LAST_WORLD_KEY, CONFIG.world); } catch { /* private mode */ }
 }
 
-/** This page entered signed in, and since then someone logged this browser out (ui.js
- *  logOut, in any tab, clears ew-authed). Where that person has been is no longer this
- *  browser's to remember: a tab still open must not write it back for the next visitor. */
+/** This page entered signed in and someone since logged this browser out (ui.js logOut clears ew-authed): a tab
+ *  still open must not write that person's world back for the next visitor. */
 function loggedOutElsewhere() {
   try { return !!CONFIG.authed && localStorage.getItem('ew-authed') !== '1'; } catch { return false; }
 }
-/** This browser was signed in, and this page is not: identity did not come through
- *  (/whoami or /authcfg failed, a bounce already spent this minute). A refusal then may
- *  be about WHO we are, not where, and must not cost the person their memory of the
- *  world: a reload with identity back would get in. */
+/** This browser was signed in and this page is not (/whoami failed, a bounce already spent this minute): a refusal
+ *  may then be about who we are, not where, and must not cost the memory of the world. */
 function identityMissing() {
   if (CONFIG.authed || CONFIG.token) return false;   // a door key is an identity of its own, never bounced to the login
   try { return localStorage.getItem('ew-authed') === '1'; } catch { return false; }
@@ -511,18 +456,15 @@ function forgetWorld(name) {
   }
 }
 
-/** The other half of rememberWorld's rule: a world found empty at the door is
- *  forgotten, so bare links stop leading there. The page stays (the person may be
- *  about to build); main.js's empty-world notice says how to go elsewhere. */
+/** A world found empty at the door is forgotten, so bare links stop leading there. The page stays (the person may be
+ *  about to build). */
 function forgetEmptyWorld() {
   if (CONFIG.spectate || CONFIG.renderer || builtIn(shadowState.st)) return;
   forgetWorld(CONFIG.world);
 }
 
-/** A world's door refused us (4010 not open to you, 4006 removed). Forget it from
- *  whichever memory would bring us back (base.js pickWorld). If a memory, not the
- *  link, brought this page here and we never got in, go where a bare link now leads.
- *  Every refusal removes the memory that led to it, so this ends. */
+/** A world's door refused us (4010 not open to you, 4006 removed): forget it from whichever memory would bring us
+ *  back. If a memory, not the link, brought this page here and we never got in, go where a bare link now leads. */
 function forgetRefusedWorld() {
   if (CONFIG.spectate || CONFIG.renderer) return false;   // their refusals are theirs: the memory is a person's
   if (identityMissing()) return false;   // maybe refused for who we are: keep the memory, say the old words
@@ -537,17 +479,14 @@ function whereNext() {
   const next = pickWorld(CONFIG.params, ...rememberedWorlds()).world;
   return next === 'commons' ? 'the commons' : `"${next}"`;
 }
-/** The tail of a refusal toast that leaves the page where it is. A reload of a page
- *  a memory brought here no longer comes back here (the memory is forgotten), so
- *  the words say where it does go, and how to come back on purpose. */
+/** The tail of a refusal toast that leaves the page where it is: where a reload now goes, and how to come back on
+ *  purpose. */
 function reloadHint(plain) {
   if (!CONFIG.worldRemembered || CONFIG.spectate || CONFIG.renderer || identityMissing()) return plain;
   return `a reload now takes you to ${whereNext()} — ?world=${CONFIG.world} comes back here`;
 }
 
-// The server may know who we are from the ew_sess cookie (set by /auth after a
-// Discord login). Fetched once; a verified name OVERRIDES localStorage's, since
-// the server ignores our self-asserted id anyway.
+// the server may know us from the ew_sess cookie (/auth after a Discord login); a verified name overrides localStorage's
 let identity;   // undefined = not asked yet, null = no session
 let authCfg = null;
 
@@ -560,9 +499,7 @@ async function fetchIdentity() {
   if (identity) {
     CONFIG.authed = true;
     CONFIG.sub = identity.sub;
-    // Remember that this browser entered verified: when the session later
-    // expires, the right move is back through the login, not the key door.
-    localStorage.setItem('ew-authed', '1');
+    localStorage.setItem('ew-authed', '1');   // when the session later expires, the way back is the login, not the key door
     if (identity.name && identity.name !== CONFIG.name) {
       CONFIG.name = identity.name;
       localStorage.setItem('ew-name', identity.name);
@@ -570,11 +507,8 @@ async function fetchIdentity() {
   }
 }
 
-/** A logged-out returning Discord user goes back through the login — it
- *  round-trips without interaction while Discord still knows them. Key-link
- *  visitors (CONFIG.token) are never bounced, and one bounce per minute is
- *  the cap: if the identity node is down we fall through to the authority (which
- *  offers the same link) instead of redirect-looping. */
+/** A logged-out returning Discord user goes back through the login (silent while Discord still knows them). Key-link
+ *  visitors are never bounced; one bounce per minute, so a dead identity node can't redirect-loop. */
 function bounceToLogin() {
   if (identity || !authCfg?.login || CONFIG.token) return false;
   if (localStorage.getItem('ew-authed') !== '1') return false;
@@ -585,36 +519,28 @@ function bounceToLogin() {
   return true;
 }
 
-/** Resolve the verified identity BEFORE any UI reads CONFIG.name — main.js
- *  awaits this ahead of the front door, so the door greets the person Discord
- *  says they are instead of a stale localStorage name. Memoized. */
+/** Resolve the verified identity before any UI reads CONFIG.name (main.js awaits this ahead of the front door). */
 export async function initIdentity() {
   await fetchIdentity();
   return identity;
 }
 
-/** The deployment's login URL, if identity is wired up — the authority offers it as
- *  the keyless way in. Only meaningful after initIdentity()/connect(). */
+/** The deployment's login URL, if identity is wired up. Only meaningful after initIdentity()/connect(). */
 export function loginUrl() {
   return authCfg?.login ?? null;
 }
 
 export async function connect() {
   await fetchIdentity();
-  // Login-required deployment and we have neither a session nor a door key:
-  // go get one. The home node round-trips through /auth back to here.
+  // login required and we have neither a session nor a door key: go get one (/auth round-trips back here)
   if (!identity && authCfg?.required && authCfg?.login && !CONFIG.token) {
     location.href = authCfg.login;
     return;
   }
-  // Not required, but this browser used to be logged in and isn't anymore —
-  // re-login is silent while Discord still authorizes, so don't make them
-  // rediscover the authority.
   if (bounceToLogin()) return;
-  // The early socket (inline boot script in index.html) may already have sent
-  // this exact join while the module graph parsed. Adopt it only when its join
-  // is byte-for-byte the one we would send now; on ANY mismatch close it and
-  // connect fresh. An optimization, never an authority.
+  // The early socket (inline boot script in index.html) may already have sent this exact join while the module graph
+  // parsed. Adopt it only when its join is byte-for-byte the one we would send now; otherwise close it and connect
+  // fresh.
   const early = globalThis.__ewEarlySocket;
   globalThis.__ewEarlySocket = null;
   if (early) {
@@ -626,13 +552,10 @@ export async function connect() {
       bus.emit('net', net);
       net.ws = early.ws;
       joinRefusal = null; joinRefused = null;
-      // Drain what raced ahead IN ORDER; the rewire below is synchronous with
-      // the final empty check, so no message slips between the two.
+      // drain what raced ahead in order; the rewire below is synchronous with the final empty check
       while (early.buffered.length) {
         const raw = early.buffered.shift();
-        // When the boot script's message handler ran, so the server's `t` it
-        // carries is sampled then rather than after the wait for this drain. Undefined
-        // from a boot script older than `arrived`: the sample is taken now.
+        // when the boot script took the message, so a server `t` it carries is sampled then, not after this drain
         const at = early.arrived?.shift();
         let msg;
         try { msg = JSON.parse(raw); } catch { continue; }
@@ -645,9 +568,8 @@ export async function connect() {
     if (!early.closeInfo && early.ws.readyState === 2) await new Promise((res) => {
       const prev = early.ws.onclose; early.ws.onclose = (ev) => { try { prev?.(ev); } finally { res(); } }; setTimeout(res, 2000);
     });
-    // The world REFUSED the early join (a 4xxx close): that refusal is the answer, not a reason to dial again. Read
-    // the server's words out of what the boot script buffered and close as a live socket would — but only for the
-    // join this page would send; a refusal of some OTHER join is discarded with the socket and the page connects fresh.
+    // the world refused the early join (a 4xxx close): read the server's words out of what the boot script buffered
+    // and close as a live socket would. Only for the join this page would send; another join's refusal is discarded.
     if (same && early.closeInfo?.code >= 4000) {
       net.status = 'connecting';
       for (const raw of early.buffered) {
@@ -668,8 +590,7 @@ export async function connect() {
   wireSocket(net.ws);
 }
 
-/** close/error/message wiring, shared by a fresh connect and an adopted
- *  early socket (the inline boot script in index.html — see connect()). */
+/** close/error/message wiring, shared by a fresh connect and an adopted early socket (connect()). */
 function wireSocket(ws) {
   ws.onclose = onSocketClosed;
 
@@ -682,13 +603,12 @@ function wireSocket(ws) {
   };
 }
 
-/** What the server said when it refused this join: the `error` that arrives before the snapshot is the refusal's own
- *  words, and the close (4005 …) that follows shows THEM rather than a guess from the code. Reset per connection. */
-let joinRefusal = null, joinRefused = null;   // …and its structured reason, where the wire carries one (old-format: docs/reference/WIRE.md 4005)
+/** What the server said when it refused this join: the `error` before the snapshot is the refusal's own words, and
+ *  the close that follows shows them rather than a guess from the code. Reset per connection. */
+let joinRefusal = null, joinRefused = null;   // …and its structured reason, where the wire carries one (docs/reference/WIRE.md 4005)
 function noteRefusal(text, refused) { if (!net.joined && text) { joinRefusal = String(text); joinRefused = refused && typeof refused === 'object' ? refused : null; } }
 
-/** A refused join, shown where the person is looking: the splash stays (or comes back) with the server's sentence on
- *  it (boot.js refuseBoot) — never a toast under the splash over an empty world. */
+/** A refused join, shown on the splash (boot.js refuseBoot), never as a toast under it. */
 function showRefusal(text) {
   net.status = 'rejected';
   bus.emit('net', net);
@@ -699,18 +619,15 @@ function showRefusal(text) {
 
 /** The socket's close, live or the early socket's (connect()). One place decides what each close code means. */
 function onSocketClosed(ev) {
-  // a socket already replaced (rejoin dials before the old close lands: it waits at most 2 s) answers its own requests
-  // and nothing else: the live socket's requests, its join and its clock are not its to end
+  // a socket already replaced (rejoin dials before the old close lands) answers its own requests and nothing else
   const sock = ev?.target ?? null;
   failPending(sock);
   if (sock && net.ws && sock !== net.ws) { if (sock === intentionalClose) intentionalClose = false; return; }
   clearInterval(clockTimer); clockTimer = null;
   net.joined = false;
-  // rejoin() drives its own reconnect, for the socket it replaced only: the NEW socket dropping before the old close
-  // lands must still redial
+  // rejoin() drives its own reconnect, for the socket it replaced only
   if (intentionalClose && (intentionalClose === true || intentionalClose === sock || !sock)) { intentionalClose = false; return; }
-  // 4002 = session takeover: this identity re-arrived elsewhere. Retrying
-  // would kick THAT session and ping-pong forever.
+  // 4002 = session takeover: this identity re-arrived elsewhere; retrying would kick that session and ping-pong
   if (ev.code === 4002) {
     net.status = 'rejected';
     bus.emit('net', net);
@@ -718,10 +635,8 @@ function onSocketClosed(ev) {
     toast(`"${CONFIG.name}" is connected in another tab. This one has yielded — reload to take over.`, 'warn', 60000);
     return;
   }
-  // 4006 = removed by moderation (kicked or banned). The server already
-  // explained itself in an error toast just before closing. No retry: a
-  // banned door will not open, and auto-rejoining after a kick would make
-  // the kick meaningless — coming back is a deliberate reload.
+  // 4006 = removed by moderation; the server explained itself in an error toast just before. No retry: coming back
+  // is a deliberate reload.
   if (ev.code === 4006) {
     net.status = 'rejected';
     bus.emit('net', net);
@@ -730,27 +645,22 @@ function onSocketClosed(ev) {
     toast(`you were removed from this world — ${reloadHint('reload if you believe you may return')}`, 'warn', 60000);
     return;
   }
-  // 4010 = this world is not open to you (access.ts ACCESS_CLOSE): refused at the door (listed people only, watch only),
-  // or your access just ended or was changed. The server said why in an `error` just before closing. No retry — the
-  // door won't open on its own; coming back is a deliberate reload (or ?spectate, when it said you may watch).
+  // 4010 = this world is not open to you (server/access.ts ACCESS_CLOSE), at the door or because your access just
+  // changed. No retry: the door won't open on its own.
   if (ev.code === 4010) {
     if (forgetRefusedWorld()) return;
     showRefusal(joinRefusal ?? `you're not in "${CONFIG.world}" — ${reloadHint('reload if your access changes')}`);
     return;
   }
-  // 4011 = nothing to watch here (a spectator of a world that is unavailable to it, perhaps not founded yet): try again,
-  // backing off, so an observer started early joins once the world exists.
+  // 4011 = nothing to watch here yet (a spectator of a world not founded): retry with backoff
   if (ev.code === 4011) {
     net.status = 'retrying';
     bus.emit('net', net);
     setTimeout(connect, redial.next(REDIAL.full));
     return;
   }
-  // 4005 = a refused join: a malformed name, world-unavailable (missing or not yours to see), an old-format world, a client that doesn't fold the log.
-  // No retry: the answer won't change. The server's `error` sentence just before this close is shown; without one,
-  // the close reason picks the words.
-  // 4005 "full" = the world is at its access max: TRANSIENT. Say the server's words (on the splash if it is still
-  // up, else a toast) and try again, backing off.
+  // 4005 = a refused join (docs/reference/WIRE.md): final, except reason "full", which is transient and retried
+  // with backoff. The server's `error` just before the close is shown; without one the close reason picks the words.
   if (ev.code === 4005 && String(ev.reason ?? '') === 'full') {
     const text = `${joinRefusal ?? `"${CONFIG.world}" is full`} — trying again by itself`;
     if (!waitBoot(text)) toast(text, 'warn', 8000);
@@ -778,10 +688,7 @@ function onSocketClosed(ev) {
     net.status = 'rejected';
     bus.emit('net', net);
     failSays();
-    // If we entered verified, this refusal means the session died
-    // server-side (TTL lapsed mid-visit). The cached identity is stale —
-    // drop it and go back through the login rather than asking for a key
-    // this person never had.
+    // entered verified: the session died server-side, so drop the stale identity and go back through the login
     if (CONFIG.authed) {
       identity = null;
       CONFIG.authed = false;
@@ -797,55 +704,39 @@ function onSocketClosed(ev) {
 
 // ---------------------------------------------------------------- handling
 
-/** ONE teardown for a departed participant — every leave-shaped exit (leave,
- *  kick/ban's broadcast leave, the reconnect snapshot's roster prune) funnels
- *  here so the whole generation dies together: drag custody FIRST (a drag sim
- *  holds bone references into the avatar about to be disposed), then the body
- *  itself (nameplate, bubbles, typing dots and held poses dispose with it).
- *  A body's seat (avatarMounts) is presence: dropRemote clears it with the body.
- *  `expected` makes the drop generation-conditional (see dropRemote). */
+/** One teardown for a departed participant (leave, kick/ban, the reconnect snapshot's roster prune), so the whole
+ *  generation dies together: drag custody first (a drag sim holds bone references into the avatar about to be
+ *  disposed), then the body and what hangs off it. `expected` makes the drop generation-conditional (dropRemote). */
 export function teardownParticipant(id, expected) {
-  // The generation check comes BEFORE any side effect: a predecessor's stale
-  // cleanup must be a complete no-op. Only a caller who owns the current record may tear.
-  if (expected && remotes.get(id) !== expected) return null;
+  if (expected && remotes.get(id) !== expected) return null;   // a predecessor's stale cleanup is a no-op
   bus.emit('participant-teardown', id);   // bodydrag releases custody before the bones vanish
   const dropped = dropRemote(id, expected);
-  // The voice peer rides the 'roster' sweep every caller emits right after this
-  // (voice.js imports net, so calling it here would close a cycle).
+  // the voice peer rides the 'roster' sweep every caller emits right after (voice.js imports net: a cycle)
   return dropped;
 }
 
-/** Presence for an id the world never announced (or already dismissed) is
- *  dropped, counted, and said a few times — the flight-recorder spirit,
- *  the noteMalformed bound. */
+/** Presence for an id the world never announced (or already dismissed) is dropped, counted, and said a few times. */
 let stalePresenceSeen = 0;
 export const stalePresenceCount = () => stalePresenceSeen;
-/** test seam — the wire, minus the socket (test/client/remotes-lifecycle-test.ts
- *  drives the dispatch directly; the server's per-socket FIFO is the test's
- *  license to sequence messages by hand) */
+/** test seam: the wire minus the socket (test/client/remotes-lifecycle-test.ts drives the dispatch directly) */
 export const _dispatch = (msg) => handle(msg);
 function noteStalePresence(id) {
   if (stalePresenceSeen++ >= 5) return;
   console.warn(`[net] presence for unannounced id "${id}" dropped (straggler from a departed generation?)`);
 }
 
-/** `at`: the performance.now() when the boot script's handler took an
- *  early-socket message (the drain in connect()); undefined for a message
- *  handled as its event runs. */
+/** `at`: performance.now() when the boot script took an early-socket message (connect()'s drain); undefined for a
+ *  message handled as its event runs. */
 async function handle(msg, at) {
   switch (msg.type) {
     case 'snapshot': startClock(); return onSnapshot(msg);
 
-    // Two answers share the name: a round trip's ({t0, t}: the ask in askClock below), and the server's time sent
-    // just before each snapshot to a join that asks ({t} alone: sendJoin's and the boot script's do), a one-way sample
-    // taken before the snapshot's sounds are seeked, so the first seek isn't on this machine's own clock
-    // (client/lib/serverclock.js says how each is kept).
+    // two answers share the name: a round trip's ({t0, t}: askClock), and the one-way sample sent just before each
+    // snapshot to a join that asks ({t} alone), so the first sound seek isn't on this machine's clock (serverclock.js)
     case 'clock': if (msg.t0 !== undefined) noteRoundTrip(msg.t0, msg.t, localNow()); else noteServerTime(msg.t, at); break;
 
     case 'your-rights': {
-      // Personalized effective rights, folded by the authority after every
-      // grant. This is the live answer for wildcard/sub/name precedence; the
-      // browser never has to approximate it from one partial delta.
+      // effective rights, folded by the authority after every grant: the browser never approximates precedence
       if (msg.rights) {
         net.myRights = msg.rights;
         bus.emit('your-rights', net.myRights);
@@ -854,13 +745,11 @@ async function handle(msg, at) {
     }
 
     case 'arrive':
-      // `authority: true` — an arrive is the world SAYING this person exists.
-      // On a takeover (same id re-arriving) the predecessor generation retires
-      // whole first: the teardown event releases drag custody and the voice peer,
-      // which the roster sweep can't (the id stays present).
+      // an arrive is the world saying this person exists (`authority: true`). On a takeover (same id re-arriving) the
+      // predecessor retires whole first: the roster sweep can't, since the id stays present.
       if (remotes.has(msg.id)) bus.emit('participant-teardown', msg.id);
       bus.emit('participant-session', { id: msg.id, session: msg.session });
-      ensureRemote(msg.id, msg.avatar, { declares: msg.declares ?? null, authority: true });   // §6a: a declared status (any word), absent = undeclared; shown as said, never sorted into kinds
+      ensureRemote(msg.id, msg.avatar, { declares: msg.declares ?? null, authority: true });   // declares: PROTOCOL §6a, shown as said, never sorted into kinds
       if (msg.actorId) identities.set(msg.id, msg.actorId);
       if (msg.guest) guests.add(msg.id); else guests.delete(msg.id);
       logChat('*', `${msg.id} arrived`);
@@ -874,20 +763,15 @@ async function handle(msg, at) {
       break;
 
     case 'pose': {
-      // Presence UPDATES bodies; it never creates them. The server's per-socket
-      // order puts a body's authority (snapshot roster or arrive) before its
-      // first sample, so a pose for an unknown id is a straggler — creating
-      // here would rebuild the departed as a ghost with a live nametag.
+      // presence updates bodies, never creates them: the roster or arrive always precedes a body's first sample, so
+      // a pose for an unknown id is a straggler (creating here would rebuild the departed as a ghost)
       if (remotes.has(msg.id)) pushPose(msg.id, msg.pose, msg.t);
       else noteStalePresence(msg.id);
       break;
     }
 
     case 'frame': {
-      // Batched embodied plane: one message per server tick, latest pose per
-      // id. Same law as `pose`: update-only, never create — and with no
-      // creation there is no fire-and-forget load whose completion could
-      // deliver a departed generation's sample into a successor's buffer.
+      // batched presence: one message per server tick, latest pose per id; the same update-only law as `pose`
       noteServerTime(msg.t, at);
       for (const [id, pose] of Object.entries(msg.poses)) {
         if (id === net.myId) continue; // our own echo — local prediction owns this body
@@ -897,8 +781,7 @@ async function handle(msg, at) {
       break;
     }
 
-    case 'drag': {
-      // transient build feedback — apply without logging anything
+    case 'drag': {   // transient build feedback, never logged
       bus.emit('drag', msg);
       break;
     }
@@ -910,12 +793,12 @@ async function handle(msg, at) {
       break;
     }
 
-    // SFU transport (VOICE_TRANSPORT=sfu). This switch has NO default branch:
-    // an unrouted type is silently dropped, so every new type needs its case.
+    // voice transport. This switch has no default branch: an unrouted type is silently dropped, so every new type
+    // needs its case.
     case 'sfu-offer': bus.emit('sfu-offer', msg); break;
     case 'sfu-ice':   bus.emit('sfu-ice', msg);   break;
     case 'sfu-route': bus.emit('sfu-route', msg); break;
-    case 'relay-cred':          // the minted media credential (voicerelay.js)
+    case 'relay-cred':          // the minted media credential (voicesfubridge.js)
       window.__voiceRelayAbsent = false;   // a relay answered: an earlier "no relay" (a server restarted without voice) is over
       bus.emit('relay-cred', msg);
       break;
@@ -935,9 +818,7 @@ async function handle(msg, at) {
       bus.emit('surface-transition', { actor: msg.id, surface: msg.surface, gen: msg.gen, retired: msg.retired });
       break;
 
-    case 'caption':
-      // live speech pacing (presence, never logged) — the bubble speaks in
-      // real time; the log gets the whole utterance as one say at the end
+    case 'caption':   // live speech pacing (presence): the bubble speaks in real time, the log gets one say at the end
       bus.emit('caption', { actor: msg.id, text: msg.text });
       break;
 
@@ -955,15 +836,11 @@ async function handle(msg, at) {
     }
 
     case 'puppet':
-      // Someone wants to pose US. A puppet is an INPUT to our own body, not a
-      // pose asserted onto it: localbody.js applyPuppet drives our avatar
-      // through the normal presence path (the authority already gated it).
+      // someone wants to pose me: an input to my own body (localbody.js applyPuppet), not a pose asserted onto it
       bus.emit('puppet', msg);
       break;
 
-    case 'bodydrag':
-      // someone is (asking to be, or currently) dragging MY body — same
-      // doctrine as puppet: an input my client applies to itself, or refuses
+    case 'bodydrag':   // someone is dragging my body: an input my client applies to itself, or refuses, as puppet
       bus.emit('bodydrag', msg);
       break;
 
@@ -972,10 +849,7 @@ async function handle(msg, at) {
       bus.emit('holds', msg.holds ?? {});
       break;
 
-    case 'geom':
-      // the placeholder tier's bbox side-channel — arrives a beat after the
-      // snapshot (async summaries; the join send stays synchronous). Bus,
-      // not import: the models realizer listens (net must not import it).
+    case 'geom':   // the placeholder tier's bbox side-channel, a beat after the snapshot; the models realizer listens
       bus.emit('lib-geom', msg.geom ?? {});
       break;
 
@@ -986,18 +860,13 @@ async function handle(msg, at) {
     case 'log': onLog(msg); break;
     case 'reply': onReply(msg); break;
 
-    case 'renderer-travel':
-      // a roaming renderer is wanted elsewhere (server/screenshots.ts summon): go there — the same in-page re-join a
-      // person's travel uses. Only a roaming renderer obeys; anyone else ignores it.
+    case 'renderer-travel':   // a roaming renderer is wanted elsewhere (server/screenshots.ts): only a roaming renderer obeys
       if (CONFIG.renderer && CONFIG.roam && isWorldName(msg.world) && msg.world !== CONFIG.world) {
         CONFIG.world = msg.world; rejoin();
       }
       return;
 
-    case 'capture':
-      // The reply is the snapshot's to produce and the wire's to send, so a client
-      // without a renderer answers with an error instead of going quiet on an id
-      // someone is waiting for. See net_capture.js (wired by main.js).
+    case 'capture':   // net_capture.js, wired by main.js; a client without a renderer answers with an error
       capture(msg).then((r) => net.ws?.send(JSON.stringify({ type: 'capture-result', id: msg.id, ...r })));
       return;
 
@@ -1013,23 +882,18 @@ async function handle(msg, at) {
       break;
     }
 
-    case 'avatar-profile-updated': {
-      // a seat profile was proposed or countersigned — occupants.js holds
-      // the cache and the generation guard; this is just the wire → bus hop
+    case 'avatar-profile-updated': {   // a seat profile was proposed or countersigned (occupants.js)
       bus.emit('avatar-profile-updated', msg);
       break;
     }
 
-    case 'defs-updated': {
-      // a def changed on disk (§24 hot reload) — wire → bus hop; world.js
-      // re-fetches the registry and regrows what the changed content shapes
+    case 'defs-updated': {   // a def changed on disk; world.js re-fetches the registry
       bus.emit('defs-updated', msg);
       break;
     }
 
     case 'world-forked': {
-      // The link stands alone at the end of the line, never inside brackets:
-      // naive linkifiers swallow closing punctuation into the URL.
+      // the link ends the line: naive linkifiers swallow closing punctuation into the URL
       const link = `${location.origin}/?world=${encodeURIComponent(msg.to)}`;
       logChat('*', `world copied — "${msg.from}" → "${msg.to}" — visit: ${link}`);
       toast(`copied to "${msg.to}" — open ?world=${msg.to} to visit`, 'info', 12000);
@@ -1044,9 +908,7 @@ async function handle(msg, at) {
       break;
     }
 
-    case 'world-reset': {
-      // The world we are standing in is now empty: a reload through the normal
-      // join path is the one rebuild that cannot disagree with the server.
+    case 'world-reset': {   // the world we stand in is now empty: a reload is the one rebuild that cannot disagree
       toast(`${msg.by} reset "${msg.world}" to zero — reloading…`, 'warn', 4000);
       logChat('*', `${msg.by} reset this world to zero`);
       shadowReset();
@@ -1054,9 +916,7 @@ async function handle(msg, at) {
       break;
     }
 
-    case 'mod':
-      // Moderation replies (ban lists, server-ban confirmations) — chat is
-      // where the person is looking when they issue the command.
+    case 'mod':   // moderation replies (ban lists, confirmations) go to chat, where the command was typed
       for (const line of String(msg.text ?? '').split('\n')) logChat('*', line);
       break;
     case 'moderated':
@@ -1067,8 +927,7 @@ async function handle(msg, at) {
         logChat('*', `${msg.by} ${what}${until}${msg.reason ? ` — ${msg.reason}` : ''}`); bus.emit('moderated-me', msg); }
       else logChat('*', String(msg.text ?? ''));
       break;
-    case 'warned':
-      // a warning (research roles §5): a notice you dismiss, and a line in chat to keep
+    case 'warned':   // a moderator's warning: a notice you dismiss, and a line in chat to keep
       logChat('*', `${moderatorHeader(CONFIG.world)} — ${msg.by} warned you: ${String(msg.reason ?? '')}`, '', { links: false });   // their text is never a link
       bus.emit('warned', msg);
       break;
@@ -1078,10 +937,8 @@ async function handle(msg, at) {
       break;
 
     case 'notice':
-      // The world telling YOU something that is not a refusal — today, that
-      // your access here ends soon. Toast (it matters now) and chat (so it is
-      // still there when you look). Not an `error`: that would also tell every
-      // optimistic preview its verb was refused.
+      // the world telling you something that is not a refusal (your access ends soon): toast and chat. Not an
+      // `error`, which would also read as a refused verb.
       toast(String(msg.text ?? ''), 'warn', 20000);
       logChat('*', String(msg.text ?? ''));
       break;
@@ -1093,16 +950,11 @@ async function handle(msg, at) {
       break;
 
     case 'error':
-      // the world tells us it has no voice relay only when we try to use one —
-      // remember it, so the mic glyph can say WHY it stays off
+      // "no voice relay" is said only when we try to use one: remembered so the mic glyph can say why it stays off
       if (/no voice relay/i.test(String(msg.error ?? ''))) window.__voiceRelayAbsent = true;
       noteRefusal(msg.error, msg.refused);   // before the snapshot, an error is the join's refusal: its close shows these words
-      // Server-side refusals are the user's problem to see, not the console's.
       toast(msg.error, 'warn');
-      // ...and any module holding an optimistic preview can hear it (no lib module listens today): a
-      // refused verb never folds.
-      // The wire names no verb — every refusal on this socket is ours.
-      bus.emit('verb-refused', { error: String(msg.error ?? '') });
+      bus.emit('verb-refused', { error: String(msg.error ?? '') });   // the wire names no verb: every refusal on this socket is ours
       break;
   }
 }
@@ -1111,7 +963,7 @@ async function onSnapshot(msg) {
   // no fold, no join: refused before any joined state is published (the voice bridge arms on it)
   if (!msg.state) {
     replica.reset(); report('snapshot', new Error('the server sent no world snapshot (an old server?)'));
-    // an older server: not "live" with nothing loaded — say so, fail the queued says, hang up without a redial (#470)
+    // an older server: say so, fail the queued says, hang up without a redial
     net.joined = false; net.status = 'rejected'; bus.emit('net', net); failSays();
     toast('this server is older than the page: nothing will load — reload once it is updated', 'warn', 60000);
     intentionalClose = net.ws ?? true; try { net.ws?.close(4000); } catch { /* already gone */ }
@@ -1119,9 +971,7 @@ async function onSnapshot(msg) {
   }
   // what the server says you may do here; live grants keep it fresh via world.js
   net.myRights = msg.yourRights ?? { role: 'builder', gen: true };
-  // the body roster rides the snapshot — resolveMyAvatarPath and the avatar
-  // panel read it with no /avatars round-trip (older servers: field absent,
-  // consumers fall back to the lazy fetch)
+  // the body roster rides the snapshot: the avatar panel reads it with no /avatars round-trip (absent on older servers)
   if (msg.avatars) { net.avatars = msg.avatars; bus.emit('avatars', msg.avatars); }
   bus.emit('your-rights', net.myRights);
   markPhase('connect', 1);
@@ -1135,11 +985,8 @@ async function onSnapshot(msg) {
   net.renameAfter = msg.renameAfter ?? null; net.renameCooldownDays = msg.renameCooldownDays ?? null;   // profile.js's name dialog
   if (msg.renameRefused) { const d = new Date(msg.renameRefused.until);
     toast(`still “${msg.you}”: names change once every ${msg.renameCooldownDays} days — “${msg.renameRefused.tried}” can be yours from ${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}`, 'info', 12000); }   // the durable subject the authority vouched for, if any — what guarded things match on
-  // The server's `you` is authoritative (verified identity, or a suffixed name
-  // when two people share a nick): adopt it, and say so. Renderer/spectator
-  // clients join under a transport prefix ("renderer-" / "retina-") that is not
-  // part of the name: strip it, or ew-name grows one prefix per reload, unless
-  // the ack is a verified identity (base.js nameFromJoinAck).
+  // the server's `you` is authoritative (a verified identity, or a suffixed name when two people share a nick):
+  // adopt it and say so. Renderer/spectator clients strip their transport prefix (base.js nameFromJoinAck).
   const you = nameFromJoinAck(msg.you, { renderer: CONFIG.renderer, spectate: CONFIG.spectate, verified: !!msg.yourSub });
   if (you && you !== CONFIG.name && !msg.renameRefused) {
     CONFIG.name = you;
@@ -1147,16 +994,13 @@ async function onSnapshot(msg) {
     toast(`you're appearing as “${msg.you}”`, 'info', 8000);
   } else if (msg.renameRefused) { CONFIG.name = msg.you; localStorage.setItem('ew-name', msg.you);
     try { const u = new URL(location.href); if (u.searchParams.has('name')) { u.searchParams.set('name', msg.you); history.replaceState(null, '', u); } } catch { /* fine */ } }
-  // a RE-join: lastSeq is still the last entry the old socket delivered, and
-  // what was said after it may be trimmed out of this snapshot's chat window
-  // (fair, not contiguous). Fetch it before lastSeq moves on. A first join has rendered nothing and is a no-op.
-  // lastSeq is already in the chat's numbering (seq × 1000: onLog, the server's window and readHistory alike).
+  // a re-join: what was said after the old socket's last entry may be trimmed out of this snapshot's chat window,
+  // so fetch it before lastSeq moves on (a first join is a no-op). lastSeq is in the chat's numbering (seq × 1000).
   if (lastSeq >= 0) void resyncChatAfter(lastSeq);
   if (typeof msg.throughSeq === 'number' && msg.throughSeq > lastSeq) lastSeq = msg.throughSeq;
   bus.emit('net', net);
   bus.emit('participant-sessions', msg.present ?? []);
-  // who has which aux legs live NOW (surface-transition keeps it current after
-  // this). Consumers key hold-then-fallback TTS on it.
+  // who has which aux legs live now (surface-transition keeps it current after this)
   bus.emit('surfaces', [...(msg.present ?? []),
     ...(msg.yourSurfaces?.length ? [{ id: msg.you, surfaces: msg.yourSurfaces }] : [])]);
 
@@ -1165,25 +1009,20 @@ async function onSnapshot(msg) {
     logChat('*', '⏺ this performance is being recorded (movement + chat, for the archive)');
   }
 
-  // wake where you fell asleep — but never teleport a body that has already
-  // moved this session (mid-session reconnects keep local truth)
+  // wake where you fell asleep, but never teleport a body that has already moved this session (a renderer-free
+  // client has no body: `!s` passes)
   const s = hooks.myState;
-  // No `s &&` here: a renderer-free client has no body, and the guard only
-  // protects a body that has ALREADY MOVED this session.
   if (msg.restore && !restoredPose && (!s || s.speed === 0)) {
     restoredPose = true;
     hooks.onRestore(msg.restore);
   }
   restoredPose = true; // first snapshot decides, restore or not
 
-  // reconcile: the snapshot is authoritative — tear down any participant no
-  // longer present, through the SAME funnel a leave uses, or stale ghosts
-  // survive reconnects.
+  // the snapshot's roster is authoritative: tear down anyone no longer present, through the funnel a leave uses
   const present = new Set(msg.present.map((p) => p.id));
   for (const id of [...remotes.keys()]) if (!present.has(id)) teardownParticipant(id);
 
-  // remote avatars build in parallel and never block log replay — the
-  // roster is an AUTHORITY: a same-id record here is a fresh generation
+  // remote avatars build in parallel and never block log replay; a same-id record here is a fresh generation
   identities.clear(); guests.clear(); if (msg.actor) net.you = msg.actor;
   for (const p of msg.present) {
     if (p.actorId) identities.set(p.id, p.actorId);
@@ -1193,9 +1032,8 @@ async function onSnapshot(msg) {
       .catch((e) => report(`present ${p.id}`, e));
   }
 
-  // State adopts the snapshot FIRST, synchronously: the authority's own fold, drawn as the view of THIS client's fold of it
-  // (the snapshot's `chat` is the chat window: chat isn't world state). A {dialect, v} this page doesn't read is refused
-  // whole (D5): nothing is folded, and the page says so instead of half-reading the world.
+  // the replica adopts the snapshot first, synchronously (the snapshot's `chat` is the chat window, not world state).
+  // A {dialect, v} this page doesn't read is refused whole (docs/decisions/LOG-VOCABULARY.md D5).
   if (!replica.adopt(msg)) {
     report('snapshot', new Error(`unknown-version: the world speaks ${msg.dialect} v${msg.v}; this page reads another`));
     net.joined = false; net.status = 'rejected'; bus.emit('net', net); failSays();
@@ -1208,8 +1046,7 @@ async function onSnapshot(msg) {
   forgetEmptyWorld();   // …or holds nothing, and a bare link should stop leading here
 
   hydrating = true; pendingLive = [];
-  // flush the chat lines that raced us, in order, once, after the hydration window so a raced say lands below the
-  // arrival chat window, not above it.
+  // chat lines that raced us land below the arrival chat window, in order
   const backlog = pendingLive.filter((e) => (e.seq ?? -1) > lastSeq).sort((a, b) => a.seq - b.seq);
   pendingLive = []; hydrating = false;
   for (const e of backlog) {
@@ -1220,16 +1057,11 @@ async function onSnapshot(msg) {
   const rc = msg.chat?.recentChat ?? [];
   noteHistoryContext({
     total: msg.chat?.chatTotal ?? null,
-    // what was ACTUALLY rendered: the window is exactly state.recentChat
-    // (tail says beyond its 40-line cap are not re-played — they are
-    // fetchable by paging, and this count is what makes the "showing N of
-    // M" hint appear so a reader knows to page; review B2).
-    shown: rc.length,
+    shown: rc.length,   // what was rendered: the "showing N of M" hint tells a reader to page for the rest
     spanMs: rc.length > 1 ? rc[rc.length - 1].ts - rc[0].ts : null,
   });
 
-  // World progress tracks the scheduler's outstanding entity loads ('world'
-  // is the bar's biggest segment). The curtain does NOT wait on this.
+  // the progress bar's 'world' segment tracks the scheduler's outstanding entity loads; the curtain does not wait on it
   const initialPending = pending(P.FAR);
   if (initialPending > 0) {
     markPhase('world', Math.max(0.15, 1 - initialPending / (initialPending + 1)));

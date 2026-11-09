@@ -1,24 +1,16 @@
-// widgets — the ONE field → widget table every panel surface reads.
-//
-// A panel declares FIELDS (fieldpanels.js's schema) and never owns bespoke DOM or paint. Three surfaces draw a field:
-// the desktop frame (DOM), the legacy VR quad (a 2D canvas in the panels' skin) and build mode's VR quad (the same
-// canvas under the VR floor theme.js sets). Every field type is ONE entry here, so no surface can lack a widget
-// another has:
+// widgets — the ONE field → widget table every panel surface reads (fieldpanels.js declares the field specs).
+// Three surfaces draw a field: the desktop frame (DOM), the legacy VR quad (a canvas in the panels' skin) and build
+// mode's VR quad (a canvas under theme.js's VR floor). Every field type is ONE entry here:
 //
 //   WIDGETS[t] = { dom(f, D), legacy(f, P), edit(f, P), editH?(f, S), row? }
 //
 // dom builds the row's control into D.row and sets row.update; legacy and edit paint into P.g and push hit REGIONS
-// ({x, y, w, h, action, payload?, slider?}) that xrpanels.js resolves a laser UV against and dispatches exactly as the
-// DOM control dispatches. The SURFACE is the parameter: D is the desktop's (the row, its label, edit(), the frame's
-// stepper/pop/menu makers), P is a canvas surface's (its context, geometry, tokens and primitives; fieldpanels.js builds
-// the legacy one, paint.js the edit one). paintFields(fields, S) is the one canvas walk both share: the layout
-// (folds, deskOnly, a list's rows), the per-row label the surface paints, the disabled rule (a disabled field paints
-// but takes no hits) and the lookup. A type dropped from this table is gone from every surface at once, which is what
-// test/client/panels-schema-test.ts and test/client/edittheme-test.ts go red on together.
-//
-// The two canvas looks still differ in places (see layout() below); those differences are kept, not reconciled. The
-// facts a widget reads (step, dp, unit, deg, min, max, options, def) are the descriptor's `ui` facts
-// (shared/descriptors.js) as editschema's rowOf hands them on; the shared readers of them are FACTS below.
+// ({x, y, w, h, action, payload?, slider?}) that xrpanels.js dispatches as the DOM control does. D is the desktop
+// surface (row, label, edit(), the frame's stepper/pop/menu makers); P is a canvas surface (fieldpanels.js builds the
+// legacy one, paint.js the edit one). paintFields(fields, S) is the one canvas walk both share. The two canvas looks
+// differ in places (layout() below); kept, not reconciled. The facts a widget reads (step, dp, unit, deg, min, max,
+// options, def) come from the descriptor's `ui` facts (shared/descriptors.js) via editschema; FACTS reads them.
+// test/client/panels-schema-test.ts and test/client/edittheme-test.ts hold every surface to this table.
 
 import { svg as strokeSvg, rsvg, has as hasIcon, fsvg, hasFill, hasLine, stroke as strokeIcon } from '../icons.js';
 import { EDIT as T, EDIT_VR as V, pictoRuns, hasPicto } from './theme.js';
@@ -84,8 +76,8 @@ export function put(e, s, icons) {
   return e;
 }
 
-/** A number as build mode writes it (R, 10-10, after Maya's channel box): no trailing zeros, a bare 0, a leading 0 before
- *  a fraction: 0.5 not 0.50, 0 not 0.00, 0.15 not .15, 2 not 2.00. `dp` is the most decimals shown. */
+/** A number as build mode writes it (Maya's channel box): no trailing zeros, a bare 0, a leading 0 before a fraction:
+ *  0.5 not 0.50, 0 not 0.00, 2 not 2.00. `dp` is the most decimals shown. */
 export function trimNum(v, dp = 2) {
   let s = (+v).toFixed(dp);
   if (s.includes('.')) s = s.replace(/0+$/, '').replace(/\.$/, '');
@@ -248,9 +240,7 @@ export const WIDGETS = {
   num: {
     dom(f, D) { const { row, label, setLabel, edit, ro, el, stepper } = D;
       const st = stepper(f.value ?? 0, f, (v, o) => edit(f.k, v, null, o));
-      // driven: the FIELD carries it (edit chrome) — a `~` inside its left end; the label keeps its axis colour
-      // …and it leads to its driver (Resonite's drive mark, Unity's animated tint; drivers are ordinary cards,
-      // the field points at them — no second list to drift): click goes to the driver's card
+      // driven: a `~` inside the field's left end (the label keeps its axis colour); click goes to the driver's card
       if (f.driven && ro.icons) { const d = el('span', 'sp-drv', '~'); d.title = `driven by ${f.drivenBy ? `its ${f.drivenBy} (${f.driven})` : f.driven} — click to go to its card`;
         d.style.cursor = 'pointer'; d.onpointerdown = (e) => e.stopPropagation(); d.onclick = (e) => { e.stopPropagation(); edit('goto', f.driven); }; st.prepend(d); }
       row.append(st); row._st = st;
@@ -295,8 +285,7 @@ export const WIDGETS = {
   },
   range: {
     dom(f, D) { const { row, setLabel, edit, el } = D;
-      // the house's own <input type=range> (index.html styles it globally;
-      // --p drives the progress fill) — the same control the desk's dials use
+      // the house <input type=range> (index.html styles it; --p drives the progress fill)
       const { lo, hi, st, dp } = FACTS.range(f);
       const sl = el('input', 'sp-range'); sl.type = 'range'; sl.min = lo; sl.max = hi; sl.step = st; sl.value = f.value ?? lo;
       const out = el('span', 'sp-range-val', `${trimNum(+sl.value, dp)}${f.unit ?? ''}`);
@@ -399,9 +388,8 @@ export const WIDGETS = {
     },
   },
   color: {
-    // A colour field is a picker. The native <input type=color> opened nothing in a headset (the quad's click is
-    // synthetic and the dialog would be the desktop's), so the picker is made of what a quad draws and clicks: solid
-    // cells. One swatch opens it in place; a cell, a recent or a typed hex commits once.
+    // A colour field is a picker of solid cells (a native <input type=color> opens nothing in a headset). One swatch
+    // opens it in place; a cell, a recent or a typed hex commits once.
     dom(f, D) { const { row, setLabel, edit, el } = D;
       const hex = FACTS.hex;
       let cur = f.value ?? 0xffffff, dis = !!f.disabled;
@@ -459,14 +447,12 @@ export const WIDGETS = {
       inp.checked = !!f.value;
       inp.indeterminate = !!f.mixed;   // mixed: some of the selection are, some aren't (the box shows a dash)
       inp.disabled = !!f.disabled;
-      // In a busy world every frame repaints, and until the authority's answer folds in each repaint would put the box
-      // back to the old value (inviting a second click). A clicked box keeps what it was clicked to until the record
-      // agrees, a field bumps `settle` (it has had its answer, a refusal too), or 3 s pass — then the record wins.
+      // a clicked box keeps what it was clicked to until the record agrees, `settle` bumps (its answer landed, a
+      // refusal too) or 3 s pass; else every repaint would put it back before the authority's answer folds in
       let pending = null, rec = !!f.value, settle = f.settle;
       inp.onchange = () => { inp.indeterminate = false; pending = { v: inp.checked, until: performance.now() + 3000 }; edit(f.k, inp.checked);
         setTimeout(() => { if (pending && performance.now() >= pending.until) { pending = null; inp.checked = rec; } }, 3050); };
-      // a mouse click must not leave focus here: a focused input holds the panel's repaint until blur, and the world's keys
-      // (WASD, B, Enter) stop. Keyboard focus (Tab) still lands
+      // a mouse click must not leave focus here (a focused input holds the panel's repaint and stops the world's keys)
       inp.onmousedown = (e) => e.preventDefault();
       row.append(inp);
       row.update = (nf) => { setLabel(nf); const v = !!nf.value; rec = v;
@@ -497,7 +483,7 @@ export const WIDGETS = {
   },
   text: {
     dom(f, D) { const { row, setLabel, edit, el } = D;
-      // multiline (a story's text, a sign's words; batch 2): a textarea, committed when it loses focus or on Ctrl+Enter
+      // multiline (a sign's words): a textarea, committed on blur or Ctrl+Enter
       const inp = f.multiline ? el('textarea', 'sp-text sp-textarea') : el('input', 'sp-text');
       if (f.multiline) { inp.rows = 4; inp.style.cssText = 'width:100%;min-height:4.5em;resize:vertical;font:inherit;font-size:12px';
         inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { inp.blur(); e.stopPropagation(); } else if (e.key !== 'Escape') e.stopPropagation(); });   // keys: jsonCommit
@@ -561,9 +547,8 @@ export const WIDGETS = {
   },
   ref: {
     dom(f, D) { const { row, setLabel, edit, el } = D;
-      // a reference to another entity: the value is its id (or null). A "pick"
-      // button arms the same click-to-name gesture attach uses — the next thing
-      // clicked, a tree row or the thing itself in the world, becomes the target.
+      // a reference to another entity (its id, or null): the button arms a pick; the next thing clicked, a tree row or
+      // the thing in the world, becomes the target
       const wrap = el('div', 'sp-ref');
       const name = el('button', `sp-btn sp-ref-name${f.arming ? ' arming' : ''}`,
         FACTS.ref(f));
@@ -586,8 +571,7 @@ export const WIDGETS = {
       };
     },
     legacy(f, P) { const { g, regions, C, font, vx, rowH, y } = P;
-      // the reference name box arms the laser-pick; the next thing the
-      // pointer selects (a row or the thing in the world) names the target.
+      // the name box arms the laser-pick; the next thing selected names the target
       const txt = FACTS.ref(f);
       const bw = Math.max(120, txt.length * 8 + 24);
       g.fillStyle = f.arming ? C.accent : C.row;
@@ -797,10 +781,8 @@ export const WIDGETS = {
     dom(f, D) { const { row, edit, ro, el, put, contextMenu, menuButton } = D;
       const box = el('div', 'sp-tree');
       if (!f.rows?.length) box.append(el('div', 'sp-empty', f.empty ?? 'nothing here'));
-      // drag a row onto another to reparent it (edit('drop', {id, onto})); onto
-      // the tree's empty space to make it a root ({onto: null}). The dragged
-      // id rides a module variable, not dataTransfer — synthetic DragEvents
-      // in a headless bench carry no data, and nothing else needs it.
+      // drag a row onto another to reparent it (edit('drop', {id, onto})); onto empty space makes it a root. The dragged
+      // id rides a module variable, not dataTransfer (synthetic DragEvents in a headless bench carry no data)
       const dropOn = (onto) => (e) => { e.preventDefault(); e.stopPropagation(); box.querySelectorAll('.drop').forEach((x) => x.classList.remove('drop')); if (treeDrag && treeDrag !== onto) edit('drop', { id: treeDrag, onto }); treeDrag = null; };
       box.ondragover = (e) => { if (treeDrag) { e.preventDefault(); e.dataTransfer && (e.dataTransfer.dropEffect = 'move'); } };
       box.ondrop = dropOn(null);
@@ -886,10 +868,10 @@ export const WIDGETS = {
           const held = !r.locked && !!r.heldBy;
           const lock = el('button', `sp-mini sp-lock${r.locked ? ' on' : ''}${held ? ' inherited' : ''}`);
           lock.innerHTML = iconSvg(r.locked || held ? 'lock' : 'lockOpen', 14);   // a glyph, not an emoji (the canvas trap; one icon set)
-          const lv = r.lockLevel ? ` (${r.lockLevel})` : '';   // recut B2: the setter's rank in words
+          const lv = r.lockLevel ? ` (${r.lockLevel})` : '';   // the lock's strength: its setter's rank, in words
           lock.title = r.locked ? `locked${lv} — click to unlock` : held ? `held by ${r.heldByLabel ?? r.heldBy}'s lock — it moves only with it; unlock that to move this on its own` : 'click to lock in place';
           if (held) lock.dataset.heldBy = r.heldBy;
-          // lockable: false = this viewer may not lift locks (a member, §5; or a level above their rank): the icon still says, the click doesn't
+          // lockable: false = this viewer may not lift this lock (no build right, or a rank above theirs): the icon says, the click doesn't
           if (r.lockable === false) { lock.disabled = true; lock.title = r.locked ? `locked (${r.lockLevel ?? 'its setter\'s rank and up'} can unlock it)` : held ? lock.title : 'not locked (builders and owners can lock it)'; }
           lock.onclick = (e) => { e.stopPropagation(); if (lock.disabled) return; if (held) edit('find', r.heldBy); else edit('lock', r.id); };
           line.append(lock);
@@ -907,14 +889,12 @@ export const WIDGETS = {
         box.append(zone);
       }
       row.append(box);
-      // a changed tree is rebuilt (rows are shape), and a new box starts scrolled to the top — every few frames in a
-      // world where things move. The box keeps where it was scrolled to, by the field's key.
+      // a changed tree is rebuilt (rows are shape); the box keeps where it was scrolled to, by the field's key
       const tkey = f.k ?? 'tree';
       box.addEventListener('scroll', () => treeScroll.set(tkey, box.scrollTop), { passive: true });
       const back = () => { const y = treeScroll.get(tkey); if (y && box.isConnected) box.scrollTop = y; };
       queueMicrotask(back); requestAnimationFrame(back);
-      // rows are shape: a changed tree repaints. A same-shape repaint (a refused switch leaves the rows as they were) still
-      // owes the boxes the record, past a click still waiting on its answer
+      // a same-shape repaint (a refused switch leaves the rows as they were) still owes the boxes the record
       row.update = (nf) => { settle = nf.settle; for (const r of nf.rows ?? []) { const b = boxes.get(String(r.id)); if (!b || r.enabled == null) continue; b._rec = !!r.enabled;
         if (b._pend && b._pend.settle === nf.settle && performance.now() < b._pend.until) { b.checked = b._pend.v; continue; }
         b._pend = null; b.checked = !!r.enabled; } };

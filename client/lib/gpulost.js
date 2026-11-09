@@ -1,21 +1,17 @@
 // gpulost — when the GPU takes the page's context away, go back to the live world.
 //
-// A frame that keeps the GPU busy for more than ~2 s trips the OS watchdog (Windows TDR)
-// and the driver resets; the browser then loses every WebGL context on it
-// ('CONTEXT_LOST_WEBGL: loseContext: context lost', seen by the owner 2026-09-26 after a 4.3 s sky bake
-// frame in VR). three does not rebuild its resources on a lost context, so the page kept
-// running at 60 fps into a black canvas with nothing to say why. Nothing listened.
+// A frame that keeps the GPU busy for ~2 s trips the OS watchdog (Windows TDR) and the driver resets; the browser
+// then loses every WebGL context on it. three does not rebuild its resources on a lost context, so without this the
+// page runs on at 60 fps into a black canvas.
 //
-// Rebuilding in place means re-creating every GPU object the realizers own (the same work
-// as swapping renderers mid-page; FEATURE-WISHLIST), so recovery is a reload into the same
-// world: the server remembers the pose, the HTTP cache is warm, and a VR session is gone
-// either way. The ?xr=1 boot flag is dropped so a crash out of VR lands on the desktop.
+// Rebuilding in place would mean re-creating every GPU object the realizers own, so recovery is a reload into the
+// same world: the server remembers the pose, the HTTP cache is warm, and a VR session is gone either way. The ?xr=1
+// boot flag is dropped so a crash out of VR lands on the desktop.
 //
-// A second loss inside the window does NOT reload again: a device that resets on every
-// boot would otherwise loop. It says so and leaves the reload to the person. Nor does a THIRD
-// loss inside 15 min, however far apart (review 10a M2): a loop whose period is boot time plus
-// time-to-the-fatal-draw — the 89–94 s sky link above plus a cold boot — runs longer than 2 min,
-// saw an empty short window every time and reloaded forever, a driver reset each cycle.
+// Loop guards (gpuLostAction): a second loss inside GPU_LOST_WINDOW_MS does not reload again (a device that resets
+// on every boot would loop), and neither does a third inside GPU_LOST_LONG_MS, however far apart (a boot-loop whose
+// period is a cold boot plus the time to the fatal draw can outlast the short window). It says so and leaves the
+// reload to the person.
 
 export const GPU_LOST_KEY = 'ew-gpu-lost';           // sessionStorage: ms timestamps of recent losses
 const GPU_RECOVERED_KEY = 'ew-gpu-recovered'; // sessionStorage: the reason, read once by the next boot's notice

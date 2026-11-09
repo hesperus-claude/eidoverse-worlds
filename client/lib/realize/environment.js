@@ -1,22 +1,20 @@
-// environment — the world-scope realizer (TEL0S_NOTES §11.4): terrain, grass,
-// sky/weather and the asset palette as projections of the folded singletons in
-// state.st. Thin: the apply logic lives in world.js (applyTerrainState etc.).
-// The 'hydrated' handler runs synchronously inside shadowHydrate, so the
-// terrain build (which gates arrival) is queued before checkReady can see an
-// empty build queue.
+// environment — the world-scope realizer (docs/history/TEL0S_NOTES.md §11.4): terrain, grass, sky/weather and the
+// asset palette as projections of the folded singletons in state.st. Thin: the apply logic lives in world.js
+// (applyTerrainState etc.). The 'hydrated' handler runs synchronously, so the terrain build (which gates arrival) is
+// queued before the ready check can see an empty build queue.
 
 import { state, onWorldChange } from '../state.js';
 import { applyTerrainState, applyGrassState, applySkyFolded, applyAssetState } from '../world.js';
 
-// a world with no sky authored (never, or removed) shows a plain clear sky, not the sky defaults' cumulus; the same at join.
+// no sky authored (never, or removed): a plain clear sky, not the sky defaults' cumulus
 const NO_SKY = Object.freeze({ clouds: 'clear' });
 
 // the ground's builder fills water on the ground it builds: the world's water component rides on its args, and in a world
-// with no terrain on the stage floor ({stageFloor, water}: I8)
+// with no terrain on the stage floor ({stageFloor, water})
 const groundArgs = (st) => (st.terrain ? (st.water ? { ...st.terrain, water: st.water } : st.terrain) : st.water ? { stageFloor: true, water: st.water } : null);
 
 // every join hands over what the fold says, absence included: a rejoin into a world whose terrain or grass went while we
-// were away clears them, instead of keeping the last session's (I55)
+// were away clears them, instead of keeping the last session's
 function reconcileEnvironment() {
   const st = state.st;
   applyTerrainState(groundArgs(st));

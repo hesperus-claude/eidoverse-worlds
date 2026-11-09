@@ -1,12 +1,9 @@
-// My body in the world's physics — ragdoll, seats, being dragged, pins,
-// shoves. Extracted from main.js (§14 6c). The invariant every section here
-// shares: MY client owns MY body. Everything that happens to it — a tumble, a
-// seat, someone's hand, a nail, a blast — is applied HERE and rebroadcast
-// through ordinary presence, so nobody else ever needs code to simulate me.
+// localbody — my body in the world's physics: ragdoll, seats, being dragged, pins, shoves. The invariant every
+// section shares: my client owns my body. Everything that happens to it (a tumble, a seat, someone's hand, a nail, a
+// blast) is applied here and rebroadcast through ordinary presence, so nobody else needs code to simulate me.
 //
-// logChat arrives through initLocalBody rather than an import: chat.js sits
-// in the world→flora→controller→chat→net→world knot, and this module must
-// not add another edge into it (§14.2).
+// logChat arrives through initLocalBody rather than an import: chat.js sits in an import cycle this module must
+// not add another edge to.
 
 import { bodyOf } from '../../shared/components.js';
 import { mayLeave, vacatedFromMine, vacatedAt, OCCUPY_REACH, ESCAPE_HOLD_S, ESCAPE_REPEAT_S } from '../../shared/sockbody.js';
@@ -39,23 +36,17 @@ import { getMe } from './mybody.js';
 
 let logChat = () => {};
 
-// Ragdoll — owner-simulated, presence-streamed, captured to a held pose.
-//
-// Only this client simulates its own body; the result rides the pose field
-// like any other pose, so remotes need no ragdoll code at all. On settle the
-// final bones stay as a held pose (lastPose), so a reconnect or a late joiner
-// gets the settled RESULT, not a replay of the flop.
+// Ragdoll: owner-simulated, presence-streamed, captured to a held pose. Only this client simulates its own body; the
+// result rides the pose field like any other pose, so remotes need no ragdoll code. On settle the final bones stay
+// as a held pose, so a late joiner gets the settled result, not a replay of the flop.
 let ragdoll = null;
 let downed = false;
 
 export function isDowned() { return downed; }
 export function activeRagdoll() { return ragdoll; }
 
-// Which way you go over. A limp body does not drop straight down — its support
-// fails and the mass above the feet keeps going — and one that DOES drop
-// straight down has nowhere to put its leg length, so it folds its knees into
-// their stops under its own weight and then kicks them back out. You fall the
-// way you were facing, harder the faster you were moving.
+// Which way you go over: the way you were facing, harder the faster you were moving. (A body dropped straight down
+// has nowhere to put its leg length and kicks its knees back out.)
 const _fall = new THREE.Vector3();
 function toppleVelocity() {
   return _fall.set(Math.sin(myState.yaw), 0, Math.cos(myState.yaw))
@@ -66,11 +57,10 @@ export function goLimp(lean = null) {
   const me = getMe();
   if (!me || downed) return;
   downed = true;
-  // Park the undriven bones and stop the clip BEFORE constructing the sim: both its reference skeletons (the neutral
-  // rest and the live start pose) are read here, and neither may still have the walk cycle in it. A sit/lie clip's
-  // hips drop moves onto the root as it parks, so the root is measured from rest hips, as an agent's is.
+  // park the undriven bones and stop the clip before constructing the sim: its reference skeletons (the neutral rest
+  // and the live start pose) are read here, and neither may still have the walk cycle in it
   me.setLimp(true, { bake: true });
-  clearMyReach();   // a knocked-over body's reach is gone — descriptor AND arm (mirrors agent.ts knockDown)
+  clearMyReach();   // a knocked-over body's reach is gone, descriptor and arm (as mcpl/agent.ts knockDown)
   ragdoll = makeRagdoll(me, lean ?? toppleVelocity(), me.restBonePositions());
   myState.clip = 'ragdoll';
   flashHint('limp — move to get up');
@@ -89,7 +79,7 @@ export function getUp() {
   myState.pos.y = 0;
 }
 // ---------------------------------------------------------------- mounted
-// While I occupy a seat, my body is DERIVED from the parent entity's live transform + socket (the same math remotes
+// While I occupy a seat, my body is derived from the parent entity's live transform + socket (the same math remotes
 // use: occupybody.js). Getting off is the socket's to allow (shared/sockbody.js mayLeave): moving, jumping, the
 // explicit get-up, or only a script. It emits no verb: my next frame simply carries no seat.
 const _seatP = new THREE.Vector3();
@@ -100,13 +90,12 @@ export function occupiedBody() {
   const m = avatarMounts.get(CONFIG.name);
   return m ? bodyOf(seatSocket(m.to)?.station) : null;
 }
-/** Get off my seat, if the socket lets this kind of leaving through ('move' | 'jump' | 'menu' | 'script'). True when
- *  I'm off (or on my way off, with a leave clip). */
-// The escape: a seat that lets you go only when the world does still can't hold you. The explicit
-// get-up pressed again within ESCAPE_REPEAT_S of its refusal, or X held for ESCAPE_HOLD_S, always gets you up.
+// The escape: a seat that lets you go only when the world does still can't hold you. The explicit get-up pressed
+// again within ESCAPE_REPEAT_S of its refusal, or X held for ESCAPE_HOLD_S, always gets you up.
 let escapeArmedAt = -Infinity, escapeHeld = 0, escapeTile = false;
 bus.on('escape-hold', (on) => { escapeTile = !!on; });   // the stand tile pressed and held (actionbar.js), as X held
-// at: where the authority let me go ([x, y, z], its `vacated.at`): I stand there, so my body and its track start together
+/** Get off my seat, if the socket lets this kind of leaving through ('move' | 'jump' | 'menu' | 'script'). True when
+ *  I'm off (or on my way off, with a leave clip). `at`: where the authority let me go ([x, y, z], its `vacated.at`). */
 export function dismountMe(kind = 'menu', at = null) {
   const m = avatarMounts.get(CONFIG.name);
   if (!m) return false;
@@ -144,7 +133,7 @@ export function dismountMe(kind = 'menu', at = null) {
     myState.clip = leaveClip;
   } else {
     me?.root.rotation.set(0, exitYaw, 0);  // stand upright again (a rocket seat may have had me on my back)
-    myState.pos.set(off.x, off.y, off.z); myState.yaw = exitYaw;   // at the height I'm let go at: a seat upstairs stands me upstairs (review of PR #260)
+    myState.pos.set(off.x, off.y, off.z); myState.yaw = exitYaw;   // at the height I'm let go at: a seat upstairs stands me upstairs
     myState.q = undefined;
     setPosture('stand');
   }
@@ -210,8 +199,7 @@ export function updateMountedMe(dt) {
   me.root.quaternion.copy(r.q);   // the socket's whole rotation: upright on a chair, on your back in a rocket
   // look locked: the view faces the way the seat does (the camera sits behind it)
   if (body.input.look === 'locked') setCamYaw(r.yaw + Math.PI);
-  // The camera lives in updateMe, which we skip while seated, so drive it here or it freezes on the frame you sat
-  // down. First person keeps its own-mesh exclusion; both modes follow the socket.
+  // the camera lives in updateMe, which is skipped while seated, so drive it here or it freezes on the frame you sat
   updateFollowCamera(dt, me);
   // look.up 'socket': the view rolls with the thing (a rocket, a loop-the-loop); 'world' keeps the horizon level
   if (body.look.up === 'socket') {
@@ -232,13 +220,13 @@ export function updateMountedMe(dt) {
   else escapeHeld = 0;
 }
 
-/** Nearest declared seat: distance to the SOCKET's world point, not the entity's origin (a ferry's helm can be a
- *  deck-length from the hull's centre). Every slot competes. `arg` narrows to one entity by id prefix
- *  (case-insensitive: `/sit 34` reaches 3485c78e). A taken seat is skipped; the seat I'm on doesn't count. */
 const _sitV = new THREE.Vector3();
-// A plain X offers only a seat you could climb onto (height counts, not just ground distance); naming one
-// (/sit <name>) still reaches any. One source with the authority's sit check: shared/sockbody.js OCCUPY_REACH.
+// a plain X offers only a seat you could climb onto (height counts); naming one (/sit <name>) still reaches any.
+// One source with the authority's sit check: shared/sockbody.js OCCUPY_REACH.
 const SEAT_RISE = { up: OCCUPY_REACH.up, down: OCCUPY_REACH.down };
+/** Nearest declared seat: distance to the socket's world point, not the entity's origin (a ferry's helm can be a
+ *  deck-length from the hull's centre). `arg` narrows to one entity by id prefix (case-insensitive). A taken seat is
+ *  skipped; the seat I'm on doesn't count. */
 function nearestSeat(arg, reach) {
   const want = arg ? String(arg).toLowerCase() : null;
   const mine = avatarMounts.get(CONFIG.name);
@@ -264,10 +252,9 @@ function nearestSeat(arg, reach) {
   return best;
 }
 
-/** Sit ON something: nearest socket within arm's reach (or a named entity from anywhere). When nothing is in reach
- *  but a seat exists further out, SAY so (a silent ground-sit reads as "sitting is broken"). In a world the authority is asked first (`use {id, action, args: {slot}}`):
- *  it checks who may and answers with what the body does; nothing is logged.
- *  Already seated, I may move straight to a socket that allows it (fromSeat). */
+/** Sit on something: the nearest socket within arm's reach (or a named entity from anywhere). When nothing is in
+ *  reach but a seat exists further out, say so. The authority is asked first (`use {id, action}`): it checks who
+ *  may and answers with what the body does. Already seated, I may move straight to a socket that allows it (fromSeat). */
 let sitTicket = 0;   // the latest sit ask; getting up (or asking again) makes every earlier answer stale
 export function trySitOn(arg, slot = null) {
   const mine = avatarMounts.get(CONFIG.name);
@@ -281,8 +268,8 @@ export function trySitOn(arg, slot = null) {
   if (mine && !best.body.fromSeat) { logChat('*', `get up first — ${called(best.id)} (${best.slot}) doesn't take you straight from another seat`); return true; }
   const ticket = ++sitTicket;
   const take = () => {
-    // only the latest ask may seat me, and only if I haven't sat, stood or asked again since: a late answer (a slow
-    // door, X pressed twice) must never put me back on a seat I already left
+    // only the latest ask may seat me, and only if I haven't sat, stood or asked again since: a late answer must
+    // never put me back on a seat I already left
     if (ticket !== sitTicket || avatarMounts.get(CONFIG.name) !== mine) return;
     if (mine) releaseOccupied(getMe());
     setBodySeat(CONFIG.name, { to: best.sock });   // presence: my frames carry the seat, the socket's id (world.js)
@@ -295,10 +282,9 @@ export function trySitOn(arg, slot = null) {
   return true;
 }
 
-// "I'm working on this": while my camera is free of my body in edit mode, the body holds a working pose so the people
-// around can see I've stepped out. It ends when the camera comes back (the Body switch, or B); a pose held before is
-// not restored. Arms forward and a little down, spread 7.5° each, elbows 35°, wrists back 80° so the palms face out
-// (like a mage casting); head bent.
+// While my camera is free of my body in edit mode, the body holds a working pose so people can see I've stepped
+// out. It ends when the camera comes back; a pose held before is not restored. Arms forward and a little down,
+// palms out, head bent.
 const WORKING_POSE = { leftUpperArm: [0.0772, -0.5863, -0.1053, 0.7995], rightUpperArm: [0.0772, 0.5863, 0.1053, 0.7995], leftLowerArm: [0, -0.3007, 0, 0.9537], rightLowerArm: [0, 0.3007, 0, 0.9537],
   leftHand: [0, 0, 0.6428, 0.766], rightHand: [0, 0, -0.6428, 0.766], head: [0.0872, 0, 0, 0.9962] };
 let working = false;
@@ -308,11 +294,10 @@ bus.on('edit-freecam', (on) => {
   else if (!on && working) { working = false; if (myState.pose === WORKING_POSE) { myState.pose = null; me.clearPose(); } }
 });
 
-// The world's standing offer: when a declared seat is within reach the hint bar says so (an affordance nobody can
-// discover may as well not exist). Checked ~2×/s.
+// The hint bar's standing offer: a seat within reach, what I hold, what's in front of me to use. Checked ~2×/s.
 let _hintAcc = 0;
-// builder mode has its own keys (build.js: X and Del remove, E rotates): the world's play offers ("X — sit", "E open")
-// would advertise a delete key as a seat. The bar carries the builder's hints there instead.
+// builder mode has its own keys (edit/build.js): the world's play offers ("X — sit") would advertise a delete key as
+// a seat, so the bar carries the builder's hints there instead
 let _building = false;
 bus.on('build-mode', (on) => { _building = !!on; _hintAcc = 1; });
 export function updateSeatHint(dt) {
@@ -326,7 +311,7 @@ export function updateSeatHint(dt) {
     hint = !b || b.leaveBy === 'any' ? (b?.input.move !== 'none' && b ? html`<kbd>X</kbd> get up · <kbd>WASD</kbd> drive` : html`<kbd>X</kbd> get up · <kbd>WASD</kbd> hop off`)
       : b.leaveBy === 'script' ? html`this seat lets you go when the world does · hold <kbd>X</kbd> to get up anyway` : b.leaveBy === 'jump' ? html`<kbd>Space</kbd> or <kbd>X</kbd> get up` : html`<kbd>X</kbd> get up`; }
   else if (!downed && nearestSeat(null, OCCUPY_REACH.r)) hint = html`<kbd>X</kbd> — sit`;
-  // my hands come first: what I hold and how to let go (it must never be a secret), else what's in reach to pick up
+  // my hands come first: what I hold and how to let go, else what's in reach to pick up
   if (!downed) { const hh = handsHint(); if (hh && (myHoldsNow() || !hint)) hint = hh; }
   if (!hint && !downed) hint = usePromptHint();   // E: what's in front of you to use (useprompt.js)
   setAmbientHint(hint);
@@ -340,15 +325,13 @@ export function stepRagdoll(dt) {
     myState.pos.copy(me.root.position);          // streamed root tracks the sim
     if (ragdoll.done) { myState.pose = ragdoll.finalPose; ragdoll = null; }
   }
-  // The camera lives in updateMe, which we skip while limp: drive it here too, or it freezes on the frame you fell.
+  // the camera lives in updateMe, which is skipped while limp: drive it here too
   if (me) updateFollowCamera(dt, me);
 }
 
 // ---------------------------------------------------------------- dragged
-// Someone else's sim is driving my limp body (bodydrag takeover — the drag
-// module holds the protocol; these are the hands it moves). My client stays
-// the authority: it APPLIES the stream to itself and rebroadcasts through
-// normal presence, so everyone else sees the drag as ordinary motion of mine.
+// Someone else's sim is driving my limp body (bodydrag.js holds the protocol; these are the hands it moves). My
+// client stays the authority: it applies the stream to itself and rebroadcasts through normal presence.
 
 function beginDraggedMode(by) {
   const me = getMe();
@@ -375,10 +358,8 @@ function applyDraggedSample({ pose, p, yaw }) {
   myState.speed = 0;
 }
 
-// While a hand holds me, my body is a stream of poses with no sim behind it —
-// so its VELOCITY only exists as the difference between the frames arriving.
-// Sampled here so the moment the hand lets go the sim can start with the
-// motion the body already had, instead of at a dead stop.
+// While a hand holds me, my body is a stream of poses with no sim behind it, so its velocity only exists as the
+// difference between arriving frames. Sampled here so the sim can start with that motion when the hand lets go.
 let dragSnap = null, dragVel = null;
 function noteDraggedMotion() {
   const me = getMe();
@@ -399,9 +380,7 @@ function noteDraggedMotion() {
 function endDraggedMode(msg) {
   const me = getMe();
   if (!me || !downed) return;
-  // land on their final frame, then settle under MY OWN sim from wherever the
-  // hand let go — dropped from a height, the body falls; the takeover was
-  // only ever the moving part
+  // land on their final frame, then settle under my own sim from wherever the hand let go
   if (msg?.pose || msg?.p) applyDraggedSample(msg);
   me.root.updateMatrixWorld(true);
   // the hand's own sim state outranks anything we sampled from its stream
@@ -412,11 +391,9 @@ function endDraggedMode(msg) {
 }
 
 // ---------------------------------------------------------------- pins
-// Nails through my body (bodydrag's persistent pins): MY state, MY sim
-// enforcing them, streamed in MY presence so everyone sees the markers. A
-// dragger may place one (the release message carries it) or ask to pull one;
-// my movement key tears them all out — the body is always its own final
-// authority. Session-scoped on purpose: pins are presence, not history.
+// Nails through my body (bodydrag's persistent pins): my state, my sim enforcing them, streamed in my presence so
+// everyone sees the markers. A dragger may place one (the release message carries it) or ask to pull one; my
+// movement key tears them all out. Session-scoped: pins are presence, not history.
 const myPins = new Map();            // joint -> [x, y, z]
 const _pinV = new THREE.Vector3();
 const MAX_PINS = 8;
@@ -426,8 +403,8 @@ function syncPins() {
 }
 function applyMyPins() {
   if (!ragdoll) return;
-  // §24k R0: everything in myPins is a NAIL, so it takes the nail's firm tuning, as the dragger's takeover sim does
-  // (bodydrag.js): the same nail must hold the same on whichever machine simulates.
+  // everything in myPins is a nail, so it takes the nail's firm tuning, as the dragger's takeover sim does
+  // (bodydrag.js): the same nail must hold the same on whichever machine simulates
   for (const [j, at] of myPins) ragdoll.setPin(j, _pinV.set(at[0], at[1], at[2]), true);
 }
 function addPin(j, at) {
@@ -441,8 +418,7 @@ function removePin(j) {
   if (!myPins.delete(j)) return;
   ragdoll?.setPin(j, null);
   syncPins();
-  // freed of a nail while lying with no live sim (and nobody's hand on me):
-  // wake my own sim so the body sags from what remains and settles honestly
+  // freed of a nail while lying with no live sim (and nobody's hand on me): wake my own sim so the body settles
   const me = getMe();
   if (downed && !ragdoll && me && !beingDragged()) {
     me.root.updateMatrixWorld(true);
@@ -460,17 +436,13 @@ function clearPins() {
 
 // ---------------------------------------------------------------- shove
 
-// The hard ceiling on any shove that arrives over the wire, in m/s. The sim
-// has its own stability cap; this one is about the WORLD — nobody gets to
-// launch a body across the map no matter what numbers they put in a message.
+// the hard ceiling on any shove that arrives over the wire, in m/s: nobody launches a body across the map
 const MAX_PUSH = 6;
 const _shove = new THREE.Vector3();
 
-/** Every external force on my body lands here — a directed push, a blast,
- *  an undirected knock-over. I own the body, so I simulate: standing → the
- *  sim starts with this lean; mid-tumble → the running sim takes it as an
- *  impulse; settled-but-down → a fresh sim starts from the lying pose (a
- *  corpse can be kicked, and tumbles again). */
+/** Every external force on my body lands here (a directed push, a blast, an undirected knock-over). Standing → the
+ *  sim starts with this lean; mid-tumble → the running sim takes it as an impulse; settled-but-down → a fresh sim
+ *  starts from the lying pose. */
 function applyShove(lean, by) {
   const me = getMe();
   if (!me) return;
@@ -480,8 +452,7 @@ function applyShove(lean, by) {
   if (downed) {
     if (ragdoll) ragdoll.impulse(lean ?? toppleVelocity());
     else {
-      // still limp from the last fall (getUp is what clears it) — the new sim
-      // reads the lying pose as its start and the neutral rest as its limits
+      // still limp from the last fall (getUp clears it): the new sim starts from the lying pose
       ragdoll = makeRagdoll(me, lean ?? toppleVelocity(), me.restBonePositions());
       applyMyPins();               // a nailed body shoved is a nailed body swinging
       myState.clip = 'ragdoll';
@@ -497,22 +468,21 @@ function applyShove(lean, by) {
 export function initLocalBody({ logChat: logChatFn }) {
   logChat = logChatFn;
 
-  // my body's consent (two gates, two lists) as the authority takes it (consentsync.js: only what differs): every arrival,
-  // every change; a refusal is a toast and a retry
+  // my body's consent (two gates, two lists) as the authority takes it (consentsync.js: only what differs): every
+  // arrival, every change; a refusal is a toast and a retry
   useWorld(CONFIG.world);
   const consentSync = makeConsentSync({ table: bodyTable, send: sendRequest, toast, on: (ev, fn) => bus.on(ev, fn), enabled: () => !(CONFIG.renderer || CONFIG.spectate), held: noteHeld, gone: forget, landed });
   onConsentChange(consentSync.sync);
-  // main's "allow posing" couldn't carry into Allow being posed and touched (wider): said once, to a person, never a renderer (consent.js TOUCH_NOTICE)
+  // an old "allow posing" setting couldn't carry into the wider one: said once, to a person, never a renderer (consent.js TOUCH_NOTICE)
   if (!(CONFIG.renderer || CONFIG.spectate)) { const told = takeNotice(); if (told) toast(told, 'info', 15000); }
 
-  // X reaches the socket system through the controller's hook: mounted → get
-  // up; a declared seat in reach → mount it; anything else falls through to
-  // the controller's own layers (geometry seat pans, then the ground sit).
+  // X reaches the socket system through the controller's hook: mounted → get up; a declared seat in reach → mount
+  // it; anything else falls through to the controller's own layers (geometry seats, then the ground sit)
   setMountedHook(() => avatarMounts.has(CONFIG.name));
-  // sitting is consent, standing up is the exit (someone else's edit moved the seat I sat on, and the
-  // authority let me go (its `vacated` inbox message, authority/occupants.js vacatesFor). Get off as when the world lets go.
+  // someone else's edit moved the seat I sat on and the authority let me go (its `vacated` inbox message,
+  // shared/protocol/authority.js): get off as when the world lets go
   bus.on('body-inbox', (msg) => {
-    // only from the seat I'm on now: a late message (after a reconnect) never stands me up from a seat taken since
+    // only from the seat I'm on now: a late message never stands me up from a seat taken since
     const u = Array.isArray(msg?.messages) ? msg.messages.find((m) => m?.type === 'vacated') : null;
     if (u && vacatedFromMine(u, avatarMounts.get(CONFIG.name)) && dismountMe('script', vacatedAt(u))) toast(`${typeof u.by === 'string' ? u.by : 'someone'} moved what you were occupying, so you stood up`, 'info', 5000);
     // an act the authority delivered (an ask I said yes to) is applied as a puppet is
@@ -546,18 +516,17 @@ export function initLocalBody({ logChat: logChatFn }) {
 }
 
 function applyPuppet({ by, pose, merge, anim, ragdoll: rag }) {
-  // A ragdoll request runs the sim on MY body — I own it, so I simulate and
-  // stream. That is the sync guarantee: the requester never simulates me.
-  // The authority already decided (server/messages.ts puppet: bodyRefusal for shove and pose) — what arrives applies.
+  // a ragdoll request runs the sim on my body: I own it, so I simulate and stream; the requester never simulates me.
+  // The authority already decided (server/messages.ts puppet): what arrives applies.
   if (rag) {
-    // rag is true (undirected — old wire, old clients) or {lean:[x,y,z]} m/s
+    // rag is true (undirected: old wire, old clients) or {lean:[x,y,z]} m/s
     const l = Array.isArray(rag?.lean) && rag.lean.length === 3 && rag.lean.every(Number.isFinite)
       ? _shove.set(rag.lean[0], rag.lean[1], rag.lean[2]) : null;
     applyShove(l, by);
     return;
   }
-  // merge: only the bones they sent (null releases one); otherwise their pose replaces mine whole, and an EMPTY one is
-  // a release (an empty held pose would be ignored by setPose and never let a human go).
+  // merge: only the bones they sent (null releases one); otherwise their pose replaces mine whole, and an empty one
+  // is a release
   if (pose) {
     myState.pose = merge ? mergePose(myState.pose, pose) : (Object.keys(pose).length ? pose : null);
     flashHint(myState.pose ? `${by} posed you` : `${by} released your pose`);

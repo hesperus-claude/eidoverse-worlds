@@ -1,11 +1,11 @@
 // lifecycle — what the realizer holds, and the one word every registry built on a realized object listens for.
 //
-// The realizer says it ONCE — `release(id, phase)` — and every module that built something on the object lets go on
+// The realizer says it once, `release(id, phase)`, and every module that built something on the object lets go on
 // that word, synchronously (colliders.js the collider, lightrig.js the caster and the entity's lamps). A registry that
 // forgets to subscribe leaks; test/client/realized-lifecycle-test.ts pins the registries at every seam.
 //
-// `tracked` is the realizer's own record ({kind, lib?, gen, …}); gen guards an async load completion against acting
-// for a reservation retired and re-created while its bytes flew.
+// `tracked` is the realizer's own record; gen guards an async load completion against acting for a reservation
+// retired and re-created while its bytes flew.
 import { bus } from '../base.js';
 
 /** id → {kind, lib?, gen, loading?, failedAt?, retierAt?} */

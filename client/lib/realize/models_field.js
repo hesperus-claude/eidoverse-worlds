@@ -1,7 +1,6 @@
-// models_field — the models realizer's pure half (TEL0S_NOTES §11.4): diff the
-// folded entities against what is realized and decide what to create, retire or
-// rebuild. No THREE, no DOM; models.js executes the plan, test/client/models-field-test.ts
-// holds this half to the light (same split as flora_field.js / emitter_field.js).
+// models_field — the models realizer's pure half (docs/history/TEL0S_NOTES.md §11.4): diff the folded entities against
+// what is realized and decide what to create, retire or rebuild. No THREE, no DOM; models.js executes the plan,
+// test/client/models-field-test.ts tests this half (same split as ../flora_field.js / emitter_field.js).
 
 import { P } from '../scheduler.js';
 import { COMPONENTS } from '../../../shared/protocol/componentspec.js';
@@ -62,9 +61,8 @@ export function planReconcile(stEntities, realized) {
   return { create, retire };
 }
 
-/** Load priority by distance from the viewpoint, re-evaluated at dequeue so a
- *  walk toward something promotes it. Bands, not a curve: "in front of you" vs
- *  "the world behind you" is the difference that matters. */
+/** Load priority by distance from the viewpoint, re-evaluated at dequeue so a walk toward something promotes it.
+ *  Bands, not a curve. */
 export function bandForDistance(d) {
   if (!Number.isFinite(d)) return P.VISIBLE;
   if (d <= 12) return P.NEAR;
@@ -72,12 +70,10 @@ export function bandForDistance(d) {
   return P.FAR;
 }
 
-/** Entity mounts whose folded parent involves `touchedId` (as child or
- *  carrier): the set to re-check after a spawn realizes. State is the pending
- *  list; a mount that cannot execute yet stays in the fold until both ends are live. */
+/** Entity mounts whose folded parent involves `touchedId` (as child or carrier): the set to re-check after a spawn
+ *  realizes. A mount that cannot execute yet stays in the fold until both ends are live. */
 export function mountsTouching(stEntities, touchedId, childrenOf = null) {
-  // `childrenOf(id)` (the fold's own index, world.js) answers the carrier direction in O(children) instead of
-  // O(world); membership is the scan's below by construction (the index is kept at every ingest).
+  // `childrenOf(id)` (the fold's own index, world.js) answers the carrier direction in O(children) instead of O(world)
   if (childrenOf) {
     const out = stEntities[touchedId]?.parent ? [touchedId] : [];
     for (const cid of childrenOf(touchedId)) out.push(cid);
@@ -93,9 +89,9 @@ export function mountsTouching(stEntities, touchedId, childrenOf = null) {
 
 
 /** Does this entity's collision belong to somebody else? Then no box is inferred for it here:
- *  - MOUNTED cargo collides as its carrier (execMount law).
- *  - A `structure` entity's collision is DECLARED by the structure realizer (exact wall/floor/corner boxes); the
- *    entity is only an anchor whose placeholder mesh is hidden, and a box inferred from it is an invisible obstacle.
+ *  - mounted cargo collides as its carrier (models.js execMount).
+ *  - a `structure` entity's collision is declared by the structure realizer (exact wall/floor/corner boxes); the
+ *    entity is only an anchor whose mesh is hidden, and a box inferred from it would be an invisible obstacle.
  *
  *  @param {any} ent   the folded entity record
  *  @param {boolean} mounted  whether the scene object rides a carrier */

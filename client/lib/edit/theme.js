@@ -1,14 +1,10 @@
-// theme — the ONE source of build mode's look (DESIGN-SPEC "Build mode: the look").
+// theme — the ONE source of build mode's look: a dark-grey utilitarian editor (Blender / Godot / Maya family) where the
+// WORLD is the only colour. Colour in the chrome means exactly one of: selection/focus (accent), an axis (x/y/z),
+// danger, a driven value, or "only you" (mine).
 //
-// Build mode is a dark-grey utilitarian editor (Blender / Godot / Resonite / Maya family): the chrome
-// is grey and the WORLD is the only colour. Colour in the chrome means exactly one of: selection /
-// focus (accent), an axis (x/y/z), danger, a driven value, or "only you" (mine). Nothing is coloured for decoration.
-//
-// Two surfaces read these values and must never drift:
-//   - the desktop CSS (client/index.html, the `--e-*` block scoped to body.edit-workspace / .frame.edit)
-//     carries them as literals — test/client/edittheme-test.ts parses that block and fails on any difference;
-//   - the VR canvas painter (fieldpanels.js renderCanvas, theme 'edit') imports them directly.
-// Change a value HERE and in the CSS block together; the test tells you if you forgot one.
+// Two surfaces read these values: the desktop CSS (client/index.html, the `--e-*` block) carries them as literals —
+// test/client/edittheme-test.ts fails on any difference — and the VR painter (paint.js) imports them. Change a value
+// here and in the CSS block together.
 
 export const EDIT = Object.freeze({
   bg0: '#161618',        // rails, top bar, the outermost chrome

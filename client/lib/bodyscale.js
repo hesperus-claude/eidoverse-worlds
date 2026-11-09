@@ -6,13 +6,10 @@
 // the typing pill and the bubble, which stay screen-sized — platesize.js owns their size), multiplied with the VR
 // puppet fit: vrm.scene.scale = u · puppet.
 //
-// IN VR (xr.js DeviceScale, Basis's way): the puppet wears 1/k, k = avatar eye / your eye, so your authored body's eyes
-// land at your real eye height H with tracking 1:1. A chosen size u must NOT be undone by that fit — and eyes must
-// still sit at the HMD and hands on the controllers. So the TRACKING SPACE (the rig: camera + controllers) scales by u
-// too: the HMD then reads u·H in the world, the body is u·(1/k)·E = u·H tall at the eye, the controllers are u× as far
-// from the rig as your hands are from your feet, and the arms (u/k × authored) reach them — the same 1:1 as before,
-// one size up. The world looks 1/u as big, which is what being big IS. Everything the rig measures in its own frame
-// (the head-height samples that decide k, the recentre offsets) is in rig-local units, i.e. divided by u.
+// IN VR (xr.js DeviceScale): the puppet wears 1/k, k = avatar eye / your eye, so the body's eyes land at your real eye
+// height with tracking 1:1. A chosen size u must not be undone by that fit, so the TRACKING SPACE (camera + controllers)
+// scales by u too: eyes stay at the HMD, hands on the controllers, and the world looks 1/u as big. Everything the rig
+// measures in its own frame (head-height samples, recentre offsets) is in rig-local units, i.e. divided by u.
 //
 // NAMEPLATE LIFT: metres above the measured crown (plateanchor.js), at the body's AUTHORED size — applied × the live
 // model→world scale, so it grows with the body and follows sitting/lying exactly as auto does. 0 = auto.

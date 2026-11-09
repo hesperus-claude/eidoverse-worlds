@@ -1,20 +1,14 @@
 // emitter_field — the `particles` component's lifecycle, DOM- and THREE-free (test/client/particles-test.ts).
 //
-// The upstream builder (`eidoverse/particles.js`) adds a mesh to the scene and a hook to the global
-// `_autoParticleSystems` array with no way to undo either; this registry owns every emitter so a
-// replacement retires the old one instead of stacking a second system. Everything is idempotent: the same
-// state twice is a no-op, and a build that finishes after its entity was replaced retires itself.
+// A built emitter adds a mesh to the scene and a hook to the shared per-frame array (autohooks.js) with no way to
+// undo either; this registry owns every emitter so a replacement retires the old one instead of stacking a second
+// system. Idempotent: the same state twice is a no-op, and a build that finishes after its entity was replaced
+// retires itself.
 
 import { releaseHook } from '../autohooks.js';
 
-/**
- * Retire one built emitter completely: unhook its per-frame update, release
- * its GPU resources, detach its mesh. Safe to call twice.
- *
- * Hooks come off by IDENTITY, never by index — the array is global and shared
- * with grass wind and the sky, so an index captured at build time means
- * unhooking somebody else's emitter.
- */
+/** Retire one built emitter: unhook its per-frame update, release its GPU resources, detach its mesh. Safe to call
+ *  twice. Hooks come off by identity, never by index: the array is shared with grass wind and the sky. */
 export function retireEmitter(handle, autos) {
   if (!handle || handle.retired) return;
   handle.retired = true;
@@ -25,11 +19,8 @@ export function retireEmitter(handle, autos) {
   } catch { /* a failed teardown must not strand the registry entry */ }
 }
 
-/**
- * Give back a RAW upstream system: allocated by `makeParticles()` (mesh in the scene, hook registered) but
- * not yet owned by a handle — what `adoptSystem` unwinds to when an attach step throws.
- * Disposes geometry and material, never the texture (cached and shared, see emitters.js).
- */
+/** Give back a raw system (mesh in the scene, hook registered) not yet owned by a handle: what `adoptSystem`
+ *  unwinds to when an attach step throws. Disposes geometry and material, never the texture (emitters.js's cache). */
 export function retireRawSystem(sys, autos) {
   if (!sys || sys.__retired) return;
   sys.__retired = true;
@@ -54,16 +45,10 @@ export function adoptSystem(sys, autos, attach) {
   }
 }
 
-/**
- * The world's emitter registry.
- *
- * `build(emitter, {id})` is the host's (THREE-bound) half: it returns — or
- * resolves to — a handle `{mesh?, update?, hooks?, dispose()}`. `autos` is the
- * per-frame hook array the engine drains (`globalThis._autoParticleSystems`).
- *
- * `apply(id, emitter)` is the ONLY entry point the fold uses: pass the
- * normalized emitter to attach or replace, `null` to end it.
- */
+/** The world's emitter registry. `build(emitter, {id})` is the host's (THREE-bound) half: it returns, or resolves
+ *  to, a handle `{mesh?, update?, hooks?, dispose()}`. `autos` is the per-frame hook array the frame loop drains.
+ *  `apply(id, emitter)` is the only entry point the fold uses: the normalized emitter to attach or replace, `null`
+ *  to end it. */
 export function makeEmitterRegistry({ autos, build, onError } = {}) {
   /** id -> { gen, key, handle|null, emitter } — one live emitter per entity. */
   const live = new Map();
@@ -74,11 +59,11 @@ export function makeEmitterRegistry({ autos, build, onError } = {}) {
   async function apply(id, emitter) {
     const key = keyOf(emitter);
     const cur = live.get(id);
-    // Idempotence: the identical bag (a replay, a snapshot) must not churn GPU resources or re-register a hook.
+    // the identical bag (a replay, a snapshot) must not churn GPU resources or re-register a hook
     if (cur && cur.key === key) return cur.handle;
 
     const mine = ++gen;
-    // Retire the old one FIRST: never two emitters overlapping across the await.
+    // retire the old one first: never two emitters overlapping across the await
     if (cur) {
       retireEmitter(cur.handle, autos);
       live.delete(id);

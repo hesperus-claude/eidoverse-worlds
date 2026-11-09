@@ -2,9 +2,9 @@
 //
 // Absent, a thing shows its model's own materials. Present, the value
 // overrides fields of them: {color?, roughness?, metalness?, emissive?, emissiveStrength?, opacity?} (glTF PBR terms).
-// `hesperus/material` applies to every material slot (an instanced mesh's shared material excepted); `hesperus/material:<slot>` to one (the slot is the model's
-// material name, slotKey'd). A field absent = the model's own value. A malformed value or field is ignored, never thrown.
-// (A `surface` link to physics waits for promotion: a draft can't feed a rule.)
+// `hesperus/material` applies to every material slot (an instanced mesh's shared material excepted);
+// `hesperus/material:<slot>` to one (the slot is the model's material name, slotKey'd). A field absent = the model's
+// own value. A malformed value or field is ignored, never thrown. (A `surface` link to physics waits for promotion.)
 //
 // Models share materials across instances, so an override is a per-mesh CLONE, built once and prepared like every
 // world material (materials.js prepareMaterial: the node graph's shape is fixed before its first compile); later edits
@@ -104,7 +104,7 @@ export function initMaterialOverrides() {
   bus.on('comp', ({ id, type }) => { if (type === MAT || String(type).startsWith(`${MAT}:`)) applyMaterials(id); });
   // a model that arrives (or is swapped in by residency) after its component: the bag is re-announced, but be sure
   bus.on('entity', ({ id, kind }) => { if (kind === 'spawn' || kind === 'place') { const bag = bagOf(id); if (bag && Object.keys(bag).some((k) => k === MAT || k.startsWith(`${MAT}:`))) requestAnimationFrame(() => applyMaterials(id)); } });
-  // a deleted override: the bag no longer has it, and nothing announces a deleted type by name everywhere; re-read on any comp change of a thing that had one
+  // a deleted override: nothing announces a deleted type by name, so re-read on any comp change of a thing that had one
   bus.on('comp', ({ id }) => { const obj = entities.get(id); if (obj && meshes(obj).some((m) => m.userData.__matClones?.some(Boolean))) applyMaterials(id); });
   globalThis.__materialDraft = { applyMaterials, materialsOf: (id) => materialsOf(entities.get(id)) };
 }

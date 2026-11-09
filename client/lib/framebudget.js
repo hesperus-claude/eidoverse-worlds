@@ -98,16 +98,14 @@ export function nextFrame() {
 export function ask(lane, { gpu = false, waited = 0 } = {}) {
   const l = laneOf(lane);
   const starved = waited >= AGE_FRAMES;
-  // the free first grant is counted by GRANTS, not spend: a grant charges only after its work runs, and every caller
-  // asking in between would otherwise see nothing spent and be waved through too
+  // the free first grant is counted by GRANTS, not spend (a grant charges only once its work reports; see the hold)
   const room = starved || grantsThis === 0 || remaining() > 0;
   const ok = gpu ? gpuUnits === 0 && room : room;
   if (!ok) { l.denied++; return false; }
   l.grants++;
   grantsThis++;
   if (gpu) gpuUnits++;
-  // hold the lane's typical cost until THIS grant's work reports: a grant charges only after its work runs, and
-  // without the hold every ask in between would see an empty frame. Per grant: several records share a lane.
+  // hold the lane's typical cost until THIS grant's work reports, or every ask in between would see an empty frame
   spentThis += l.ewma;
   return { held: l.ewma, frame: frameNo };
 }

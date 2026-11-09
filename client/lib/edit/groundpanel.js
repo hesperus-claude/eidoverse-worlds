@@ -1,17 +1,8 @@
-// groundpanel — the 🌿 ground section of the world panel (split from build.js).
+// groundpanel — the ground section of the world panel. Unlike the sky panel's live sliders, every control here is a
+// deliberate commit on a click (terrain and grass are authored: they persist and fold).
 //
-// Ground was agent-only (terrain/grass verbs); an empty world had no way for a
-// person to grow either. These are AUTHORED (they persist and fold), so —
-// unlike the sky tuner's live sliders — each is a deliberate commit on a
-// click, which is also why they don't spam the log.
-//
-// The vocabulary itself — tints, shapes, the grass dials, what "grow" can
-// plant — is a DEF now (defs/ground/_palette.json, §R4 defs round two), on
-// the sky-presets law: the panel applies a choice as concrete verb args, so
-// the log never stores a palette name and logged meaning never depends on
-// the def file. SINGLE-SOURCE posture: no hardcoded fallback vocabulary —
-// a fallback would be the mirror this extraction exists to kill, so a world
-// serving no palette gets a panel that says so.
+// The vocabulary (tints, shapes, grass dials, plantings) is a def (defs/ground/_palette.json): a pick writes concrete
+// verb args, so the log never stores a palette name. No fallback vocabulary: a world serving no palette says so.
 
 import { bus, report, CONFIG } from '../base.js';
 import { currentTerrainArgs, terrainEditBase, noteTerrainSent } from '../world.js';
@@ -24,12 +15,10 @@ import { state, onWorldChange } from '../state.js';
 import { stateLines } from '../statelines.js';
 import { getGrassQuality, getGrassShed, getGrassDensity } from '../terrain.js';
 
-// panel state, OUTSIDE the paint: a defs push repaints the rows and must not
-// forget what the author had dialed in
+// panel state, outside the paint: a defs push repaints the rows and must keep what the author dialed in
 const st = { tint: null, shape: null, seed: 7, density: null, grass: false, plant: null, height: null };
 let offNow = null, offBudget = null;   // the readout's subscriptions — one per paint
-// the ground is @world's terrain and grass components, so a pick is a `set` and mow is a `delete` — one door
-// request each, undoable like any edit
+// the ground is @world's terrain and grass components: a pick is a `set`, mow is a `delete`; one request, undoable
 const ground = (component, value) => sendRequest(value == null ? { verb: 'delete', args: { id: '@world', component } } : { verb: 'set', args: { id: '@world', component, value } }, { what: component });
 
 export function paintGround(body) {
@@ -42,8 +31,7 @@ export function paintGround(body) {
       body.innerHTML = '<div style="color:var(--dim);font-size:11px">this world serves no ground palette (defs/ground/_palette.json)</div>';
       return;
     }
-    // carry the author's dials across a defs push; fall back when an edit
-    // removed the very option they had selected
+    // keep the author's dials across a defs push; fall back when the def dropped the option selected
     const def = paletteDefaults(pal);
     if (!pal.tints[st.tint]) st.tint = def.tint;
     if (pal.shapes[st.shape] == null) st.shape = def.shape;
@@ -51,18 +39,15 @@ export function paintGround(body) {
     if (pal.grassDensity[st.density] == null) st.density = def.density;
     if (!pal.plantings[st.plant]) st.plant = def.plant;
 
-    // the args are shared/grounddefs.js's (the Build tab's World section writes the same ones for the same pick).
-    // Each control changes ITS key over the world's current terrain bag, never the whole bag, so what the panel
-    // doesn't own (placed features, a heightmap, a console-set seed) survives. A world with no terrain gets the full
-    // default bag. The patch builds on terrainEditBase() (a sent-but-unechoed edit counts), so quick clicks compose.
+    // the args are shared/grounddefs.js's (the Build tab's World section writes the same). Each control patches ITS
+    // key over the current terrain bag (terrainEditBase: a sent-but-unechoed edit counts, so quick clicks compose), so
+    // what the panel doesn't own (features, a heightmap) survives. A world with no terrain gets the default bag.
     const fresh = () => terrainArgs(pal, { seed: st.seed, shape: st.shape, tint: st.tint });
     const growTerrain = (patch = {}) => {
       const cur = terrainEditBase();
       ground('terrain', noteTerrainSent(cur ? { ...cur, ...patch } : { ...fresh(), ...patch }));
     };
-    // what "grow" plants — every option is one bag on the singleton grass
-    // verb, straight from the def; blade plantings take the height dial and
-    // the tint row's colour column
+    // what "grow" plants: one grass bag from the def; blade plantings take the height dial and the tint's colour
     const growGrass = () => {
       st.grass = true;
       ground('grass', grassArgs(pal, st));
@@ -75,13 +60,13 @@ export function paintGround(body) {
     body.appendChild(btnRow(btn('↻ reshuffle', () => { st.seed = Math.floor(Math.random() * 9999); growTerrain({ seed: st.seed }); })));
     body.appendChild(heightmapRow());
 
-    // 💧 water: one level for the world (the `water` component on @world) — every bit of ground below it is under water, dry pockets aside. The level starts
-    // a quarter of the way up the ground's current range (a pond in the low places), or where it is now.
+    // water: one level for the world (@world's `water` component). The field starts at the current level, else a
+    // quarter of the way up the ground's range (a pond in the low places).
     {
       const lvl = document.createElement('input');
       lvl.type = 'number'; lvl.step = '0.25'; lvl.title = 'water level (m)';
       lvl.style.cssText = 'width:4.5em;font-size:11px';
-      const cur = (state.st?.water ?? currentTerrainArgs()?.water)?.level;   // water is its own component (shape audit 10-16)
+      const cur = (state.st?.water ?? currentTerrainArgs()?.water)?.level;   // water is its own component
       if (Number.isFinite(cur)) lvl.value = String(cur);
       else fetch(`/heightmap?world=${encodeURIComponent(CONFIG.world)}&format=json`).then((r) => (r.ok ? r.json() : null))
         .then((m) => { if (m && !lvl.value) lvl.value = (m.min + (m.max - m.min) * 0.25).toFixed(1); }).catch(() => {});
@@ -100,9 +85,8 @@ export function paintGround(body) {
       ));
     }
 
-    // WHAT THE WORLD HAS NOW, and what you're seeing instead (only while those differ). The dials below are a
-    // COMPOSER (what 🌱 grow will plant) and they default to meadow, so on their own they read like a report of the
-    // field (the owner and I both took galleta_dry for meadow, 09-24).
+    // what the world has now, and what you're seeing instead (only while those differ): the dials below are a
+    // COMPOSER (what grow will plant) and would otherwise read as a report of the field
     const lines = stateLines();
     lines.el.classList.add('ground-now');
     const readNow = () => {
@@ -171,10 +155,9 @@ export function paintGround(body) {
     body.appendChild(tint.row);
   };
 
-  // ⛰ heightmap: the ground as an image, out and back (server/heightmap.ts). Export samples the CURRENT ground (noise,
-  // heightmap and features together) into a 16-bit grayscale PNG carrying its height range; import makes one the
-  // ground and replaces the features too (no hill counted twice). The low/high fields cover an editor that drops the
-  // range chunk; they start at the current ground's range.
+  // heightmap: the ground as an image, out and back (server/heightmap.ts). Export samples the current ground into a
+  // 16-bit PNG carrying its height range; import makes one the ground and replaces the features (no hill counted
+  // twice). The low/high fields cover an image without a range chunk; they start at the current range.
   function heightmapRow() {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;flex-direction:column;gap:3px;padding:2px 0';

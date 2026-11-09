@@ -61,7 +61,7 @@ export class BodyEngineBase {
   }
 
 /** Hips offset from the root, horizontally in the root's own frame, measured from the rest pose at build. ~0 on most
- *  rigs, but some author the skeleton well forward of the origin (tel0s: 0.233 m; §24t-8). */
+ *  rigs, but some author the skeleton well forward of the origin (0.233 m on one). */
   _measureHipsLocal(restHipsWorld) {
     const root = this.avatar.root;
     if (!restHipsWorld || !root) { this.hipsLocalX = 0; this.hipsLocalZ = 0; return; }

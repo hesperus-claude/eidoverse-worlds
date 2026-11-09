@@ -8,7 +8,7 @@ import { allFrames, getFrame, frameResizeInfo } from './windows.js';
 import { HTMLMesh } from '../vendor/three-addons/htmlmesh.js';
 import { quadMaterial } from './quadcolour.js';
 
-const PX_PER_M = 900;      // xrpanels' density — the number the tester's eyes accepted
+const PX_PER_M = 900;      // xrpanels' density
 const W = 0.58;            // metres across, like the canvas quads
 const XR_FRAMES = ['world', 'actions', 'settings', 'chat', 'debug', 'profile', 'moderation', 'world-settings'];   // the frames that had canvas quads, + the two roles panels
 const LIVE_MIN_MS = { debug: 250, chat: 250 };   // live panels re-rasterise at most 4 Hz; others at 16 ms

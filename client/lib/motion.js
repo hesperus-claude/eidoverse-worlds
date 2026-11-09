@@ -17,19 +17,13 @@
 //   oscillate {axis?, amp, period, phase?, t0}                     — back and forth along an axis (a sine): hover, buoys, pistons
 //   path     {points, speed|duration, loop?: 'loop'|'pingpong'|'once', face?, t0}
 //
-// SUB-OBJECTS: a component keyed `motion:<slot>` whose value names a `node`
-// (its name as the model file spells it; motioneval.js motionNode — or, in an
-// older stored value, the key's tag or a whole `motion`'s `part`) animates ONE NAMED NODE inside the entity's model
-// instead of the whole thing (Orrery's segmented exports name their parts:
-// tripo_part_0, …). Several `motion:<part>` components coexist on one entity,
-// so a machine can have many moving parts. Coordinates are the PART's frame:
-// pivot/axis are relative to the part node's own origin (default pivot
-// [0,0,0] = the node origin, where a hinge usually lives), oscillate/orbit/path
-// positions are in the part's parent frame. `measure` reports each part's
-// `local` center/size in exactly this frame — a local center IS a pivot
-// candidate verbatim. The server folds all of it blindly; clients that
-// predate this file simply don't animate parts. When a part's motion is
-// removed, the part eases back to its authored rest pose.
+// SUB-OBJECTS: a component keyed `motion:<slot>` whose value names a `node` (as the model file spells it;
+// shared/protocol/names.js motionNode also reads the older forms) animates ONE NAMED NODE inside the entity's model
+// instead of the whole thing. Several coexist on one entity, so a machine can have many moving parts. Coordinates
+// are the PART's frame: pivot/axis relative to the node's own origin (default pivot [0,0,0], where a hinge usually
+// lives), oscillate/orbit/path positions in the part's parent frame. `measure` reports each part's `local`
+// center/size in this frame, so a local center is a pivot candidate verbatim. When a part's motion is removed, the
+// part returns to its authored rest pose.
 
 import { THREE, camera } from './core.js';
 import { entities, bags, bagOf, findPart } from './world.js';
@@ -52,8 +46,7 @@ const _rp = new THREE.Vector3();
 const lastIndexed = new Map();
 
 // ---- sub-object machinery ---------------------------------------------------
-// findPart (name → node, async-load-safe) lives in world.js now — mounting
-// rides the same parts this module animates, so they share one lookup.
+// findPart (name → node, async-load-safe) lives in world.js: mounting rides the same parts, so they share one lookup.
 
 const _qb = new THREE.Quaternion();
 
@@ -144,7 +137,7 @@ export function tickMotion() {
       const at = obj.userData.mountedTo ? obj.getWorldPosition(_wp) : obj.position;
       if (at.distanceToSquared(_eye) > 8100) continue;   // 90m, from the camera's WORLD position
       const t = since(m, nowMs);
-      const partName = motionNode(key, m);   // the node it moves: its value's `node` (motioneval.js)
+      const partName = motionNode(key, m);   // the node it moves: its value's `node` (shared/protocol/names.js)
 
       if (partName) {
         const part = findPart(obj, partName);

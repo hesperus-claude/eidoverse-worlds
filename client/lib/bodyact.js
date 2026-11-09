@@ -1,4 +1,4 @@
-// bodyact.js — what the authority's body inbox says about my body (PROTOCOL §5): an act it delivered (`body {to, kind}` that
+// bodyact.js — what the authority's body inbox says about my body (spec/PROTOCOL.md §5): an act it delivered (`body {to, kind}` that
 // my consent allowed), as the puppet message localbody.js already applies; and an act it refused (body-refused), as the
 // words localbody.js shows me. A leaf: nothing from lib comes in, so test/client/consent-client-test.ts can drive it.
 /** A refused act on my body (`{type: "body-refused", from, class, gate}`: said once per asker per cooldown by the authority)

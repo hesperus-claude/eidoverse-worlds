@@ -1,8 +1,5 @@
-// micgate — the noise gate as a smoothed GAIN, not a track.enabled switch.
-//
-// Toggling track.enabled clicks at both ends, and the opening click lands on the
-// first consonant. So the gate is a GainNode with an attack/release envelope
-// (the shape BasisVR's local microphone driver uses):
+// micgate — the noise gate as a smoothed gain, not a track.enabled switch (which clicks at both ends, the opening
+// click on the first consonant). The gate is a GainNode with an attack/release envelope:
 //
 //     voiceSource()  →  MediaStreamSource  →  GainNode  →  MediaStreamDestination
 //                                               ↑                     ↓
@@ -18,25 +15,20 @@
 import { audioContext } from './audioctx.js';
 import { report } from './base.js';
 
-// Envelope time constants (s) for setTargetAtTime: ~95% of target in 3·tau, so
-// attack is ~95% open in 24ms; worst-case onset is the 20ms tick + envelope ≈ 44ms.
-// Attack stays faster than release (a late open loses a consonant, an early close
-// cuts a word). The 700ms hang-time runs before the release fade, so a mid-sentence
-// pause never reaches it. BasisVR's 0.10/0.05 are per-20ms-frame lerp rates, not
-// taus; one smoothing stage only (see driveGate).
+// Envelope time constants (s) for setTargetAtTime: ~95% of target in 3·tau, so attack is ~95% open in 24 ms;
+// worst-case onset is the 20 ms tick + envelope ≈ 44 ms. Attack stays faster than release (a late open loses a
+// consonant, an early close cuts a word). The 700 ms hang-time runs before the release fade.
 const ATTACK_TAU = 0.008;
 const RELEASE_TAU = 0.12;
-// Lookahead (s): delay the AUDIO, not the detector, so a low-energy onset (/h/)
-// that never crosses the threshold is still in the delay line when the vowel opens
-// the gate. Costs 50ms of outbound latency.
+// Lookahead (s): delay the audio, not the detector, so a low-energy onset (/h/) that never crosses the threshold is
+// still in the delay line when the vowel opens the gate. Costs 50 ms of outbound latency.
 const LOOKAHEAD = 0.05;
 
 let _ctx = null, _src = null, _gain = null, _dest = null, _look = null;
 let _rawStream = null, _gatedStream = null, _level = () => 0;
 
-// If the graph can't be built, gateStream fails CLOSED (returns null) unless the
-// person explicitly chose ungated transmission via allowUngated(true): a privacy
-// control must never silently downgrade to "off".
+// If the graph can't be built, gateStream fails closed (returns null) unless the person explicitly chose ungated
+// transmission via allowUngated(true): a privacy control must never silently downgrade to "off".
 let _gateUnavailable = false;   // the graph could not be built on this device
 let _ungatedConsent = false;    // explicit "transmit raw anyway" choice
 export const gateUnavailable = () => _gateUnavailable;
@@ -59,16 +51,13 @@ export function gateStream(stream, levelFn) {
     _gateUnavailable = false;
     _src = _ctx.createMediaStreamSource(stream);
     _gain = _ctx.createGain();
-    // Start CLOSED: opening on the first frame would broadcast the room before
-    // the settle window has learned its noise floor.
+    // start closed: opening on the first frame would broadcast the room before the settle window has learned its
+    // noise floor. `_wanted` outlives the graph, so reset it or gateOpenness() reports the previous lane's state.
     _gain.gain.value = 0;
-    // A fresh lane is closed. `_wanted` outlives the graph, so reset it or
-    // gateOpenness() reports the previous lane's state.
   _wanted = 0;
     _dest = _ctx.createMediaStreamDestination();
-    // src → lookahead delay → gate gain → destination. See LOOKAHEAD.
-    // The lookahead is optional: without createDelay, connect straight through.
-    // A missing enhancement must not fall into the fail-closed no-gate path.
+    // src → lookahead delay → gate gain → destination. Without createDelay, connect straight through: a missing
+    // enhancement must not fall into the fail-closed no-gate path.
     _look = null;
     if (typeof _ctx.createDelay === "function") {
       try {
@@ -81,25 +70,23 @@ export function gateStream(stream, levelFn) {
     _gain.connect(_dest);
     _gatedStream = _dest.stream;
 
-    // Carry the original track's identity forward where it matters: muting still
-    // operates on the RAW track (see voice.js), so both streams stay live and the
-    // gate only decides how much of the raw signal reaches the destination.
+    // muting operates on the raw track (micstate.js), so both streams stay live and the gate only decides how much
+    // of the raw signal reaches the destination
     return _gatedStream;
   } catch (e) {
     report('mic gate graph', e);
     release();
-    // Fail closed; allowUngated(true) is the explicit way back to raw.
+    // fail closed; allowUngated(true) is the explicit way back to raw
     _gateUnavailable = true;
     return _ungatedConsent ? stream : null;
   }
 }
 
-/** Drive the gain from the gate decision. `open` is the gate's boolean; the
- *  smoothing lives here so the decision logic stays readable. */
+/** Drive the gain from the gate decision. `open` is the gate's boolean; the smoothing lives here. */
 export function driveGate(open) {
   if (!_gain || !_ctx) return;
-  // One smoothing stage: setTargetAtTime IS the envelope, so target the true
-  // endpoint. Pre-lerping the step double-smooths and the gate never fully closes.
+  // one smoothing stage: setTargetAtTime is the envelope, so target the true endpoint (pre-lerping the step
+  // double-smooths and the gate never fully closes)
   const target = open ? 1 : 0;
   const tau = open ? ATTACK_TAU : RELEASE_TAU;
   try {
@@ -109,9 +96,8 @@ export function driveGate(open) {
 }
 
 // ── the ungated lane's only gate ─────────────────────────────────────────────
-// On the consented raw lane there is no gain for driveGate() to drive, so
-// push-to-talk toggles the raw tracks' `enabled` instead (abrupt, but true).
-// Intent is recorded so gateOpenness() reports what the wire is doing.
+// On the consented raw lane there is no gain for driveGate() to drive, so push-to-talk toggles the raw tracks'
+// `enabled` instead. Intent is recorded so gateOpenness() reports what the wire is doing.
 let _rawWanted = 0;
 export function driveRawTracks(open) {
   if (!_rawStream) return false;
@@ -121,13 +107,11 @@ export function driveRawTracks(open) {
 }
 
 
-// ── MONITOR: hear your own lane, exactly as the room hears it ───────────────
-// Tapped AFTER the gain, so it carries the gate (a raw-source monitor would sound
-// fine while the room heard nothing). On speakers this WILL feed back: keep the
-// default level low and say so in the UI.
+// ── monitor: hear your own lane, exactly as the room hears it ───────────────
+// Tapped after the gain, so it carries the gate (a raw-source monitor would sound fine while the room heard
+// nothing). On speakers this will feed back: keep the default level low and say so in the UI.
 let _mon = null, _delay = null, _wanted = 0;
-// Long enough to be heard as a separate event rather than as an echo of your
-// own voice. Tunable live via setMonitorDelay() while testing.
+// long enough to be heard as a separate event rather than as an echo of your own voice (setMonitorDelay retunes it)
 let MONITOR_DELAY = 0.4;
 export function setMonitor(on, level = 0.35) {
   if (!_ctx || !_gain) return false;
@@ -141,9 +125,8 @@ export function setMonitor(on, level = 0.35) {
   }
   if (!_mon) {
     _mon = _ctx.createGain();
-    // A deliberate delay, past the ~50ms echo threshold, so the repeat is distinct
-    // from bone-conducted voice and you can hear whether the gate clipped a word.
-    // Same createDelay guard as the lookahead: degrade to zero-latency monitoring.
+    // a deliberate delay, past the ~50 ms echo threshold, so you can hear whether the gate clipped a word; the same
+    // createDelay guard as the lookahead
     _delay = null;
     if (typeof _ctx.createDelay === "function") {
       try {
@@ -155,25 +138,21 @@ export function setMonitor(on, level = 0.35) {
     else _gain.connect(_mon);
     _mon.connect(_ctx.destination);
   }
-  // setTargetAtTime, not a bare assignment: a step change in a monitor path is
-  // an audible click straight into your ears.
+  // setTargetAtTime, not a bare assignment: a step change in a monitor path is an audible click
   try { _mon.gain.setTargetAtTime(level, _ctx.currentTime, 0.02); }
   catch { _mon.gain.value = level; }
   return true;
 }
 export const monitoring = () => !!_mon;
 
-/** Is any signal actually reaching the wire right now? The honest answer to
- *  "am I being broadcast", read from the gain itself rather than inferred. */
-// Reports the gate's INTENT, not the mid-fade .value, so the indicator never
-// flickers through an envelope.
+/** Is any signal reaching the wire right now? Reports the gate's intent, not the mid-fade .value, so the indicator
+ *  never flickers through an envelope. */
 export const gateOpenness = () => (_gain ? _wanted : (_gateUnavailable && _rawStream ? _rawWanted : 0));
 export const gateGainNow = () => (_gain ? _gain.gain.value : 0);
 
 
-/** Detach the DEVICE from the lane, keeping the lane itself alive.
- *  The GainNode and destination stay, so every peer's sender still holds a live
- *  track and the mic can come back without renegotiation. */
+/** Detach the device from the lane, keeping the lane alive: the GainNode and destination stay, so every peer's
+ *  sender still holds a live track and the mic can come back without renegotiation. */
 export function detachSource() {
   try { _src?.disconnect(); } catch { /* already gone */ }
   _src = null;
@@ -181,44 +160,39 @@ export function detachSource() {
   if (_gain) _gain.gain.value = 0;        // lane open, silent
 }
 
-/** Reconnect a new device stream into the EXISTING lane. Returns the same gated
- *  stream the senders already hold, so nothing downstream changes. */
+/** Reconnect a new device stream into the existing lane. Returns the same gated stream the senders already hold. */
 export function attachSource(stream) {
   if (!_ctx || !_gain || !_dest) return null;
   try { _src?.disconnect(); } catch { /* fine */ }
   _src = _ctx.createMediaStreamSource(stream);
-  // Through the same lookahead as gateStream, or a reattach loses the first syllable.
+  // through the same lookahead as gateStream, or a reattach loses the first syllable
   if (_look) _src.connect(_look); else _src.connect(_gain);
   _rawStream = stream;
   return _gatedStream;
 }
 
-/** Full teardown — the lane included. ONLY for leaving the world or revoking
- *  consent, never for going quiet: this is the path that costs a renegotiation
- *  to undo. */
+/** Full teardown, the lane included. Only for leaving the world or revoking consent, never for going quiet: this
+ *  path costs a renegotiation to undo. */
 export function release() {
   try { _src?.disconnect(); } catch { /* already gone */ }
   try { _look?.disconnect(); } catch { /* already gone */ }
   _look = null;
   try { _gain?.disconnect(); } catch { /* already gone */ }
-  // This module built the monitor tap, so this module disconnects it.
   try { _mon?.disconnect(); } catch { /* already gone */ }
   _mon = null;
-  // Deliberately does NOT stop the destination's tracks: they belong to the
-  // stream WebRTC holds, and stop() is a one-way door. The caller's own sender
-  // cleanup owns that.
+  // deliberately does not stop the destination's tracks: they belong to the stream WebRTC holds, and stop() is a
+  // one-way door; the caller's sender cleanup owns that
   _src = _gain = _dest = null;
   _gatedStream = null;
   _rawStream = null;
   _rawWanted = 0;
 }
 
-/** The RAW stream, for anything that must measure the true input — the analyser
- *  especially. Measuring the gated output would make the gate self-latching. */
+/** The raw stream, for anything that must measure the true input (the analyser: measuring the gated output would
+ *  make the gate self-latching). */
 export const rawStream = () => _rawStream;
 
-/** Retune the monitor delay live, in seconds (0…2). For finding the spacing that
- *  makes a clipped consonant obvious rather than ambiguous. */
+/** Retune the monitor delay live, in seconds (0…2); unused in-repo, kept for console tuning. */
 function setMonitorDelay(sec) {
   MONITOR_DELAY = Math.max(0, Math.min(2, Number(sec) || 0));
   if (_delay && _ctx) {
@@ -228,14 +202,11 @@ function setMonitorDelay(sec) {
   return MONITOR_DELAY;
 }
 
-// ── the onset machine + level meter, one copy ───────────────────────────────
-// Shared by voice.js (the mesh) and micstate.js (the transport seam); each
-// instantiates with its own stream/mute closures.
+// ── the onset machine + level meter ─────────────────────────────────────────
+// micstate.js (the transport seam) instantiates each with its own stream/mute closures.
 
-/** RMS level meter over whatever stream `getMeasured` currently names —
- *  null means "muted or no stream": report 0 and learn nothing.
- *  Reuses the one shared AudioContext (Chrome caps a document at ~6) and
- *  disconnects the replaced analyser pair so the graph doesn't accumulate nodes. */
+/** RMS level meter over whatever stream `getMeasured` currently names; null means "muted or no stream": report 0
+ *  and learn nothing. Reuses the one shared AudioContext and disconnects the replaced analyser pair. */
 export function makeLevelMeter(getMeasured) {
   let _an = null, _anStream = null, _anBuf = null, _anSrc = null;
   return function level() {
@@ -260,20 +231,17 @@ export function makeLevelMeter(getMeasured) {
   };
 }
 
-/** The speech-onset gate: BasisVR's block-minima noise floor, a fixed
- *  threshold with ~3dB hysteresis and 700ms hang-time, and the once-per-
- *  utterance 🎙 announcement. `drive(open)` is the transport's gain hand
- *  (it applies its own lane/mute authority first); `level()` returning 0
- *  means muted — close, drop the speaking latch, learn nothing.
+/** The speech-onset gate: a block-minima noise floor, a fixed threshold with ~3 dB hysteresis and 700 ms hang-time,
+ *  and the once-per-utterance 🎙 announcement. `drive(open)` is the transport's gain hand (it applies its own
+ *  lane/mute authority first); `level()` returning 0 means muted: close, drop the speaking latch, learn nothing.
  *
  *  Invariants:
  *  - drive the gate before any early return;
- *  - learn before judging (~1s settle window, or a loud room fires the 🎙 at itself);
- *  - the floor is min-of-block-minima (6 × 0.4s), so speech can never raise it;
- *  - announce only after the gate has been open 60ms, max once per 1.5s, so the
- *    pill and the audio agree;
- *  - `speaking` reports threshold PLUS hang-time, or the bar flickers through pauses;
- *  - 20ms tick: the interval is the worst-case clip on a word's attack. */
+ *  - learn before judging (~1 s settle window, or a loud room fires the 🎙 at itself);
+ *  - the floor is min-of-block-minima (6 × 0.4 s), so speech can never raise it;
+ *  - announce only after the gate has been open 60 ms, max once per 1.5 s, so the pill and the audio agree;
+ *  - `speaking` reports threshold plus hang-time, or the bar flickers through pauses;
+ *  - 20 ms tick: the interval is the worst-case clip on a word's attack. */
 export function makeOnsetGate({ level, threshold, drive, announce, held = () => null }) {
   let _timer = null, _above = false, _lastOnset = 0, _openUntil = 0;
   let _openedAt = 0, _announced = false;
@@ -281,18 +249,16 @@ export function makeOnsetGate({ level, threshold, drive, announce, held = () => 
   let _blocks = new Array(6).fill(Infinity), _blockIdx = 0, _blocksFilled = 0,
       _blockMin = Infinity, _blockStart = 0;
 
-  // Push-to-talk is a mode of this machine: `held()` returns null when the level
-  // decides, else the key's boolean. The level side keeps running (meter, noise
-  // floor), but under a held answer it drives nothing and never fires the 🎙;
-  // press() announces instead, through the same rate limit.
+  // Push-to-talk is a mode of this machine: `held()` returns null when the level decides, else the key's boolean.
+  // The level side keeps running (meter, noise floor), but under a held answer it never fires the 🎙; press()
+  // announces instead, through the same rate limit.
   const decide = (now) => { const h = held(); return h === null ? (_above || now <= _openUntil) : h; };
   const apply = (now) => drive(decide(now));
 
   function tick() {
     const lv = level();
     if (lv <= 0) {
-      // muted: close, do not learn — and DROP THE SPEAKING LATCH, or
-      // info().speaking reports true forever while the gate is forced shut
+      // muted: close, do not learn, and drop the speaking latch (or info().speaking reports true while forced shut)
       _above = false; _openUntil = 0;
       apply(Date.now()); return;
     }
@@ -327,8 +293,7 @@ export function makeOnsetGate({ level, threshold, drive, announce, held = () => 
   }
 
   return {
-    /** Re-measure the room on every start: a floor learned in a quiet
-     *  session would gate you out of a loud one. */
+    /** Re-measure the room on every start: a floor learned in a quiet session would gate you out of a loud one. */
     start() {
       if (_timer) return;
       _above = false;
@@ -341,19 +306,16 @@ export function makeOnsetGate({ level, threshold, drive, announce, held = () => 
       if (_timer) { clearInterval(_timer); _timer = null; }
       _above = false;
     },
-    /** Apply the current latch through the transport's authority — the
-     *  external gateAudio (mute toggles call it directly). */
+    /** Apply the current latch through the transport's authority (mute toggles call it directly). */
     apply,
-    /** Drop the speaking latch without stopping the watch — unmute hands
-     *  control back to the gate rather than reopening mid-latch. */
+    /** Drop the speaking latch without stopping the watch: unmute hands control back to the gate. */
     dropLatch() { _above = false; _openUntil = 0; },
-    /** A push-to-talk press: announce the 🎙 as a declared gesture, under the
-     *  same once-per-1.5s limit as a level onset. The caller applies the gate. */
+    /** A push-to-talk press: announce the 🎙, under the same once-per-1.5 s limit as a level onset. The caller
+     *  applies the gate. */
     press(now = Date.now()) {
       if (now - _lastOnset > 1500) { _lastOnset = now; announce(); }
     },
-    /** `speaking` is what the room is getting: the held answer when there is
-     *  one, else threshold PLUS hang-time. */
+    /** `speaking` is what the room is getting: the held answer when there is one, else threshold plus hang-time. */
     info: () => ({ level: level(), noise: _noise, on: threshold(),
       speaking: decide(Date.now()) }),
   };

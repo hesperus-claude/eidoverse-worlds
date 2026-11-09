@@ -1,5 +1,5 @@
-// Which selection layers MY clicks in the edit viewport can land on (shared/layers.js). Per viewer, remembered here;
-// 'environment' starts off (people don't select the ground plane all the time).
+// Which selection layers MY viewport clicks can land on (shared/layers.js). Per viewer, in localStorage; 'environment'
+// (the ground) starts off.
 import { bus } from '../base.js';
 import { LAYERS, layerOf } from '../../../shared/layers.js';
 const KEY = 'ew.select.mask';

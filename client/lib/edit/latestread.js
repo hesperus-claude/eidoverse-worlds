@@ -1,15 +1,9 @@
-// latestread — a panel's re-read of the authority, paced: at most one read in flight per key, the newest wish re-asked once
-// the current one answers, and never more often than `gapMs`.
-//
-// Why: the Inspector and the History re-read on every change to the thing they show, and editing fast could cross the
-// server's 60-messages-a-second cap, so the person's own next request was refused with `rate` (client-check K7, GR1).
-// This is the one rule for all of them.
+// latestread — paced re-reads of the authority: at most one in flight per key, never more often than `gapMs`, and a
+// read asked meanwhile replaces the one waiting (only the newest runs; it carries the newest state).
+// Why: the Inspector and History re-read on every change, and fast editing tripped the server's rate limit.
 //
 //   const paced = latestRead(250);
-//   paced(id, () => sendRequest('inspect', { id }).then(...));   // returns nothing; `run` must return a promise
-//
-// A read asked while one is in flight, or inside the gap, replaces any read already waiting: only the newest runs. Nothing
-// is dropped that matters: the newest wish carries the newest state.
+//   paced(id, () => sendRequest('inspect', { id }).then(...));   // `run` must return a promise
 
 /** @param {number} gapMs  least time between two reads' starts, per key */
 export function latestRead(gapMs = 250, now = () => performance.now(), later = (f, ms) => setTimeout(f, ms)) {

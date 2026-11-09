@@ -28,11 +28,11 @@ export function makeConsentSync({ table, send, toast, on, later = (fn) => setTim
     if (!read?.ok || !read.table) results.push(['your consent, read back', read?.ok ? { ok: false, refused: { reason: 'the authority sent no table' } } : read]);
     else {
       const authority = read.table, gates = {}; noteHeld(authority, read.world);   // the panel shows the authority's lists and the gates in force
-      // each of my changes not yet landed here, then marked landed (consent.js drains it: review full-260 L9)
+      // each of my changes not yet landed here, then marked landed (consent.js drains it)
       const mark = (op, id) => { try { landed(op, id); } catch { /* the store's, never the sync's */ } };
-      // a gate the authority holds off is reopened only by my turning it on here since (want.opened): a migrated off wins (#260 follow-up B)
+      // a gate the authority holds off is reopened only by my turning it on here since (want.opened): a migrated off wins
       const reopens = (g) => want[g] === false || typeof authority[g] !== 'boolean' || (want.opened ?? []).includes(g);
-      for (const g of ['move', 'touch']) if (typeof want[g] === 'boolean' && authority[g] !== want[g] && reopens(g)) gates[g] = want[g];   // never chosen: the world's default stands (F2b)
+      for (const g of ['move', 'touch']) if (typeof want[g] === 'boolean' && authority[g] !== want[g] && reopens(g)) gates[g] = want[g];   // never chosen: the world's default stands
       for (const g of want.opened ?? []) if (authority[g] === want[g]) mark('gate', g);
       if (Object.keys(gates).length) { const r = await send('consent', gates).then((r) => r, failed); results.push([Object.entries(gates).map(([g, v]) => `${g} ${v ? 'on' : 'off'}`).join(', '), r]); if (r?.ok) for (const g of Object.keys(gates)) mark('gate', g); }
       const has = (list, id) => Array.isArray(authority[list]) && authority[list].includes(id);
@@ -40,7 +40,7 @@ export function makeConsentSync({ table, send, toast, on, later = (fn) => setTim
         const r = await send('consent', { [list]: id }).then((r) => r, failed);
         if (r?.refused?.code === 'gone') gone(id); else { results.push([`${list} one person`, r]); if (r?.ok) mark(list, id); } }   // gone: no one wears that id now (a guest who left): pruned, not retried
       for (const id of want.unlist ?? []) { if (want.allow.includes(id) || want.block.includes(id)) continue;
-        if (!has('allow', id) && !has('block', id)) { mark('unlist', id); continue; }   // only whom I unlisted: the authority's own entries stay (F2a)
+        if (!has('allow', id) && !has('block', id)) { mark('unlist', id); continue; }   // only whom I unlisted: the authority's own entries stay
         const r = await send('consent', { unlist: id }).then((r) => r, failed); results.push(['unlist one person', r]); if (r?.ok) mark('unlist', id); }
       // an unlist from before the queue (its world unknown): sent only to take someone off allow here, never to lift a block (consent.js follows)
       for (const id of want.unallow ?? []) { if (want.allow.includes(id) || want.block.includes(id)) continue;

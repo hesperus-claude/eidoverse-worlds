@@ -1,6 +1,6 @@
-// client/lib/climb.js — my body on a climb route (componentspec climb; shared/climb.js), ported from upstream's
-// client/lib/traversal.js. The state is {host, progress, dir}: presence sends {host, progress}, and every frame resolves it
-// through the host's live object, so a moving carrier carries its climber.
+// client/lib/climb.js — my body on a climb route (componentspec climb; shared/climb.js). The state is {host, progress,
+// dir}: presence sends {host, progress}, and every frame resolves it through the host's live object, so a moving
+// carrier carries its climber.
 import { THREE } from './core.js';
 import { bus } from './base.js';
 import { state } from './state.js';

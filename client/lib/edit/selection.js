@@ -1,14 +1,10 @@
-// selection — the editor's ONE selection (C6).
+// selection — the editor's ONE selection: `{ ids, kind }`, PRIMARY first; one 'selection' bus event per change, none
+// for a no-op. Headless: nothing here knows whether an id exists (callers check `entities`).
 //
-// `{ ids, kind }`, ids ordered with the PRIMARY first; one 'selection' bus event per change, carrying the new state,
-// and none for a no-op. Nothing here knows whether an id exists — callers that need a live thing check `entities`
-// first — so it is headless and has no three.
+//   kind: 'things' (placed entities) | 'world' (the @world entity) | 'env:<key>' (the world with one environment
+//         card in focus) | null when empty
 //
-//   kind: 'things' (placed entities) | 'world' (the @world entity) | 'env:<key>' (the world with
-//         one environment card in focus) | null when empty
-//
-// scenegraph.sceneSelected() and panels.js selection() remain as thin adapters over this
-// (client-check names them); they are the 'things' view of the store.
+// scenegraph.sceneSelected() and panels.js selection() are thin adapters over this: the 'things' view of the store.
 import { bus } from '../base.js';
 
 let ids = [];
@@ -49,8 +45,8 @@ export function extend(list, k = 'things') {
   if (!add.length) return false;
   return commit(kind === k || kind === null ? [...ids, ...add] : add, k);
 }
-/** A Ctrl/Shift-click: add it if absent, take it out if present. Taking the primary out promotes
- *  the next id and keeps the rest — one event, which is the whole reason this module exists. */
+/** A Ctrl/Shift-click: add it if absent, take it out if present. Taking the primary out promotes the next id and
+ *  keeps the rest, in one event. */
 export function toggle(id, k = 'things') {
   if (id == null) return false;
   if (kind !== null && kind !== k) return set([id], k);

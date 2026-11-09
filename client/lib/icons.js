@@ -4,17 +4,15 @@
 // fallback), and headless Chromium may rasterize it fine, so tests can't see it. Any emoji that carries meaning in
 // this UI is a silent-failure risk.
 //
-// Path data is verbatim from lucide-icons/lucide (ISC licence), 24x24 viewBox.
-// Same technique as porch-old's PORCH_ICONS: store the `d` strings, build
-// Path2D lazily, and let each surface render them its own way.
+// Path data is verbatim from lucide-icons/lucide (ISC licence), 24x24 viewBox: store the `d` strings, build Path2D
+// lazily, and let each surface render them its own way.
 //
 //   stroke(ctx, name, size)  → canvas / 3D sprite (Path2D, cached)
 //   svg(name, size)          → inline <svg> markup for DOM chrome
 //   has(name)                → registry probe
 //
-// Adding an icon: curl the SVG from
-// raw.githubusercontent.com/lucide-icons/lucide/main/icons/<name>.svg and
-// paste its path `d` strings here. Do NOT hand-draw replacements: they read as blobs at 26px.
+// Adding an icon: curl raw.githubusercontent.com/lucide-icons/lucide/main/icons/<name>.svg and paste its path `d`
+// strings here. Do NOT hand-draw replacements: they read as blobs at 26px.
 
 const P = {
   // the world, for the Hierarchy's World row (a filled planet is a blot at 13 px): a circle, its equator, one meridian

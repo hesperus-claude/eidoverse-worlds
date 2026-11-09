@@ -5,15 +5,14 @@
 // qualified display names like `Artie (kube)` and hyphens, so a person's highlight and an agent's ping can differ.
 
 import { CONFIG, bus, colorFor, assignColors } from './base.js';
-// NOT importing xrpanels.js (it reaches the engine via domquad -> htmlmesh, and chat.js also serves a client with no
-// scene): the VR panel spec is EXPORTED and main.js registers it, so there is no lite-mode flag in a chat file.
+// Not importing xrpanels.js (it reaches the engine, and chat.js also serves a client with no scene): the VR panel
+// spec is exported (chatXRPanel) and main.js registers it.
 import { lastWhy } from './debuglog.js';
 import { initAttention, mountAttentionControls } from './attention.js';
 import { makeFrame } from './windows.js';
 import { fsvg } from './icons.js';
 import { requestHistory } from './net.js';
-// ONLY the registry — never handlers.js, or the cycle chat→handlers→net→chat
-// closes (§14.2). The registry is a pure table with no imports of its own.
+// only the registry, never handlers.js, or the cycle chat→handlers→net→chat closes; the registry is a pure table
 import { COMMANDS, resolveCommand } from './commands/registry.js';
 import { register as registerAction } from './actions.js';
 import { escapeHtml as esc } from './markup.js';
@@ -55,10 +54,8 @@ export function mentionsMe(text) {
   return mentionRx(CONFIG.name).test(String(text ?? ''));
 }
 
-/** Render text with mentions marked and links made clickable, without ever
- *  putting untrusted text through innerHTML. */
-// Standard inline markdown, nothing more: **bold**, *italic* / _italic_, `code`.
-// Text nodes only — no HTML is ever parsed from a message. Off = plain text.
+// Standard inline markdown, nothing more: **bold**, *italic* / _italic_, `code`. Text nodes only; no HTML is ever
+// parsed from a message. Off = plain text.
 const MD_RX = /(\*\*([^*\n]+)\*\*)|(`([^`\n]+)`)|((?<![\w*])\*([^*\n]+)\*(?![\w*]))|((?<!\w)_([^_\n]+)_(?!\w))/g;
 function inline(run) {
   if (!chatMd) return document.createTextNode(run);
@@ -74,8 +71,9 @@ function inline(run) {
   if (i < run.length) frag.append(document.createTextNode(run.slice(i)));
   return frag;
 }
-// a moderator's notice wears this first, fixed: their words can read like the house's, the header says they aren't (spoofing item 1)
+// a moderator's notice wears this first, fixed: their words can read like the house's, the header says they aren't
 export const moderatorHeader = (world) => `From a moderator of world ‹${world}›, not from Eidoverse`;
+/** Render text with mentions marked and links made clickable, without ever putting untrusted text through innerHTML. */
 function renderBody(text, names, { links = true } = {}) {
   const frag = document.createDocumentFragment();
   const pattern = new RegExp(
@@ -126,8 +124,7 @@ let loadingOlder = false;
 let noMoreHistory = false;
 let endMarker = null;               // the "beginning of this world" row, while the walk is finished
 let trimmedThrough = -1;            // highest seq the MAX_LINES trim has removed
-// The most pages of 40 a scroll walks past already-shown lines, and the most
-// pages a re-join's catch-up fetches (resyncChatAfter).
+// the most pages of 40 a scroll walks past already-shown lines, and the most pages a re-join's catch-up fetches
 const MAX_SKIP_PAGES = 25;
 
 /** Start the backward walk again from no lower than `cursor` (null: the present) — after a trim passed it, a trim of
@@ -158,8 +155,7 @@ function trimLog() {
   }
 }
 
-/** Every seq a row shows: one, or several when logChat merged the rest of a
- *  spoken utterance into it (dataset.seqs). */
+/** Every seq a row shows: one, or several when logChat merged the rest of a spoken utterance into it (dataset.seqs). */
 function seqsOf(row) {
   if (row.dataset.seqs) return row.dataset.seqs.split(',').map(Number);
   return row.dataset.seq !== undefined ? [+row.dataset.seq] : [];
@@ -179,8 +175,7 @@ function insertHistorical(who, text, ts, seq) {
     if (c.dataset.seq !== undefined && +c.dataset.seq < seq) prev = c;
   }
   if (prev) prev.after(line); else logEl.prepend(line);
-  // a grouped row that now sits under a different speaker must reprint its
-  // name (sys rows pass through a group, as in logChat)
+  // a grouped row that now sits under a different speaker must reprint its name (sys rows pass through a group)
   let below = line.nextElementSibling;
   while (below && below.dataset.kind === 'system') below = below.nextElementSibling;
   if (below && below.dataset.author !== who) below.classList.remove('cont');
@@ -241,9 +236,7 @@ export async function resyncChatAfter(seq) {
   restartWalk(before);               // the cap, with a full last page: older lines may be left
 }
 
-/** Tell an arrival that what they are looking at is a window, not the room's
- *  whole memory — and roughly how small a window. Without this, 40 lines of one
- *  bot's telemetry looks like everything that has ever happened here. */
+/** Tell an arrival that what they are looking at is a window, not the room's whole memory, and roughly how small. */
 export function noteHistoryContext({ total = null, shown = 0, spanMs = null } = {}) {
   if (!logEl) return;
   // one note, ever: every rejoin (each server restart) would prepend another
@@ -315,20 +308,18 @@ export function logChat(who, text, kind = '', meta = {}) {
     if (renderedSeqs.has(meta.seq) || meta.seq <= trimmedThrough) return;
     renderedSeqs.add(meta.seq);
   }
-  // the VR quad reads the tail of the log from here — every line, merged
-  // continuations included, twelve deep
+  // the VR quad reads the tail of the log from here, twelve deep
   recent.push({ who, text: String(text).slice(0, 140), kind });
   if (recent.length > 12) recent.shift();
   bus.emit('xr:repaint');
-  // Spoken-utterance merge: ONLY the continuation of one spoken utterance (spoken:true + same author + same utt) —
-  // an interrupted voicebox flushes the aired sentences and may finish the rest under the SAME utt. Everything else
+  // Spoken-utterance merge: only the continuation of one spoken utterance (spoken:true + same author + same utt);
+  // an interrupted voice flushes the aired sentences and may finish the rest under the same utt. Everything else
   // keeps one row per message.
   if (meta.spoken && meta.utt != null && lastLineEl?.isConnected &&
       lastLineEl.dataset.author === who && lastLineEl.dataset.utt === String(meta.utt)) {
     const body = lastLineEl.querySelector('.body');
     if (body) {
-      // the row now shows this say too: a trim must release its seq with
-      // the row's own, or paging would treat it as still on screen
+      // the row now shows this say too: a trim must release its seq with the row's own
       if (typeof meta.seq === 'number' && meta.seq >= 0) {
         lastLineEl.dataset.seqs = [...seqsOf(lastLineEl), meta.seq].join(',');
       }
@@ -351,10 +342,10 @@ export function logChat(who, text, kind = '', meta = {}) {
   lastLineEl = line;
 
   const wasAtBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 48;
-  // Causal placement: a spoken utterance is an INTERVAL — its record arrives when the voice stops, but it BEGAN before
-  // any interrupt. A spoken say carrying t0 (air-start) slots in front of trailing lines that arrived after its speech
-  // began. Server order stays arrival-truth (this is display only); t0 is honored only inside the spoken protocol and
-  // a bounded window, since an old or foreign server might not clamp it.
+  // Causal placement: a spoken utterance is an interval; its record arrives when the voice stops, but it began
+  // earlier. A spoken say carrying t0 (air-start) slots in front of lines that arrived after its speech began.
+  // Display only (server order stays arrival-truth); t0 is honoured only inside the spoken protocol and a bounded
+  // window, since an old or foreign server might not clamp it.
   const ts = meta.ts ?? Date.now();
   const t0ok = meta.spoken && Number.isFinite(meta.t0) &&
     meta.t0 <= ts && meta.t0 >= ts - 300_000;
@@ -365,12 +356,10 @@ export function logChat(who, text, kind = '', meta = {}) {
   }
   if (anchor) {
     logEl.insertBefore(line, anchor);
-    // the anchor may have been name-grouped with a line that's no longer its
-    // neighbor — a different speaker between them means the name must reprint
+    // the anchor may have been name-grouped with a line that's no longer its neighbour: the name must reprint
     if (anchor.dataset.author !== who) anchor.classList.remove('cont');
-    // ...and the inserted line's OWN grouping is re-derived from its visual predecessor: buildLine grouped it by
-    // arrival (lastAuthor), which disagrees exactly here, and a 'cont' line under another speaker reads as theirs.
-    // Sys lines pass through a group, as in the chronological rule.
+    // and the inserted line's own grouping is re-derived from its visual predecessor: buildLine grouped it by
+    // arrival (lastAuthor), which disagrees exactly here. Sys lines pass through a group.
     let prev = line.previousElementSibling;
     while (prev && prev.dataset.kind === 'system') prev = prev.previousElementSibling;
     const near = !!prev && prev.dataset.author === who &&
@@ -383,8 +372,8 @@ export function logChat(who, text, kind = '', meta = {}) {
     newlyPinged: line.dataset.kind === 'mention', wasAtBottom });
 }
 
-// ONE place turns a landed line into reader-facing accounting, for new and merged rows alike, so a mention in a later
-// spoken sentence counts like its own line and nothing counts twice. `seen` = frame visible and pinned to the bottom.
+// One place turns a landed line into unread accounting, for new and merged rows alike, so nothing counts twice.
+// `seen` = frame visible and pinned to the bottom.
 function account(line, { who, text, merged, newlyPinged, wasAtBottom }) {
   const seen = frame.visible && wasAtBottom;
   if (seen) scrollToEnd();
@@ -402,8 +391,8 @@ function buildLine(who, text, { kind = '', ts = Date.now(), historical = false, 
   const mine = who === CONFIG.name;
   const pinged = !sys && !mine && mentionsMe(text);
 
-  // the label comes from live presence (the word a speaker declared at the door, PROTOCOL §6a: any word, shown as
-  // said; none, no label), never from the log. Nothing here sorts speakers into kinds.
+  // the label comes from live presence (the word a speaker declared at the door, spec/PROTOCOL.md §6a: any word,
+  // shown as said; none, no label), never from the log
   const declared = sys || mine ? null : (getPeople().find((p) => p.id === who)?.declares ?? null);
 
   const line = document.createElement('div');
@@ -411,12 +400,10 @@ function buildLine(who, text, { kind = '', ts = Date.now(), historical = false, 
   line.dataset.kind = sys ? 'system' : pinged ? 'mention' : 'chat';
 
   const now = ts;
-  // Discord-style grouping: consecutive lines from one author inside a short
-  // window drop the repeated name, so a paragraph reads as a paragraph.
-  // Historical lines are prepended out of order, so they never group.
+  // grouping: consecutive lines from one author inside a short window drop the repeated name. Historical lines are
+  // prepended out of order, so they never group.
   const grouped = !historical && !sys && who === lastAuthor && now - lastAt < 90_000;
-  // sys lines pass THROUGH a group (an act narration between spoken sentences shouldn't reprint the name); only a
-  // change of speaker or the window ends one
+  // sys lines pass through a group (an act narration between spoken sentences shouldn't reprint the name)
   if (!historical && !sys) { lastAuthor = who; lastAt = now; }
   if (grouped) line.classList.add('cont');
   if (historical) line.classList.add('old');
@@ -431,8 +418,7 @@ function buildLine(who, text, { kind = '', ts = Date.now(), historical = false, 
   w.className = 'who';
   w.textContent = who;
   if (typeof declared === 'string' && declared) w.dataset.declares = declared;   // drawn after the name (index.html)
-  // Everyone gets their colour, INCLUDING you: the point is that a name looks
-  // the same to every reader, so people can refer to each other by it.
+  // everyone gets their colour, including you: a name looks the same to every reader
   if (!sys) w.style.color = colorFor(who);
   // click a name to start a mention of them
   if (!sys && !mine) {
@@ -449,9 +435,7 @@ function buildLine(who, text, { kind = '', ts = Date.now(), historical = false, 
   return line;
 }
 
-// A join or a leave changes who has to be told apart, so colours are
-// re-negotiated and the scrollback is repainted to match. Without the repaint,
-// a name that shifted would read as two different people up the log.
+// a join or a leave changes who has to be told apart, so colours are re-negotiated and the scrollback repainted
 bus.on('roster', () => {
   const names = getPeople().map((p) => p.id);
   names.push(CONFIG.name);
@@ -519,7 +503,7 @@ function insertAtCursor(str) {
 
 let acBox = null, acItems = [], acIndex = 0, acStart = -1, acKind = null;
 
-// The command list derives from the registry: the table that autocompletes IS the table the handlers registered.
+// the command list derives from the registry: the table that autocompletes is the table the handlers registered
 
 function closeAC() {
   acBox.style.display = 'none';
@@ -590,8 +574,7 @@ function acceptAC() {
 
 // ---- commands ---------------------------------------------------------------
 
-// The build actually SERVED (the server's /version): a report from a stale page must carry a visibly different value,
-// or a stale page and a broken probe are indistinguishable.
+// the build actually served (the server's /version): without it a stale page and a broken probe are indistinguishable
 let _build = 'unknown';
 versionReady.then((v) => { if (v) _build = `${String(v.sha ?? '').slice(0, 7) || 'unknown'}${v.dirty === true ? '+dirty' : ''}`; });   // null: 'unknown' is itself a diagnostic
 
@@ -617,17 +600,14 @@ function audioReport() {
     const d = typeof window.relayDiag === 'function' ? window.relayDiag() : null;
     const s = d?.speakers ?? d?.peers;
     if (!s) return 'unknown';
-    // sfuDiagClient returns [{id, hasStream}] — name each one and whether a
-    // track actually landed, since "attached but no stream" is its own bug.
+    // [{id, hasStream}]: name each one and whether a track actually landed ("attached but no stream" is its own bug)
     const list = (Array.isArray(s) ? s : Object.entries(s).map(([id, v]) => ({ id, ...v })))
       .map((x) => (typeof x === 'string' ? x : `${x.id}${x.hasStream === false ? '(no stream)' : ''}`));
     return list.length ? `${list.length} — ${list.join(', ')}` : 'none attached';
   });
-  // Playback is the half that failed silently on Android: packets arrive, the
-  // <audio> element refuses to start, and nothing anywhere says so.
+  // playback can fail silently (packets arrive, the <audio> element refuses to start): say so
   probe('playback', () => {
-    // 🔴 NOT querySelectorAll('audio'): voicesfu's `new Audio()` elements are never appended to the DOM, so the
-    // document can't see them. Ask the transport for its own elements.
+    // not querySelectorAll('audio'): the transport's `new Audio()` elements are never appended to the DOM
     const entries = typeof window.__voiceSpeakerEls === 'function' ? window.__voiceSpeakerEls() : null;
     if (!entries) return 'unknown (transport exposes no elements)';
     if (!entries.length) return 'no speaker elements yet';
@@ -642,20 +622,17 @@ function audioReport() {
   probe('captions', () => {
     const has = !!(window.SpeechRecognition ?? window.webkitSpeechRecognition);
     if (!has) return 'no SpeechRecognition in this browser';
-    // the TALLY is the load-bearing part: a last-event slot cannot prove that something never happened
+    // the tally is the load-bearing part: a last-event slot cannot prove that something never happened
     return `${window.__sttOn?.() ? 'ON' : 'off'}`
       + (window.__sttTally ? ` [${window.__sttTally()}]` : '')
       + (window.__sttLast ? ` — last: ${window.__sttLast}` : ' — no events yet');
   });
-  // Each subsystem's own last narrated decision (debuglog.js — the shared
-  // "name which guard refused" channel; __why('<topic>') in the console shows
-  // recent history for any of them).
+  // each subsystem's last narrated decision (debuglog.js; __why('<topic>') in the console shows recent history)
   probe('panel', () => `${lastWhy('tts-section')} | ${lastWhy('tts-list')}`);
   probe('source', () => lastWhy('publish'));
   probe('secure', () => `${window.isSecureContext} · isolated=${window.crossOriginIsolated}`);
 
-  // 🔴 STAMP THE BUILD: without a version in the report, a stale page (an older copy of a module) and a broken probe
-  // are indistinguishable.
+  // stamp the build: without it a stale page and a broken probe are indistinguishable
   L.push(`build: ${_build}`);
   return 'audio ▸ ' + L.join('  ·  ');
 }
@@ -663,8 +640,7 @@ function audioReport() {
 /** Just the captions answer, short enough to copy on a phone. */
 function sttReport() {
   const parts = [`build ${_build}`];
-  // The recognizer's language — a wrong one returns confident nothing (nomatch)
-  // rather than an error, which is exactly what one Android phone reported.
+  // the recognizer's language: a wrong one returns confident nothing (nomatch) rather than an error
   try { if (window.__sttLang) parts.push(`lang ${window.__sttLang}`); } catch { /* ignore */ }
   try { parts.push(window.__sttOn?.() ? 'stt ON' : 'stt off'); } catch { parts.push('stt ?'); }
   try { parts.push(window.__sttTally ? window.__sttTally() : 'NO TALLY (stale page)'); }
@@ -673,8 +649,8 @@ function sttReport() {
   return 'stt ▸ ' + parts.join(' · ');
 }
 
-// The commands chat OWNS (they need this module's state: the log element, the roster read). Everything else resolves
-// through the registry's one alias table and rides the bus (§24l R1).
+// The commands chat owns (they need this module's state: the log element, the roster read). Everything else
+// resolves through the registry's alias table and rides the bus.
 const CHAT_LOCAL = {
   // whisper was removed: speech in a world is public and arrival-only; DMs are planned at the identity level
   w() { logChat('*', 'whisper was removed: everything said in a world is public (everyone here hears it). To address someone, @mention them.'); },
@@ -694,17 +670,16 @@ const CHAT_LOCAL = {
     lastAuthor = null;
   },
   audio(rest, arg) {
-    // /audio — the phone's own console (Android Chrome has none on-device). Answers LOCALLY by default (a diagnostic
-    // is a self-report); `say` opts the short form into the room.
+    // /audio: the phone's own console (Android Chrome has none on-device). Local by default; `say` puts the short
+    // form into the room.
     const mode = (arg || '').trim().toLowerCase();
     if (mode === 'say') { onSend(sttReport()); return; }
     logChat('*', mode === 'stt' ? sttReport() : audioReport());
   },
 };
 
-/** One line, as if typed into the compose box and Entered: history, then a
- *  /command or speech to the room. The lantern prompt sends through here, so
- *  there is ONE send path. */
+/** One line, as if typed into the compose box and Entered: history, then a /command or speech to the room. The one
+ *  send path. */
 function submitLine(v) {
   sentHistory.push(v);
   while (sentHistory.length > 50) sentHistory.shift();
@@ -750,18 +725,16 @@ export const chat = {
 };
 const open = chat.open;
 
-// ---- who's-here side pane, collapsible in one click. The toggler rides the pane's left edge: › closes, ‹ opens.
+// ---- who's-here side pane, collapsible in one click -------------------------
 const SIDE_LS = 'ew-chat-side';
-// The side-pane nodes, captured from the markup initChat ITSELF wrote: mods mount markup with these PUBLIC classes
+// The side-pane nodes, captured from the markup initChat itself wrote: mods mount markup with these public classes
 // (docs/guide/MODDING-UI.md §3) into frame bodies after initChat, so a class lookup could find a mod's node instead.
 let sideEls = null;
-// FAIL LOUD, never stale: a mod can remove a captured node, and writes to a detached node vanish silently, so a
-// detached node reads as absent (the same ?.isConnected idiom as the spoken-line path).
+// a mod can remove a captured node, and writes to a detached node vanish silently, so a detached node reads as absent
 const sideEl = (k) => { const n = sideEls?.[k] ?? null; return n?.isConnected ? n : null; };
 let sideSt = { w: 150, open: false, pos: 'left' };   // people pane on the LEFT by default
 function initSidePane() {
   try { sideSt = { ...sideSt, ...JSON.parse(localStorage.getItem(SIDE_LS) || '{}') } } catch {}
-  // guarded like every other reader here: sideEl() returns null for a detached node
   const tog = sideEl('tog');
   if (tog) tog.onclick = toggleSide;
   // the open column's header closes it (the tab-row chip is hidden while it is open)
@@ -774,7 +747,7 @@ function initSidePane() {
     });
   }
 
-    // DOUBLE-CLICK A NAME -> A MENTION of them in the compose box. DELEGATED: paintSide rebuilds this list's
+    // double-click a name → a mention of them in the compose box. Delegated: paintSide rebuilds this list's
     // innerHTML on every roster event. Skips your own row.
     const list = sideEl('list');
     const nameOf = (row) => row?.dataset?.name ?? null;
@@ -784,10 +757,10 @@ function initSidePane() {
       const name = nameOf(row);
       if (name) mentionPerson(name);
     });
-    // THE PERSON MENU: one menu per person, built by people.js from roles.js personActions — desktop right-click (and
-    // the menu key); a phone's long-press (500 ms) opens a bottom sheet; in a headset a trigger on a row expands an
-    // inline strip (no popups in VR). Chrome's own long-press cancels the pointer and fires contextmenu around 500 ms:
-    // that contextmenu (from touch, or during our pending press) is the sheet; whichever comes first opens it.
+    // The person menu (people.js): desktop right-click (and the menu key); a phone's long-press (500 ms) opens a
+    // bottom sheet; in a headset a trigger on a row expands an inline strip (no popups in VR). Chrome's own
+    // long-press cancels the pointer and fires contextmenu around 500 ms: that contextmenu (from touch, or during
+    // our pending press) is the sheet; whichever comes first opens it.
     list?.addEventListener('contextmenu', (e) => {
       const row = e.target?.closest?.('.who-row'); if (!row || !personUi || row.classList.contains('self')) return;
       e.preventDefault();
@@ -840,10 +813,10 @@ function initSidePane() {
 }
 const saveSide = () => { try { localStorage.setItem(SIDE_LS, JSON.stringify(sideSt)) } catch {} };
 function toggleSide() { sideSt.open = !sideSt.open; applySide(); saveSide(); }
-// THE PRESENCE CHIP in the tab row: who's here at a glance (a dot per person in their name colour, ringed by
-// presence) and the pane's toggle. Collapsed, the pane leaves NO strip, so tabs, log and compose sit centred.
-// Painted in place on roster/presence; paintTabs rebuilds the row and calls this for its new chip.
-let whoChip = null;   // the chip paintTabs wrote — by handle, never by class (MODDING-UI §3)
+// The presence chip in the tab row: who's here at a glance (a dot per person in their name colour, ringed by
+// presence) and the pane's toggle. Painted in place on roster/presence; paintTabs rebuilds the row and calls this
+// for its new chip.
+let whoChip = null;   // the chip paintTabs wrote, by handle, never by class (MODDING-UI §3)
 function paintWho() {
   const chip = whoChip?.isConnected ? whoChip : null;
   if (!chip) return;
@@ -856,7 +829,7 @@ function paintWho() {
   if (left && bar.firstElementChild !== chip) bar.prepend(chip);
   else if (!left && bar.lastElementChild !== chip) bar.appendChild(chip);
   chip.classList.toggle('at-left', left);
-  // OPEN, the chip steps out: the column's own header says who's here and is the way back. Closing returns it.
+  // open, the chip steps out: the column's own header says who's here and is the way back
   chip.hidden = !!sideSt.open;
   chip.setAttribute('aria-expanded', String(!!sideSt.open));
   chip.title = 'people here';
@@ -891,8 +864,8 @@ function paintSide(force = false) {
   sideEl('head').textContent =
     others === 0 ? 'just you' : `${others} other${others === 1 ? '' : 's'} here`;
   const html = people.length
-      // A BUTTON, not a div: _contentClaims (windows.js) exempts only BUTTON/INPUT/TEXTAREA/SELECT/A from the frame's
-      // drag surface, so a <div> row would be grabbed as the pane (the ∃ menu's .mrow is a <button> for the same reason).
+      // a <button>, not a div: windows.js _contentClaims exempts only BUTTON/INPUT/TEXTAREA/SELECT/A from the frame's
+      // drag surface, so a <div> row would be grabbed as the pane
       ? people.map((p) => `<button type="button" class="who-row ${p.me ? 'self' : ''}" data-name="${esc(p.id)}"${p.me || !personUi ? '' : ' aria-haspopup="menu"'}>
           <span class="who-mark" data-presence="${esc(p.presence ?? 'present')}" title="${esc(p.presence ?? 'present')}"></span>
           <span class="n" style="color:${colorFor(p.id)}">${esc(p.id)}${p.me ? ' (you)' : ''}</span>${personUi ? personUi.badgeHtml(p.id, esc) : ''}${personUi?.muted?.(p.id) ? '<span class="who-muted" title="muted by a moderator" aria-label="muted">⊘</span>' : ''}
@@ -906,12 +879,10 @@ function paintSide(force = false) {
   if (strip) personUi.stripFor(stripName, strip);
 }
 
-// ---- chat gear: text size (the sheet's -a/+A) + which side the people pane
-// sits on. Small popover; both persisted.
+// ---- chat gear: text size, markdown, which side the people pane sits on; a small popover, all persisted
 const CFS_LS = 'ew-chat-fs';
 function applyChatPrefs() {
-  // logEl, NOT a .chat-log lookup: a mod's .chat-log in the chat body would win the query (MODDING-UI §3: the client
-  // addresses its own nodes by the handles it captured when it wrote them)
+  // logEl, not a .chat-log lookup: a mod's .chat-log in the chat body would win the query (MODDING-UI §3)
   if (logEl) logEl.style.fontSize = `${chatFs}px`;
   sideEl('cols')?.classList.toggle('side-left', sideSt.pos === 'left');
 }
@@ -930,8 +901,8 @@ function initChatGear() {
     const body = frame.body.getBoundingClientRect();
     const minTop = Math.max(4, body.top - f.top + 4);
     const bottom = Math.min(frame.el.clientHeight, body.bottom - f.top) - 4;
-    // open below the gear when the options fit, else UPWARD from it; when neither fits, the side with more room takes
-    // it and a short frame scrolls the options instead of clipping them
+    // open below the gear when the options fit, else upward; when neither fits, the side with more room takes it
+    // and a short frame scrolls the options instead of clipping them
     const below = a.bottom - f.top + 6, above = a.top - f.top - 6;
     pop.style.maxHeight = 'none';
     const height = pop.offsetHeight;
@@ -990,8 +961,8 @@ function initChatGear() {
   applyChatPrefs();
 }
 
-// THE COMPOSE BOX GROWS, like Discord/Slack/iMessage: one line at rest, growing with what you type up to six lines or
-// 40% of the chat pane (whichever is less), then scrolling, so the log is never pushed out of sight.
+// The compose box grows: one line at rest, growing with what you type up to six lines or 40% of the chat pane
+// (whichever is less), then scrolling, so the log is never pushed out of sight.
 const INPUT_MAX_LINES = 6, INPUT_MAX_SHARE = 0.4;
 function sizeInput() {
   if (!inputEl) return;
@@ -1054,11 +1025,10 @@ export function initChat({ send, typing, people, person }) {
       head: cols.querySelector(':scope > .chat-side > .chat-side-head'),
       list: cols.querySelector(':scope > .chat-side > .chat-side-list'),
     } : null; }
-  // Hand the captures to whoever holds this frame: ui.js's Tab handler needs these exact nodes, and a class lookup
-  // (even `:scope >`) can be won by a mod prepending a .chat-cols. Both sides hold the frame via getFrame('chat'),
-  // so neither file imports the other.
+  // hand the captures to whoever holds this frame (ui.js's Tab handler needs these exact nodes, and a class lookup
+  // can be won by a mod prepending a .chat-cols); both sides hold the frame via getFrame('chat')
   frame.sidePane = (k) => sideEl(k);
-  // BEFORE initChatGear: its last statement, applyChatPrefs(), writes through the captured logEl.
+  // before initChatGear: its last statement, applyChatPrefs(), writes through the captured logEl
   logEl = frame.body.querySelector('#chatlog');
   tabsEl = frame.body.querySelector(':scope > .chat-cols > .chat-main > .chat-tabs');
   initSidePane();
@@ -1074,8 +1044,8 @@ export function initChat({ send, typing, people, person }) {
 
   jumpEl = frame.body.querySelector('#chat-jump'); jumpEl.onclick = scrollToEnd;
   logEl.addEventListener('scroll', () => {
-    // reaching the bottom clears the unread counters — but never touch scrollTop from inside the scroll handler (it
-    // traps a reader in the near-bottom band). Stick-to-bottom on new content is account()'s.
+    // reaching the bottom clears the unread counters; never touch scrollTop from inside the scroll handler (it traps
+    // a reader in the near-bottom band). Stick-to-bottom on new content is account()'s.
     if (logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 48 &&
         (unread || unreadMentions)) {
       unread = 0; unreadMentions = 0; paintUnread();
@@ -1141,8 +1111,8 @@ export function initChat({ send, typing, people, person }) {
     const needsArg = new RegExp(`^/${row.name} (<|\\[(name|thing|person)\\b)`).test(row.help);
     registerAction({
       id: `cmd:${row.name}`, title: `/${row.name}`, group: 'commands', detail: row.help,
-      // the name is already a word of the title ('/sit'), so it is not ALSO an exact keyword: an exact keyword
-      // outranked the thing itself ('sit' led with /sit, not the body's own sit / stand)
+      // the name is already a word of the title ('/sit'), so it is not also an exact keyword (that outranked the
+      // body's own sit / stand)
       keywords: [...(row.aliases ?? []), row.help.replace(/^\/\S+\s*/, '').replace(/[<>[\]—|"]/g, ' ')],
       ...(needsArg ? { fill: `/${row.name} ` } : { run: () => submitLine(`/${row.name}`) }),
     });
@@ -1189,16 +1159,15 @@ function paintTabs() {
   const STEP = 90;
   left.onclick = (e) => { e.stopPropagation(); scroll.scrollLeft -= STEP; };
   right.onclick = (e) => { e.stopPropagation(); scroll.scrollLeft += STEP; };
-  // An arrow with nowhere to go is a lie about the interface: hidden unless the
-  // row really overflows, re-checked on scroll and on every repaint.
+  // hidden unless the row really overflows, re-checked on scroll and on every repaint
   const paintArrows = () => {
     const over = scroll.scrollWidth > scroll.clientWidth + 1;
     left.hidden = !over || scroll.scrollLeft <= 0;
     right.hidden = !over || scroll.scrollLeft + scroll.clientWidth >= scroll.scrollWidth - 1;
   };
   scroll.addEventListener('scroll', paintArrows);
-    // WATCH THE SCROLLER ITSELF: paintTabs and onResize both measure BEFORE the browser applies a new width, so a
-    // narrowing panel can overflow with the arrows still hidden. A ResizeObserver fires after layout on the element.
+    // watch the scroller itself: paintTabs and onResize both measure before the browser applies a new width; a
+    // ResizeObserver fires after layout
     if (typeof ResizeObserver === 'function') {
       try { new ResizeObserver(() => paintArrows()).observe(scroll); } catch { /* older engine */ }
     }
@@ -1222,11 +1191,10 @@ function paintTabs() {
   whoChip = who;
   paintWho();
   paintArrows();
-  // KEEP THE ACTIVE TAB IN VIEW: overflow must never clip the tab you are reading.
+  // keep the active tab in view
   const active = scroll.querySelector('button.on');
   if (active) {
-    // after layout, or scrollWidth is still 0 and this is a no-op
-      // 'nearest' moves the minimum to make a partly clipped tab whole ('end' leaves a clipped tab alone)
+      // 'nearest' moves the minimum to make a partly clipped tab whole; again after layout, when scrollWidth is real
       const bring = () => active.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
     bring();
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { bring(); paintArrows(); });
@@ -1264,9 +1232,9 @@ bus.on('pinged', () => {
   setTimeout(() => frame?.el.classList.remove('flash'), 1400);
 });
 
-// ---- the chat frame as a VR quad: READ + canned replies --------------------
-// Until the renderer has a keyboard grid, the quad shows the log's tail and offers a few whole replies through the
-// SAME onSend typing uses. Honest about the gap in its title.
+// ---- the chat frame as a VR quad: read + canned replies --------------------
+// Until VR has a keyboard, the quad shows the log's tail and offers a few whole replies through the same onSend
+// typing uses.
 const CANNED = ['hello', 'yes', 'no', 'one moment', 'come here', 'thank you'];
 export const chatXRPanel = {
   id: 'chat', title: 'Chat',

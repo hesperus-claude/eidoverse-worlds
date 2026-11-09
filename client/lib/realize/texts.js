@@ -1,5 +1,5 @@
-// texts — the browser realizer for the `text` component: a sign (plain, canvas text, one house font, no rich text). The meaning lives in shared/protocol/componentspec.js (text) and shared/text.js (how it
-// wraps); this file only draws it.
+// texts — the browser realizer for the `text` component: a sign (plain canvas text, one house font, no rich text).
+// The meaning lives in shared/protocol/componentspec.js (text) and shared/text.js (how it wraps); this file only draws it.
 //
 //   - Layout: shared/text.js layoutLines, by words, falling back to characters for a word wider than a line (CJK, a URL),
 //     measured with the canvas's own measureText. Each paragraph's direction is its first strong letter's, so Arabic and

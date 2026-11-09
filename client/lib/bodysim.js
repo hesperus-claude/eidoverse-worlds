@@ -1,9 +1,8 @@
 // bodysim — the body-physics engine is a CHOICE, not a fact of the client.
 //
 // One interface (the contract is in bodyengine.js's header), two engines: the pure-JS Verlet and the Bullet
-// (ammo.js) rig ported from socketteer/ragdoll-physics. (The Rapier solver is retired, §24j; it lives in git history
-// and test/labs/rapier-spike.ts.) Everything downstream — goLimp, drag, nails, the presence stream — asks this factory
-// and cannot tell which engine answered. A world mod can swap engines through EW.bodysim.
+// (ammo.js) rig ported from socketteer/ragdoll-physics. Everything downstream — goLimp, drag, nails, the presence
+// stream — asks this factory and cannot tell which engine answered. A world mod can swap engines through EW.bodysim.
 
 import { Ragdoll } from './ragdoll.js';
 import { report } from './base.js';

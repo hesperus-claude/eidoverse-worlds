@@ -1,14 +1,9 @@
-// tabs — which page of the edit workspace's left column a viewer sees
-// (design §5: "B enters build mode on the Build tab; the last tab used is
-// remembered after that"). Pure, so a test can hold the rule without a DOM;
-// layout.js keeps the layout in localStorage (per viewer, client-only,
-// never on the wire) and asks here.
+// tabs — which page of the edit workspace's left column a viewer sees: B opens on Build the first time, then the
+// last tab used. Pure (no DOM); layout.js stores the layout per viewer and asks here.
 
 /** The left column's top pane, one page at a time: [id, title]. */
 export const TABS = [['build', 'Build'], ['hierarchy', 'Hierarchy']];
-/** Bumped when the tab set changes meaning: a layout saved before Build
- *  existed (its leftTab was the old default, 'hierarchy', or the retired
- *  'create') opens on Build once, and is remembered from then on. */
+/** Bumped when the tab set changes meaning: a layout saved under an older TAB_V opens on Build once. */
 export const TAB_V = 2;
 const known = (id) => TABS.some(([t]) => t === id);
 

@@ -3,7 +3,7 @@
 //   byteCache  raw bytes (progress into the loading tray)
 //   glbCache   parsed GLB prototypes; every use gets a skeleton clone
 //   vrmaCache  animation bytes, retargeted per VRM at use
-//   vrmPool    whole parsed VRMs at rest (§19b: a bound rig has no clone, so released bodies are reworn intact)
+//   vrmPool    whole parsed VRMs at rest (a bound rig has no clone, so released bodies are reworn intact)
 
 import { keyFromVersion, negotiate, lodFromVersion } from '../../shared/ktx2.js';
 import { tierOf, askFor } from './lod_policy.js';
@@ -71,8 +71,8 @@ export function forgetBytes(match) {
   }
 }
 
-// ---- the byte tier's budget (§13.3 R3) --------------------------------------
-// LRU budget on byteCache (JS heap); Map order IS the LRU. The HTTP cache keeps the wire bytes, so a re-fetch is a disk read
+// ---- the byte tier's budget ---------------------------------------------------
+// LRU budget on byteCache (JS heap); Map order is the LRU. The HTTP cache keeps the wire bytes, so a re-fetch is a disk read
 const BYTE_BUDGET = 128 * 1024 * 1024;
 const byteSizes = new Map();   // path -> resolved byteLength, insertion = LRU
 let byteTotal = 0;
@@ -144,7 +144,7 @@ export async function fetchBytes(path) {
 
 // three's own decoder via /node_modules: no third-party origin at run time (the CSP connect-src names none)
 const draco = new DRACOLoader().setDecoderPath('/node_modules/three/examples/jsm/libs/draco/gltf/');
-// §20b: ONE KTX2 transcoder for every parse site; detectSupport here is safe, core.js awaits renderer.init() first
+// one KTX2 transcoder for every parse site; detectSupport here is safe, core.js awaits renderer.init() first
 const ktx2 = new KTX2Loader()
   .setTranscoderPath('/node_modules/three/examples/jsm/libs/basis/')
   .detectSupport(renderer);
@@ -152,7 +152,7 @@ const ktx2 = new KTX2Loader()
 export const ktx2Capable = () => !!ktx2.workerConfig;
 // key from the RUNNING server (/version, version.js), never the shared/ktx2.js it serves: they differ between pull and restart
 export const ktx2KeyReady = versionReady.then(keyFromVersion);
-/** The running sequencer's geometry-LOD recipe (#156), or null: never ask for a tier the running process didn't declare. */
+/** The running server's geometry-LOD recipe, or null: never ask for a tier the running process didn't declare. */
 export const lodRecipeReady = versionReady.then(lodFromVersion);
 // resolved, for synchronous reads (the 2 Hz residency sweep can't await); null until or unless /version publishes
 let ktx2Key = null, lodRecipe = null;
@@ -160,9 +160,9 @@ ktx2KeyReady.then((k) => { ktx2Key = k; }).catch(() => {});
 lodRecipeReady.then((r) => { lodRecipe = r; }).catch(() => {});
 /** Settles once /version answers or fails; never rejects. */
 export const negotiationReady = Promise.all([ktx2KeyReady, lodRecipeReady]).then(() => {}, () => {});
-/** Can a lod ask cross the wire now (#170;transcoder, running key AND recipe, bare .glb)? Nothing is reported asked that couldn't be. */
+/** Can a lod ask cross the wire now (transcoder, running key and recipe, bare .glb)? Nothing is reported asked that couldn't be. */
 export const lodNegotiable = (libPath) => resolveLoadRequest(libPath, 'lod').tier === 'lod';
-/** THE decision seam of a tiered load (#170): tier wish -> URL, asked tier, cache key. test/client/lod-loader-child.ts gates it. */
+/** The decision seam of a tiered load: tier wish → URL, asked tier, cache key. test/client/lod-loader-child.ts gates it. */
 export function resolveLoadRequest(libPath, tier = 'full') {
   // an eido:sha256/… model fetches /library/eido/sha256/<hex>.glb; the cache keys stay the model value itself
   const ask = askFor({ libPath: libRelOf(libPath), key: ktx2Key, capable: !!ktx2.workerConfig, recipe: lodRecipe, tier });
@@ -170,13 +170,13 @@ export function resolveLoadRequest(libPath, tier = 'full') {
 }
 /** GPU memory against the proto budget — the policy's "device pressure". */
 export const gpuPressure = () => (renderer.info?.memory?.total ?? 0) / GPU_BUDGET;
-// loadGLB(lib, { tier: 'full' | 'lod' }) is the only place a tier turns into bytes (#156)
+// loadGLB(lib, { tier: 'full' | 'lod' }) is the only place a tier turns into bytes
 /** The running server's key appended when this GPU decodes KTX2 and the asset class is `eligible`; else the bare path. */
 async function negotiated(path, eligible) {
   const key = eligible && ktx2.workerConfig ? await ktx2KeyReady : null;
   return negotiate(path, key);
 }
-export function makeLoader(vrm = false) {   // exported for tools/glbperf-parity (the client's own loader)
+export function makeLoader(vrm = false) {   // exported for bench/glbperf-parity.mjs (the client's own loader)
   const l = new GLTFLoader();
   l.setDRACOLoader(draco);
   l.setKTX2Loader(ktx2);
@@ -189,7 +189,7 @@ export function makeLoader(vrm = false) {   // exported for tools/glbperf-parity
 }
 
 // ---- texture priming --------------------------------------------------------
-// a budget-slice of uploads per frame, so the first render doesn't stall; maps are own properties, so Object.values finds them (§16.1c)
+// a budget-slice of uploads per frame, so the first render doesn't stall; maps are own properties, so Object.values finds them
 function collectTextures(obj) {
   const seen = new Set();
   const out = [];
@@ -203,7 +203,7 @@ function collectTextures(obj) {
   });
   return out;
 }
-// bytes, not CPU-ms: initTexture returns while the GPU works, so a ms budget lets several 4K maps land in one frame (§16.1g)
+// bytes, not CPU-ms: initTexture returns while the GPU works, so a ms budget would let several 4K maps land in one frame
 const TEX_FRAME_BYTES = 16 * 1024 * 1024;
 function textureUploadBytes(t) {
   const img = t.image;
@@ -228,7 +228,7 @@ async function primeTextures(obj, work) {
   }
 }
 
-// prime-on-decode (§17a): node-graph textures miss collectTextures but all pass loadImageTexture; spreads, never gates
+// prime-on-decode: node-graph textures miss collectTextures but all pass loadImageTexture; spreads, never gates
 const texPrimeQueue = [];
 let texPrimePumping = false;
 function queueTexturePrime(tex) {
@@ -252,7 +252,7 @@ function queueTexturePrime(tex) {
 }
 
 export async function loadVRM(libPath, { priority = 1 } = {}) {
-  // §19b: the pool is consulted FIRST; a hit skips download, parse, skeleton and textures
+  // the pool is consulted first; a hit skips download, parse, skeleton and textures
   const t0 = performance.now();
   const pooled = takePooledVrm(libPath);
   if (pooled) {
@@ -262,7 +262,7 @@ export async function loadVRM(libPath, { priority = 1 } = {}) {
   const work = beginWork(`vrm ${libPath.split('/').pop()}`);
   try {
     work.phase('download');
-    // §20c: bodies negotiate KTX2 like GLBs; the full URL keys byteCache, vrmPool and vrmMeta key on the bare libPath
+    // bodies negotiate KTX2 like GLBs; the full URL keys byteCache, vrmPool and vrmMeta key on the bare libPath
     const url = await negotiated(libPath, libPath.split('?')[0].endsWith('.vrm'));
     const buf = await fetchBytes(`/library/${url}`);
     work.phase('queued');
@@ -279,7 +279,7 @@ export async function loadVRM(libPath, { priority = 1 } = {}) {
           vrm.userData.boneRest[o.name] = { q: o.quaternion.toArray(), p: o.position.toArray(), s: o.scale.toArray() };
         }
       });
-      // pool ledger (§19b): source bytes are the VRAM proxy the budget counts
+      // pool ledger: source bytes are the VRAM proxy the budget counts
       vrmMeta.set(vrm, { libPath, bytes: buf.byteLength });
       await work.yield();
       work.phase('skeleton');
@@ -297,9 +297,9 @@ export async function loadVRM(libPath, { priority = 1 } = {}) {
   } finally { work.end(); }
 }
 
-// ---- the VRM instance pool (§19b) -------------------------------------------
-// VRMs can't share a proto (three-vrm binds specific nodes), so the pool shelves whole instances.
-// THE POOL OWNS DISPOSAL: never deepDispose a pooled body elsewhere (black avatar); only eviction disposes.
+// ---- the VRM instance pool --------------------------------------------------
+// VRMs can't share a proto (three-vrm binds specific nodes), so the pool shelves whole instances. The pool owns
+// disposal: never deepDispose a pooled body elsewhere (black avatar); only eviction disposes.
 const vrmPool = new Map();        // libPath -> [{ vrm, bytes, at }], oldest first
 const vrmMeta = new WeakMap();    // vrm -> { libPath, bytes }, stamped at parse
 const warmedVrms = new WeakSet(); // instances whose pipelines warmed once
@@ -414,7 +414,7 @@ export async function loadGLB(libPath, { tier = 'full' } = {}) {
       const work = beginWork(`glb ${short}`);
       try {
         work.phase('download');
-        // §20 + #156: a lod ask is never a worse model (the server falls back); the full URL keys byteCache
+        // a lod ask is never a worse model (the server falls back); the full URL keys byteCache
         const buf = await fetchBytes(`/library/${req.url}`);
         // body first: the PARSE waits for your own body (bodygate.js), capped so nothing can hold the world
         if (BODY_FIRST && bodyGateArmed() && !bodyGateOpen()) {
@@ -446,7 +446,7 @@ export async function loadGLB(libPath, { tier = 'full' } = {}) {
   const proto = await glbCache.get(glbKey);
   const obj = skeletonClone(proto); // safe for rigged + static alike
   registerFoliage(obj);             // per-placement foliage cores (foliage.js)
-  // all three compile paths go through the warm conductor (warmqueue.js, §16.2.A): a bare compileAsync starves rAF
+  // all three compile paths go through the warm conductor (warmqueue.js): a bare compileAsync starves rAF
   if (compiledLibs.has(glbKey)) {
     await warm(`compile ${short}`, () => renderer.compileAsync(obj, camera, scene).catch(() => {}));
     return obj;
@@ -488,7 +488,7 @@ const libCompiles = new Map(); // libPath -> in-flight first compile
 // in-flight loads count as references: eviction during a clone's compile yield would dispose its shared proto
 const loadsInFlight = new Map();
 
-// ---- proto residency (§13.3 R2) ---------------------------------------------
+// ---- proto residency --------------------------------------------------------
 // only dispose() frees VRAM: protos are refcounted by clones, zero-ref ones evict over budget
 // NEVER call this per-entity: disposal reaches every clone
 const libRefs = new Map();     // lib -> count of realized clones in the scene
@@ -501,7 +501,7 @@ const GPU_BUDGET = 1_500_000_000;   // bytes of renderer.info.memory.total
 export async function evictIdleProtos() {
   if ((renderer.info?.memory?.total ?? 0) < GPU_BUDGET) return 0;
   let evicted = 0;
-  // the VRM pool drains first (§19b): pooled bodies are zero-ref by construction
+  // the VRM pool drains first: pooled bodies are zero-ref by construction
   while ((renderer.info?.memory?.total ?? 0) >= GPU_BUDGET && evictOldestPooled()) evicted++;
   if ((renderer.info?.memory?.total ?? 0) < GPU_BUDGET) return evicted;
   for (const [lib, promise] of [...glbCache]) {
@@ -532,7 +532,7 @@ export async function evictIdleProtos() {
 export const protoStats = () => ({
   protos: glbCache.size, referenced: libRefs.size,
   bytesCached: byteSizes.size, byteTotal,
-  vrmPool: poolStats(),   // §19b
+  vrmPool: poolStats(),
 });
 
 // ---- VRMA clips -------------------------------------------------------------
@@ -540,7 +540,7 @@ export const protoStats = () => ({
 // 'fly' and 'soar' are the airborne pair: fallIdle (limbs trailing, no contact), not a run cycle.
 
 const vrmaCache = new Map();
-// the seat gate matches this to the server's profile digest (#101): a divergent clip can't wear another's profile
+// the seat gate matches this to the server's profile digest: a divergent clip can't wear another's profile
 const vrmaSha = new Map(); // slot → hex sha256, present only once resolved
 export function vrmaShaLoaded(slot) { return vrmaSha.get(slot) ?? null; }
 // ?v=<mtime> from /animations: the only invalidation reaching caches we don't control
@@ -633,7 +633,7 @@ export async function primeFiles(paths, { concurrency = 6 } = {}) {
     while (q.length) {
       const p = q.shift();
       try {
-        // §20d: loose images negotiate KTX2; denoFiles keys on the bare path, loadImageTexture sniffs the magic
+        // loose images negotiate KTX2; denoFiles keys on the bare path, loadImageTexture sniffs the magic
         const url = await negotiated(p, /\.(png|jpe?g)$/i.test(p));
         const buf = await fetchBytes(`/library/${url}`);
         denoFiles.set(p, new Uint8Array(buf));
@@ -682,7 +682,7 @@ globalThis.Deno = {
   build: { os: 'browser' },
 };
 
-/** The browser side of render_scene.mjs loadImageTexture, cached per bytes object + opts (§16.2.B).
+/** The browser side of the toolkit's loadImageTexture (render_scene.mjs), cached per bytes object + opts.
  *  Cached textures are shared, so dispose() is a no-op: a disposed shared texture is black. */
 const imageTexCache = new WeakMap(); // bytes object -> Map<opts key, Promise<Texture>>
 // the full 12-byte KTX2 identifier, matched byte-for-byte so nothing else routes to the transcoder
@@ -699,7 +699,7 @@ globalThis.loadImageTexture = async (bytes, opts = {}) => {
     const u8 = bytes instanceof Uint8Array ? bytes
       : bytes instanceof ArrayBuffer ? new Uint8Array(bytes)
         : new Uint8Array(bytes);
-    // §20d: bytes may arrive as KTX2: route by the 12-byte container magic, never the path.
+    // bytes may arrive as KTX2: route by the 12-byte container magic, never the path
     if (u8.length >= 12 && KTX2_MAGIC.every((v, i) => u8[i] === v)) {
       // Flip and colorSpace were baked at encode (server --ktx2-img): don't override colorSpace here.
       // ktx2.parse DETACHES its buffer, so pass a copy: readFileSync returns the same Uint8Array per path.
@@ -710,11 +710,11 @@ globalThis.loadImageTexture = async (bytes, opts = {}) => {
         tex.userData.ewShared = true;   // served from cache — teardowns must skip it
         tex.dispose = () => {};         // session-pinned, same as the raster path
       }
-      queueTexturePrime(tex);           // §17a: initTexture sums literal mip bytes
+      queueTexturePrime(tex);           // initTexture sums literal mip bytes
       return tex;
     }
-    // Engine contract (render_scene.mjs loadImageTexture): the flip is BAKED into the pixels and tex.flipY stays
-    // false; { flipY: false } skips it for glTF images. Must match, or authored-UV textures arrive mirrored.
+    // the toolkit's contract (render_scene.mjs loadImageTexture): the flip is baked into the pixels and tex.flipY
+    // stays false; { flipY: false } skips it for glTF images. Must match, or authored-UV textures arrive mirrored.
     const bitmap = await createImageBitmap(new Blob([u8]), {
       colorSpaceConversion: 'none',
       imageOrientation: opts.flipY !== false ? 'flipY' : 'none',
@@ -731,7 +731,7 @@ globalThis.loadImageTexture = async (bytes, opts = {}) => {
       tex.userData.ewShared = true;   // served from cache — teardowns must skip it
       tex.dispose = () => {};         // session-pinned (see above)
     }
-    queueTexturePrime(tex);           // §17a: upload spread, ahead of the compile
+    queueTexturePrime(tex);           // upload spread, ahead of the compile
     return tex;
   })();
   if (cacheable) {
@@ -768,7 +768,7 @@ export function loadEidoModule(name) {
       if (!r.ok) throw new Error(`module ${name}: ${r.status}`);
       const src = await r.text();
       denoFiles.set(`eidoverse/${name}`, new TextEncoder().encode(src)); // self-prime
-      (0, eval)(src); // same indirect-eval hosting as the engine
+      (0, eval)(src); // the same indirect-eval hosting as the toolkit's own renderer
     })());
   }
   return eidoModules.get(name);

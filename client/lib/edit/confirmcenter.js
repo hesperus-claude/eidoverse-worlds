@@ -1,12 +1,10 @@
-// confirmcenter — a yes/no question in the middle of the screen, for a press that would otherwise do something
-// big without warning: leaving for the light version, or a VR click that has to restart the page on WebGL.
-// The browser's own confirm() hangs from the top edge, can't be styled, and doesn't exist inside a headset.
+// confirmcenter — a yes/no question in the middle of the screen (the browser's confirm() can't be styled and doesn't
+// exist in a headset).
 //
 //   confirmCenter({ title, body, ok = 'OK', cancel = 'Cancel' }) → Promise<boolean>
 //
-// Enter or the OK button says yes; Esc, the Cancel button, or a press on the dim backdrop says no. One at a time:
-// asking again while one is open answers the open one no and replaces it.
-// No imports: the lite client and the boot path may use this without pulling the engine in.
+// Enter / OK says yes; Esc, Cancel or the backdrop says no. One at a time: a new ask answers the open one with its
+// cancel. No imports: the lite client and the boot path use this too.
 
 let open = null;   // { root, settle, cancel }
 
@@ -46,7 +44,7 @@ export function confirmCenter({ title, body = '', ok = 'OK', cancel = 'Cancel' }
     root.querySelector('.cc-no').addEventListener('click', () => settle(false));
     addEventListener('keydown', onKey, true);
     document.body.appendChild(root);
-    open = { root, settle, cancel: false };   // what an interrupting ask answers it with (bot #213)
+    open = { root, settle, cancel: false };   // cancel: what an interrupting ask answers it with
     root.querySelector('.cc-ok').focus();
   });
 }

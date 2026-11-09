@@ -21,7 +21,6 @@ export const attentionPrefs = () => ({ ...prefs });
 export function setAttentionPrefs(update) {
   prefs = normalize({ ...prefs, ...update });
   try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch {}
-  // Preferences remain local, including error/status reporting.
   for (const h of active) h.gain.gain.value = prefs.enabled ? prefs.volume * 0.15 : 0;
 }
 

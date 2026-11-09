@@ -1,6 +1,5 @@
-// Rows for the editor's History (and, later, its Credits facet): pure, so they can be tested without a browser.
-// A refused write is on the record as an act whose body carries refused {code} (authority.js logRefusal, R7): it reads as
-// an attempt, never as a deed.
+// Rows for the editor's History: pure, testable without a browser. A refused write is logged as an act whose body
+// carries refused {code} (shared/protocol/authority.js logRefusal): shown as an attempt, never counted as a deed.
 import { phraseOf } from '../../../shared/credits.js';
 export function worldHistoryRows(entries, nameOf) {
   return entries.filter((e) => e.kind === 'request').reverse().map((e) => {
@@ -13,7 +12,7 @@ export function worldHistoryRows(entries, nameOf) {
   });
 }
 
-// Credits, inside History as filter modes (not a third tab). The same rows, seen four ways; a refused attempt is shown (as an attempt) but is never a deed.
+// Credits are History view modes. The same rows, seen four ways:
 //   time    every row, newest first (the default)
 //   person  one person's rows (opts.who: their identity)
 //   top     the biggest contributors: people ranked by deeds (acts that changed something), with their rows
@@ -40,15 +39,11 @@ export function historyView(list, nameOf, { mode = 'time', who = null } = {}) {
   return { mode: 'time', rows };
 }
 
-/** A thing's history page merged into what the panel shows (panels.js' History; client-check HT4-HT6), against the
- *  authority's reply: `history {id, limit, before?}` → {entries: [{seq (the change entry's seq), diff (computed by the
- *  authority against the whole log, never against the page), …}], next: the last row's seq, or null at the beginning}; a
- *  `before` page holds the rows with seq < before. Recent by default, deeper on request.
- *  - an Older… read (`more`) appends, by seq, and takes its cursor; it marks the panel `paged`;
- *  - a refresh (the thing changed) shows the newest page and its cursor — unless the person has paged: then the pages
- *    they read stay where they meet the new page, with the deeper cursor (a refresh landing after an Older… read never
- *    undoes it); one that doesn't meet starts over.
- *  {entries, next, paged} */
+/** Merge a `history {id, limit, before?}` reply ({entries: [{seq, diff, …}], next: the last seq or null}) into the
+ *  panel's state {entries, next, paged} (panels.js History):
+ *  - an Older… read (`more`) appends and takes the reply's cursor, marking the panel `paged`;
+ *  - a refresh shows the newest page — unless the person has paged and the new page meets what they read: then the
+ *    deeper pages stay, with the deeper cursor. A page that doesn't meet starts over. */
 export function mergeHistory({ entries, next, paged = false }, rows, rNext, more) {
   const sorted = (xs) => { const m = new Map(); for (const e of xs) m.set(e.seq, e); return [...m.values()].sort((a, b) => b.seq - a.seq); };
   if (more) return { entries: sorted([...entries, ...rows]), next: rNext, paged: true };

@@ -1,7 +1,8 @@
 // accesspanel.js — World Settings › Who may come in › Listed here: everyone this world lists (@world roles:*), who is here
 // unlisted, and adding someone (docs/decisions/WORLD-ACCESS.md § UX).
 // Facts come from the page's own fold; edits are ordinary set/delete requests on @world, and the authority judges every one
-// (its refusal is shown here in its words). Controls mirror the rank rule (roles.js); the authority's rights rule (you give only what you hold, gate.js) answers on send, and its refusal is shown.
+// (its refusal is shown here in its words). Controls mirror the rank rule (roles.js); the rights rule (gate.js: you give only
+// what you hold) answers on send.
 // Adding someone: a name is looked up only among the people this world has seen (whois); anyone else is added by their exact
 // identity (u-…, shown to each person on this panel). There is no search of everyone on the server.
 import { bus } from './base.js';
@@ -26,7 +27,7 @@ function learnName(id) {
   if (asked.has(id) || presentName(id) || named.has(id)) return; asked.add(id);
   sendRequest('whois', { id }).then((r) => { const p = r?.people?.find((x) => x.id === id); if (p?.name && p.name !== id) { named.set(id, p.name); repaint(); } });
 }
-/** May I change this person's grant (the authority's grant rule, mirrored to draw the controls; the authority decides)? */
+/** May I change this person's grant? The authority's rule, mirrored to draw the controls; the authority decides. */
 const mayChange = (id, roleId) => roleId !== 'owner' && (isOwner() || (mayGrant() && rankOfId(id) < me().rank && R.rankOfRole(wc(), roleId) < me().rank));
 const roleOptions = () => R.grantableRoles(wc(), me()).filter((r) => isOwner() || r.id !== 'owner');
 

@@ -3,16 +3,13 @@
 // Every edit is a REQUEST, the same request an agent sends ({type: 'request', verb, args}), and the person waits for
 // the authority's answer: an act number to undo by, or a refusal in the same words an agent gets (shared/protocol/refusal.js).
 //
-//   send(req, opts)        one request; on a `locked` refusal by someone who may lift the lock, a centre dialog offers
-//                          "Move anyway", which re-sends the SAME request with throughLock: true (§5: the log records
-//                          only the edit; the lock stays on). A refusal reverts the local preview.
-//   sendOps(ops, opts)     an edit's ops (shared/requests.js, planned by editschema.js, build.js…) as ONE request (a
-//                          single tool, or a batch): one edit is one act, so one Ctrl+Z.
-//   expectOf(ids, comps)   §3a: the values a gesture started from, as `expect`. A drag is presence until release; the
-//                          release is one request with expect, refused `changed` if anyone wrote those since.
-//   undo() / redo()        Ctrl+Z is the authority's `undo {act}` of MY last act; redo is `undo {act: <my undo>}`, which the
-//                          authority refuses when everything it touched changed since; otherwise it redoes what's untouched
-//                          and says what it skipped (undo.js `skipped`; Figma's rule: never back over later work).
+//   send(req, opts)        one request; on a `locked` refusal, someone who may lift the lock is asked and may re-send
+//                          the SAME request with throughLock: true (the lock stays on). A refusal reverts the local preview.
+//   sendOps(ops, opts)     an edit's ops (shared/requests.js) as ONE request (a tool, or a batch): one act, one Ctrl+Z.
+//   expectOf(ids, comps)   the values a gesture started from, as `expect`: the release is refused `changed` if anyone
+//                          wrote those since.
+//   undo() / redo()        Ctrl+Z is the authority's `undo {act}` of MY last act; redo is `undo` of my undo. The authority
+//                          redoes what's untouched and says what it skipped (shared/protocol/authority/undo.js).
 //   del(ids), duplicate(ids), lock(id, on), publish(ids, name), copyBlueprint(hash, at)
 import { bus } from '../base.js';
 import { net, sendRequest, replica, replicaActive, sendDrag } from '../net.js';
@@ -56,8 +53,8 @@ export function writesOf(req) {
   return ops.filter((o) => o.verb === 'set').map((o) => [idOut(o.args.id), o.args.component]);
 }
 
-/** May this viewer lift a lock (§5)? By the build permission, never a role name. The authority decides either way;
- *  this only chooses between the "Move anyway" dialog and the refusal. */
+/** May this viewer lift a lock? By the build permission, never a role name. The authority decides either way; this
+ *  only chooses between the "Move anyway" dialog and the refusal. */
 export const mayLift = () => { const r = net.myRights; if (!r) return false;
   return Array.isArray(r.permissions) ? r.permissions.includes('build') : isOwner(r); };
 
@@ -83,13 +80,12 @@ export function showWarnings(what, r) {
   const ws = Array.isArray(r?.warnings) ? r.warnings.filter((w) => w && w.kind !== 'unchecked') : [];
   if (!ws.length) return null;
   const text = `Done, but ${ws.slice(0, 3).map(warnPlain).join('; ')}${ws.length > 3 ? ` (and ${ws.length - 3} more)` : ''}`;
-  claimStatus('warn', { priority: 3, content: text, ttl: 6000 });   // on the one status bar, about what I just did (not a toast: DESIGN-status-bar.md)
+  claimStatus('warn', { priority: 3, content: text, ttl: 6000 });   // on the one status bar, not a toast
   bus.emit('edit-warned', { what, warnings: ws, text });
   return text;
 }
 
-// writes still waiting for the authority: Ctrl+Z waits for them, or a quick Ctrl+Z after a release would undo the act BEFORE
-// it (the release's act isn't on the stack until its reply arrives)
+// writes still waiting for the authority: Ctrl+Z waits for them (a release's act isn't on the stack until its reply)
 const inflight = new Set();
 const settled = () => Promise.allSettled([...inflight]);
 /** One request, waiting for the authority. opts: {what, revert(), record = true}. Returns the final reply. */
@@ -102,18 +98,16 @@ const remember = (act) => { undoStack.push(act); if (undoStack.length > 200) und
 async function sendNow(req, { what = req.verb, revert = null, record = true } = {}) {
   bus.emit('edit-sending', { req, what });
   let r = await sendRequest(req.verb, req.args);
-  // A lock (§5): someone who may lift it is asked "This is locked. Move anyway?" —
-  //   ✓ through: the SAME request with throughLock: one act, the lock stays on;
-  //   ✕ cancel:  nothing is written, and the thing goes back (revert);
-  //   🔓 unlock: delete the lock, then the request as it was: two acts on my stack, so Ctrl+Z undoes the edit first.
-  //     Undo and redo aren't offered it: their act isn't mine to stack under an unlock (Ctrl+Z would then undo the unlock).
-  // A member (who may not lift locks) gets the refusal as a toast, no buttons. Another lock further up asks again.
+  // A lock: someone who may lift it is asked "This is locked. Move anyway?"
+  //   through: the SAME request with throughLock (one act, the lock stays on);
+  //   cancel:  nothing is written, the thing goes back (revert);
+  //   unlock:  delete the lock, then the request as it was (two acts, so Ctrl+Z undoes the edit first); not offered
+  //            to undo/redo, whose act isn't mine to stack under an unlock.
+  // A refusal with mayLift: false (a lock above your rank) shows as words, no buttons. Another lock further up asks again.
   let cancelled = false, lifted = 0;   // lifted: the unlocks already written when a later lock's question is cancelled
-  // a lock you may not lift (above your level, R 10-07, or no right to delete it: refused with mayLift: false) isn't yours to
-  // go through or lift: its refusal shows as words, no buttons. The false is the signal: a refusal without the field asks as before
   for (let round = 0; round < 8 && !r.ok && r.refused?.code === 'locked' && r.refused?.mayLift !== false && req.args?.throughLock !== true && mayLift(); round++) {
     const verb = lockVerb(req);
-    // a delete or a replace through a lock is the destructive answer: styled so, and NOT the one Enter gives (S1)
+    // a delete or a replace through a lock is destructive: styled so, and not the answer Enter gives
     const destructive = verb === 'Delete' || verb === 'Replace';
     const choices = lockChoices(verb).filter((c) => record || c.v !== 'unlock').map((c) => (destructive && c.v === 'through' ? { ...c, danger: true } : c));
     console.info('[editwrites] lock:', refusalText(what, r));
@@ -152,8 +146,7 @@ export async function sendOps(ops, { what, base = null, expect = true, revert = 
   return send(req, { what, revert });
 }
 
-// ---- undo / redo: the authority's undo-by-act, of my own acts only ----
-// one press at a time: two concurrent presses would read the same top act. A drop checks the top is still that act.
+// ---- undo / redo: the authority's undo-by-act, of my own acts only; one press at a time ----
 let turn = Promise.resolve();
 const inTurn = (fn) => { const r = turn.then(fn, fn); turn = r.catch(() => {}); return r; };
 export function undo() { return inTurn(undo1); }
@@ -195,7 +188,7 @@ export function del(ids) {
 export function duplicate(id, at = undefined) {
   return send({ verb: 'create', args: { from: idIn(id), ...(at ? { at } : {}) } }, { what: `duplicate ${id}` });
 }
-/** Lock or unlock: `set lock true` / `delete lock` (§5: the plain lock component, both ways). */
+/** Lock or unlock: `set lock true` / `delete lock`. */
 export function lock(id, on) {
   return send(on ? { verb: 'set', args: { id: idIn(id), component: 'lock', value: true } } : { verb: 'delete', args: { id: idIn(id), component: 'lock' } },
     { what: on ? `lock ${id}` : `unlock ${id}` });

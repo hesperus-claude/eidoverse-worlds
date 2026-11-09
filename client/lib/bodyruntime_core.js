@@ -1,11 +1,10 @@
-// bodyruntime_core — the pure half of a body that brings its own runtime (§24 avatar defs: `runtime`, see
-// shared/avatardefs.js). bodyruntime.js maps the declared kind to reviewed code built into Worlds; this half knows the frame order and runs
-// it, with no DOM and no THREE of its own, so tools/bodyruntime.test.ts drives it headless.
+// bodyruntime_core — the pure half of a body that brings its own runtime (avatar defs: `runtime`, shared/avatardefs.js).
+// bodyruntime.js maps the declared kind to reviewed built-in code; this half knows the frame order and runs it, with no
+// DOM and no THREE of its own, so test/client/body-runtime-test.ts drives it headless.
 //
-// kind 'claude-robot-dof': Claude's reviewed hardware-DOF runtime, whose header documents its frame order
-// (eidoverse/claude_robot_dof.js in the library). Retargeted human clips ask a machine for poses its joints can't
-// take: a knee twist, an ankle yaw, a wrist past its stops, legs through each other. The module projects each pose
-// onto the body's real joints and clamps it to their ranges. Its order, and where it lands in Avatar.update:
+// kind 'claude-robot-dof' (client/lib/bodyruntimes/claude_robot_dof.js): a hardware-DOF runtime. Retargeted human clips
+// ask a machine for poses its joints can't take; the module projects each pose onto the body's real joints and clamps
+// it to their ranges. Its order, and where it lands in Avatar.update:
 //   at load, before anything poses the body   initArmDOF(vrm, hinges), setupHandDOF(vrm, hinges), setupLegDOF(vrm),
 //                                             setupCrown(vrm)
 //   right after the clip's mixer.update       every bound value written (three's PropertyMixer.apply skips a value that

@@ -15,14 +15,11 @@
 //   * Consent is the owner's, always: the grab is a request (pushable gates
 //     it), a movement key revokes mid-drag, and 1.2s of dragger silence
 //     auto-resumes — a crashed dragger never leaves a body possessed.
-//   * On release the owner runs its OWN settle sim from wherever it was left
-//     (the corpse-kick path), so the body lands and rests under the authority
-//     that owns it. The takeover is only ever the moving part.
+//   * On release the owner runs its OWN settle sim from wherever it was left, so the body lands and rests under the
+//     authority that owns it. The takeover is only ever the moving part.
 //
-// This is also why dragging works on AGENT bodies: a headless client cannot
-// run a Verlet on itself (which is why agents slump instead of tumbling), but
-// under takeover the dragger sims and the agent only has to accept-and-
-// rebroadcast — the same thing it already does for puppet poses.
+// This is also why dragging works on agent bodies: a headless client runs no sim of its own, but under takeover it
+// only has to accept-and-rebroadcast, as it already does for puppet poses.
 
 import { THREE, camera, canvas, scene } from './core.js';
 import { bus } from './base.js';
@@ -128,8 +125,7 @@ function pinCurrent() {
     end: true,
     pinAt: { joint: drag.joint, at: [t.x, t.y, t.z] },
     ...(drag.rd.pose ? { pose: drag.rd.pose } : {}),
-    // a nail is a handover too: the owner takes over enforcing it, and should
-    // continue this sim rather than rebuild a guess of it from the bones
+    // a nail is a handover too: the owner continues this sim rather than rebuilding a guess of it from the bones
     sim: drag.rd.snapshot(),
     ...(r?.avatar ? {
       p: r.avatar.root.position.toArray(),
@@ -198,8 +194,7 @@ function endGrab() {
   sendBodyDrag(drag.id, {
     end: true,
     ...(drag.rd.pose ? { pose: drag.rd.pose } : {}),
-    // the handover: exactly where every joint is and how fast, so the owner
-    // CONTINUES this sim instead of rebuilding a guess of it from the bones
+    // the handover: where every joint is and how fast, so the owner continues this sim
     sim: drag.rd.snapshot(),
     ...(r?.avatar ? {
       p: r.avatar.root.position.toArray(),
@@ -261,8 +256,7 @@ bus.on('bodydrag', (msg) => {
     draggedBy = by;
     lastSampleAt = performance.now();
     hooks.beginDragged(by);
-    // grabbing a nailed joint takes it back into the hand; the OTHER nails
-    // stay mine, and the dragger's takeover sim needs to know about them
+    // grabbing a nailed joint takes it back into the hand; the other nails stay mine, and the dragger's sim needs them
     if (msg.grab.joint) hooks.removePin?.(String(msg.grab.joint));
     const pins = hooks.getPins?.() ?? [];
     if (pins.length) sendBodyDrag(by, { pins });
@@ -274,8 +268,7 @@ bus.on('bodydrag', (msg) => {
     return;
   }
   if (Array.isArray(msg.pins)) {
-    // the owner's other nails, sent back on grab accept — my takeover sim
-    // must keep enforcing them while I hold the body by something else
+    // the owner's other nails, sent back on grab accept: my takeover sim keeps enforcing them
     if (drag && drag.id === by) {
       for (const p of msg.pins) {
         if (p?.j && Array.isArray(p.at) && p.at.length === 3) {
@@ -286,9 +279,8 @@ bus.on('bodydrag', (msg) => {
     return;
   }
   if (msg.end != null) {
-    // my dragger let go (or a refused grabber acknowledging) — resume myself.
-    // A release may carry a nail: the dragger pinned the held joint where it
-    // was, and from here MY sim enforces it.
+    // my dragger let go (or a refused grabber acknowledging): resume myself. A release may carry a nail, which my sim
+    // enforces from here.
     if (draggedBy === by) {
       draggedBy = null;
       if (msg.pinAt?.joint && Array.isArray(msg.pinAt.at)) hooks.addPin?.(String(msg.pinAt.joint), msg.pinAt.at);
@@ -355,8 +347,7 @@ export function updateBodyDrag(dt, now = performance.now()) {
     hooks?.endDragged({});
   }
 
-  // nails, drawn where the world says they are: every body streams its pins
-  // in presence, mine come from my own state
+  // nails, drawn where the world says they are: every body streams its pins in presence, mine come from my own state
   const wanted = new Map();
   for (const r of remotes.values()) {
     const pins = r.buf?.[r.buf.length - 1]?.pins;

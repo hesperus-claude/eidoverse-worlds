@@ -1,5 +1,5 @@
 // flora_lod — blade-level LOD index subsets for tiled 'blades' strokes,
-// DOM-free (unit-tested in test/client/flora-test.ts). §17b.
+// DOM-free (unit-tested in test/client/flora-test.ts).
 //
 // The upstream tuft (vegetation.js bunchGeometry) builds each blade as a CONTIGUOUS run: 10 vertices, then 24 index
 // entries referencing only its own 10. A far-LOD index keeps whole runs, still pointing into the SHARED vertex
@@ -39,7 +39,7 @@ export function bladeLodIndex(index, vertexCount, keep) {
   return out;
 }
 
-// §22n — VERTEX LOD, the successor to the blade-count subset above: keeps EVERY blade (no count pop) but spans its
+// VERTEX LOD, the successor to the blade-count subset above: keeps EVERY blade (no count pop) but spans its
 // quads across loops 0→2→4: 12 entries referencing 6 of the 10 verts. An index subset never renumbers vertices, so the
 // dither's bladeId (vertexIndex / 10) still lands on the right blade.
 export const BLADE_COARSE_INDICES = 12;   // 2 quads: loops 0→2→4

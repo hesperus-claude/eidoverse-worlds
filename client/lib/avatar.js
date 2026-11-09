@@ -12,12 +12,9 @@ import { defsRegistry } from './defs.js';
 import { bodyRuntimeFor, bodyDefFor, capEmissive } from './bodyruntime.js';
 import { measureChain, solveChain } from './reachbone.js';
 import { REACH_CHAINS } from '../../shared/joints.js';
-// The light-slot rig: a body that GLOWS should also CAST. Requests, never
-// lights -- lightrig owns the topology because adding a PointLight at runtime
-// recompiles every material in the scene.
+// a body that glows also casts: light requests, never lights (lightrig owns the topology)
 import { attachLamps, releaseOwner, updateRequest, glowScale } from './lightrig.js';
 import { setBodyShadows } from './materials.js';
-// BREATH (spec T8) is the idle flap's period, imported so the two cannot drift.
 import { BREATH } from '../../shared/breath.js';
 import {
   loadVRM, clipFor, vrmaBytes, loadTrack, loadDone,
@@ -40,90 +37,48 @@ import { planReaches } from '../../shared/reachorder.js';
 import { poseChannels } from '../../shared/humanoid.js';
 import { swimTargets, SWIM_CLIPS } from '../../shared/swimpose.js';
 
-// A body is born with the CORE_CLIPS (~1.9MB per clip slot) and learns the rest while you move.
-// How far an upper lid swings to shut, in radians about its own X, when the rig exports no limit
-// of its own. Signed: which way is "closed" depends on how the lid bone was rolled — a dial.
+// Blink and eye dials, for a rig whose lids are bones and exports no limit of its own (_findLids).
 export const BLINK = {
-  closed: 1.2,   // radians — 69 deg, tuned by eye
+  closed: 1.2,   // radians an upper lid swings to shut, signed (depends on the lid bone's roll); tuned by eye
   hz: 1,         // blink-rate multiplier
-  // Which AXIS a lid swings about depends on the bone's roll (Blender's bone axes are not
-  // glTF's). 0=x 1=y 2=z. The wrong one sweeps the lid sideways instead of down.
-  axis: 0,
-  lower: -0.35,  // the LOWER lid's share, signed and usually opposite: an upper
-                 // lid alone leaves the sclera and iris showing under it.
-  eyeMax: 0.42,  // radians an eyeball may turn off the head's forward (~24 deg).
-                 // A doll whose eyes track hard reads as staring; the head does most of the work.
-  dur: 0.28,     // seconds for a full close-and-open, covering both halves:
-                 // a real blink is 100-150ms of CLOSING plus the reopen.
+  axis: 0,       // which axis a lid swings about (0=x 1=y 2=z): bone roll out of Blender is arbitrary
+  lower: -0.35,  // the lower lid's share, usually opposite (an upper lid alone leaves the sclera showing)
+  eyeMax: 0.42,  // radians an eyeball may turn off the head's forward; eyes that track hard read as staring
+  dur: 0.28,     // seconds for a full close-and-open
 };
 
-// Wings, when a rig has them: [LR]_Wing_(Upper|Lower)[_<n>] — four chains off the clavicles, any
-// length. The flap is PROCEDURAL, not a clip: VRMA can only address humanoid bones, and the wings
-// must stop being driven the instant the body goes limp (a one-line handover to the sim).
-// The axis is the BODY'S FORWARD, not the bone's own axes (bone roll out of Blender is arbitrary);
-// about it, "up" is up for any outward wing and the two sides differ only by sign.
+// Wings, when a rig has them: [LR]_Wing_(Upper|Lower)[_<n>], four chains off the clavicles, any length. The flap
+// is procedural, not a clip: VRMA addresses only humanoid bones, and the wings must stop being driven the instant
+// the body goes limp. The axis is the body's forward (bone roll out of Blender is arbitrary); the sides differ by
+// sign. The dials, idle and power, are read by _flap; `wingEffort` in [0,1] crossfades them term by term.
 export const WING_IDLE = {
-  // a small stroke that travels far along the span and lags: membrane rather than hinge
-  deg: 10,       // half-amplitude at the shoulder. A resting bird's wings barely
-                 // move; this is an IDLE, not flight.
-  hz: 1 / BREATH, // one beat per BREATH (spec T8, 3.4s)
-  bias: 0,       // degrees of permanent lift added to the flap, both sides. A
-                 // dial for resting the wings higher or lower than the rig's
-                 // rest pose without editing the blend.
-  tip: 0.9,      // the outer segment's share of the amplitude. Two segments
-                 // rotating as one plank is the difference between a wing and a
-                 // door; the tip carrying less than the root gives it a curve.
-  lag: 0.25,     // cycles the outer segment trails the inner by. This is the
-                 // whole reason a wing reads as membrane rather than board — the
-                 // tip is still going up as the shoulder starts down.
-  sync: true,    // upper and lower pairs share one phase. False gives the lower
-                 // pair a half-cycle offset (they beat against each other, which
-                 // is an insect, not a bird).
-  recover: 0.5,  // seconds to slerp back into the flap after a ragdoll, out of
-                 // whatever pose the body was left in.
-  // ---- the SWEEP: how far the tips travel FORWARD and BACK, as a second rotation about the body's
-  // UP axis (mirrored, so both wings sweep forward together). It opens the tip's path from an arc
-  // into an ellipse — the difference between moving air and waving.
-  sweep: 18,       // degrees fore/aft at the shoulder
-  sweepPhase: 0.25, // cycles the sweep leads the flap by. A QUARTER turn is
-                    // what opens the arc into an ellipse; at 0 the path is a
-                    // straight diagonal (a tilted hinge).
+  deg: 10,       // half-amplitude at the shoulder (an idle, not flight)
+  hz: 1 / BREATH, // one beat per BREATH (shared/breath.js)
+  bias: 0,       // degrees of permanent lift over the rig's rest pose, both sides
+  tip: 0.9,      // the outer segment's share of the amplitude (less than the root gives the wing a curve)
+  lag: 0.25,     // cycles the outer segment trails the inner by: membrane rather than board
+  sync: true,    // upper and lower pairs share one phase (false beats them against each other: an insect)
+  recover: 0.5,  // seconds to slerp back into the flap after a ragdoll
+  sweep: 18,     // degrees fore/aft at the shoulder, about the body's up: opens the tip's arc into an ellipse
+  sweepPhase: 0.25, // cycles the sweep leads the flap by (a quarter turn makes the ellipse; 0 is a tilted hinge)
 };
 
-// THE POWER STROKE — what the same wings do when they are holding a body up. Every dial is
-// WING_IDLE's, so `wingEffort` in [0,1] crossfades the two term by term and `_flap` needs no second
-// path. The effort follows the flight state (controller.js): full through the launch and while
-// Space is held, decaying to idle while gliding.
+// the power stroke, while the wings hold a body up: controller.js sets wingEffort from the flight state
 export const WING_POWER = {
-  // small and FAST: a blur of short strokes is what a bird leaving the ground looks like
-  deg: 8,        // half-amplitude at the shoulder. Small and FAST is the power
-                 // stroke; the amplitude at the tip is still larger, because
-                 // tip carry and the root's own rotation compound it.
-  hz: 2.1,       // seven times the idle's 1/3.4. Fast enough to read as effort,
-                 // enough that the lag below still separates tip from shoulder
-                 // -- past ~3Hz the whole chain blurs into one shape.
-  bias: -8,      // the stroke sits LOW: a power flap drives down from above,
-                 // so the arc is centred below the rest pose rather than on it.
-  tip: 0.78,     // the tip carries LESS of the stroke than at idle (0.9) --
-                 // under load a wing straightens out along its span instead of
-                 // curling, and the extra carry is what sells the push.
-  lag: 0.09,     // and trails the shoulder LESS than at idle (0.25), not more:
-                 // a loaded wing stiffens along its span and drives as more of
-                 // one surface, where the idle's long lag is a slack membrane.
+  deg: 8,        // small and fast: a blur of short strokes
+  hz: 2.1,       // past ~3Hz the whole chain blurs into one shape
+  bias: -8,      // the stroke sits low: a power flap drives down from above
+  tip: 0.78,     // under load a wing straightens along its span instead of curling
+  lag: 0.09,     // a loaded wing drives as more of one surface
   sync: true,
-  recover: 0.55, // unchanged: this is the ragdoll handover, not the flap.
-  sweep: 17,     // nearly double. The ellipse is what makes a flap look like it
-                 // moves air rather than waving, and moving air is the entire
-                 // claim a power stroke makes.
+  recover: 0.55,
+  sweep: 17,     // nearly double the idle's: the ellipse is what reads as moving air
   sweepPhase: 0.25,
 };
 
-// THE VIGIL POSTURE (fold_down: a distinct silhouette, readable at 50 m; test/client/flight-test.ts T6;
-// the flight spec it came from is not in this repo). A POSE, NOT A CLIP, for the flap's reasons; it composes through _flap, so folding
-// inherits the ragdoll handover. Read out of the authored Blender action (wings-folded_1.asset.blend):
-// quaternions LOCAL to each bone's rest, in three.js [x,y,z,w] order (Blender stores [w,x,y,z]).
-// The upper and lower roots were eased about their own axes after authoring (lower 10 deg, upper
-// 3 deg less fold), which keeps each fold's direction exactly as authored.
+// The folded-wing posture (test/client/flight-test.ts T6): a pose, not a clip, composed through _flap so folding
+// inherits the ragdoll handover. Read out of the authored Blender action (wings-folded_1.asset.blend): quaternions
+// local to each bone's rest, in three.js [x,y,z,w] order (Blender stores [w,x,y,z]).
 const WING_FOLDED = {
   L_Wing_Lower: [-0.19528, +0.01928, +0.08113, +0.97720],
   L_Wing_Lower_1: [+0.00000, +0.00000, -0.14119, +0.98998],
@@ -138,8 +93,7 @@ const WING_FOLDED = {
   R_Wing_Upper_1: [+0.00000, -0.00000, +0.17326, +0.98488],
 };
 
-/** Blend two wing dial sets: numbers interpolate; `sync` (a mode) and `recover` (the ragdoll
- *  handover) take the idle's value. Scratch object reused: this runs per frame, per body. */
+/** Blend two wing dial sets: numbers interpolate; `sync` and `recover` take the idle's value. */
 const _wmix = {};
 function mixWings(a, b, t) {
   for (const k of Object.keys(a)) {
@@ -149,20 +103,17 @@ function mixWings(a, b, t) {
   return _wmix;
 }
 
-/** What a limp body's springbones become, when no sim of its own is running.
- *  Live: the debug panel dials these, and they take effect on the next body to
- *  go limp. stiffness is a FACTOR on whatever the rig declared; gravity is a
- *  floor, so a chain that already falls harder keeps its own value. */
+/** What a limp body's springbones become when no sim of its own is running (_springsLimp). Live: the debug panel
+ *  dials these. stiffness is a factor on what the rig declared; gravity is a floor. */
 export const LIMP_SPRINGS = {
-  stiffness: 0.2,   // give way — the rest shape was authored for standing up
-  gravity: 0.45,    // ...and let the world win instead
+  stiffness: 0.2,   // give way: the rest shape was authored for standing up
+  gravity: 0.45,
 };
 
+// a body is born with the CORE_CLIPS (~1.9MB per clip slot) and learns the rest while you move (hydrateClips)
 const CORE_CLIPS = ['idle', 'walk'];
 const LATER_CLIPS = CLIP_SLOTS.filter((s) => !CORE_CLIPS.includes(s));
-// Until a clip arrives, the nearest thing that HAS arrived stands in. Silently
-// playing nothing would read as a bug; walking when you meant to run reads as
-// the world catching up.
+// until a clip arrives, the nearest thing that has arrived stands in
 const CLIP_FALLBACK = {
   run: 'walk', jump: 'idle', climb: 'walk',
   sit: 'idle', lie: 'idle', sitchair: 'sit',
@@ -172,23 +123,18 @@ const CLIP_FALLBACK = {
   swim: 'idle', tread: 'idle',
 };
 
-// Gesture slots are loaded lazily. The action bar's vocabulary lives in animnames.js and is
-// re-exported here (same objects, one module instance). IMPORT then re-export, not
-// `export ... from`: a bare re-export makes no local binding, and playOnce reads ANIM_CLIPS below.
+// the gesture vocabulary (animnames.js), re-exported; imported first because playOnce reads ANIM_CLIPS
 import { ANIM_CLIPS, ANIM_ORDER, ANIM_ICONS, hydrateAnimNames } from './animnames.js';
 export { ANIM_CLIPS, ANIM_ORDER, ANIM_ICONS, hydrateAnimNames };
-// Seated postures differ by what you're sitting ON — the ground clip on a
-// chair leaves you cross-legged in mid-air.
+// seated postures differ by what you sit on: the ground clip on a chair leaves you cross-legged in mid-air
 const SEAT_CLIPS = { ground: 'sitting_on_ground', chair: SEAT_CLIP_FILE };
 
 // ---------------------------------------------------------------- sprites
 
-// THE OWN-BODY CLEARANCE: labels are hidden by scenery and other avatars, never by their owner's
-// own body. Body-attached sprites (plate, typing pill) are depth-tested but write their depth as if
-// they stood `userData.plateClear` metres nearer the eye (platesize.js plateClear). A fragment-depth
-// override keeps the sprite where it is, on screen and in stereo; alternatives rejected:
-// docs/research/avatar-design-notes.md. ONE node graph reads the per-object value (TSL userData),
-// so every such sprite shares one pipeline. Perspective (both depth conventions) and orthographic.
+// Own-body clearance: labels are hidden by scenery and other avatars, never by their owner's body. Body-attached
+// sprites are depth-tested but write their depth as if `userData.plateClear` metres nearer the eye (platesize.js).
+// One node graph reads the per-object value, so every such sprite shares one pipeline. Alternatives rejected:
+// docs/research/avatar-design-notes.md.
 const PLATE_DEPTH = Fn((builder) => {
   const z = min(positionView.z.add(userData('plateClear', 'float')), cameraNear.negate().mul(1.0001));   // never past the near plane
   if (!builder.camera?.isPerspectiveCamera) return viewZToOrthographicDepth(z, cameraNear, cameraFar);
@@ -235,8 +181,6 @@ const makeLabel = (name) => {
   const box = plateBox({ asc: ink.actualBoundingBoxAscent, desc: ink.actualBoundingBoxDescent, width: ink.width },
     { asc: ref.actualBoundingBoxAscent, desc: ref.actualBoundingBoxDescent });
   const s = textSprite((ctx) => {
-  // system-ui (Segoe on Windows): humanist, and no webfont race on a canvas that draws the moment
-  // someone arrives
   labelFont(ctx);
   ctx.textAlign = 'center';
   ctx.fillStyle = tokv('--pill-bg', 'rgba(6,16,22,0.62)');
@@ -247,16 +191,14 @@ const makeLabel = (name) => {
   s.userData.aspect = box.h / box.w;   // the sprite's height per metre of width: avatar.js sizes it by width each frame
   s.userData.pillH = box.pillH / box.w;   // the pill's height, as a share of the sprite's width (the hover card's box)
   s.userData.pill = box.pillW / box.w;   // the pill's share of the sprite's width: the hover card sits beside IT
-  // Whether the viewer can SEE it, for the hover card (platecard.js): a GPU occlusion query on the plate's own draw —
-  // the same depth test the picture passes. The answer is a frame or two old (resolved async).
+  // whether the viewer can see it, for the hover card (platecard.js): a GPU occlusion query, a frame or two old
   s.occlusionTest = true;
   s.onBeforeRender = noteOccluded;
   return s;
 };
 function noteOccluded(r) { this.userData.occluded = r.isOccluded(this); }
 
-// what hangs over the plate, in the body's frame: lifts tuned when the plate sat at a fixed 1.95 (bubble 2.3, pill 2.12,
-// pill over a bubble 2.72) — now they ride wherever the plate hangs (plateanchor.js), sitting and lying included
+// what hangs over the plate (metres above it): the bubble, the typing pill, the pill over a bubble
 const BUBBLE_LIFT = 0.35, TYPING_LIFT = 0.17, TYPING_OVER_BUBBLE = 0.77;
 const _pHips = new THREE.Vector3(), _pHead = new THREE.Vector3(), _pFoot = new THREE.Vector3(), _pScale = new THREE.Vector3();
 const _ownM = new THREE.Matrix4();
@@ -278,9 +220,7 @@ function wrap(text, n) {
   }
   return lines;
 }
-// Speech cap is 4000 chars: the bubble shows an opening and says the rest is in the chat log.
-const BUBBLE_LINES = 8;
-// The overhead bubble for a message; its chat-log twin is chat.js buildLine.
+const BUBBLE_LINES = 8;   // a long say shows an opening and points at the chat log
 function makeBubble(text) {
   const all = wrap(text, 38);
   const clipped = all.length > BUBBLE_LINES;
@@ -304,9 +244,7 @@ function makeBubble(text) {
   }, 704, Math.max(64, h), 2.4);
 }
 
-// ---- typing indicator ------------------------------------------------------
-// A small pill of pulsing dots above the head — "composing". Its own canvas, redrawn only while
-// typing and at a throttled rate; gives way to the speech bubble the moment they speak.
+// ---- typing indicator: a pill of pulsing dots above the head, redrawn at a throttled rate while composing
 function makeTypingSprite() {
   const c = document.createElement('canvas');
   c.width = 128; c.height = 56;
@@ -319,9 +257,8 @@ function makeTypingSprite() {
   s.userData.ctx = c.getContext('2d');
   return s;
 }
-// Attention glyphs: ear = your speech will reach it; think = a reply is being composed; tool =
-// mid-task; mic = this body's voice is LIVE in the room now (presence, not a message). Icons come
-// from the Lucide registry (icons.js), never emoji: canvas fillText of a missing glyph paints nothing.
+// attention glyphs (icons.js, never emoji): ear = your speech reaches it; think = composing a reply; tool =
+// mid-task; mic = this body's voice is live now
 const ICON_FOR = { ear: 'ear', think: 'think', tool: 'wrench', mic: 'mic' };
 
 function drawTypingDots(sprite, t, state) {
@@ -338,8 +275,7 @@ function drawTypingDots(sprite, t, state) {
     ctx.globalAlpha = b;
     ctx.strokeStyle = 'rgba(180,240,216,1)';
     strokeIcon(ctx, ICON_FOR[state], 26);
-    // mic gets sound arcs on top: the icon says "a voice", the arcs say "NOW"
-    if (state === 'mic') {
+    if (state === 'mic') {   // sound arcs: the voice is live now
       for (let i = 0; i < 2; i++) {
         const amp = 0.3 + 0.7 * Math.max(0, Math.sin(t * 5 - i * 0.7));
         ctx.globalAlpha = b * amp;
@@ -404,18 +340,12 @@ const CLIP_NAME_RE = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
 const HYDRATED = new Set([...CORE_CLIPS, ...LATER_CLIPS, 'sitchair']);
 const DEG = Math.PI / 180;
 
-// THE LAMP'S BREATH, as dials (named so they can become debug-panel dials, like WING_IDLE's):
-//   FLOOR  near-dark, non-zero: the chest looks out between breaths but never switched off
-//   PEAK   below 1 on purpose; a lower ceiling reads as breath, not as a pulse
-//   SHAPE  >1 dwells near the floor and softens the flare (inhale slower than
-//          the rekindling); 1.0 is a plain sine, 2.0 is the sharp version
+// the lamp's breath (update): floor near-dark but never off; peak below 1 so it reads as breath, not a pulse
+// (tuned with the lamp's shadows on); shape >1 dwells near the floor and softens the flare (1 is a plain sine)
 const LAMP_FLOOR = 0.03;
-const LAMP_PEAK = 0.62;    // brighter WITH shadows on -- see below
+const LAMP_PEAK = 0.62;
 const LAMP_SHAPE = 1.6;
-// PEAK is tuned WITH the lamp's own shadows on: shadowed neighbours make the same light read dimmer.
-// LAMP_DAY_FLOOR: the sky's share. The surface dims toward noon on lightrig's (1-dayness)^2 curve —
-// bright at night, subtle at midday — floored so a lamp never looks broken in full sun.
-const LAMP_DAY_FLOOR = 0.18;
+const LAMP_DAY_FLOOR = 0.18;   // the surface's share of the sky's dimming curve: never looks broken in full sun
 
 
 /** A jump clip's take-off: the hips dip (anticipation), then come back up through their rest height — that is the
@@ -429,9 +359,7 @@ function clipTakeoff(clip) {
     let minI = 0, minY = Infinity;
     for (let i = 0; i < half; i++) { const y = tr.values[i * 3 + 1]; if (y < minY) { minY = y; minI = i; } }
     if (minI > 0 && tr.values[1] - minY > 0.01) {   // a real dip (>1 cm), not noise
-      // the body actually leaves the ground when the hips come back UP through rest height (jump.vrma:
-      // rest .864, bottom .494 @0.33 s, back through rest @0.50 s, apex @0.75 s) — start there, not at the
-      // bottom of the squat, or an airborne body is still pushing off
+      // the feet leave the ground when the hips come back up through rest height, not at the bottom of the squat
       let i = minI; while (i < n - 1 && tr.values[i * 3 + 1] < tr.values[1]) i++;
       out = tr.times[i];
     }
@@ -450,28 +378,22 @@ export class Avatar {
     this.root.userData.isBody = true;   // so the sky's scene-diff never claims a person
     this.root.userData.who = id;        // perf attribution: this subtree is a PERSON (perfscope)
     this.root.add(vrm.scene);
-    // THIS BODY's chosen size and plate lift (bodyscale.js; Profile › Avatar). The size lives on vrm.scene, multiplied
-    // with the VR puppet fit, never on the root: the root also carries the plate, the pill and the bubble,
-    // which platesize.js keeps screen-sized. A pooled VRM may come back still wearing its last owner's size, so the
-    // scale is written fresh here, before anything below measures the body.
+    // The chosen size (bodyscale.js) lives on vrm.scene, multiplied with the VR puppet fit, never on the root: the
+    // root also carries the plate, pill and bubble, which platesize.js keeps screen-sized. Written fresh: a pooled
+    // VRM may still wear its last owner's size.
     this.userScale = 1; this.plateY = 0; this._puppet = 1;
     vrm.scene.scale.setScalar(1);
-    // A LAMP IN THE BODY: attachLamps requests a real point light at each emissive mesh's centre
-    // (as realize/models.js does for spawned models), so a glowing chest lights the room.
-    // OWNED PER BODY INSTANCE, not per identity: a body swap builds the new body before disposing
-    // the old (mybody.js), so an identity-keyed owner would let the old body release the new lamp.
+    // A lamp in the body: a light request at each emissive mesh's centre, so a glowing chest lights the room. Owned
+    // per body instance, not per identity: a body swap builds the new body before disposing the old (mybody.js).
     this._lampOwner = `body:${id}:${++Avatar._seq}`;
     this._lamps = [];
-    // `shadows: true` is the avatar's claim on the one casting slot (false at the seam, so a
-    // placed glowing prop cannot take it from a body — see attachLamps). A def whose glow is
-    // not a lamp (`lamps: false`: indicator lights, a screen) keeps its blob.
+    // `shadows: true` claims the one casting slot (see attachLamps). A def whose glow is not a lamp (`lamps: false`:
+    // indicator lights, a screen) keeps its blob.
     if (lamps) {
       try { this._lamps = attachLamps(vrm.scene, this._lampOwner, { shadows: true }) ?? []; }
       catch { /* a body with no glow simply has none */ }
     }
-    // A LAMPED BODY CASTS AND RECEIVES; every other body keeps its blob. Shadows for every avatar
-    // would be an unmeasured cost: bodies never reach warmqueue's warmDepth (their depth pipelines
-    // compile in-frame) and bypass the distance-ranked caster budget.
+    // a lamped body casts and receives; every other body keeps its blob (shadows for every avatar is an unmeasured cost)
     if (this._lamps.length) {
       try { setBodyShadows(vrm.scene, true); }
       catch { /* shadows are a nicety; a body that cannot take them still works */ }
@@ -488,8 +410,7 @@ export class Avatar {
     this.current = null;
     this.currentSlot = null;
     this.onceAnim = null;             // { action, until }
-    // the ankles' height above the root at rest (no clip has posed it yet): a socket anchoring the FEET puts the soles
-    // on the socket, not the ankle joints
+    // the ankles' height above the root at rest: a socket anchoring the feet puts the soles on it, not the ankles
     try { const h = vrm.humanoid; const f = h?.getRawBoneNode?.('leftFoot') ?? h?.getNormalizedBoneNode?.('leftFoot');
       if (f) { this.root.updateMatrixWorld(true); this._footRestY = Math.max(0, this.root.worldToLocal(f.getWorldPosition(new THREE.Vector3())).y); } } catch { this._footRestY = 0; }
     this.setClip('idle');
@@ -509,8 +430,7 @@ export class Avatar {
     this._plateOff = null;                        // smoothed plate height above the root (world m) — see _placePlate
     liveAvatars.add(this);
 
-    // ---- gaze: a target object per avatar (the VRM lookAt rig's target), moved each frame
-    // toward whatever deserves attention.
+    // gaze: the VRM lookAt rig's target, eased each frame toward whatever deserves attention
     this.gaze = new THREE.Object3D();
     this.gaze.userData.isBody = true;
     scene.add(this.gaze);
@@ -529,15 +449,11 @@ export class Avatar {
     scene.add(this.root);
   }
 
-  /** Find the eyeball bones once. VRM ships a lookAt rig and three-vrm drives
-   *  it — but only if the file HAS one, and this rig has hand-rigged bones
-   *  instead: L_Eye / R_Eye. Same gaze target either way. */
+  /** Find hand-rigged eyeball bones (L_Eye / R_Eye) once. A rig whose eyes are VRM-mapped is three-vrm's: this.gaze
+   *  is already its target, and two writers on one bone fight. */
   _findEyes() {
     this._eyes = null;
     if (!this.vrm?.scene) return;
-    // DEFER to three-vrm when the rig maps its eyes (VRM leftEye/rightEye, as import-tripo-avatar
-    // does): this.gaze is already its target, and two writers on one bone fight. Bone-rigged eyes
-    // with no VRM mapping still need us.
     if (this.vrm.lookAt && this.vrm.humanoid?.getNormalizedBoneNode?.('leftEye')) return;
     const found = [];
     this.vrm.scene.traverse((o) => {
@@ -546,22 +462,16 @@ export class Avatar {
     if (found.length) this._eyes = found;
   }
 
-  /** Give the hair back to three-vrm, resuming from where the tumble left it.
-   *
-   *  Not a reset: springBoneManager.reset() restores every joint's _initialLocalRotation (the
-   *  combed pose), a visible snap. Wanted is the other half of reset(): tails re-derived from the
-   *  CURRENT world matrices, so the springs pick up with no stored velocity and comb the shape out
-   *  over the next second. The rest rotation is pointed at the current pose for the call (making the
-   *  restore a no-op), then put back so the springs still pull toward the authored shape.
-   */
+  /** Give the hair back to three-vrm, resuming from where the tumble left it. springBoneManager.reset() would snap
+   *  to the combed pose; wanted is only its other half, tails re-derived from the current matrices. So the rest
+   *  rotation is pointed at the current pose for the call, and put back by _combHair unless `adopt`. */
   _releaseHair({ adopt = false } = {}) {
     if (!this.__simHair) return;
     this.__simHair = false;
     const sbm = this.vrm?.springBoneManager;
     if (!sbm?.joints) return;
     this.vrm.scene?.updateMatrixWorld?.(true);
-    // The authored spring rest, remembered ONCE, so adopting a fallen shape is
-    // always reversible and can never ratchet.
+    // the authored spring rest, remembered once, so adopting a fallen shape can never ratchet
     if (!this.__springRest) {
       this.__springRest = new Map();
       for (const j of sbm.joints) {
@@ -575,15 +485,9 @@ export class Avatar {
     if (!adopt) this._combHair();
   }
 
-  /** Springbone settings for a body that is LIMP and has no sim of its own (remotes, and the gap
-   *  after a doll disposes; where Bullet runs it uses real gravity and none of this applies).
-   *
-   *  three-vrm's springbones model the droop into the rest shape (gravityPower ~0.01-0.03,
-   *  stiffness 0.35-1.3), and stiffness pulls toward a rest DIRECTION that rotates with the body —
-   *  so on a body lying on its side the hair is pulled sideways. While limp and unowned, stiffness
-   *  gives way and gravity takes over (LIMP_SPRINGS); the originals are restored on standing.
-   *  A rarer sideways-hair case remains open.
-   */
+  /** Springbone settings for a limp body with no sim of its own (remotes, and the gap after a doll disposes).
+   *  Stiffness pulls toward a rest direction that rotates with the body, so on a body lying on its side the hair is
+   *  pulled sideways: while limp, stiffness gives way and gravity takes over (LIMP_SPRINGS). */
   _springsLimp(on) {
     const sbm = this.vrm?.springBoneManager;
     if (!sbm?.joints || this.__springsLimp === on) return;
@@ -603,15 +507,12 @@ export class Avatar {
       if (!o) continue;
       j.settings.stiffness = on ? o.s * LIMP_SPRINGS.stiffness : o.s;
       j.settings.gravityPower = on ? Math.max(o.g, LIMP_SPRINGS.gravity) : o.g;
-      // ...AND THE HAIR LIVES IN THE WORLD, not in the hips. `center` stores tails in the hips'
-      // frame so walking doesn't sweep the hair back — but a carried body's hair then rotates
-      // rigidly with it. A limp body is not walking, so the center is dropped while limp.
+      // `center` stores tails in the hips' frame so walking doesn't sweep the hair back, but a carried body's hair
+      // then rotates rigidly with it: dropped while limp
       if (on) j._center = null;
       else if (o.center !== undefined) j._center = o.center;
     }
-    // The tails were stored in the frame we just changed; re-derive them from
-    // the pose the hair is in, or the first frame after the switch flings it.
-    this._springsResync();
+    this._springsResync();   // the tails were stored in the frame just changed; re-derive them or the hair flings
   }
 
   /** Re-derive spring tail state from the CURRENT pose, keeping that pose (the trick in
@@ -630,10 +531,8 @@ export class Avatar {
     for (const [j, q] of saved) j._initialLocalRotation.copy(q);
   }
 
-  /** Put the AUTHORED spring rest back, so the hair combs itself out again.
-   *
-   *  Split from the release: a doll that disposes mid-tumble hands the hair back ADOPTING the
-   *  fallen shape (live, still falling); getting UP is when the combed shape comes back. */
+  /** Put the authored spring rest back, so the hair combs itself out again (on getting up, not on the doll's
+   *  dispose, which hands the hair back still falling). */
   _combHair() {
     const sbm = this.vrm?.springBoneManager;
     if (!sbm?.joints || !this.__springRest) return;
@@ -643,22 +542,12 @@ export class Avatar {
     }
   }
 
-  /** Find the wing bones once, and remember the pose they were authored in.
-   *
-   *  `[LR]_Wing_(Upper|Lower)` roots a chain and `_<n>` is its nth segment outward. Depth is the
-   *  INDEX in the name, not a count of underscores. Chains may differ in length (the ragdoll's
-   *  limit ramp divides by each chain's own length).
-   *
-   *  Every frame rebuilds from this rest: composing onto last frame's pose integrates and winds
-   *  the wings up. The ragdoll reads the same capture as its equilibrium, so it must be the
-   *  AUTHORED pose, never one a sim or the flap left behind.
-   */
+  /** Find the wing bones once and remember their authored pose (every frame of _flap rebuilds from it, and the
+   *  ragdoll reads it as its equilibrium). Wings are springbones, so three-vrm may have posed them already: prefer
+   *  each spring joint's _initialLocalRotation, the live pose only for a bone no springbone claims. */
   _findWings() {
     this._wings = null;
     if (!this.vrm?.scene) return;
-    // THE AUTHORED REST, NOT THE LIVE ONE: wings are springbones, so three-vrm may have posed them
-    // already (an observer first seeing a ragdolled body would capture a fallen pose). Prefer each
-    // spring joint's _initialLocalRotation; the live pose only for a bone no springbone claims.
     const springRest = new Map();
     for (const j of this.vrm.springBoneManager?.joints ?? []) {
       if (j?.bone && j._initialLocalRotation) springRest.set(j.bone, j._initialLocalRotation);
@@ -670,50 +559,39 @@ export class Avatar {
       found.push({
         node: o,
         rest: (springRest.get(o) ?? o.quaternion).clone(),
-        // +1 left, -1 right: about the body's forward axis the mirror is a sign and nothing else.
         side: m[1] === 'L' ? 1 : -1,
         lower: m[2] === 'Lower',
         depth: m[3] ? Number(m[3]) : 0,
       });
     });
     if (!found.length) return;
-    // roots before tips: a tip's world frame is read AFTER its root has been
-    // written this frame, so the order it is visited in is load-bearing.
-    found.sort((a, b) => a.depth - b.depth);
+    found.sort((a, b) => a.depth - b.depth);   // roots before tips: a tip composes on its root's new orientation
     this._wings = found;
-    // Shared with the ragdoll, which hangs its Bullet chains off this pose
-    // (stored on the avatar because the doll is rebuilt on every grab).
     this.__wingRest = new Map(found.map((w) => [w.node, w.rest]));
   }
 
-  /** One frame of the idle flap. Every wing is rebuilt from its captured rest, so this cannot
-   *  integrate. The rotation is about a WORLD axis (the body's forward) carried into the bone's
-   *  parent frame: local = parentWorld⁻¹ · R · parentWorld · rest (as the eyeballs do). */
+  /** One frame of the flap. Every wing is rebuilt from its captured rest, so this cannot integrate. The rotation is
+   *  about a world axis (the body's forward) carried into the bone's parent frame: local = P⁻¹ · R · P · rest. */
   _flap(dt) {
-    // EFFORT crossfades the two dial sets, term by term. `wingEffort` is set from outside
-    // (controller.js, from the flight state) and eased HERE so a slam to 1 arrives over ~0.2 s.
-    // Asymmetric: on fast (a bird commits to a beat), off slowly (the climb trails into the glide).
+    // effort (controller.js) eased here, asymmetric: on fast, off slowly (the climb trails into the glide)
     const want = THREE.MathUtils.clamp(this.wingEffort ?? 0, 0, 1);
     const have = this._wingEffort ?? 0;
     const tau = want > have ? 0.18 : 0.55;
     this._wingEffort = have + (want - have) * (1 - Math.exp(-dt / tau));
     const e = this._wingEffort;
 
-    // FOLDING, eased over about half a second: `wingsFolded` is set from outside (the fold_down
-    // verb), so the wings close rather than snap, and a ragdoll can interrupt it halfway.
+    // folding, eased over about half a second
     const fWant = this.wingsFolded ? 1 : 0;
     const fHave = this._wingFold ?? 0;
     this._wingFold = fHave + (fWant - fHave) * (1 - Math.exp(-dt / 0.45));
     const fold = this._wingFold;
-    // A FOLDED WING DOES NOT BEAT: the flap runs underneath and the fold blends over the top, so a
-    // body that folds mid-idle settles instead of freezing mid-stroke.
+    // the flap runs underneath and the fold blends over the top, so a body that folds mid-idle settles
     const folding = fold > 0.001;
     const W = e < 0.001 ? WING_IDLE : mixWings(WING_IDLE, WING_POWER, e);
     this._wingBlend = Math.min(1, (this._wingBlend ?? 1) + dt / Math.max(0.01, W.recover));
     this._wingT = (this._wingT ?? 0) + dt * Math.max(0, W.hz);
     this._wingT -= Math.floor(this._wingT);      // stays in [0,1) forever
-    // The body's forward, from the NORMALIZED rig (three-vrm guarantees those bones rest facing +Z;
-    // raw Tripo bones carry arbitrary roll). Falls back to the avatar group.
+    // the body's forward, from the normalized rig (those bones rest facing +Z; raw bones carry arbitrary roll)
     const h = this.vrm.humanoid;
     const ref = this._wingRef ?? (this._wingRef =
       h?.getNormalizedBoneNode?.('upperChest') ?? h?.getNormalizedBoneNode?.('chest')
@@ -722,27 +600,18 @@ export class Avatar {
     _wax.set(0, 0, 1).applyQuaternion(_wq).normalize();   // forward: the flap
     _wup.set(0, 1, 0).applyQuaternion(_wq).normalize();   // up: the sweep
     for (const w of this._wings) {
-      // the outer segments trail their root, and (optionally) the lower pair
-      // trails the upper by half a beat
       const ph = this._wingT - W.lag * w.depth - (W.sync || !w.lower ? 0 : 0.5);
-      // depth 0 carries the full amplitude; each segment out carries `tip` of
-      // the one before it, as its OWN rotation — the total sweep at the tip is
-      // larger than at the shoulder, because it inherits the root's as well.
+      // each segment out carries `tip` of the one before it, as its own rotation on top of the root's
       const amp = W.deg * Math.pow(W.tip, w.depth);
       const ang = (amp * Math.sin(ph * Math.PI * 2) + W.bias) * DEG * w.side;
       _wr.setFromAxisAngle(_wax, ang);
-      // ...and the fore/aft sweep, about UP, mirrored the OTHER way from the flap (both wings sweep
-      // forward together), composed on the left so it acts in the body's frame.
+      // the fore/aft sweep about up, mirrored the other way (both wings sweep forward together)
       const sw = W.sweep * Math.pow(W.tip, w.depth)
         * Math.sin((ph + W.sweepPhase) * Math.PI * 2) * DEG * -w.side;
       if (sw) _wr.premultiply(_wsw.setFromAxisAngle(_wup, sw));
-      // parentWorld is read fresh per bone, roots before tips (see _findWings), so a tip composes on
-      // its root's NEW orientation. _wacc is the accumulator, not _wpq: three.js quaternion ops MUTATE
-      // the receiver, so reusing _wpq would square the rotation.
       w.node.parent.getWorldQuaternion(_wpq);
       _wacc.copy(_wpq).invert().multiply(_wr).multiply(_wpq).multiply(w.rest);
-      // ...and then toward the vigil. The authored pose is LOCAL TO REST, the frame `w.rest` is in,
-      // so the target is rest * folded.
+      // ...then toward the fold; WING_FOLDED is local to rest, so the target is rest * folded
       if (folding) {
         const q = WING_FOLDED[w.node.name];
         if (q) {
@@ -752,21 +621,15 @@ export class Avatar {
         }
       }
       if (this._wingBlend < 1 && w.from) {
-        // Standing up, the bones are wherever the ragdoll left them: slerp out of that pose over the
-        // first half-second rather than teleport (the hair deliberately stays dishevelled).
-        w.node.quaternion.copy(w.from).slerp(_wacc, this._wingBlend);
+        w.node.quaternion.copy(w.from).slerp(_wacc, this._wingBlend);   // standing up: out of the ragdoll's pose, not a teleport
       } else {
         w.node.quaternion.copy(_wacc);
       }
-      // Explicit: a bone declared as a VRM springbone has matrixAutoUpdate FALSE (three-vrm), and
-      // there assigning .quaternion never reaches the renderer.
-      w.node.updateMatrix();
+      w.node.updateMatrix();   // a springbone has matrixAutoUpdate false
     }
   }
 
-  /** Hold the eyes shut (1) or let them open (0). Eased in update() so it
-   *  reads as closing rather than snapping. Returns false if this body has no
-   *  eyelid bones, so a caller can say so instead of appearing to work. */
+  /** Hold the eyes shut or let them open (eased in update). False when this body has no eyelid bones. */
   setEyes(shut) {
     if (this._lids === undefined) this._findLids();
     if (!this._lids) return false;
@@ -774,12 +637,8 @@ export class Avatar {
     return true;
   }
 
-  /** Find the eyelid bones once, and remember where OPEN is.
-   *
-   *  L_/R_Eyelid_Upper (and _Lower) from the rig pipeline. The closing angle comes from the rig as a
-   *  node extra (eido_export.py); BLINK.closed is the fallback, deliberately modest — an overshoot
-   *  reads as a wince.
-   */
+  /** Find the eyelid bones (L_/R_Eyelid_Upper, _Lower) once and remember where open is. The closing angle comes
+   *  from the rig as a node extra; BLINK.closed is the fallback. */
   _findLids() {
     this._lids = null;
     if (!this.vrm?.scene) return;
@@ -788,18 +647,13 @@ export class Avatar {
       const m = /^[LR]_Eyelid_(Upper|Lower)$/.exec(o.name ?? '');
       if (!m) return;
       const ex = o.userData?.gltfExtras ?? o.userData ?? {};
-      // THREE SOURCES, in order of authority: a saved closed POSE (authored), then a Limit Rotation
-      // constraint (inferred), then BLINK.closed (a generic dial).
+      // in order of authority: a saved closed pose (already a rotation from rest), a Limit Rotation constraint
+      // (absolute angles, rest mid-range, so the delta is closed - centre), then the BLINK.closed dial
       let lim = NaN;
       const cl = Number(ex.blink_closed_x);
       if (ex.blink_closed_src === 'pose') {
-        // AUTHORED: eido_export.py read this from a saved eyes-closed pose asset, so it is already
-        // the lid's rotation FROM REST — no centring.
         if (Number.isFinite(cl) && Math.abs(cl) > 1e-3 && Math.abs(cl) < 1.6) lim = cl;
       } else {
-        // A Limit Rotation's numbers are ABSOLUTE angles in the bone's own frame, not offsets from
-        // rest. Rest sits mid-range, so the closing delta is closed - centre; anything implausible
-        // falls back to the dial (a rig may set limits for something other than a blink).
         const mn = Number(ex.limit_min_x), mx = Number(ex.limit_max_x);
         if ([mn, mx, cl].every(Number.isFinite) && mx > mn) {
           const d = cl - (mn + mx) / 2;
@@ -813,25 +667,19 @@ export class Avatar {
         exported: Number.isFinite(lim) && Math.abs(lim) > 1e-4 ? lim : null,
       });
     });
-    // NOT report(): that is the error channel, and a clean load is not a fault.
     if (found.length) this._lids = found;
   }
 
   // ---- first-person anchors (fp_view.js consumes these) -------------------
 
-  /** Live world position of the head bone, or null when the rig has none.
-   *  The RAW bone is the skinned skeleton the mesh actually follows — it
-   *  carries the current clip (seated, mounted, mid-swing) because the root
-   *  rides whatever drives it and the pose rides the mixer. */
+  /** Live world position of the head bone (the raw bone, which the mesh follows), or null when the rig has none. */
   headWorldPosition(out) {
     const node = this.vrm.humanoid?.getRawBoneNode?.('head') ?? this.head;
     if (!node) return null;
     return node.getWorldPosition(out);
   }
 
-  /** World bounds of the rig's own mesh — vrm.scene only, deliberately NOT
-   *  this.root, so the nameplate/bubble sprites above the head don't inflate
-   *  the box. Fallback anchor for rigs without a head bone. */
+  /** World bounds of the rig's own mesh (vrm.scene, not the root: the sprites above the head would inflate it). */
   visualBounds(box) {
     box.setFromObject(this.vrm.scene);
     return box.isEmpty() ? null : box;
@@ -840,12 +688,10 @@ export class Avatar {
   // ---- locomotion / clips
   setClip(slot, speed = 0, { fade, ease = false } = {}) {
     this.postureSlot = slot;   // what was ASKED (the wire's clip), before any fallback: the plate reads posture from it
-    // Moving cancels a gesture: better cut short than frozen mid-cheer while walking away.
-    if (this.onceAnim && speed > 0.05) this.cancelOnce();
+    if (this.onceAnim && speed > 0.05) this.cancelOnce();   // moving cancels a gesture
     if (this.onceAnim) return;        // otherwise it owns the body until it finishes
     if (this._sb) return;          // a socket's pose (setSeatBlend) owns the base clips while it holds
-    // any clip the library has, by name (a socket's enter/leave riding someone's presence `clip`): loaded on first
-    // ask, the nearest loaded posture stands in meanwhile
+    // any clip the library has, by name: loaded on first ask, the nearest loaded posture stands in meanwhile
     if (!this.actions[slot] && !CLIP_FALLBACK[slot] && !HYDRATED.has(slot)) this.ensureClip(slot);
     let use = slot;
     while (!this.actions[use] && CLIP_FALLBACK[use]) use = CLIP_FALLBACK[use];
@@ -871,13 +717,9 @@ export class Avatar {
     return h;
   }
 
-  /** SWIMMING, drawn: no rig ships a swim clip, so the stroke is procedural, composed over the idle clip on
-   *  the normalized bones (rest = identity: +x the body's left, +z forward). `swim` is a heads-up
-   *  breaststroke — the body leans in, the arms reach and sweep, the legs frog-kick on the off-beat;
-   *  `tread` is upright, the arms sculling, the legs cycling. Eased in and out, and cross-faded between the
-   *  two, by weights, so arriving in deep water or stopping mid-stroke never snaps. Runs BEFORE the held
-   *  pose and animations, which therefore win any bone they name; never the head (the camera pitch's).
-   *  Every client draws it from the clip name alone — nothing new on the wire. */
+  /** Swimming, drawn: no rig ships a swim clip, so the stroke (shared/swimpose.js swimTargets) is composed over the
+   *  idle clip on the normalized bones, eased and cross-faded between `swim` and `tread` by weight. Runs before
+   *  the held pose and animations, which win any bone they name; never the head. */
   _swimLayer(dt, now) {
     const slot = this.postureSlot;
     const want = !this._limp && SWIM_CLIPS.includes(slot) ? 1 : 0;
@@ -899,15 +741,11 @@ export class Avatar {
   _setAction(a, slot, fadeIn, ease = false) {
     if (!a || this.current === a) return;
     let linear = false;
-    // into a jump the caller says how fast: a jump press is snappy (FADE_PRESS, one owner with
-    // locomotion_clip.js); otherwise 0.5 s EASED.
-    const fade = fadeIn ?? (slot === 'jump' ? FADE_PRESS : 0.22);
-    // a cut that lands INSIDE an ease (a landing inside the walk-off ease) continues from the current
-    // weights with a linear profile, and fades the outgoing action that was parked at 1-w. The
-    // plain branch's reset()+fadeIn would dip the weight sum for a frame.
+    const fade = fadeIn ?? (slot === 'jump' ? FADE_PRESS : 0.22);   // a jump press is snappy (locomotion_clip.js)
+    // a cut landing inside an ease continues from the current weights, linear (reset()+fadeIn would dip the sum)
     if (this._xfade) { const x = this._xfade; if (x.out && x.out !== a && x.out !== this.current) x.out.fadeOut(fade); this._xfade = null; ease = true; linear = true; }
     if (ease) {
-      // three's fades are linear; this one is smoothstep on both sides so the weights always sum to 1
+      // smoothstep on both sides, so the weights always sum to 1
       const prev = this.current; const out0 = prev ? prev.getEffectiveWeight() : 0; if (prev) prev.stopFading();
       const in0 = a.getEffectiveWeight();   // from wherever the previous linear fade left them, not 0/1
       a.enabled = true; a.reset(); a.stopFading(); a.setEffectiveWeight(in0); a.play();
@@ -918,15 +756,13 @@ export class Avatar {
       a.setEffectiveWeight(1);       // base weight — fadeIn ramps a MULTIPLIER on this
       a.reset().fadeIn(fade);
     }
-    // The jump LEAVES THE GROUND INSTANTLY, but the clip opens with its anticipation crouch: start it
-    // at take-off, measured from the clip itself, so it holds for any body and any jump clip.
+    // the body leaves the ground instantly, so the jump clip starts at its take-off, past the anticipation crouch
     if (slot === 'jump') a.time = clipTakeoff(a.getClip());
     this.current = a;
     this.currentSlot = slot;
   }
 
-  /** Fill in the clips that weren't needed to stand up. Safe to call twice.
-   *  One at a time, in idle moments, not a parse burst right behind the landing. */
+  /** Fill in the clips that weren't needed to stand up, one at a time in idle moments. Safe to call twice. */
   async hydrateClips() {
     if (this._hydrating) return this._hydrating;
     this._hydrating = (async () => {
@@ -959,9 +795,7 @@ export class Avatar {
         this.extraClips.set(file, action);
       }
       const dur = action.getClip().duration;
-      // play() is what puts an action in the mixer's evaluation set; without it the skeleton
-      // falls to its REST pose (the T-pose).
-      action.reset().play();
+      action.reset().play();   // without play() the skeleton falls to its T-pose
       this.onceAnim = null;           // let _setAction run
       this._setAction(action, `once:${name}`);
       this.onceAnim = { action, until: performance.now() + dur * 1000 };
@@ -971,18 +805,13 @@ export class Avatar {
     if (!this.onceAnim) return;
     const action = this.onceAnim.action;
     this.onceAnim = null;
-    // The gesture MUST be faded out: a LoopOnce with clampWhenFinished holds its final frame at
-    // full weight forever, blended into everything after.
-    action.fadeOut(0.25);
+    action.fadeOut(0.25);   // a clamped LoopOnce holds its final frame at full weight forever otherwise
     if (this.current === action) this.current = null; // next setClip fades in fresh
   }
 
   // ---- custom poses & one-off animations ---------------------------------
-  //
-  // Both are humanoid-bone rotations, held (a pose) or sampled over time (an animation), applied
-  // AFTER vrm.update: the mixer rewrites every bone from the clip each frame, and this SLERPS the
-  // listed bones toward the override by a ramping weight — composing over a walk cycle instead of
-  // fighting it, and easing back on release. No mixer, no asset: a few hundred bytes of quaternions.
+  // Both are bone rotations, held (a pose) or sampled over time (an animation), slerped over the clip's pose by a
+  // ramping weight between the mixer and vrm.update (see update): composing over a walk cycle instead of fighting it.
 
   /** Resolve+cache the normalized bone nodes for a set of names once. */
   _resolveBones(names) {
@@ -994,9 +823,7 @@ export class Avatar {
     return out;
   }
 
-  /** Any bone of this rig by its exported name — hair, wings, eyelids, twist
-   *  bones, the raw halves of humanoid bones — or null. Built once: remotes
-   *  call setPose every frame while a pose blends. */
+  /** Any bone of this rig by its exported name (hair, wings, eyelids, twist bones, raw humanoid bones), or null. */
   _rawBone(name) {
     if (!this._rawBones) {
       this._rawBones = new Map();
@@ -1005,14 +832,10 @@ export class Avatar {
     return this._rawBones.get(name) ?? null;
   }
 
-  /** A raw bone's rest, from the TRS every bone had at load (assets.js
-   *  boneRest) rather than from the live node, which holds whatever the clip,
-   *  the springs or the wings last wrote. `pq` is the PARENT's rest rotation
-   *  in the model frame, `pinv` its inverse linear part, `rq` this bone's rest
-   *  local rotation: what a model-axes pose value needs to land in a
-   *  parent-local node. The composition three-vrm applies to humanoid bones
-   *  (raw = P⁻¹·q·P·rest), extended to every bone. Null when the body has no
-   *  recorded rest (the capsule stand-in). */
+  /** A raw bone's rest, from the TRS every bone had at load (assets.js boneRest), not the live node. `pq` is the
+   *  parent's rest rotation in the model frame, `pinv` its inverse linear part, `rq` this bone's rest local
+   *  rotation: what a model-axes pose value needs to land in a parent-local node (raw = P⁻¹·q·P·rest, as three-vrm
+   *  does for humanoid bones). Null when the body has no recorded rest (the capsule). */
   _rawRest(node) {
     this._rawRests ??= new Map();
     if (this._rawRests.has(node)) return this._rawRests.get(node);
@@ -1023,8 +846,7 @@ export class Avatar {
     };
     let rest = null;
     if (table?.[node.name]) {
-      // Walk up through bones at rest; the first non-bone (the armature node)
-      // does not animate, so where it is now IS where it rests.
+      // walk up through bones at rest; the first non-bone (the armature node) does not animate
       const P = new THREE.Matrix4();
       let o = node.parent;
       while (o && o.isBone && table[o.name]) { P.premultiply(local(o)); o = o.parent; }
@@ -1041,14 +863,10 @@ export class Avatar {
     return rest;
   }
 
-  /** Hold a pose. `bones` is a sparse map name -> value, where a value is a
-   *  bare [x,y,z,w] or {q?, t?, s?} (shared/humanoid.js poseChannels). A
-   *  VRM humanoid name rotates the normalized bone, composed over the clip as
-   *  it always has; any OTHER name the rig has (Hair_3_2, a wing, an eyelid,
-   *  L_ThighTwist02) is posed on the raw node. Translation and scale ride the
-   *  raw node for every bone, except hips translation, which goes through
-   *  the normalized hips so springs and everything downstream see the body
-   *  where it is. */
+  /** Hold a pose. `bones` is a sparse map name -> [x,y,z,w] or {q?, t?, s?} (shared/humanoid.js poseChannels). A
+   *  humanoid name rotates the normalized bone over the clip; any other bone the rig has is posed on the raw node.
+   *  Translation and scale ride the raw node, except hips translation, which goes through the normalized hips so
+   *  everything downstream sees the body where it is. */
   setPose(bones) {
     if (!bones || typeof bones !== 'object') return this.clearPose();
     const targets = new Map(), raw = [];
@@ -1070,27 +888,21 @@ export class Avatar {
     }
     if (!targets.size && !raw.length && !hipsT) return;
     const nodes = this._resolveBones([...targets.keys()]);
-    // A pose REPLACING a pose (remotes do it every frame, a ragdoll on its first step) must hand
-    // back what only the old one covered, or a bone whose clip track holds still keeps it forever.
+    // a pose replacing a pose hands back what only the old one covered (a still clip track never would)
     if (this._override) this._handBack(this._override, nodes, raw, hipsT);
     this._override = {
       kind: 'pose', nodes,
       raw, hipsT, hipsNode: hipsT ? h.getNormalizedBoneNode('hips') : null,
-      // A tumble starts at FULL weight: the ragdoll's first frame is by construction the pose the
-      // body is already in, and easing in would blend the walk back in during the impact.
+      // a tumble starts at full weight: the ragdoll's first frame is the pose the body is already in
       targets, weight: this._override?.weight ?? (this._limp ? 1 : 0), wantWeight: 1,
     };
   }
 
-  /** Play a one-off animation. data = { dur, loop?, replace?, tracks: {bone:[{t,q:[x,y,z,w]}]} }.
-   *
-   *  Animations are LAYERS over the held pose, not a replacement: a wave while crouching keeps the
-   *  crouch. A new animation takes only ITS bones from the layers already playing; the rest play on.
-   *  `replace` ends every other layer instead. Ending the held pose is the AUTHOR's half of a
-   *  replace — it lives in presence (myState.pose, an agent's heldPose), which this body only renders. */
+  /** Play a one-off animation. data = { dur, loop?, replace?, tracks: {bone:[{t,q:[x,y,z,w]}]} }. Animations are
+   *  layers over the held pose (a wave while crouching keeps the crouch); a new one takes only its bones from the
+   *  layers playing, or every layer with `replace`. The held pose itself is presence, which this body only renders. */
   playAnimation(data) {
-    // {stop: true}: every layer fades out and hands its bones back to what is beneath (the held pose,
-    // the clip): the body rests in what it was doing, never the bind pose
+    // {stop: true}: every layer fades out and hands its bones back to what is beneath
     if (data?.stop === true) { for (const l of this._anims ?? []) l.wantWeight = 0; return; }
     if (!data?.tracks) return;
     const tracks = new Map();
@@ -1105,8 +917,7 @@ export class Avatar {
     const dur = Math.max(0.1, Math.min(30, Number(data.dur) || 2));
     const nodes = this._resolveBones([...tracks.keys()]);
     const mine = new Set(nodes.map(([, n]) => n));
-    // Omitted on legacy wire packets: those always replaced the previous clip.
-    // Modern authoring surfaces send false explicitly to request a merge.
+    // omitted = replace (the older wire); false requests a merge
     const replace = data.replace !== false;
     let from = 0;   // a bone taken over mid-play continues from where it was
     this._anims ??= [];
@@ -1124,11 +935,8 @@ export class Avatar {
     });
   }
 
-  /** Return an outgoing override's bones to their owners — the clip, or the
-   *  pose underneath — except those the incoming one (`nodes` [name, node]
-   *  pairs, `raw` entries, `hipsT`) goes on writing. Only bones still
-   *  holding exactly what we left are touched; anything rewritten since has
-   *  an owner already. */
+  /** Return an outgoing override's bones to their owners (the clip, or the pose underneath), except those the
+   *  incoming one (`nodes`, `raw`, `hipsT`) goes on writing. Only bones still holding exactly what we left. */
   _handBack(o, nodes = [], raw = [], hipsT = null) {
     const keep = new Set(nodes.map(([, n]) => n));
     // an outgoing ANIMATION's bones under the held pose stay the pose's
@@ -1143,16 +951,12 @@ export class Avatar {
     if (o.hipsNode && !hipsT) this._rawRelease(o.hipsNode);
   }
 
-  // ---- reaching: IK that re-solves every frame ------------------------------
-  //
-  // A reach is a RELATION to a point that may be moving, so it is stored as a target FUNCTION and
-  // re-solved every frame (one closed-form solve per reaching limb). It has its own slot so a held
-  // pose and a reach coexist; where both would write a bone the reach wins and the pose skips it,
-  // keeping the one-author-per-bone-per-frame rule _composeBegin depends on.
+  // ---- reaching: IK re-solved every frame ------------------------------
+  // A reach is a relation to a point that may be moving, so it is stored as a target function and re-solved every
+  // frame (reachbone.js). Where a held pose and a reach would write the same bone the reach wins and the pose skips
+  // it: one author per bone per frame, which _composeBegin depends on.
 
-  /** Measure the fixed facts about one arm/leg chain, once. Everything here is
-   *  in the avatar ROOT's local frame, where the rest pose has identity
-   *  rotations — the frame shared/reach.js does its algebra in. */
+  /** Measure the fixed facts about one arm/leg chain, once (in the root's frame, where rest is identity). */
   _measureChain(key) {
     this._chains ??= new Map();
     if (!this._chains.has(key)) this._chains.set(key, measureChain(this, key));
@@ -1175,10 +979,9 @@ export class Avatar {
       lastWrist: prev?.lastWrist ?? null,
       relation: opts.relation ?? null,
       palm: opts.palm !== false,
-      owner: opts.owner ?? null,            // 'seat': a socket's reach (occupybody.js) — a person's own reach outranks it
-      hint: opts.hint ?? null,              // () => [x,y,z] world: where the elbow/knee points (a socket's reach.hint)
-      // Retargeting still has to restore the previous writes when the new
-      // relation cannot solve (including a cycle over a paused base clip).
+      owner: opts.owner ?? null,            // 'seat': a socket's reach (occupybody.js); a person's own reach outranks it
+      hint: opts.hint ?? null,              // () => [x,y,z] world: where the elbow/knee points
+      // retargeting still restores the previous writes when the new relation cannot solve
       _nu: prev?._nu, _nl: prev?._nl, _nh: prev?._nh,
     });
     return true;
@@ -1191,8 +994,7 @@ export class Avatar {
     if (r) r.wantWeight = 0;
   }
 
-  /** What each live reach achieved last frame — for callers that need to know
-   *  a hand did NOT get there (out of range, or stopped by a joint). */
+  /** What each live reach achieved last frame (a hand may not have got there). */
   reachStatus() {
     const out = {};
     for (const [k, r] of this._reach ?? []) out[k] = { weight: r.weight, gap: r.gap ?? null, bound: r.bound, penetration: r.penetration ?? null, palmResidual: r.palmResidual ?? null };
@@ -1201,14 +1003,12 @@ export class Avatar {
 
   _applyReach(dt, now) {
     if (!this._reach?.size) return;
-    // Establish this frame's clip base before any relation reads a target.
+    // this frame's clip base, before any relation reads a target
     for (const r of this._reach.values()) for (const node of [r._nu, r._nl, r._nh]) {
       const c = node && this._composed.get(node);
       if (c?.live && node.quaternion.equals(c.out)) { node.quaternion.copy(c.base); c.live = false; }
     }
-    // Release is a lifecycle operation, including when a cycle prevents a
-    // solve. Retire fading entries BEFORE planning so their dependants can
-    // resume against the released limb's clip pose in this same frame.
+    // retire fading entries before planning, so their dependants resume against the released limb this frame
     for (const [key, r] of this._reach) {
       if (r.wantWeight !== 0) continue;
       r.weight += (r.wantWeight - r.weight) * Math.min(1, 12 * dt);
@@ -1220,21 +1020,17 @@ export class Avatar {
     const plan = planReaches([...this._reach].map(([limb, r]) => ({ owner, limb, target: r.relation, reach: r })));
     for (const e of plan.blocked) { e.reach.bound = ['cyclic-reach']; e.reach.gap = null; }
     for (const { limb: key, reach: r } of plan.order) {
-      // Only solvable reaches fade IN; all releases already faded above.
       if (r.wantWeight !== 0) r.weight += (r.wantWeight - r.weight) * Math.min(1, 12 * dt);
       const ch = this._measureChain(key);
       if (!ch) { this._reach.delete(key); continue; }
 
-      // A target may be a bare point, or a {pos, normal} — the normal being
-      // the surface the hand is meeting, which is what lets the palm face it
-      // rather than arriving back-first.
+      // a bare point, or {pos, normal} (the surface the hand meets, so the palm can face it)
       const raw = typeof r.target === 'function' ? r.target() : r.target;
       const tw = Array.isArray(raw) ? raw : raw?.pos;
       const normal = Array.isArray(raw) ? null : raw?.normal;
       if (!tw || tw.length !== 3 || !tw.every(Number.isFinite)) { r.bound = ['no-target']; continue; }
 
-      // the palm faces INTO the surface, so it wants the opposite of the
-      // outward normal
+      // the palm faces into the surface: the opposite of the outward normal
       const palm = (r.palm !== false && normal && normal.length === 3 && normal.every(Number.isFinite))
         ? { dir: [-normal[0], -normal[1], -normal[2]] } : null;
       const hint = typeof r.hint === 'function' ? r.hint() : r.hint;
@@ -1242,8 +1038,7 @@ export class Avatar {
         ...(Array.isArray(hint) && hint.length === 3 && hint.every(Number.isFinite) ? { hintWorld: hint } : {}) });
       if (!out.ok) { r.bound = [out.why]; continue; }
       r.bound = out.res.bound; r.gap = out.res.gap; r.lastPick = out.pick ?? null; r.lastSwivel = out.swivelUsed ?? null; r.penetration = out.penetration ?? 0; r.lastElbow = out.elbowOffset;
-      // what the solver BELIEVES it placed, in world space, so a probe can
-      // compare it against where the bones actually ended up
+      // what the solver believes it placed, for probes
       r.solved = { elbow: this.root.localToWorld(_rv3.set(...out.res.elbow)).toArray(),
                    hand: this.root.localToWorld(_rv4.set(...out.res.hand)).toArray() };
       const q = { upper: out.upper, lower: out.lower };
@@ -1258,8 +1053,7 @@ export class Avatar {
     }
   }
 
-  /** Slerp one bone from whatever the clip left toward `q`, composed so the
-   *  fade-out actually returns to the clip rather than converging near it. */
+  /** Slerp one bone from the clip's pose toward `q`, composed so the fade-out returns to the clip. */
   _writeBone(node, q, weight) {
     const c = this._composeBegin(node);
     _rq3.set(q[0], q[1], q[2], q[3]);
@@ -1267,8 +1061,7 @@ export class Avatar {
     this._composeEnd(node, c);
   }
 
-  /** Bones a live reach owns this frame — a held pose must not also write
-   *  them, or two authors compose onto each other and both drift. */
+  /** Bones a live reach owns this frame; a held pose must not also write them. */
   _reachOwned() {
     if (!this._reach?.size) return null;
     const s = new Set();
@@ -1282,12 +1075,9 @@ export class Avatar {
   clearPose() { if (this._override) this._override.wantWeight = 0; }
 
   // ---- the body at a socket (shared/sockbody.js) ------------------------------
-  //
-  // A socket says what a body does there as data: a clip, a BLEND of clips by a signal (speed, steer, phase, a
-  // script's param), or a clip whose TIME is locked to the thing's motion (a swing's pump follows the swing). That is
-  // a mixer job the locomotion slots can't do — they crossfade one action at a time — so a socket's pose is its own
-  // layer over the mixer: several actions at once, weights set every frame, time optionally driven rather than
-  // advanced. While it holds, setClip yields (the seat owns the base clip) and gestures still play over it.
+  // A socket says what a body does there as data: a clip, a blend of clips by a signal, or a clip whose time is
+  // locked to the thing's motion. So a socket's pose is its own layer over the mixer: several actions at once,
+  // weights set every frame, time optionally driven. While it holds, setClip yields and gestures play over it.
 
   /** The action for a clip name, loading it from the animation library on first ask (null until it lands). Slot
    *  names (idle, walk, sit, sitchair, lie…) come from hydrateClips; every other name is a library file. */
@@ -1326,9 +1116,7 @@ export class Avatar {
     }
     this._sb.want = clips; this._sb.phase = Number.isFinite(phase) ? phase : null;
   }
-  /** The slot actually carrying the body: currentSlot, or while a socket's pose holds (setSeatBlend clears currentSlot)
-   *  the blend's heaviest clip, named as the slot it really is (a fallback reads as itself). The seat-profile gate reads
-   *  this (occupants.js). */
+  /** The slot actually carrying the body: currentSlot, or the seat blend's heaviest clip (occupants.js reads this). */
   playingSlot() {
     if (!this._sb) return this.currentSlot;
     let best = null, bw = 0;
@@ -1429,9 +1217,8 @@ export class Avatar {
     }
   }
 
-  /** Which body point a socket seats (hips | feet | head): its place in the ROOT's frame, measured from the posed
-   *  skeleton every frame it is asked for (Resonite AvatarAnchor's PositionNode, measured rather than declared, so
-   *  any body in any clip lands its hips on the socket). Null = not measured yet (the body is loading). */
+  /** Which body point a socket seats (hips | feet | head): its place in the root's frame, measured from the posed
+   *  skeleton every frame it is asked for, so any body in any clip lands on the socket. Null = not measured yet. */
   setAnchorWant(kind) { this._anchorWant = kind && kind !== 'root' ? kind : null; if (!this._anchorWant) this._anchorOff = null; }
   anchorOffset() { return this._anchorOff ?? null; }
   _measureAnchor() {
@@ -1447,14 +1234,10 @@ export class Avatar {
     this._anchorOff = p.toArray();
   }
 
-  /** Move a held pose's hips translation onto the ROOT, leaving every joint where it is in the
-   *  world — for the moment a sim takes the body (its first step replaces the pose with a
-   *  rotations-only one, which would snap a kneel back to standing height above its own physics).
-   *  True when something moved.
-   *
-   *  `clip: true` bakes what a lowering CLIP did to the hips too (sit, lie), because a watcher
-   *  draws a limp remote over the clip it last saw. One convention on every screen and in every
-   *  agent's sim: the root carries every drop, the hips stay at rest while limp (_park). */
+  /** Move a held pose's hips translation onto the root, leaving every joint where it is in the world, for the
+   *  moment a sim takes the body (its rotations-only pose would snap a kneel back to standing height). `clip: true`
+   *  bakes a lowering clip's hips too (sit, lie). One convention everywhere: the root carries every drop, the hips
+   *  stay at rest while limp (_park). True when something moved. */
   bakeHipsIntoRoot({ clip = false } = {}) {
     let moved = false;
     const o = this._override;
@@ -1483,32 +1266,21 @@ export class Avatar {
     return moved;
   }
 
-  /** The normalized hips' rest position in its parent's frame (three-vrm's
-   *  normalizedRestPose): the height every fallen body's root is measured
-   *  from, on every screen and in every agent's sim. */
+  /** The normalized hips' rest position in its parent's frame: the height every fallen body's root is measured from. */
   _hipsRest() {
     if (this.__hipsRest !== undefined) return this.__hipsRest;
     const p = this.vrm.humanoid?.normalizedRestPose?.hips?.position;
     return (this.__hipsRest = Array.isArray(p) && p.length === 3 ? new THREE.Vector3().fromArray(p) : null);
   }
 
-  /** Go limp, or stand back up.
-   *
-   *  The locomotion mixer writes every bone its clip tracks, every frame, but a ragdoll drives
-   *  only DRIVEN_BONES. So every bone the sim does NOT drive is parked at its rest rotation each
-   *  frame, right after the mixer writes it — a body going limp unclenches its hands and drops its
-   *  shoulders, and the chest->upperArm span is rigid, as the sim's distance constraint assumes.
-   *
-   *  Do NOT stop the mixer: the actions are play()ed once and cross-faded by WEIGHT ever after, so
-   *  stopAllAction() would deactivate them for good, leave the head pitch (`+=`) integrating, and
-   *  snap the skeleton to its bind pose (which the Ragdoll would then measure).
-   *
+  /** Go limp, or stand back up. A ragdoll drives only DRIVEN_BONES, so every other bone is parked at its rest
+   *  rotation each frame after the mixer writes it (_park). The mixer keeps running: its actions are play()ed once
+   *  and cross-faded by weight, and stopAllAction() would snap the skeleton to its bind pose.
    *  `bake`: your own body only (a remote's root arrives carrying its drop; bakeHipsIntoRoot). */
   setLimp(on, { bake = false } = {}) {
     on = !!on;
     if (on === this._limp) return;
-    // A held pose's hips translation (a kneel) is baked FIRST: that hands the
-    // hips back to the clip's own value, which is what getting up must restore.
+    // a held pose's hips translation is baked first, handing the hips back to the clip's value for getting up
     if (on && bake) this.bakeHipsIntoRoot();
     const hipsNode = on ? this.vrm.humanoid?.getNormalizedBoneNode('hips') : null;
     const clipHips = hipsNode?.position.clone() ?? null;   // what getting up hands back
@@ -1516,15 +1288,11 @@ export class Avatar {
     this._limp = on;
     // A body with its own runtime hands the sim back the nodes it was solving (bodyruntime_core.js setLimp).
     this.bodyRuntime?.setLimp?.(this.vrm, on);
-    // Eyes close when the body goes slack and open when it gets up (eyelid-bone rigs only; setEyes
-    // says so). Driven from setLimp, so it is true of remotes too — nothing new on the wire.
-    // _limpEyes remembers that WE closed them: someone who chose /eyes closed keeps them closed.
+    // eyes close when the body goes slack and open when it gets up; _limpEyes remembers that WE closed them, so
+    // someone who chose /eyes closed keeps them closed
     if (on) { this._limpEyes = this.setEyes(true); }
     else if (this._limpEyes) { this._limpEyes = false; this.setEyes(false); }
-    // Wings: while limp they belong to the ragdoll (ammodoll hangs Bullet chains off these bones);
-    // here we capture where the sim left them, so the flap can slerp out of it. A remote's wings
-    // simply freeze where the flap stopped (no dressing on the wire, as with the hair).
-    // Getting up — not the doll's dispose — is when the hair goes back to three-vrm.
+    // getting up is when the hair goes back to three-vrm, and when the flap captures where the sim left the wings
     if (!on) { this._releaseHair(); this._combHair(); }
     if (!on) {
       if (this._wings === undefined) this._findWings();
@@ -1534,11 +1302,9 @@ export class Avatar {
       }
     }
     if (!on) {
-      // Hand the bones back as we found them: three.js only writes a bone when the clip's value
-      // CHANGES, so a still track would never overwrite the parked rest rotation.
+      // hand the bones back as found: a still clip track would never overwrite the parked rest rotation
       for (const [node, q] of this._parked ?? []) node.quaternion.copy(q);
       this._parked = null;
-      // and the hips where the clip had them, for the same reason
       if (this._parkedHips) this._parkedHips[0].position.copy(this._parkedHips[1]);
       this._parkedHips = null;
       return;
@@ -1550,12 +1316,8 @@ export class Avatar {
     this._parked = this._resolveBones(
       this._humanoidBones().filter((n) => !driven.has(n)))
       .map(([, node]) => [node, node.quaternion.clone()]);
-    // The hips POSITION is parked at rest too: the drop belongs to the root (bakeHipsIntoRoot), so a
-    // limp body's root, its own or off the wire, is always measured from rest hips.
-    this._parkedHips = hipsNode && clipHips && this._hipsRest() ? [hipsNode, clipHips] : null;
-    // once here as well as per-frame, so the Ragdoll about to be built reads a
-    // skeleton that already agrees with what it will be driving
-    this._park();
+    this._parkedHips = hipsNode && clipHips && this._hipsRest() ? [hipsNode, clipHips] : null;   // the drop belongs to the root
+    this._park();   // now as well as per frame, so the ragdoll about to be built reads the parked skeleton
     this.root.updateMatrixWorld(true);
   }
 
@@ -1564,14 +1326,9 @@ export class Avatar {
     if (this._parkedHips) this._parkedHips[0].position.copy(this._hipsRest());
   }
 
-  // ---- composing on top of the clip, without trusting it to come back
-  //
-  // Writers between mixer.update and vrm.update compose on the clip pose, but three.js only calls
-  // binding.setValue when the computed value CHANGES: a bone whose track holds still is written once,
-  // and whatever we compose on top would integrate (and clearPose would be a one-way door).
-  // So remember the clip's value and what we left; if the bone still holds exactly what we left, put
-  // the clip's value back before composing again. Exact float compare is right (both sides are plain
-  // copies), and a false match is harmless.
+  // ---- composing on top of the clip. three.js writes a bone only when the clip's value changes, so a still
+  // track is written once and anything composed on top would integrate. So: remember the clip's value and what we
+  // left; if the bone still holds exactly what we left, put the clip's value back before composing again.
   _composeBegin(node) {
     let r = this._composed.get(node);
     if (!r) {
@@ -1584,8 +1341,7 @@ export class Avatar {
   }
   _composeEnd(node, r) { r.out.copy(node.quaternion); r.live = true; }
 
-  // The same guard over all three channels, for writers that also move and scale — per channel,
-  // because owners differ (vrm.update rewrites a humanoid bone's rotation, never its scale).
+  // the same guard over all three channels, per channel (vrm.update rewrites a humanoid bone's rotation, never its scale)
   _rawBegin(node) {
     this._rawComposed ??= new Map();
     let r = this._rawComposed.get(node);
@@ -1614,12 +1370,8 @@ export class Avatar {
     r.live = false;
   }
 
-  /** The raw half of a held pose: rotation of non-humanoid bones, and
-   *  translation/scale of any bone. AFTER vrm.update and after the wings,
-   *  because those are this bone's other authors — springs rewrite the hair
-   *  inside vrm.update, _flap rewrites the wings after it, the blink rewrites
-   *  the lids before it — and a bone the pose names is the pose's. Not while
-   *  limp: then the sim owns the hair and wings. */
+  /** The raw half of a held pose: rotation of non-humanoid bones, translation/scale of any bone. After vrm.update
+   *  and the wings, their other authors, so a bone the pose names is the pose's. Not while limp (the sim's). */
   _applyRawPose() {
     const o = this._override;
     if (o?.kind !== 'pose' || !o.raw?.length || this._limp) return;
@@ -1634,20 +1386,15 @@ export class Avatar {
       }
       if (e.t) e.node.position.addScaledVector(_hv.set(e.t[0], e.t[1], e.t[2]).applyMatrix3(rest.pinv), w);
       if (e.s) e.node.scale.multiply(_hs.set(e.s[0], e.s[1], e.s[2]).lerp(_ONE, 1 - w));
-      // Spring joints (hair, wings) run with matrixAutoUpdate off — three-vrm
-      // and _flap rebuild their matrices by hand — so a TRS write alone would
-      // never reach the skin.
-      if (!e.node.matrixAutoUpdate) e.node.updateMatrix();
+      if (!e.node.matrixAutoUpdate) e.node.updateMatrix();   // spring joints rebuild their matrices by hand
       this._rawEnd(e.node, r);
     }
   }
 
   _humanoidBones() { return Object.keys(this.vrm.humanoid?.humanBones ?? {}); }
 
-  /** World positions of the humanoid bones in the NEUTRAL rest pose — every
-   *  humanoid rotation identity — without disturbing the pose on screen.
-   *  The ragdoll measures joint limits, brace lengths and its hip offset against this, never
-   *  against the live skeleton (a mid-stride fall would take the stride as rest). */
+  /** World positions of the humanoid bones in the neutral rest pose (every rotation identity), without disturbing
+   *  the pose on screen. The ragdoll measures against this, never the live skeleton. */
   restBonePositions(names = null) {
     const h = this.vrm.humanoid;
     if (!h) return null;
@@ -1683,8 +1430,7 @@ export class Avatar {
   }
 
   _applyOverride(dt, now) {
-    // A live reach owns its bones outright this frame: the compose guard cannot tell two authors
-    // apart (each would read the other's output as the clip's value and both would integrate).
+    // a live reach owns its bones outright this frame: the compose guard cannot tell two authors apart
     const taken = this._reachOwned();
     const posed = this._override ? this._applyPoseSlot(dt, taken) : null;
     if (this._anims?.length) {
@@ -1697,11 +1443,9 @@ export class Avatar {
   _applyPoseSlot(dt, taken) {
     const o = this._override;
     const posed = new Set();
-    // ramp toward the wanted weight (ease ~120ms)
     o.weight += (o.wantWeight - o.weight) * Math.min(1, 12 * dt);
     if (o.wantWeight === 0 && o.weight < 0.02) {
-      // Hand the bones back on the way out: the ramp is cut at 2%, and on a still track nothing
-      // would ever clear that last 2%.
+      // hand the bones back on the way out: on a still track nothing would ever clear the last 2%
       for (const [, node] of o.nodes) {
         const r = this._composed.get(node);
         if (r?.live && node.quaternion.equals(r.out)) { node.quaternion.copy(r.base); r.live = false; }
@@ -1712,9 +1456,7 @@ export class Avatar {
       return posed;
     }
 
-    // Hips translation, on the NORMALIZED hips (three-vrm carries it to the raw hips inside
-    // vrm.update, so springs and wings follow). Same compose rule as rotation, or a clip with no
-    // hips track would sink the body a little more each frame.
+    // hips translation on the normalized hips (three-vrm carries it to the raw hips), under the same compose rule
     if (o.kind === 'pose' && o.hipsNode && o.hipsT) {
       const r = this._rawBegin(o.hipsNode);
       o.hipsNode.position.addScaledVector(o.hipsT, o.weight);
@@ -1725,7 +1467,6 @@ export class Avatar {
       for (const [name, node] of o.nodes) {
         const target = o.targets.get(name);
         if (!target || taken?.has(node)) continue;
-        // Composed, so the fade-OUT actually returns to the clip (a plain slerp never walks back)
         const r = this._composeBegin(node);
         node.quaternion.slerp(target, o.weight);
         this._composeEnd(node, r);
@@ -1735,10 +1476,8 @@ export class Avatar {
     return posed;
   }
 
-  /** The one-off animation, over whatever the clip and the pose left. A bone the pose wrote THIS
-   *  frame is composed onto the pose's output rather than begun afresh (beginning would read the
-   *  pose's value as the clip's); ending records the combined value, so next frame the pose's begin
-   *  still restores the clip underneath. */
+  /** The one-off animation, over the clip and the pose. A bone the pose wrote this frame is composed onto the pose's
+   *  output rather than begun afresh (which would read the pose's value as the clip's). */
   _applyAnimSlot(o, dt, now, taken, posed) {
     o.weight += (o.wantWeight - o.weight) * Math.min(1, 12 * dt);
     if (o.wantWeight === 0 && o.weight < 0.02) {
@@ -1763,15 +1502,13 @@ export class Avatar {
     }
   }
 
-  /** Rename the body. The nameplate is a baked sprite, so it is redrawn; the VRM, clips and mixer
-   *  are untouched (rebuilding the avatar would drop you through the floor mid-step). */
+  /** Rename the body: the nameplate is redrawn, nothing else is touched. */
   setName(name) {
     this.id = name;
     this._labelName = name;
     this.repaintLabel();
   }
-  /** This body's chosen size (bodyscale.js: 0.5–2; the body, its eyes, stride and collider — see the header there).
-   *  → true when it changed. */
+  /** This body's chosen size (bodyscale.js). True when it changed. */
   setUserScale(u) {
     const v = clampBodyScale(u);
     if (v === (this.userScale ?? 1)) return false;
@@ -1792,9 +1529,8 @@ export class Avatar {
     if (!sc) return;
     sc.scale.setScalar(this.bodyScale());
     sc.updateMatrixWorld(true);
-    this._ownClear = null;   // the clearance over the plate is in world units: re-measure at the new size
-    // a held reach's limb lengths are measured in the root frame, which sees this size: re-measure them, or a live
-    // resize (the slider, the VR fit) keeps bending the old arm. Eagerly, so _reachOwned never sees a gap.
+    this._ownClear = null;   // world units: re-measure at the new size
+    // a held reach's limb lengths are in the root frame: re-measure, or a live resize keeps bending the old arm
     if (this._chains) for (const key of [...this._chains.keys()]) this._chains.set(key, measureChain(this, key));
   }
   /** Metres the nameplate hangs over the measured crown, at the authored size (bodyscale.js plateLift). 0 = auto. */
@@ -1805,10 +1541,9 @@ export class Avatar {
     return true;
   }
 
-  /** The crown, measured ONCE while the body is at rest (constructor: a fresh or pooled VRM is in its rest pose, no
-   *  clip applied yet) — plateanchor.js crownEstimate over the raw head/hips/eye bones and the SKINNED mesh top (vertex
-   *  positions through the posed bones, ≤4000 a mesh). All in the VRM scene's own frame: model units, so a live
-   *  resize (root scale, the XR puppet scale) multiplies in per frame instead of going stale. null = nothing to measure. */
+  /** The crown, measured once while the body is at rest (the constructor): plateanchor.js crownEstimate over the
+   *  head/hips/eye bones and the skinned mesh top (≤4000 vertices a mesh), in the VRM scene's own frame so a live
+   *  resize multiplies in per frame. null = nothing to measure. */
   _measurePlateRest() {
     try {
       const sc = this.vrm?.scene, h = this.vrm?.humanoid;
@@ -1841,13 +1576,10 @@ export class Avatar {
     } catch { return null; }
   }
 
-  /** Hang the plate from the body, this frame (plateanchor.js says why). X/Z over the live hips (over the head, when
-   *  lying); Y from the rest crown, chased smoothly. The chase is on the plate's height ABOVE THE ROOT, so moving the
-   *  whole body (walking up stairs, a jump's root arc, a lift) never makes it trail — only posture changes ease.
-   *  Standing (_plateStanding), Y is the rest crown over the root, so a jump clip moving the hips doesn't move it.
-   *  Worked in WORLD (up is up even if the root tilts), then written into the root's frame, which is where the plate,
-   *  the typing pill and the bubble all live. A body with no hips/head hangs it over its rest mesh top;
-   *  with nothing at all, at the old fixed 1.95. */
+  /** Hang the plate from the body this frame (plateanchor.js): X/Z over the live hips (the head, when lying), Y from
+   *  the rest crown, chased on its height above the root so moving the whole body never makes it trail. Standing, Y
+   *  is the rest crown over the root, so a jump clip's hips don't move it. Worked in world, written into the root's
+   *  frame. A body with no hips/head hangs it over its rest mesh top; with nothing at all, at a fixed 1.95. */
   _placePlate(dt) {
     const r = this._plateRest, sc = this.vrm?.scene, h = this.vrm?.humanoid;
     if (!sc || !r || (r.hipsToCrown == null && r.boundsTop == null)) { this.label.position.set(0, 1.95, 0); this._plateDrop = null; return; }
@@ -1887,13 +1619,11 @@ export class Avatar {
     this.label.position.copy(this.root.worldToLocal(_pHips.set(x, rootY + this._plateOff, z)));
   }
 
-  /** Upright in ordinary motion (plateanchor.js STAND_SLOTS), with nothing else owning the body: a gesture, a held
-   *  pose and a ragdoll fall can crouch, bow or tumble it, so they keep the live anchor. */
+  /** Upright in ordinary motion (plateanchor.js STAND_SLOTS) with nothing else owning the body. */
   _plateStanding() { return STAND_SLOTS.has(this.postureSlot) && !this.onceAnim && !this._override && !this._limp; }
 
-  /** Slide the hung plate off the head for THIS viewer's camera (plateanchor.js plateViewLift): along the camera's up,
-   *  in world, so each client lifts every plate for its own eye and nothing rides the wire. Runs after _placePlate,
-   *  the own-clearance measure and this frame's size; the pill and the bubble copy the plate after it. */
+  /** Slide the hung plate off the head for this viewer's camera (plateanchor.js plateViewLift), along the camera's
+   *  up. After _placePlate and this frame's size; the pill and the bubble copy the plate after it. */
   _liftPlateForView(camera) {
     if (this._plateDrop == null) return;
     const lab = this.label, a = _lvArgs;
@@ -1908,15 +1638,12 @@ export class Avatar {
     if (d > 0) lab.position.copy(this.root.worldToLocal(_lvP.addScaledVector(_lvU, d)));
   }
 
-  /** Your own plate is for OTHER eyes: hidden while presenting (hideLabel, xr.js selfFirstPerson) and in desktop first
-   *  person (firstPersonView, controller.js updateFollowCamera) — with the typing pill and the bubble over it. */
+  /** Your own plate is hidden while presenting (xr.js hideLabel) and in desktop first person (controller.js). */
   get ownPlateHidden() { return !!(this.hideLabel || this.firstPersonView); }
 
-  /** How far this body reaches from its plate's anchor, as the clearance its body-attached sprites write
-   *  (platesize.js ownClearance/reachAbove), from where the plate hangs THAT frame (_placePlate runs first). The body is
-   *  sampled ONCE (skinned positions, ≤4000 vertices a mesh) into the VRM scene's own frame; a size, lift or VR-fit
-   *  change only re-projects that sample through the scene's current transform — exact, since none of them moves a
-   *  vertex within the scene. A body with nothing measurable clears a head (CLEAR_MIN). */
+  /** How far this body reaches from its plate's anchor: the clearance its sprites write (platesize.js ownClearance).
+   *  The body is sampled once into the VRM scene's frame; a size or fit change only re-projects the sample. A body
+   *  with nothing measurable clears a head (CLEAR_MIN). */
   _measureOwnClear() {
     try {
       const sceneRoot = this.vrm?.scene;
@@ -1969,9 +1696,7 @@ export class Avatar {
     this.root.add(this.label);
   }
 
-  /** Declared-approximation marker (#101): a seated body whose profile gate is closed
-   *  (legacy socket, no profile, clip not loaded, …) wears a small ≈ on its nameplate — no
-   *  silent root-at-socket. Redrawn only on a transition. */
+  /** A seated body whose profile gate is closed (occupants.js) wears a small ≈ on its nameplate. */
   setSeatApprox(on) {
     if (this._seatApprox === !!on) return;
     this._seatApprox = !!on;
@@ -1979,9 +1704,8 @@ export class Avatar {
   }
 
   // ---- speech
-  /** Generation-end (#95): everything TRANSIENT this body was expressing — typing pill, speech
-   *  bubble, held bone pose, limpness, gaze — belongs to the generation that expressed it, not to the
-   *  mesh, and does not ride along on a takeover. Each reset goes through the transient's own teardown. */
+  /** Everything transient this body was expressing (pill, bubble, held pose, limpness, gaze) belongs to the
+   *  generation that expressed it, and does not ride along on a takeover. */
   resetTransients() {
     this.setTyping(null);
     this.bubbleUntil = 0;
@@ -1997,22 +1721,20 @@ export class Avatar {
   }
 
   setTyping(state) {
-    // state === null means STOP (mic went cold, composing ended): clear the pill, don't schedule
-    // 4s of an empty one.
+    // null means stop (mic went cold, composing ended)
     if (state === null) { this._typingUntil = 0; this._typingState = null; return; }
     this._typingUntil = performance.now() + 4000;
     this._typingState = state || null;
   }
 
   say(text) {
-    // Speaking ends COMPOSING — but not a live mic, which is presence: the voice is still coming
-    // out of this body while its transcript scrolls past.
+    // speaking ends composing, but not a live mic: the voice is still coming out of this body
     if (this._typingState !== 'mic') this._typingUntil = 0;
     if (this.bubble) { this.root.remove(this.bubble); disposeSprite(this.bubble); }
     this.bubble = makeBubble(text);
     this.bubble.position.copy(this.label.position).y += BUBBLE_LIFT;   // it rides the plate (update keeps it there)
     this.root.add(this.bubble);
-    // Long speech deserves a longer read — roughly reading speed, clamped.
+    // roughly reading speed, clamped
     const ms = THREE.MathUtils.clamp(2500 + text.length * 45, 5000, 22000);
     this.bubbleUntil = performance.now() + ms;
     this.speakUntil = performance.now() + Math.min(ms, 1000 + text.length * 38);
@@ -2037,11 +1759,10 @@ export class Avatar {
     if (this._sb) this._applySeatBlend(dt);   // a socket's pose: its weights (and locked times) before the mixer samples
     BC('av:mixer');
     this.mixer.update(dt);
-    // A body with its own runtime takes the clip's pose whole, held keys included (bodyruntime_core.js). Not while
-    // limp: the sim owns the bones then.
+    // a body with its own runtime takes the clip's pose whole (bodyruntime_core.js); not while limp
     if (this.bodyRuntime && !this._limp) this.bodyRuntime.afterMixer(this.vrm, this.mixer);
-    // Generic humanoid swim overlay; semantic presence, no new clip requirement.
-    // Restore the underlying clip every frame so leaving water releases limbs.
+    // the swim overlay for a body in water without a swim clip (shared/swimpose.js); the clip is restored every
+    // frame so leaving water releases the limbs
     for (const node of this._swimNodes ?? []) {
       const r=this._composed.get(node);
       if(r?.live && node.quaternion.equals(r.out))node.quaternion.copy(r.base);
@@ -2056,18 +1777,12 @@ export class Avatar {
       }
     }
 
-    // While limp the clip keeps running (see setLimp), so the bones the sim does not drive are
-    // re-parked after every mixer write.
+    // while limp the clip keeps running (see setLimp), so the undriven bones are re-parked after every mixer write
     BC('av:park');
     if (this._limp) this._park();
 
-    // ---- bone edits must land BETWEEN the mixer and vrm.update.
-    //
-    // The mixer writes the NORMALIZED humanoid bones, then vrm.update() copies normalized -> raw and
-    // runs springs; a normalized write AFTER vrm.update() is overwritten before it is ever copied.
-    // Not while limp: a corpse does not keep looking where you last aimed the camera.
-    // Composed through _composeBegin so it cannot integrate, as a quaternion premultiply (a
-    // pre-rotation in the parent frame) rather than `rotation.x +=`.
+    // ---- bone edits land between the mixer and vrm.update: the mixer writes the normalized bones, vrm.update copies
+    // them to the raw skeleton. Head pitch: not while limp; composed so it cannot integrate.
     BC('av:head');
     if (this.head && !this._limp) {
       const r = this._composeBegin(this.head);
@@ -2085,8 +1800,7 @@ export class Avatar {
     if (this._seatHold && !this._limp) this._applySeatHold(dt);
     if (this._holdPose && !this._limp) this._applyHoldPose(dt);   // after the seat's hold: a held thing wins its hand
 
-    // ---- reach: solved fresh every frame, so it TRACKS. After the held pose (which yields any bone
-    // a reach owns) and before vrm.update. Not while limp.
+    // ---- reach: after the held pose (which yields any bone a reach owns), before vrm.update; not while limp
     BC('av:reach');
     if (this._reach?.size && !this._limp) this._applyReach(dt, now);
     else if (this._limp && this._reach?.size) this._reach.clear();
@@ -2099,9 +1813,7 @@ export class Avatar {
       this.gaze.position.lerp(_v, 1 - Math.exp(-3 * dt));
     }
 
-    // ---- blink: irregular, in pairs sometimes, never metronomic
-    //
-    // The CLOCK runs whether or not this body has expressions: a rig whose eyelids are BONES has none.
+    // ---- blink: irregular, in pairs sometimes. The clock runs whether or not this body has expressions.
     let blinkV = 0;
     if (this.blinkT >= 0) {
       this.blinkT += dt;
@@ -2109,8 +1821,7 @@ export class Avatar {
       blinkV = k < 1 ? Math.sin(k * Math.PI) : 0;
       if (k >= 1) {
         this.blinkT = -1;
-        // Schedule from the END of the blink, not its start (a pair gap shorter than a blink
-        // would make every blink come in twos).
+        // scheduled from the end of the blink, so a pair gap shorter than a blink can't chain
         const rate = Math.max(0.15, BLINK.hz);
         this.blinkAt = now + (Math.random() < 0.22 ? 220
           : (2200 + Math.random() * 4200) / rate);
@@ -2118,9 +1829,7 @@ export class Avatar {
     } else if (now > this.blinkAt) {
       this.blinkT = 0;
     }
-    // eyelids as BONES: rotated from their captured rest by the same curve, so a blink cannot
-    // integrate.
-    // ---- eyeballs: point them at the same target the gaze already eases to
+    // ---- eyeballs: point them at the same target the gaze eases to
     if (this._eyes === undefined) this._findEyes();
     if (this._eyes && this.head) {
       this.head.getWorldQuaternion(_gq);
@@ -2143,8 +1852,8 @@ export class Avatar {
       }
     }
 
+    // ---- eyelids as bones: rotated from their captured rest by the blink curve, or the eased held state
     if (this._lids === undefined) this._findLids();
-    // ease toward the held state — a lid that snaps shut reads as a flinch
     this._eyesShut = this._eyesShut ?? 0;
     const goal = this._eyesGoal ?? 0;
     if (this._eyesShut !== goal) {
@@ -2152,8 +1861,7 @@ export class Avatar {
       if (Math.abs(goal - this._eyesShut) < 0.002) this._eyesShut = goal;
     }
     if (this._lids) {
-      // a held close (/eyes) and a blink share the lids: whichever is further
-      // shut wins, so blinking while your eyes are closed changes nothing
+      // a held close and a blink share the lids: whichever is further shut wins
       const amt = Math.max(blinkV, this._eyesShut ?? 0);
       for (const l of this._lids) {
         l.node.quaternion.copy(l.rest);
@@ -2169,9 +1877,8 @@ export class Avatar {
     const em = this.vrm.expressionManager;
     if (em) {
       em.setValue('blink', blinkV);
-      // ---- mouth: a REAL amplitude (live mic) drives the jaw when we have one, smoothed
-      // asymmetrically (open fast, close slower: speech, not chatter); otherwise a syllable-rate
-      // envelope for the utterance (TTS/captions, no waveform on this client).
+      // mouth: a real amplitude (live mic) drives the jaw, smoothed open-fast close-slow; otherwise a syllable-rate
+      // envelope for the utterance
       if (this.voiceLevel != null) {
         const target = Math.min(1, this.voiceLevel * 3.2);
         const k = target > this._mouth ? 0.55 : 0.18;
@@ -2186,44 +1893,29 @@ export class Avatar {
     }
 
     BC('av:gaze-expr');
-    // ONE author per bone — the hair. A rig with Hair_* chains is simulated TWICE while limp:
-    // ammodoll writes Bullet bodies in 'me-drive' and three-vrm's springBoneManager writes the same
-    // bones inside vrm.update() later, so the springs would always win. The springs are what move
-    // the hair while WALKING, so the manager is suppressed only while a local sim owns those bones
-    // (__simHair, set by ammodoll), then resumes from where the tumble left the hair.
-    // Caveat: this suppresses the whole manager, so a non-hair springbone (a skirt, a tail) would
-    // freeze too while limp. Self-healing: anything that ends a tumble without setLimp (an avatar
-    // swap, a dragger taking over) releases it here.
+    // One author per bone for the hair: while ammodoll owns the Hair_* bones (__simHair) the springBoneManager is
+    // suppressed for the frame, or its write inside vrm.update would win. The whole manager, so a skirt or tail
+    // freezes too while limp. Anything that ends a tumble without setLimp releases it here.
     if (this.__simHair && !this._limp) { this._releaseHair(); this._combHair(); }
-    // A limp body with no sim of its own hangs its hair on the world, not on
-    // its own rest shape (see _springsLimp).
-    this._springsLimp(this._limp && !this.__simHair);
+    this._springsLimp(this._limp && !this.__simHair);   // a limp body with no sim hangs its hair on the world
     const sbm = this.__simHair ? this.vrm.springBoneManager : null;
     if (sbm) this.vrm.springBoneManager = null;
-    // THE SEAM for tracked-body writes (xrbody: look-at, eye anchor, arm IK): after the mixer has
-    // posed this frame, before vrm.update copies normalized → raw (see "bone edits" above).
-    this.onBeforeVrmUpdate?.(dt);
-    // ...and its own limits get the final word over the pose every writer above composed: the last thing before
-    // vrm.update copies normalized -> raw (bodyruntime_core.js).
+    this.onBeforeVrmUpdate?.(dt);   // the seam for tracked-body writes (xrbody.js): posed, not yet copied to raw
+    // the body runtime's own limits get the final word over every writer above (bodyruntime_core.js)
     if (this.bodyRuntime && !this._limp) { BC('av:body-runtime'); this.bodyRuntime.beforeVrmUpdate(this.vrm, dt); }
     this.vrm.update(dt);
     if (sbm) this.vrm.springBoneManager = sbm;
     if (this._anchorWant) this._measureAnchor();   // the posed anchor (hips/feet/head) where the seat put the root
 
-    // ---- wings: flap while alive, let go the instant the body does.
-    //
-    // AFTER vrm.update, deliberately: wing bones are RAW, so vrm.update never overwrites them, but
-    // their parent clavicle is humanoid and only gets this frame's pose in vrm.update — composing
-    // before it would hang the wings off last frame's shoulder. While limp they belong to the sim.
+    // ---- wings, after vrm.update: wing bones are raw, but their parent clavicle only gets this frame's pose in
+    // vrm.update. While limp they belong to the sim.
     if (this._wings === undefined) this._findWings();
     if (this._wings && !this._limp) this._flap(dt);
     // the held pose's raw bones — last, so it wins every bone it names
     if (this._override) this._applyRawPose();
 
-    // THE LAMP BREATHES on BREATH (spec T8, shared/breath.js), the period that drives the wing idle,
-    // so lamp and wings rise together. sin^LAMP_SHAPE over |sin| at half the angular rate (period is
-    // BREATH, not half of it): dwells near the floor, softens the peak. The emissive SURFACE and the
-    // CAST light move together — visible through the glass up close, reaching whatever is nearby.
+    // ---- the lamp breathes on BREATH (shared/breath.js), the wing idle's period, so lamp and wings rise together:
+    // |sin|^LAMP_SHAPE at half the angular rate. The emissive surface and the cast light move together.
     if (this._lampMats === undefined) {
       this._lampMats = [];
       this.vrm.scene.traverse((o) => {
@@ -2237,30 +1929,25 @@ export class Avatar {
       });
     }
     if (this._lampMats.length) {
-      const phase = (now / 1000) * (Math.PI / BREATH);   // half-rate: the shaped
-      const breath = Math.abs(Math.sin(phase)) ** LAMP_SHAPE;   // sine has 2x
-      // THE SKY SETS THE CEILING for the emissive SURFACE (the cast light is already day-aware in
-      // lightrig): one (1-dayness)^2 curve for both, over LAMP_DAY_FLOOR so it stays present in full sun.
+      const phase = (now / 1000) * (Math.PI / BREATH);
+      const breath = Math.abs(Math.sin(phase)) ** LAMP_SHAPE;
+      // the sky dims the surface on lightrig's curve (glowScale), floored so it stays present in full sun
       const day = LAMP_DAY_FLOOR + (1 - LAMP_DAY_FLOOR) * glowScale();
       const k = (LAMP_FLOOR + (LAMP_PEAK - LAMP_FLOOR) * breath) * day;
       for (const { m, base } of this._lampMats) m.emissiveIntensity = base * k;
-      // the cast follows the glow, at whatever intensity the inference chose
-      // The rig applies its own dayGlow to a dayAware request, so the cast
-      // gets the BREATH only -- multiplying by `day` here would square it.
+      // the cast gets the breath only: lightrig applies its own day curve to a dayAware request
       for (const { key, intensity } of this._lamps) {
         updateRequest(key, { intensity: intensity * (LAMP_FLOOR
           + (LAMP_PEAK - LAMP_FLOOR) * breath) });
       }
     }
 
-    // ---- contact shadow: on the GROUND under the body (surfaceUnder, so a platform counts), shrinking
-    // and fading with the gap, so jump height reads even when the ground is out of frame.
+    // ---- contact shadow: on the surface under the body, shrinking and fading with the gap
     if (this.shadow) {
       const rp = this.root.position;
       const gy = surfaceUnder(rp.x, rp.z, heightAt, rp.y + 0.05).y;
       const gap = Math.max(0, rp.y - gy);
       this.shadow.position.y = (gy - rp.y) + 0.02;
-      // 3 m up the blob is gone; directly underfoot it is full size.
       const k = THREE.MathUtils.clamp(1 - gap / 3, 0, 1);
       this.shadow.scale.setScalar((0.55 + 0.45 * k) * (this.userScale ?? 1));   // a bigger body throws a bigger blob
       this.shadow.material.opacity = k * k;
@@ -2269,9 +1956,8 @@ export class Avatar {
 
     BC('av:plates');
 
-    // ---- nameplate: world-sized up close, held at a readable angle at range, faded out past 20–30 m (platesize.js
-    // says why). Depth-tested — walls and other bodies hide it — but cleared of its OWN body (textSprite says how);
-    // while names are held (namereveal.js) it comes through everything, bigger and farther.
+    // ---- nameplate: sized and faded by distance (platesize.js), depth-tested but cleared of its own body (PLATE_DEPTH);
+    // while names are held (namereveal.js) it comes through everything
     const d = this.root.position.distanceTo(camera.getWorldPosition(_plateEye));   // WORLD: in XR camera.position is rig-local
     const rk = revealLevel();
     const { lw, vis } = plateSize(d, rk);
@@ -2294,9 +1980,7 @@ export class Avatar {
       }
     }
 
-    // ---- typing dots: shown only while composing and not already speaking
-    // A composing pill hides behind a bubble; a LIVE MIC does not (the voice keeps coming), so it
-    // stacks above the bubble instead.
+    // ---- typing dots: a composing pill hides behind a bubble; a live mic stacks above it instead
     const micLive = this._typingState === 'mic';
     const typingNow = now < this._typingUntil && (micLive || !this.bubble);
     if (typingNow && !this.typing) { this.typing = makeTypingSprite(); this.root.add(this.typing); }
@@ -2316,31 +2000,23 @@ export class Avatar {
     }
   }
 
-  // Split teardown (§19b): everything PER-BODY dies here — scene membership, the gaze anchor, the
-  // sprites, the mixer and its actions, the compose records. The VRM instance is NOT disposed: the
-  // pool owns that (assets.js releaseVRM; deepDispose only at eviction). Deep-disposing a body that
-  // then pools gives the black avatar (§13.3).
+  // Everything per-body dies here. The VRM instance is not disposed: the pool owns that (assets.js releaseVRM), and
+  // deep-disposing a body that then pools gives a black avatar.
   dispose() {
     liveAvatars.delete(this);
-    // Idempotent, load-bearing: a second dispose() after the VRM was re-worn by a newer avatar would
-    // release a worn body back into the pool.
+    // idempotent: a second dispose() after the VRM was re-worn would release a worn body into the pool
     if (this._disposed) return;
     this._disposed = true;
-    // Hand this instance's light slot back -- keyed to the body, so disposing
-    // an old body cannot delete the lamp of the new one that replaced it.
     releaseOwner(this._lampOwner);
-    // ...and give the emissive back: the breath WRITES emissiveIntensity every frame and the pool's
-    // resetVrmInstance touches no materials, so a body pooled mid-breath would come back dimmer
-    // (below the attachLamps threshold, the next wearer gets no lamp at all).
+    // the breath writes emissiveIntensity every frame and the pool touches no materials: a body pooled mid-breath
+    // would come back dimmer, below the attachLamps threshold
     for (const { m, base } of this._lampMats ?? []) m.emissiveIntensity = base;
     scene.remove(this.root);
     scene.remove(this.gaze);
     if (this.bubble) disposeSprite(this.bubble);
     if (this.typing) disposeSprite(this.typing);
     disposeSprite(this.label);
-    // The pool resets humanoid rotations/positions, but knows nothing about
-    // custom-bone transforms or scale. Return every raw channel we still own
-    // before dropping the compose records and handing this VRM to a new wearer.
+    // the pool resets humanoid bones, not custom-bone transforms or scale: return every raw channel we still own
     for (const node of this._rawComposed?.keys() ?? []) this._rawRelease(node);
     this._rawComposed?.clear();
     this.bodyRuntime?.dispose?.(this.vrm);
@@ -2350,9 +2026,7 @@ export class Avatar {
   }
 }
 
-// ---------------------------------------------------------------- shadows
-// A cheap contact shadow: a blob under the feet tells you where a body IS relative to the ground
-// and how high a jump went.
+// ---------------------------------------------------------------- shadows: a blob under the feet
 let blobTex = null;
 function makeBlobShadow() {
   if (!blobTex) {
@@ -2382,13 +2056,11 @@ function makeBlobShadow() {
 export function makeCapsuleAvatar(id) {
   const av = new Avatar(id, makeCapsuleVrm(), {});
   av.isCapsule = true;
-  // the standard clips, if they can be had: idle + walk first, then the rest through the same idle-time hydration a
-  // real body uses. Each is best-effort — the capsule exists because the network may be gone.
+  // the standard clips, best-effort (the capsule exists because the network may be gone)
   (async () => {
     for (const slot of CORE_CLIPS) {
       try { const clip = await clipFor(av.vrm, slot); if (av._disposed) return;   // a remote disposed on takeover: stop feeding a dead body
         const a = av.mixer.clipAction(clip); a.enabled = true; a.setEffectiveWeight(0); a.play(); av.actions[slot] = a; }
-      // one unavailable clip is not a verdict on the rest: skip the miss
       catch (e) { console.warn(`capsule clip ${slot} unavailable`, e); }
     }
     if (av._disposed) return;
@@ -2400,15 +2072,12 @@ export function makeCapsuleAvatar(id) {
 export async function makeAvatar(id, libPath, { full = false, urgent = false } = {}) {
   loadTrack(`avatar:${id}`, `${id} materializing`);
   const work = beginWork(`avatar ${id}`);
-  // YOUR body outranks everything; ANY body outranks every object.
-  const priority = urgent ? 2 : 1;
+  const priority = urgent ? 2 : 1;   // your body outranks everything; any body outranks every object
   try {
     const slots = full ? CLIP_SLOTS : CORE_CLIPS;
     work.phase('body');
-    // VRM + the clip bytes we actually need download in PARALLEL.
     const [vrm] = await Promise.all([loadVRM(libPath, { priority }), ...slots.map(vrmaBytes)]);
-    // A body that brings its own runtime (its def's `runtime`: bodyruntime.js) is set up here, at load, before
-    // anything poses it: the runtime reads the skeleton's rest. Most bodies have none and this costs them nothing.
+    // a body with its own runtime (its def's `runtime`: bodyruntime.js) is set up at load, before anything poses it
     const bodyDef = await bodyDefFor(libPath).catch(() => null);
     const bodyRuntime = await bodyRuntimeFor(libPath, (m, e) => report(`${id} ${m}`, e), bodyDef);
     bodyRuntime?.init(vrm);
@@ -2420,15 +2089,10 @@ export async function makeAvatar(id, libPath, { full = false, urgent = false } =
     }
     work.phase('compile');
     if (vrmWarmed(vrm)) {
-      // §19b: a pooled body's material set compiled on its first wear and the renderer's pipeline
-      // cache still holds it, so skip the re-warm, and say so.
       loadNote(`avatar ${id}: compile skipped — pooled body, pipelines already warm`);
     } else {
-      // Through the warm conductor (§16.2.A), mesh by mesh with a real frame between: the body's
-      // MToon set is a burst of ~11 pipelines, which in one gulp is a compile stall. Shared materials
-      // cache-hit after their first mesh. frustumCulled defeats the compile walk's culling while the
-      // body is still detached (stale matrices). YOUR body compiles at P_GATE, ahead of every world
-      // model's compile.
+      // through the warm conductor (warmqueue.js), mesh by mesh with a frame between: the body's MToon set in one
+      // gulp is a compile stall. frustumCulled off defeats the compile walk's culling while the body is detached.
       await warm(`avatar ${id}`, async () => {
         const meshes = [];
         vrm.scene.traverse((o) => { if (o.isMesh) meshes.push(o); });
@@ -2444,21 +2108,15 @@ export async function makeAvatar(id, libPath, { full = false, urgent = false } =
     }
     const av = new Avatar(id, vrm, clips, { lamps: bodyDef?.def?.lamps !== false });
     av.bodyRuntime = bodyRuntime;
-    // The rest arrives behind you. Remote bodies hydrate too — someone else
-    // breaking into a run should not be stuck walking on your screen.
-    if (!full) av.hydrateClips();
+    if (!full) av.hydrateClips();   // the rest arrives behind you; remote bodies too
     return av;
   } finally { loadDone(`avatar:${id}`); work.end(); }
 }
 
 // ---------------------------------------------------------------- thumbnails
-// Contributed roster art: whoever wears a body renders one portrait off the VRM already in memory
-// and posts it back, so the next person picks from faces. One offscreen frame, once per body, ever.
-
-// The body's loupe rank rides the same door (POST /thumb, metadata only — no picture): the numbers of the body as
-// LOADED (perfscope.statsOf, which bills MToon's outline groups a GLB parse can't see), once per body VERSION per
-// browser. The server recomputes the rank and shows it only while `v` is the current export (routes.ts avatarRoster).
-// the door key rides a header, never the URL (routes.ts /thumb refuses ?token=)
+// Contributed roster art: whoever wears a body renders one portrait off the VRM already in memory and posts it
+// back (POST /thumb), once per body. The body's perf numbers as loaded (perfscope.js statsOf) ride the same door,
+// once per body version per browser (server/routes.ts avatarRoster). The door key rides a header, never the URL.
 const thumbAuth = (token) => (token ? { authorization: `Bearer ${token}` } : {});
 
 async function stampAvatarPerf(name, vrm, token, path) {
@@ -2470,8 +2128,7 @@ async function stampAvatarPerf(name, vrm, token, path) {
   const s = statsOf(vrm.scene, name);
   const q = new URLSearchParams({ name, v, perf: JSON.stringify({ tris: s.tris, draws: s.draws, mats: s.mats, alpha: s.alpha, bones: s.bones, texMB: s.texMB }) });
   const r = await fetch(`/thumb?${q}`, { method: 'POST', headers: thumbAuth(token) });
-  // only a server that SAYS it stored the stamp burns the once-per-version flag: an older server answers 200
-  // {existed} for a body with a portrait and drops `perf` on the floor — the next wear must try again
+  // only a server that says it stored the stamp burns the once-per-version flag (an older server drops `perf`)
   const j = r.ok ? await r.json().catch(() => null) : null;
   if (j?.perf === true) { localStorage.setItem(key, '1'); bus.emit('avatar-perf', { name }); }   // the avatar cards repaint
 }
@@ -2491,16 +2148,14 @@ export async function contributeThumbnail(name, vrm, token = '', { force = false
     const rt = new THREE.RenderTarget(size, size);
     const cam = new THREE.PerspectiveCamera(28, 1, 0.05, 12);
     const sub = new THREE.Scene();
-    // A render target gets no tone mapping (the canvas's ACES curve never touches these pixels),
-    // so the lights are linear-safe levels, not the world's.
+    // a render target gets no tone mapping, so the lights are linear-safe levels, not the world's
     sub.add(new THREE.HemisphereLight(0xffffff, 0x445566, 0.9));
     const key = new THREE.DirectionalLight(0xffffff, 1.1);
     key.position.set(1.4, 2.2, 2.4);
     sub.add(key);
 
-    // Pose it FIRST — before the precompile below: if pose and render land in the compile's frame,
-    // the skinning node skips its skeleton update and draws the compile-time pose. One frame of the
-    // idle clip, because a VRM at rest is a T-pose (a mannequin, not a person you might be).
+    // pose it first, before the precompile (pose and render in the compile's frame draw the compile-time pose):
+    // one frame of the idle clip, since a VRM at rest is a T-pose
     let poseMixer = null;
     try {
       const clip = await clipFor(vrm, 'idle');
@@ -2509,16 +2164,13 @@ export async function contributeThumbnail(name, vrm, token = '', { force = false
       act.play();
       poseMixer.update(0.6);        // a little way in, past the settling frames
       vrm.update(0.6);
-      // say what the pose did: a silent T-pose is the failure this logs
       const arm = vrm.humanoid.getRawBoneNode('leftUpperArm');
       const deg = arm ? Math.round(arm.quaternion.angleTo(new THREE.Quaternion()) * 180 / Math.PI) : -1;
       tee(`[thumb] ${name}: posed (${clip.tracks.length} tracks, raw arm ${deg}°, autoUpdate ${vrm.humanoid.autoUpdateHumanBones})`);
     } catch (e) { tee(`[thumb] ${name}: pose failed — ${e?.message ?? e}`); /* T-pose is survivable; a missing portrait is worse */ }
 
-    // Precompile the portrait's pipelines BEFORE borrowing the body: this render target and these
-    // lights are a new pipeline context, and compiling inside the synchronous render() is a
-    // seconds-long stall. compileAsync captures its render context synchronously before its first
-    // yield, so the target is restored at once and the world keeps rendering.
+    // precompile the portrait's pipelines before borrowing the body (a new pipeline context; compiling inside the
+    // synchronous render() is a seconds-long stall). compileAsync captures its render context synchronously.
     {
       const work = beginWork(`thumb ${name}`);
       try {
@@ -2534,27 +2186,25 @@ export async function contributeThumbnail(name, vrm, token = '', { force = false
       } finally { work.end(); }
     }
 
-    // Deep-cloning a VRM is not safe (MToon node materials and spring/lookAt proxies don't survive
-    // Object3D.clone), so the real body is BORROWED for one frame and put straight back.
+    // deep-cloning a VRM is not safe (MToon node materials, spring/lookAt proxies), so the real body is borrowed
+    // for one frame and put straight back
     const home = vrm.scene.parent;
     const homeIndex = home ? home.children.indexOf(vrm.scene) : -1;
     const keptPos = vrm.scene.position.clone();
     const keptRot = vrm.scene.rotation.clone();
 
-    // Frame the WHOLE figure, identically for every body: a head-relative crop gives bodies of
-    // different shapes different apparent sizes, and the full body shows the outfit.
+    // frame the whole figure, identically for every body
     const bbox = new THREE.Box3().setFromObject(vrm.scene);
-    const dims = new THREE.Vector3();     // NOT `size` — that is the pixel size
+    const dims = new THREE.Vector3();     // not `size`: that is the pixel size
     bbox.getSize(dims);
-    // True stature comes from the SKELETON, not the bounding box (hair, capes and particle shells
-    // inflate bounds); the height is also REPORTED so catalogs can draw the roster to a common scale.
+    // stature from the skeleton, not the bounding box (hair, capes and particle shells inflate it); also reported,
+    // so catalogs draw the roster to a common scale
     let height = dims.y;
     try {
       const rootY = vrm.scene.getWorldPosition(new THREE.Vector3()).y;
       const headY = vrm.humanoid.getNormalizedBoneNode('head').getWorldPosition(new THREE.Vector3()).y;
       const stature = headY - rootY + 0.13; // crown ≈ head joint + a forehead
-      // ...unless the mesh really does go higher (a crown of tentacles): the bbox may raise the top
-      // by up to 60 % of stature — enough for any head, not for a particle shell.
+      // unless the mesh really does go higher: the bbox may raise the top by up to 60% of stature
       if (stature > 0.2) height = Math.min(Math.max(stature, dims.y), stature * 1.6);
     } catch { /* bbox fallback */ }
     const fov = 30;
@@ -2570,8 +2220,7 @@ export async function contributeThumbnail(name, vrm, token = '', { force = false
     try {
       sub.add(vrm.scene);
       vrm.scene.position.set(0, 0, 0);
-      // Keep the loader's VRM0 normalization (rotateVRM0 sets rotation.y=π on
-      // the scene root) — zeroing it photographed every VRM0 body from behind.
+      // keep the loader's VRM0 normalization (rotation.y = π), or every VRM0 body is photographed from behind
       vrm.scene.rotation.set(0, vrm.meta?.metaVersion === '0' ? Math.PI : 0, 0);
       renderAside(sub, cam, rt);   // never through renderer.render while presenting: a parentless camera rewrites the stereo eyes (render.js)
     } finally {
@@ -2581,7 +2230,7 @@ export async function contributeThumbnail(name, vrm, token = '', { force = false
       vrm.scene.rotation.copy(keptRot);
       if (home) {
         home.add(vrm.scene);
-        // restore draw order so the body isn't shuffled behind its own label
+        // restore draw order
         if (homeIndex >= 0 && homeIndex < home.children.length - 1) {
           home.children.splice(home.children.indexOf(vrm.scene), 1);
           home.children.splice(homeIndex, 0, vrm.scene);
@@ -2589,11 +2238,8 @@ export async function contributeThumbnail(name, vrm, token = '', { force = false
       }
     }
 
-    // readRenderTargetPixelsAsync RETURNS the pixels; its 6th parameter is a
-    // texture index, not an output buffer.
     const buf = await renderer.readRenderTargetPixelsAsync(rt, 0, 0, size, size);
-    // A blank readback must never become a portrait (it would overwrite real art): below 2 % opaque,
-    // skip the POST and say so on the tee.
+    // a blank readback must never become a portrait: below 2% opaque, skip the POST
     { let opaque = 0; for (let i = 3; i < size * size * 4; i += 16) if (buf[i] > 10) opaque++;
       const frac = opaque / (size * size / 4);
       if (frac < 0.02) { tee(`[thumb] blank readback (${backendName()}) for ${name} — not posted`); rt.dispose(); return false; } }
@@ -2601,16 +2247,14 @@ export async function contributeThumbnail(name, vrm, token = '', { force = false
     c.width = c.height = size;
     const ctx = c.getContext('2d');
     const img = ctx.createImageData(size, size);
-    // Row order depends on the BACKEND: WebGPU hands rows back top-down, WebGL bottom-up — so flip
-    // iff WebGL.
+    // WebGPU hands rows back top-down, WebGL bottom-up
     if (backendName() === 'webgl') {
       const row = size * 4;
       for (let y = 0; y < size; y++) img.data.set(buf.subarray((size - 1 - y) * row, (size - y) * row), y * row);
     } else {
       img.data.set(buf.subarray(0, size * size * 4));
     }
-    // The target holds LINEAR light and a PNG is shown as sRGB: encode, or the portraits read dark.
-    // Alpha untouched.
+    // the target holds linear light and a PNG is shown as sRGB: encode, or the portraits read dark
     { const d = img.data; const lut = new Uint8Array(256);
       for (let i = 0; i < 256; i++) { const l = i / 255; lut[i] = Math.round(255 * (l <= 0.0031308 ? 12.92 * l : 1.055 * Math.pow(l, 1 / 2.4) - 0.055)); }
       for (let i = 0; i < d.length; i += 4) { d[i] = lut[d[i]]; d[i + 1] = lut[d[i + 1]]; d[i + 2] = lut[d[i + 2]]; } }

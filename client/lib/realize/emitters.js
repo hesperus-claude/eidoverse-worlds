@@ -25,8 +25,8 @@ import { autoHooks as autos, ownHook } from '../autohooks.js';
 import { sendRequest } from '../net.js';
 
 // ---- textures --------------------------------------------------------------
-// Sprite textures are shared and cached per path, and NOT disposed when an emitter retires: the cache owns them, the
-// emitter borrows (disposing one blanks every other fire using it).
+// Sprite textures are cached per path and never disposed when an emitter retires: the cache owns them, the emitter
+// borrows (disposing one blanks every other fire using it).
 const textureCache = new Map();
 
 async function spriteTexture(path) {
@@ -47,7 +47,7 @@ async function spriteTexture(path) {
 }
 
 // ---- quality ---------------------------------------------------------------
-// One world-wide tier, lowered by the perf governor. It scales DRAWN sprites only: preset, state and seed stay
+// One world-wide tier, lowered by the perf governor. It scales drawn sprites only: preset, state and seed stay
 // identical on every machine, so everyone is looking at the same fire.
 let tier = 'auto';
 const handles = new Set();
@@ -59,8 +59,7 @@ export function setEmitterQuality(next) {
   return true;
 }
 export const emitterQuality = () => tier;
-/** Live emitters — the governor's cue to bother at all, and the cleanup test's
- *  window onto whether anything leaked. */
+/** Live emitters: the governor's cue to bother at all, and the cleanup test's leak check. */
 export const emitterCount = () => handles.size;
 
 // ---- stored effects ---------------------------------------------------------
@@ -113,8 +112,8 @@ async function build(resolved, { id }) {
     }
   } catch (e) { for (const fx of parts) fx.dispose(); throw e; }
   host.add(group);
-  // The world owns this, not the sky: an async sky build that snapshots scene.children mid-flight must never claim (and
-  // then dispose) somebody's hearth. And the weather sweep must not wet a fire.
+  // the world owns this, not the sky: an async sky build that snapshots scene.children must never claim (and dispose)
+  // it, and the weather sweep must not wet a fire
   for (const o of [group, ...parts.map((p) => p.mesh)]) { o.userData.emitterOf = id; o.userData.entityId = id; o.userData.noWet = true; o.userData.noCloudShadow = true; }
   const update = ownHook(() => {
     if (resolved.part && group.parent === ent) { const p = findPart(ent, resolved.part); if (p) p.add(group); }   // the GLB landed
@@ -128,7 +127,7 @@ async function build(resolved, { id }) {
       handles.delete(handle);
       group.parent?.remove(group);
       for (const fx of parts) fx.dispose();
-      // NOT the texture: see textureCache above.
+      // not the texture: see textureCache
     },
   };
   handles.add(handle);         // last: nothing after this can throw and strand it
@@ -175,8 +174,8 @@ bus.on('comp', ({ id, type, data }) => {
 
 bus.on('entity', ({ id, kind }) => {
   if (kind === 'remove' || kind === 'demote') {
-    // demote (residency §13.3): the subtree left the scene with the emitter in it; retire the handle or its hook keeps
-    // ticking. Promotion re-announces the comp bag.
+    // demote: the subtree left the scene with the emitter in it; retire the handle or its hook keeps ticking.
+    // Promotion re-announces the comp bag.
     pending.delete(id);
     registry.retire(id);
   } else if (kind === 'spawn') {
@@ -214,8 +213,7 @@ export function setPressFx(id, fx) {
 }
 export const pressFxOn = () => [...fxOn];
 
-/** World teardown (a world switch, a reset): every emitter goes, and the
- *  global hook array comes back to where it started. */
+/** World teardown (a world switch, a reset): every emitter goes, and the hook array comes back to where it started. */
 export function clearEmitters() {
   pending.clear(); lastValue.clear();
   registry.retireAll();

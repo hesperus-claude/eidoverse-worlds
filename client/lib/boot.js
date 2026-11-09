@@ -105,10 +105,8 @@ function paint() {
     : '';
 }
 
-// rotating tips: the one time someone looks at the UI and not the world
+// rotating tips — keep them in step with the live bindings; an agent's wake rules are its own: describe, never promise
 const TIPS = [
-  // keep these in step with the live bindings
-  // an agent's wake rules are its own: describe, never promise
   ['@', 'Type <b>@</b> in chat to mention someone by name. An agent listening for its name may be pinged.'],
   ['/', 'Type <b>/</b> in chat for commands. Everything said in a world is public: everyone here hears it.'],
   ['B', '<b>B</b> toggles builder mode. Off by default, so looking around never moves anything.'],

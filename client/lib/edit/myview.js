@@ -1,6 +1,5 @@
-// myview — what YOU have hidden in your own view (the Hierarchy's 👁; "Hidden" is the local one). Never logged,
-// never sent, never seen by anyone else: a view filter, like Unity's scene-visibility eye (the eye means different
-// things in different engines; ours means exactly one). Kept per world in this browser.
+// myview — what YOU have hidden in your own view (the Hierarchy's eye), like Unity's scene-visibility eye. Never sent;
+// kept per world in this browser.
 import { bus, CONFIG } from '../base.js';
 
 const key = () => `ew-myhidden-${CONFIG.world ?? ''}`;
@@ -19,9 +18,8 @@ export function outOfMyView(o, { eyeOnly = false } = {}) {
 export function toggleMineHidden(id) { if (set.has(id)) set.delete(id); else set.add(id); save(); bus.emit('myview', { id, hidden: set.has(id) }); return set.has(id); }
 export function showAllMine() { const ids = [...set]; set.clear(); save(); for (const id of ids) bus.emit('myview', { id, hidden: false }); return ids.length; }
 
-// ISOLATE: see only these things, in MY view, until
-// it is turned off. Never saved, never logged. A thing is kept with what it rides (its ancestors: a hidden parent hides
-// its children) and what rides it (its descendants); realize/models.js reads isolatedOut beside isMineHidden.
+// ISOLATE: show only these things in MY view until turned off. Never saved. A thing is kept with its ancestors (a
+// hidden parent hides its children) and its descendants; realize/models.js reads isolatedOut beside isMineHidden.
 let keep = null;   // null = off; else the Set of ids still shown
 export const isolating = () => keep !== null;
 export const isolatedOut = (id) => keep !== null && !keep.has(id);

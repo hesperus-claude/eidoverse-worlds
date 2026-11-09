@@ -6,7 +6,7 @@
 // margin keeps the same key and the dwell keeps counting; a hand that moves on to the next button starts it again.
 // Pure (no DOM, no THREE): test/client/dwell-test.mjs runs it.
 
-export const DWELL_MS = 300;   // the nameplate card's long-standing hover delay, now everyone's
+export const DWELL_MS = 300;   // the nameplate card's hover delay, now everyone's
 
 /** A tracker. step(key, now) each frame (null: resting on nothing); ripe(now) once the same key has held DWELL_MS. */
 export function makeDwell(ms = DWELL_MS) {

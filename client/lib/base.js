@@ -50,7 +50,7 @@ export function pickWorld(params, last, tab = null) {
 }
 /** The two memories as pickWorld takes them; storage that throws reads as none. */
 export function rememberedWorlds() {
-  const read = (s, k) => { try { return s()?.getItem(k) ?? null; } catch { return null; } };   // the property itself may throw (bot #578)
+  const read = (s, k) => { try { return s()?.getItem(k) ?? null; } catch { return null; } };   // the property itself may throw
   return [read(() => globalThis.localStorage, LAST_WORLD_KEY), read(() => globalThis.sessionStorage, TAB_WORLD_KEY)];
 }
 /** What arriving in an empty world says (main.js, on 'hydrated'), by how the page
@@ -99,9 +99,9 @@ export const CONFIG = {
 };
 if (params.get('key')) remember('ew-key', CONFIG.token);
 remember('ew-name', CONFIG.name);
-// the ACCOUNT a private (TRUST_NAMES) server knows you by, kept apart from the name you show (R 10-11: renaming herself
-// "Rab" made her a stranger with no role in her own world). Fixed at the first real name this browser used; ?account=
-// overrides. A server with sign-in ignores it: the session is the account there.
+// the ACCOUNT a private (TRUST_NAMES) server knows you by, kept apart from the name you show (a rename must not make
+// you a stranger in your own world). Fixed at the first real name this browser used; ?account= overrides. A server with
+// sign-in ignores it: the session is the account there.
 { let acct = params.get('account') || store?.getItem('ew-account') || '';
   if (!acct && !/^guest-/.test(CONFIG.name)) acct = CONFIG.name;
   CONFIG.account = acct || null; if (acct) store?.setItem('ew-account', acct); }
@@ -139,13 +139,11 @@ export function setErrorSink(fn) { errorSink = fn; }
 // A fault inside the frame loop reports 60 times a second: identical messages are counted
 // and re-reported on a decaying schedule instead of flooding the console and the toasts.
 const seenErrors = new Map(); // key -> { n, nextAt }
-// ---- console tee: what a visitor's page says, where the operator can read it.
-// Every report() plus window errors post to /clientlog. Off the hot path (queued, one POST per flush with the lines
-// joined), never throws, and never carries the key in the payload or the URL — it rides the Authorization header
-// (Bearer), below. `tee(line)` is for lines worth keeping ([xr] etc). The server's budget (server/clientlog.ts) is
-// honoured here: a 429 waits its Retry-After (60 s when unsaid) with the lines kept; a batch (60 KB) is under its 256 KB.
+// ---- console tee: what a visitor's page says, where the operator can read it (server/clientlog.ts).
+// Every report() plus window errors post to /clientlog: queued, one POST per flush, never throws; the key rides the
+// Authorization header, never the URL. A 429 waits its Retry-After (60 s when unsaid) with the lines kept.
 let teeQ = [], teeTimer = 0, teeMuted = false, teePausedUntil = 0;
-// Batched every 10 s; as the page hides one batch goes at once (keepalive's cap) and the rest waits for the timer (Element 30 s, Sentry's buffer the same shape).
+// batched every 10 s; as the page hides one batch goes at once (keepalive's cap) and the rest waits for the timer
 const TEE_LINES = 2000, TEE_BYTES = 60 * 1024, TEE_DEBOUNCE_MS = 10000;   // 60 KB: under keepalive's 64 KB in-flight cap
 function teeFlush() {
   teeTimer = 0;
@@ -193,8 +191,7 @@ if (typeof window !== 'undefined') {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') teeOnHide(); });
   window.addEventListener('error', (e) => tee(`[window.error] ${e.message} @ ${(e.filename ?? '').split('/').pop()}:${e.lineno}`));
   window.addEventListener('unhandledrejection', (e) => tee(`[unhandled] ${e.reason?.message ?? e.reason}`));
-  // wake CAUSE, not just the URL: reload vs navigate vs back_forward separates
-  // "someone reloaded" from "the tunnel reconnected"
+  // the navigation type separates "someone reloaded" from "the tunnel reconnected"
   let cause = '?'; try { cause = performance.getEntriesByType('navigation')[0]?.type ?? '?'; } catch { /* old UA */ }
   tee(`[boot] cause=${cause} host=${location.host} ${location.pathname}${location.search.replace(/key=[^&]+/, 'key=…')} ua=${navigator.userAgent.slice(0, 120)}`);
 }
@@ -258,10 +255,9 @@ function preferredColor(name) {
   return NAME_COLORS[h % NAME_COLORS.length];
 }
 
-// The hash is a PREFERENCE (twelve colours, six people: ~78% chance of a collision); the people
-// present negotiate. Every client runs the same assignment over the same roster: sort the names,
-// each takes its preferred colour, linear-probe when taken — identical everywhere, no wire bytes.
-// Only a collision's loser moves; people who have left keep their colour (their lines are on screen).
+// The hash is a PREFERENCE (twelve colours, six people: ~78% chance of a collision); the people present negotiate.
+// Every client runs the same assignment over the same roster (sorted names, linear-probe when taken), so it is
+// identical everywhere with no wire bytes. People who have left keep their colour (their lines are on screen).
 const claimed = new Map();   // name -> colour, sticky once assigned
 
 /** The colour to draw `name` in, anywhere in the UI. */
