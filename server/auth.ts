@@ -8,10 +8,9 @@ import { ROOT } from "./config.ts";
 import { writePrivate } from "./fsutil.ts";
 import { readTokenRegistry } from "../mcpl/token-registry.ts";
 
-// ---- archipelago-home identity (connectome docs/home-node.md §7) ----------------------
-// The second door, alongside JOIN_TOKEN: humans log in with Discord at the home node, arrive at /auth with an aid1 token
-// in the URL fragment and swap it for a session cookie. Verification is offline: with the home node down, existing
-// sessions and the JOIN_TOKEN door keep working.
+// ---- archipelago-home identity ----------------------
+// The second door, beside JOIN_TOKEN: people log in with Discord at the home node, arrive at /auth with an aid1 token in the
+// URL fragment and swap it for a session cookie. Verification is offline, so the home node being down costs nothing here.
 //   HN_ISSUER_KEY   pinned issuer pubkey `ed25519:…` — unset disables the door
 //   HN_ISS          issuer domain            (default id.animalabs.ai)
 //   HN_AUD          token audience to verify (default eidoverse; staging uses eidoverse2)
@@ -63,15 +62,15 @@ export function sessionFromCookie(cookie: string | null): HnSession | null {
   return s.sub.startsWith("human:") ? s : null;   // a cookie session is a human's: anything else proves nobody (/auth refuses to make one)
 }
 
-/** The session a request's cookie proves, as the ws join takes it: only from this server's own page (Sec-Fetch-Site
- *  same-origin, so a sibling subdomain's, where SameSite=Lax lets the cookie ride, is refused too), or with no fetch metadata (a native client). */
+/** The session a request's cookie proves: only from this server's own page (Sec-Fetch-Site same-origin; a sibling subdomain
+ *  is refused too), or with no fetch metadata (a native client). */
 export function sessionOfRequest(req: Request): HnSession | null {
   const site = req.headers.get("sec-fetch-site");
   return site === null || site === "same-origin" ? sessionFromCookie(req.headers.get("cookie")) : null;
 }
 
-/** A browser upgrade from a page that isn't this server's (cross-site WebSocket hijacking; OWASP, web.dev Fetch Metadata):
- *  Sec-Fetch-Site decides when sent (same-origin only); else the Origin must equal ownOrigin exactly. No Origin: a native client. */
+/** A browser upgrade from a page that isn't this server's (cross-site WebSocket hijacking): Sec-Fetch-Site decides when sent;
+ *  else the Origin must equal ownOrigin exactly. No Origin: a native client. */
 export function crossSiteUpgrade(req: Request): boolean {
   const site = req.headers.get("sec-fetch-site"); if (site !== null) return site !== "same-origin";
   const origin = req.headers.get("origin"); if (origin === null) return false;
@@ -84,14 +83,13 @@ export function ownOrigin(req: Request): string {
 }
 
 // ---- session persistence ----------------------------------------------------
-// Sessions survive restarts. The file holds bearer-equivalent session ids: 0600 and gitignored, like mcpl/tokens.json.
-// SESSIONS_PATH (or main's HN_SESSIONS_FILE): a self-contained test keeps its sessions in its scratch dir (like
-// AGENT_TOKENS_PATH), never the checkout's
+// Sessions survive restarts. The file holds bearer-equivalent ids: 0600 and gitignored. SESSIONS_PATH (or the older
+// HN_SESSIONS_FILE) lets a test keep its sessions in a scratch dir.
 const SESSIONS_FILE = resolve(process.env.SESSIONS_PATH ?? process.env.HN_SESSIONS_FILE ?? join(ROOT, ".sessions.json"));
 export function saveSessions() {
   try {
     const live = [...hnSessions].filter(([, s]) => s.exp > Date.now());
-    // writePrivate IS the write-then-rename (a crash mid-write never truncates the live file): no second rename here
+    // writePrivate is the write-then-rename
     writePrivate(SESSIONS_FILE, JSON.stringify(Object.fromEntries(live)));
   } catch (e) { console.log(`[auth] session save failed: ${e}`); }
 }
@@ -107,9 +105,8 @@ try {
   }
 } catch (e) { console.log(`[auth] session restore failed (starting empty): ${e}`); }
 
-// Agent identity: the sequencer reads the MCPL door's per-agent bearers (mcpl/tokens.json, hot-reloaded by mtime) so
-// (a) an agent's name is RESERVED against plain browser joins and (b) a join carrying the right token is a verified
-// agent. AGENT_TOKENS_PATH lets a self-contained test own a scratch tokens.json; production leaves it unset.
+// Agent identity: the MCPL door's per-agent bearers (mcpl/tokens.json, hot-reloaded by mtime), so an agent's name is reserved
+// against plain browser joins and a join carrying the right token is a verified agent. AGENT_TOKENS_PATH: a test's scratch copy.
 const ENROLMENT_ID = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 export const AGENT_TOKENS_PATH = resolve(process.env.AGENT_TOKENS_PATH ?? join(ROOT, "mcpl", "tokens.json"));
 const AGENT_TOKENS_EXAMPLE = resolve(process.env.MCPL_TOKENS_EXAMPLE ?? join(ROOT, "mcpl", "tokens.example.json"));
@@ -120,16 +117,15 @@ export function agentTokens() {
     if (!agentTokCache || agentTokCache.mtime !== mtime) {
       const byToken = new Map<string, string>();
       const names = new Set<string>();
-      // an enrolled agent may also arrive through the home node with an aid1 credential: `subs` lists the aid1 subjects
-      // that ARE this agent (a reserved name is satisfied by a proven subject, never by a display name that slugs the same)
+      // `subs`: the aid1 subjects that are this agent, for one arriving through the home node
       const bySub = new Map<string, string>();
       if (mtime) {
-        // the MCPL door's reader (mcpl/token-registry.ts): a key copied from the public example proves nobody here either
+        // as mcpl/token-registry.ts: a key copied from the public example proves nobody
         const accepted = readTokenRegistry(AGENT_TOKENS_PATH, AGENT_TOKENS_EXAMPLE);
         const raw = JSON.parse(readFileSync(AGENT_TOKENS_PATH, "utf8")) as Record<string, { id?: string; subs?: string[] }>;
         const entries = Object.entries(raw).filter(([, v]) => typeof v?.id === "string" && v.id);
         const spellings = new Map<string, Set<string>>(); for (const [, v] of entries) { const k = v.id!.toLowerCase(); spellings.set(k, (spellings.get(k) ?? new Set()).add(v.id!)); }
-        // an id is the account (agent:token:<id>): one id on two tokens (a key rotation) is one account; ids differing only in case, or ill-formed, prove nobody (the name stays reserved)
+        // the id is the account (agent:token:<id>); two tokens on one id (a key rotation) are one account; an ill-formed id proves nobody
         const refused: string[] = [];
         for (const [tok, v] of entries) {
           const id = v.id!; names.add(id.toLowerCase());

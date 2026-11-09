@@ -1,5 +1,4 @@
-// Browser-approved native login. No world/log mutations and no OAuth tokens in
-// the native client. Pending grants are memory-only, bounded, and single-use.
+// Browser-approved native login: the native client never holds an OAuth token. Pending grants are memory-only, bounded and single-use.
 import { randomBytes } from "node:crypto";
 import type { HnSession } from "./auth.ts";
 import { readCapped } from "./reqbody.ts";
@@ -33,8 +32,7 @@ export function createNativeLogin(o: Options) {
     if (!o.enabled) return json(503, { error: "identity_unavailable" });
     if (path === "/native" && req.method === "GET") return nativePage(o.login);
     if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
-    // Browser mutations must be same-origin. Non-browser native start/poll have
-    // no Origin and no browser authority. Never accept credentialed CORS.
+    // browser mutations must be same-origin; a native client's start/poll has no Origin and no browser authority
     const origin = req.headers.get("origin"), own = typeof o.origin === "string" ? o.origin : o.origin(req);
     if (origin && origin !== own) return json(403, { error: "wrong_origin" });
     if (!req.headers.get("content-type")?.startsWith("application/json")) return json(415, { error: "json_required" });

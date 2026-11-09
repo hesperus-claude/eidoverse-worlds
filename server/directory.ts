@@ -1,17 +1,9 @@
-// server/directory.ts — who an identity is (PROTOCOL §2.3: "the mapping from an identity to a person lives
-// outside the log, so purging a person never needs the skeleton").
-//
-// Every actor a log names is an OPAQUE id, `u-` + 20 base32 characters, minted here. Nothing the server knows about the
-// person is in the log (what they say in chat is public, and stays): their display name, the account(s) that prove them,
-// and anything else about them live in this file, which is never logged and is written 0600. So:
-//   - a role is held by an id, and an id is reached only through its account (a `sub`): typing someone's display name
-//     gets you nothing. Two people who share a name are two ids; one person renamed is still one id.
-//   - forgetting a person is deleting their entries here: the log keeps ids that no longer mean anyone.
-//   - one id per account per server, the same in every world (friends, messages and "ask to be invited" need a person
-//     who stays the same between worlds). A world's slice of this file (exportSlice) travels with the world.
-// Accounts (`sub`): "human:<provider>:<id>" from a verified session, "agent:token:<name>" for an operator-enrolled agent,
-// "aid1:<iss>:<sub>" for a home-node-verified agent, "local:<name>" only on a private TRUST_NAMES server. A connection
-// with no account is ANONYMOUS: a fresh id per connection, held in memory only (never written), kind "anon".
+// server/directory.ts — who an identity is (spec/PROTOCOL.md §2.3: the identity → person mapping lives outside the log).
+// Every actor a log names is an opaque id, `u-` + 20 base32 characters, minted here. The person's display name and accounts
+// live in this file (0600, never logged), so a role is held by an id reached only through its account, forgetting a person
+// is deleting their entries here, and one account has one id server-wide. A world's slice (exportSlice) travels with the world.
+// Accounts: "human:<provider>:<id>", "agent:token:<name>", "aid1:<iss>:<sub>", "local:<name>" (TRUST_NAMES only). A
+// connection with no account gets a fresh anonymous id per connection, in memory only.
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -69,7 +61,7 @@ export function directoryAt(file: string, now: () => number = Date.now, existing
       if (mine.subs.includes(s) || !ACCOUNT_SHAPE.test(s) || (byKey.has(k) && byKey.get(k) !== id)) continue;
       mine.subs.push(s); if (mine.kind === "imported") mine.kind = "account"; byKey.set(k, id); } };
   const locked = lockFor(file);
-  // durable: the world log that names a new id is fsynced, so the id's entry is too (bot review of #260, #20)
+  // durable: the world log that names a new id is fsynced, so the id's entry is too
   const save = () => locked(() => {
     const disk = fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, "utf8")) as File) : null;
     if (disk) for (const [id, e] of Object.entries(disk.ids ?? {})) if (!d.ids[id] && !tomb.has(id)) { d.ids[id] = unkind(e); index(id, e); } else takeBinds(id, e);
@@ -87,8 +79,7 @@ export function directoryAt(file: string, now: () => number = Date.now, existing
     try { save(); } catch (err) { delete d.ids[id]; for (const s of e.subs) byKey.delete(e.world ? `${s}|${e.world}` : s); throw err; }   // not written: not held either
     return id; };
   const get = (id: string) => d.ids[id] ?? anon.get(id) ?? null;
-  /** …claimed by an account OTHER than `sub` (security pass 3, H2: an account-holder may not appear under a name another
-   *  account wears in this directory, present or not — the presence plane is read by people, who read names) */
+  /** …claimed by an account other than `sub`: an account-holder may not appear under a name another account wears here */
   const claimedByOther = (name: string, sub: string): boolean => { fresh(); const k = foldName(name); for (const e of Object.values(d.ids)) if (e.subs.length && !e.subs.includes(sub) && foldName(e.name) === k) return true; return false; };
   return {
     /** The id for a connection in a world: its account's id there (minted on first sight; the display name kept
@@ -96,7 +87,7 @@ export function directoryAt(file: string, now: () => number = Date.now, existing
      *  genesis hash); without it the id is server-wide (tools, tests, legacy worlds). */
     resolve({ sub, name, world = null }: { sub?: string | null; name: string; world?: string | null }): string {
       if (sub) { let id = byKey.get(keyOf(sub, world)); if (id) { if (d.ids[id].name !== name) { d.ids[id].name = name; save(); } return id; }
-        // a miss re-reads, and mints, holding the file's lock: two writers that both missed can't mint two ids for one account (bot #19)
+        // a miss re-reads, and mints, holding the file's lock: two writers that both missed can't mint two ids for one account
         return locked(() => { refresh(); const had = byKey.get(keyOf(sub, world));
           if (had) { if (d.ids[had].name !== name) { d.ids[had].name = name; save(); } return had; }
           return add({ name, subs: [sub], kind: "account", since: now() }); }); }
@@ -131,7 +122,7 @@ export function directoryAt(file: string, now: () => number = Date.now, existing
     },
     nameOf: (id: string): string | null => get(id)?.name ?? null,
     entry: (id: string): Entry | null => get(id),
-    /** the display names an account-holding identity has claimed here (an anonymous joiner may not take one: H1/M3) */
+    /** the display names an account-holding identity has claimed here (an anonymous joiner may not take one) */
     claimedName(name: string): boolean { fresh(); const k = foldName(name); for (const e of Object.values(d.ids)) if (e.subs.length && foldName(e.name) === k) return true; return false; },
     claimedByOther,
     /** The name a spectator's account takes on first sight: the typed name, unless another account wears it; then the
@@ -143,8 +134,7 @@ export function directoryAt(file: string, now: () => number = Date.now, existing
       for (let k = 1; ; k++) { const suffix = k === 1 ? tag : `${tag}${k}`; const n = `${name.slice(0, Math.max(0, max - suffix.length - 1))}-${suffix}`;
         if (!claimedByOther(n, sub)) return n; }
     },
-    /** the accounts of every identity wearing this (folded) display name here: what a SERVER ban by name binds to (security
-     *  review 10-18 H1; an identity with no account is nobody to ban by account). */
+    /** the accounts of every identity wearing this (folded) display name here: what a server ban by name binds to. */
     accountsNamed(name: string): string[] { fresh(); const k = foldName(name); const out: string[] = []; for (const e of Object.values(d.ids)) if (foldName(e.name) === k) out.push(...e.subs); return [...new Set(out)]; },
     /** id → display name for the ids given (what a client is sent; never subs). */
     names(ids: Iterable<string>): Record<string, string> { const o: Record<string, string> = {};

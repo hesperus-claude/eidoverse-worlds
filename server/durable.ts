@@ -1,9 +1,7 @@
 // server/durable.ts — the disk practice a sequencer owes its readers:
-//  - a line is on disk (fsync) BEFORE anyone is told about it: otherwise a crash after a broadcast loses the tail, the
-//    restarted server re-issues the same seq with a different head, and every client holding (seq, head) holds "proof"
-//    the authority equivocated;
-//  - a torn last line (a crash mid-write) is cut off at open, not kept as a permanent malformed entry;
-//  - a blob is written to a temp file and renamed, and one whose bytes don't match its name is rewritten, never kept.
+//  - a line is fsynced before anyone is told about it (else a crash after a broadcast re-issues a seq under another head);
+//  - a torn last line (a crash mid-write) is cut off at open;
+//  - a blob is written to a temp file and renamed, and one whose bytes don't match its name is rewritten.
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -105,11 +103,8 @@ function holderOf(f: string): { pid: number; nonce: string } | null {
   const [p, nonce] = s.split(" "); const pid = Number(p);
   return Number.isInteger(pid) && pid > 0 && /^[0-9a-f]{16}$/.test(nonce ?? "") ? { pid, nonce } : null;
 }
-/** Whether the holder `pid` named in a lock is gone: its process exited (same host: the file is local), or it is this
- *  process. A lock is held only inside one synchronous call, and only the main thread takes one, so a lock naming this
- *  process that the call doesn't hold was left by an earlier process with the same pid: a restart can get its old pid
- *  back. A worker thread that took one would share this pid and could clear a live sibling's lock: one that does needs the
- *  thread in the lock's holder. */
+/** Whether the holder `pid` named in a lock is gone: exited, or this very process (a lock is held only inside one synchronous
+ *  call on the main thread, so one naming our pid was left by an earlier process that had it). */
 function gone(pid: number): boolean {
   if (pid === process.pid) return true;
   try { process.kill(pid, 0); return false; } catch (e) { return (e as NodeJS.ErrnoException).code === "ESRCH"; }
@@ -123,10 +118,8 @@ function take(name: string): string | null {
   catch (e) { if ((e as NodeJS.ErrnoException).code === "EEXIST") return null; throw e; }
   finally { fs.rmSync(tmp, { force: true }); }
 }
-/** Removes the lock file `f` if its holder is gone (above), as one step. Two waiters can both see the same dead holder, so the
- *  one that removes it first takes `<lock>.<its nonce>`, the right to remove that one lock, and removes `f` only if `f`
- *  still holds that nonce. A nonce is never reused, so a lock that has since replaced it is never removed. A right whose
- *  holder is gone before giving it back is removed the same way. Whether it removed `f`. */
+/** Removes the lock file `f` if its holder is gone, as one step: two waiters can see the same dead holder, so the remover
+ *  first links `<lock>.<nonce>` as its right, and removes `f` only if `f` still holds that nonce. Whether it removed `f`. */
 function clearIfGone(lock: string, f: string): boolean {
   const h = holderOf(f); if (!h || !gone(h.pid)) return false;
   const right = `${lock}.${h.nonce}`;

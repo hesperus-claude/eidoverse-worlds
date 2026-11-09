@@ -32,9 +32,8 @@ export type OldWorld = {
   visitor: string;
 };
 
-/** What a client that doesn't fold the log is told at join (server.ts, the 4005 refusal). A NATIVE session (the Unreal client,
- *  signed in through native-login: isNativeSession, native: true or an older nativeWorld) is told the truth about itself: it hasn't been ported to this protocol
- *  yet (it has no page to reload). Anyone else (an old page, an old agent build) is told to reload or update. */
+/** What a client that doesn't fold the log is told at join (the 4005 refusal). A native session (isNativeSession) is told its
+ *  client hasn't been ported to this protocol yet; anyone else is told to reload or update. */
 export function noFoldRefusal(world: string, native: boolean): string {
   return native
     ? `"${world}" is a world of the current protocol, and this Unreal build can't fold its log. Nothing is wrong with your sign-in or with the world: update the Unreal client (current builds join through their local bridge), or join from a browser.`
@@ -74,7 +73,7 @@ export function oldWorldAt(dir: string, name: string): OldWorld | null {
   if (!NAME.test(name)) return null;
   const d = path.join(dir, name);
   let st: fs.Stats; try { st = fs.lstatSync(d); } catch { return null; }
-  if (!st.isDirectory() || isWorldDir(d) || isSwapUnfinished(d)) return null;   // an unfinished swap is its own case (interruptedSwapsIn); lstat: a symlinked world dir is never followed (backup, translate)
+  if (!st.isDirectory() || isWorldDir(d) || isSwapUnfinished(d)) return null;   // an unfinished swap is its own case (interruptedSwapsIn); lstat: a symlinked world dir is never followed
   const suggestedName = freeName(dir, name);
   const head = `WORLDS_DIR=${shellWord(dir)} ${TOOL}`, claimHead = `${CLAIMER} ${head}`;
   if (isPreNamesDir(d)) {   // checked first: such a log may be named log.jsonl too (an older file name)
