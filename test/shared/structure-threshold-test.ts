@@ -5,7 +5,7 @@
 import { noWorldUrl } from "../harness/no-world.ts";
 import { planStructure, localizePoint, prepareRouteLocal } from "../../shared/structure.js";
 import { routeGeometryFor } from "../../shared/structure-route.js";
-import { addWall, removeWall, setAperture, setTile, removeTile, drawRoom, eraseRoom, labelCell } from "../../shared/structure_edit.js";
+import { addWall, removeWall, setAperture, setTile, removeTile, drawRoom, eraseRoom, labelCell } from "../../shared/structure-edit.js";
 import { WorldAgent, WALK_ARGS_REASON } from "../../mcpl/agent.ts";
 import { handleTool } from "../../mcpl/tools.ts";
 import { valid, walk, type P } from "./structure-oracle.ts";

@@ -7,10 +7,10 @@
 //
 // Pure. The one rewrite left is a spelling, not a resolution:
 //   grass  the first protocol's makeGrass knobs → the flora spelling (flora_args mapGrassArgs, the reader's own mapping); a
-//          preset is kept by its name and checked (presetStrokes over shared/flora_presets.js): an unknown preset throws (it
+//          preset is kept by its name and checked (presetStrokes over shared/flora-presets.js): an unknown preset throws (it
 //          would throw in every reader too), and the caller refuses it
 import { isLegacyArgs, mapGrassArgs, presetStrokes } from "../flora_args.js";
-import { FLORA_PRESETS } from "../flora_presets.js";
+import { FLORA_PRESETS } from "../flora-presets.js";
 import { isObj } from "./is.js";
 
 

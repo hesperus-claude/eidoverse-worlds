@@ -87,7 +87,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["supportclass", "client/supportclass-test.ts", 1], // the one support classifier both runtimes consume (#84)
   ["support", "client/support-test.ts", 1], // a settling body rests on what actually holds it up (#17)
   ["structure-field", "shared/structure-field-test.ts", 1], // shared/structure.js: the griddled-building planner
-  ["structure-edit", "shared/structure-edit-test.ts", 1], // shared/structure_edit.js: the structure editor's pure half
+  ["structure-edit", "shared/structure-edit-test.ts", 1], // shared/structure-edit.js: the structure editor's pure half
   ["structure-collider", "client/structure-collider-test.ts", 1], // declared structure colliders (fitStructureBoxes)
   ["collider-off-bodies", "client/collider-off-bodies-test.ts", 1], // review of PR #260: collision off for bodies gives the walker nothing to meet, on a mesh's and a building's every realizing path
   ["lying-support", "mcpl/lying-support-test.ts", 1], // an agent's support for a thing lying down: its true top, no phantom deck at its origin (review of b398d7e3 #1)

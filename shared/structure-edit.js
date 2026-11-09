@@ -1,4 +1,4 @@
-// structure_edit — the griddled-building editor's pure half.
+// structure-edit — the griddled-building editor's pure half.
 //
 // Every operation is DATA IN, DATA OUT: a `structure` component goes in, a new one comes out, nothing is mutated.
 // A building is one component replaced wholesale, so undo is keeping the previous value, a preview is running the

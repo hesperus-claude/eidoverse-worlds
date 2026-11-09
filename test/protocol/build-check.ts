@@ -89,7 +89,7 @@ D.fixtureIds?.(true);
 const L = await import(TREE + "server/livehost.ts");
 const SB = await import(TREE + "shared/protocol/sandbox.js");
 const NS = await import(TREE + "client/lib/newscript.js").catch(() => null);   // absent at the base commit: the editor had no planner
-const SE = await import(ENGINE + "shared/structure_edit.js");   // the editor's own planner makes the buildings (pure; this checkout's)
+const SE = await import(ENGINE + "shared/structure-edit.js");   // the editor's own planner makes the buildings (pure; this checkout's)
 const root = scratch("build");
 const clock = labClock(); let N = 0;
 function open(name: string, o: any = {}) {
@@ -111,7 +111,7 @@ function cast(s: any) {
   for (const [who, role] of [["bob", "builder"], ["vic", "member"], ["ann", "member"]]) s.call("olive", "set", { id: "@world", component: `roles:${who}`, value: { role } });
 }
 // a 4 × 4 room (cells 0..3), a door in its south wall (the edge z = 4, x 1..2) and a window in its east wall (x = 4, z 1..2),
-// made by the editor's own planner (shared/structure_edit.js), as the Room / Door / Window tools make one
+// made by the editor's own planner (shared/structure-edit.js), as the Room / Door / Window tools make one
 function house() {
   let g = SE.emptyStructure(); g = SE.drawRoom(g, { x: 0, z: 0 }, { x: 3, z: 3 });
   g = SE.setAperture(g, { axis: 0, x: 1, z: 4 }, "door"); g = SE.setAperture(g, { axis: 1, x: 4, z: 1 }, "window");
