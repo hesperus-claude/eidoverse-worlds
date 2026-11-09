@@ -639,7 +639,6 @@ if (typeof window !== 'undefined') window.setVoice = setVoice;   // console, har
   }
 }
 
-globalThis.__ambientDebug = () => ambientDebug();
 // console probes: my own body, and every body in the scene (otherwise reachable only through private maps)
 globalThis.__me = () => getMe();
 globalThis.__bodies = () => [
@@ -654,7 +653,6 @@ globalThis.__bodies = () => [
   springbonesRunning: !av.__simHair && !!av.vrm?.springBoneManager,
   avatar: av,
 }));
-globalThis.__audioState = () => audioState();
 // The audio isolation test, from the console. It needs a click first for the context, so it reports the context state.
 globalThis.testAudioLayers = async () => {
   // the shared context: one of its own could exhaust the context budget and report silence it caused
@@ -691,17 +689,10 @@ globalThis.testAudioLayers = async () => {
       'font-size:14px;color:#6cf');
     console.log('%cWHICH DID YOU HEAR?  A only → WebAudio output dead · A+C → ' +
       'createMediaElementSource is the break · C only → decode/file · none → ' +
-      'below the page · all → page fine, ambient.js miswired', 'color:#fc6');
+      'below the page · all → page fine', 'color:#fc6');
   }, 3000);
   console.log('%c[audio] ' + JSON.stringify(r, null, 1), 'font-size:14px;color:#6cf');
   return r;
-};
-
-globalThis.whyIsItSilent = () => {
-  const s = audioState(), a = ambientDebug();
-  console.log('%c[audio] ' + JSON.stringify({ ...s, sources: a }, null, 1),
-    'font-size:14px;color:#6cf');
-  return { ...s, detail: a };
 };
 
 // the water's waves run on the world's synced clock, so the swell a swimmer rises on is the one everyone sees

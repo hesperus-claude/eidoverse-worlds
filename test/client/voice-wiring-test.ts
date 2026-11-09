@@ -44,7 +44,7 @@ const server = read("server/server.ts");
 // same per-file check follows it there — main.js must still bind what it
 // calls itself (updateVoiceMouths, from the frame-system list).
 for (const [label, src] of [["main.js", main], ["voicemouths.js", mouths]] as const) {
-  for (const fn of ["updateVoiceMouths", "micOn", "isMuted", "micAnalyserLevel"]  /* initVoice + peerLevels were mesh-only (cutover 2026-08-16) */) {
+  for (const fn of ["updateVoiceMouths", "micOn", "isMuted", "micAnalyserLevel", "ambientDebug", "audioState"]  /* initVoice + peerLevels were mesh-only (cutover 2026-08-16) */) {
     const called = new RegExp(`\\b${fn}\\s*\\(`).test(src);
     // 🔴 A DESTRUCTURED DYNAMIC IMPORT IS A BINDING TOO (fixed 2026-08-15).
     // `const { toggleMic, micOn } = await import('./lib/micstate.js')` binds both
