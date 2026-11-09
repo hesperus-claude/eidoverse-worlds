@@ -66,3 +66,6 @@ notes/surface-parity/
 
 # the protocol gate's sibling checkouts (run.ts --siblings: mcpl/ and services/captionbot/ take them by file:, deploy-vps.sh too)
 /.siblings/
+
+# bench outputs (bench/flight-capture.mjs --out default): per-run, and they hold the runner's absolute paths
+bench/*/out/
