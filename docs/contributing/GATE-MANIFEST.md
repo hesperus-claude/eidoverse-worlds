@@ -159,9 +159,9 @@ PR's own head as `prHead` and the merge's parents as `mergeOf`), whether the tre
 every suite's result and a hash of its output, and one hash over all of them. That receipt, not a sentence in a PR
 comment, is the evidence of a pass.
 
-Known gap, said plainly: the macOS and Windows paths were written and tested on Linux (the macOS process path against
-`ps`, the Windows tree walk on fixed tables, the no-`/proc` sandbox path by switching the reading off). Their first real
-runs are that workflow's.
+The macOS and Windows paths were first written on Linux (the macOS process path against `ps`, the Windows tree walk on
+fixed tables, the no-`/proc` sandbox path by switching the reading off). They now run for real in that workflow, so its
+macOS and Windows jobs, not a Linux run, are the evidence for them.
 
 ## Suites
 
