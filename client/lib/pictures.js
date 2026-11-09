@@ -216,8 +216,6 @@ export { THREE as _THREE };
 
 const PICTURE_ACCEPT = 'image/png,image/jpeg,image/webp';
 
-export { namedParts };   // lives in parts.js now: the inspector's `parts` extra reads the same list
-
 /** POST an image file through the store door; resolves to the library-relative path. */
 export async function uploadPicture(file) {
   const q = new URLSearchParams({ as: 'image', name: file.name });
