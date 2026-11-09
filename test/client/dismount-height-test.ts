@@ -31,7 +31,7 @@ const STUBS: Record<string, string> = {
   plainwords: `export const plain = (x) => x; export const called = (x) => x; export const typeable = (x) => x;`,
   useprompt: `export const usePromptHint = () => {};`,
   thingphysics: `export const handsHint = () => {}; export const physicsApi = { mine: () => [] };`,
-  myview: `export const outOfMyView = () => false;`,
+  'edit/myview': `export const outOfMyView = () => false;`,
   bodysim: `export const makeRagdoll = () => null;`,
   ragdoll: `export const jointPositions = () => null;`,
   bodydrag: `export const initBodyDrag = () => {}; export const beingDragged = () => false; export const revokeDragged = () => {};`,
