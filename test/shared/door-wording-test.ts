@@ -284,9 +284,8 @@ try {
 
   console.log("\nACT (main's WORLD_VERB)");
   // world_verb is removed (act takes the verbs; R 10-27), and a verb's arguments are the world's authority's to check
-  // (shared/protocol/verbspec.js validate, its refusals pinned in spec/refusal-codes.json): main's
-  // door-side raw-shape refusals (mcpl/shape.ts rawShapeError) and its closed verb list
-  // (server/rights.ts VERB_NEEDS) left with the v1 log, so their checks have nothing here to read.
+  // (shared/protocol/verbspec.js validate, its refusals pinned in spec/refusal-codes.json); v1's
+  // door-side shape refusals and closed verb list are gone, so there is nothing else here to check.
   const forwarded = await call("act", { verb: "fly_away", args: {} });
   check("act passes a verb it doesn't know on to the world, whose authority answers it",
     forwarded.isError !== true && JSON.stringify(agent.requests.at(-1)) === JSON.stringify(["fly_away", {}]), said(forwarded));
