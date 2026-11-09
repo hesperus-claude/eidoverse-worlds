@@ -1,9 +1,8 @@
 // debuglog — the "name which guard refused" channel, shared.
 //
-// A predicate that can decline for five reasons and returns a bare false costs a debugging round per guess; ad-hoc
-// window.__* globals per hunt were undiscoverable. One channel instead: a subsystem narrates its decisions with
-// `why(topic, message)`, and anyone — /audio, the console, a probe — reads them back per topic, with the recent
-// history a single last-value slot cannot carry.
+// A predicate that can decline for five reasons and returns a bare false costs a debugging round per guess. Instead a
+// subsystem narrates its decisions with `why(topic, message)`, and anyone — /audio, the console, a probe — reads the
+// recent history back per topic.
 //
 // Deliberately dependency-free and try/catch-free: nothing here can throw (strings, arrays, Date.now), so call sites
 // stay one line.

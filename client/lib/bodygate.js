@@ -1,5 +1,5 @@
 // The body-first gate: the world's models wait to PARSE until your own body is on screen — world GLB parses
-// stretch the frames the body's pipeline compiles wait on (measured: 23 s to a body). Downloads are not gated;
+// stretch the frames the body's pipeline compiles wait on. Downloads are not gated;
 // only the CPU lane's parse+texture pass is held. ARMED once a body load begins (armBodyGate); nothing armed means
 // nothing to wait for. Released by setMe, the viewer path, a failed body, or a 12 s race in loadGLB, so a hung body
 // never holds the world hostage. After the first release it is a resolved promise.

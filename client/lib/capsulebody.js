@@ -5,7 +5,7 @@
 // the four things the Avatar class asks of a vrm — `scene`, `humanoid.getNormalizedBoneNode/getRawBoneNode`,
 // `update(dt)`, and a tolerated absence of lookAt/expressions/springbones. So it is a real Avatar: it takes
 // the label, the action bar, the ragdoll, the XR arm solver (hand capsules land on the controllers) and the
-// C18 wire without a single consumer learning a new case. Its proportions are the ones armsolve-test
+// pose wire without a single consumer learning a new case. Its proportions are the ones test/client/armsolve-test.ts
 // proves the solver on.
 import { THREE } from './core.js';
 

@@ -4,8 +4,8 @@
 import { bus } from './base.js';
 import { defsRegistry } from './defs.js';
 
-// §24l R1: the vocabulary is data (defs/animations/_actionbar.json), hydrated in place below
-// (object identity preserved) and re-hydrated on the defs-updated push.
+// The vocabulary is data (defs/animations/_actionbar.json), hydrated in place below (object identity preserved) and
+// re-hydrated on the defs-updated push.
 export const ANIM_CLIPS = {};      // name → clip
 export const ANIM_ORDER = []; // listed names, def key order = bar/number-key order
 export const ANIM_ICONS = {}; // name → bar glyph
@@ -22,8 +22,7 @@ export function hydrateAnimNames(table) {
   bus.emit('animnames-updated');
 }
 {
-  // a failed fetch tries again, backing off (2 s doubling to a minute) (house config I18).
-  // unref: a headless host without /defs isn't held open by the retry
+  // a failed fetch tries again, backing off (2 s doubling to a minute); unref so a headless host isn't held open
   let wait = 2000, retry = null;
   const refresh = () => { clearTimeout(retry); retry = null; return defsRegistry()
     .then((reg) => { wait = 2000; hydrateAnimNames(reg.actionbar); })

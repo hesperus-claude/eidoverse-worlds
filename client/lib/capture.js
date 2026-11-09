@@ -1,4 +1,4 @@
-// capture — the one framebuffer-readback primitive (RENDERER-SEAM move 1): the only module outside the presentation
+// capture — the one framebuffer-readback primitive (docs/design/RENDERER-SEAM.md): the only module outside the presentation
 // layer allowed to say `renderer.render`, so swapping the renderer leaves frame capture as one function.
 // Deliberately NOT unified here: avatar.js's portrait pipeline, an offscreen-SUBJECT renderer (own RenderTarget,
 // isolated Scene, async reads, transparent background) rather than a capture of the live frame.

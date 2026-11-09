@@ -1,6 +1,6 @@
 // My body's consent: two gates — Move me, Touch me — each on or off, and two lists of people — Allow (always
 // yes) and Block (always no), whatever the gates say. The authority is the only place it's decided (shared/protocol/
-// consent.js decide; A1: no client gate). This module remembers my choice (localStorage, so it survives the session and
+// consent.js decide; no client-side gate). This module remembers my choice (localStorage, so it survives the session and
 // follows me between worlds) and hands it to consentsync, which sends it on every arrival and every change.
 // A leaf with no lib imports. setPushable/setPosable keep main's /pushable and /posable meanings: the move and touch gates.
 import { GATES, DEFAULT_GATES, CONSENT_SHAPE } from '../../shared/protocol/consent.js';
@@ -11,7 +11,7 @@ export const GATE_WORDS = {
   touch: { label: 'Allow being posed and touched', tip: 'Whether other people may put their hands on you (anywhere, intimate places included) or pose your body. Off by default.' },
 };
 
-// the keys before it, read by readStored and never written: main's two (ew-pushable, ew-posable), the body switch (ew-body-switch, to 10-28)
+// the keys before it, read by readStored and never written: main's two (ew-pushable, ew-posable), the body switch (ew-body-switch)
 export const KEY = 'ew-body-consent';
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
@@ -44,7 +44,7 @@ export function readStored(get = lsGet, now = Date.now()) {
   const state = { move: undefined, touch: undefined, allow: {}, block: {}, queue: [], notice: false, opened: {} };
   if (sw === 'refuse' || sw === 'ask') { state.move = false; state.touch = false; return state; }
   if (sw === 'accept') { state.move = true; state.touch = false; } else { if (pushable !== null) state.move = pushable !== '0'; if (posable !== null) state.touch = false; }
-  state.notice = posable === '1';   // main's posable was posing only; Allow being posed and touched is wider, so off and told (fixF)
+  state.notice = posable === '1';   // main's posable was posing only; Allow being posed and touched is wider, so off and told
   return state;
 }
 
@@ -54,7 +54,7 @@ const guests = new Set();
 const save = () => { lsSet(KEY, JSON.stringify({ v: CONSENT_SHAPE, move: current.move, touch: current.touch, ...(current.notice ? { notice: true } : {}), ...(Object.keys(current.opened ?? {}).length ? { opened: current.opened } : {}),
   allow: Object.fromEntries(Object.entries(current.allow).filter(([id]) => !guests.has(id))), block: Object.fromEntries(Object.entries(current.block).filter(([id]) => !guests.has(id))),
   queue: current.queue.filter((q) => !guests.has(q.id)) }));
-  // main's keys mirror the gates so a client rolled back to them reads the current choice, never a stale one (bot #143); posable '1' was posing only, within touch
+  // main's keys mirror the gates so a client rolled back to them reads the current choice, never a stale one; posable '1' was posing only, within touch
   for (const [g, k] of [['move', 'ew-pushable'], ['touch', 'ew-posable']]) { if (typeof current[g] === 'boolean') lsSet(k, current[g] ? '1' : '0'); else lsDel(k); } };
 save();
 const listeners = new Set();
@@ -67,7 +67,7 @@ export function useWorld(name) { world = String(name ?? ''); }
 
 // the gates in force at this world's authority (consentsync's read): my table's choice, else the world's body-default
 let heldGates = null, heldOff = {};   // heldOff: gates my table at this authority holds off (a migration's, or mine from before)
-/** a gate I turned on here that hasn't landed yet: only it may reopen a gate the authority holds off (#260 follow-up B) */
+/** a gate I turned on here that hasn't landed yet: only it may reopen a gate the authority holds off */
 const openedHere = (g) => current.opened?.[g] === world;
 /** a gate as it shows, the one in force: what I chose, else what the authority last read (the table's, else the world's), else the built-in */
 export const gate = (g) => (current[g] === true && heldOff[g] && !openedHere(g) ? false : (current[g] ?? heldGates?.[g] ?? DEFAULT_GATES[g]) === true);

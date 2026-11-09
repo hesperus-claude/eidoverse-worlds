@@ -1,8 +1,6 @@
-// bodyruntime — the loading half of a body that uses one of Worlds' reviewed,
-// built-in body runtimes (§24 avatar defs: `runtime`). The def selects a CLOSED
-// kind; it never supplies executable code. That distinction is load-bearing:
-// wearing somebody else's body may select code shipped in this Worlds commit,
-// but it cannot make every viewer import mutable JavaScript from the asset library.
+// bodyruntime — the loading half of a body that uses one of the reviewed, built-in body runtimes (avatar defs:
+// `runtime`, shared/avatardefs.js). The def selects a CLOSED kind; it never supplies executable code, so wearing
+// somebody else's body cannot make every viewer import JavaScript from the asset library.
 import { defsRegistry } from './defs.js';
 import { makeBodyRuntime, defForBody } from './bodyruntime_core.js';
 

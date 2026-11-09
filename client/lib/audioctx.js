@@ -10,9 +10,7 @@ export function audioContext() {
   return ctx;
 }
 
-/** TEST-ONLY: drop the cached context so a suite can swap the constructor
- *  (deterministic graph-construction failure needs a FRESH broken context —
- *  the cache would happily keep serving the working one). */
+/** TEST-ONLY: drop the cached context so a suite can swap the constructor. */
 export function __resetForTest() { ctx = null; }
 
 /** Has one been made yet? (Probes: do not CREATE one just to look at it.) */
