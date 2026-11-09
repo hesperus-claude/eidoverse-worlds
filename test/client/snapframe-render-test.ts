@@ -18,7 +18,7 @@
 
 import { fileURLToPath } from "node:url";
 import { mock } from "bun:test";
-import * as THREE from "three";
+import * as THREE from "../../client/node_modules/three/build/three.module.js";   // the copy client/lib uses
 
 const { mkCheck } = await import("../harness/harness.ts");
 const { check, tally } = mkCheck();

@@ -9,7 +9,7 @@
 //   `framebuffer !== null` → `framebuffer`        → "no base layer: not installed"
 //   `framebuffer !== null` dropped (always install) → "hardware: not installed, drawBuffers untouched"
 //   `handle.installed ||` dropped                 → "two null sessions: wrapped once"
-import { EventDispatcher } from 'three';
+import { EventDispatcher } from '../../client/node_modules/three/build/three.module.js';   // the copy client/lib uses
 import { tolerateNullXRFramebuffer } from '../../client/lib/xr_nullfb.js';
 import { checker } from '../harness/probe-harness.mjs';
 const { check, done } = checker();

@@ -3,7 +3,7 @@
 // test/client/xr-pointer-probe.mjs is the browser half: the real loop under IWER, the setting's row in the VR settings quad.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/xrpointer-test.mjs
 import * as P from '../../client/lib/xrpointer.js';
-import * as THREE from 'three';
+import * as THREE from '../../client/node_modules/three/build/three.module.js';   // the copy client/lib uses
 import { suite } from "../gate/suite.ts";
 const S = suite("xrpointer");
 const check = (name, ok, note) => S.check(name, ok, note);

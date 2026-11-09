@@ -1,7 +1,7 @@
 // test/stubs/unknown-comp-stub.mjs — the cone for test/client/unknown-comp-test.ts.
 //
 // Everything test/stubs/lod-client-stub.mjs stands in for (core, assets, colliders,
-// lightrig, lights, world's maps), plus the one export motion.js needs from
+// lightrig, lightgizmo, world's maps), plus the one export motion.js needs from
 // remotes.js (serverNow). The realizer, the fold, state.js and the bus stay
 // REAL; this file only removes the renderer and the network.
 export * from './lod-client-stub.mjs';
