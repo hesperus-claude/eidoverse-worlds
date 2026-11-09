@@ -518,7 +518,6 @@ export class HeadlessBody {
     const rd: any = this.rd;
     const bodies = rd?._bodies;
     if (!Array.isArray(bodies) || !bodies.length) return 0;
-    const A = this.m.THREE ? null : null;
     let pushed = 0;
     for (const rb of bodies) {
       try {
