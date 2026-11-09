@@ -90,7 +90,7 @@ const M: Mutant[] = [
     find: "      const reservedAs = [...at.names].find((n) => foldName(n) === foldName(c.id)) ?? null;", repl: "      const reservedAs = [...at.names].find((n) => n === c.id.toLowerCase()) ?? null;", suite: "identity", rows: ["C2f"], expect: 42 },
   // ---- the control: a comment changed, nothing else; its suite must stay green ----
   { id: "CONTROL", what: "no-op (a comment): must stay green", file: "shared/protocol/authority/storage.js",
-    find: "// Persist before publishing (review of PR #260, storage.js:110)", repl: "// Persist before publishing (review of PR #260, storage.js:110 )", suite: "reset-race", rows: [], expect: 1 },
+    find: "// Persist before publishing: a line reaches memory", repl: "// Persist before publishing:  a line reaches memory", suite: "reset-race", rows: [], expect: 1 },
 ];
 
 // the gate's pieces (blockers-mutants-a…d in suites.ts), balanced by measured time; each runs the CONTROL too, and every
