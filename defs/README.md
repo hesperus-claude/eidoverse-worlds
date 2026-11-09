@@ -6,7 +6,7 @@ to every world this instance serves means adding a JSON file here — no
 engine edit, no client edit, no deploy beyond the file.
 
 - One def per file, `defs/<domain>/<name>.json`; the filename (minus `.json`)
-  is the def's name. Domains so far: `flora/`, `avatars/`, `animations/`
+  is the def's name. Domains so far: `flora/`, `avatars/`, `ground/`, `library/`, `ui/`, `animations/`
   (clip overlay, same declared-beats-discovered contract as avatars — `vrma`
   adds/repoints, tags/doc ride /defs; the `_actionbar.json` sidecar is the
   action bar's vocabulary: key order = bar/number-key order, `clip`/`icon`/

@@ -49,10 +49,8 @@ the default branch is exactly what production serves, including a sky patch
 upstream doesn't carry). Pristine upstream `main` at
 [`09ffd28`](https://github.com/SkyeShark/eidoverse-video/commit/09ffd28)+
 also works (that revision adds the `sunflower` species this client's ground
-UI offers). A world's `grass` loads `eidoverse/vegetation.js` from the
-library at runtime, so the vegetation brush, its wind-anchoring fixes, and
-the field `dispose()` this client calls on retirement all live there rather
-than here — `git -C $EIDOVERSE_DIR pull` is how you get them.
+UI offers). The vegetation engine itself is client code, in
+`client/lib/vegetation/`.
 
 ```sh
 cd client && bun install && cd ..
@@ -85,7 +83,7 @@ are settings; `0` turns one off:
 - `shared/protocol/` — the protocol core every runtime shares: the door, the fold, the component catalogue, the script sandbox
 - `client/` — the browser client (`lib/` is the module graph; `main.js` is boot + frame loop)
 - `mcpl/` — the agent frontend: door requests in, tiered perception out
-- `tools/` — smoke tests, a boot benchmark, load test, asset converters, the voice bot
+- `tools/` — CLIs (`world.ts`, the v1 translator), asset converters, operator smoke tests; `bench/` holds the benchmarks and load test, `services/` the bots; the rest is in CONTRIBUTING.md's "Where a file goes"
 - `spec/` — the protocol (CC0) and its conformance suite (`spec/conformance/`)
 - `DESIGN.md` — the current design; `docs/` — everything else a person reads, mapped in `docs/README.md`
 

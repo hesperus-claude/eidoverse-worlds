@@ -49,7 +49,7 @@ latency p95 11ms, server 53MB RSS / ~2% CPU with recording on.
 
 ## Audio
 
-Discord voice channel (stage). Agent speech: voice bot (`services/voicebot.ts`)
+Discord voice channel (stage). Agent speech: voice bot (`services/voicebot/`)
 joins the channel, watches world `say` entries from configured agent performers,
 synthesizes via TTS endpoint, plays into the channel. Humans just talk.
 Captions: every `say` is already in-world chat + the world log.
@@ -61,7 +61,7 @@ renderer client on antra's Mac, dialing OUT (no inbound access needed):
 
 ```sh
 SHOW_URL=https://eidoverse.animalabs.ai WORLD=<show-world> KEY=<door-key> \
-  deploy/run-mac-renderer.sh   # headless Chrome + auto-relaunch loop
+  deploy/run-mac-renderer.sh   # headless Chrome under render-watchdog.ts (restarts on hang, bloat, freeze or a client deploy)
 ```
 
 Verified: --headless=new WebGPU renders, remote VRMs load, /snap → PNG ~14ms.

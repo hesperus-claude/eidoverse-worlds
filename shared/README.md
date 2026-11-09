@@ -3,7 +3,7 @@
 One copy of the facts. Everything in this directory is imported verbatim by
 all three species of runtime — the browser client (native ESM over HTTP at
 `/shared/…`), the sequencer (Bun, from disk), and the mcpl agent — so shared
-derivations (time of day, weather segments, particle meaning, and eventually
+derivations (time of day, weather segments, particle meaning, and
 the whole fold) come out of exactly one function everywhere. The "fold is
 sacred / mirrored math stays mirrored" house rules in AGENTS.md are true by
 construction only for code that lives here; moving a mirrored pair into this

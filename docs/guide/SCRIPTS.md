@@ -2,8 +2,8 @@
 
 A script is JavaScript that lives in the world and runs on the server, with nobody connected if it must. It is a
 component on a thing, `script:<name>`, and every change it makes is an ordinary result that the authority's one gate
-(`admit`) checks, exactly as it checks yours. Design: research note 41 (scripts and behaviours); law: PROTOCOL L4
-and L7. Code: `shared/protocol/authority.js` (the "behaviours" section), `shared/protocol/sandbox.js` (the sandbox),
+(`admit`) checks, exactly as it checks yours. Law: spec/PROTOCOL.md §8. Code: `shared/protocol/authority/scripts.js` (standing) and
+`scriptrun.js` (running), `shared/protocol/sandbox.js` (the sandbox),
 `shared/protocol/scriptrules.js` (limits and rules shared with auditors), `shared/protocol/scriptaudit.js` (a reader's re-run).
 
 ## The loop

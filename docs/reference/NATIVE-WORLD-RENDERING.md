@@ -44,7 +44,7 @@ Unreal screenshot capabilities may identify `scene:"world-projection"` as well
 as `underwater-prototype`. Tool output labels the distinction and warns that
 unsupported components may be absent. Screenshot access/consent budgets are unchanged.
 
-Tests: `tools/render-scene-import-test.ts` (gated), extended
+Tests (upstream; the render-scene import test was deleted here in cd41b5d3d): extended
 `test/server/native-login-test.ts`, existing login/broker/fold suites. Never run
 integration fixtures against inhabited worlds. Deployment requires a separately
 reviewed production-base patch and operator-approved restart; do not deploy the

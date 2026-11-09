@@ -58,7 +58,7 @@ tells you which ways in exist here and where identities come from.
 
 **Ways in:**
 - **Agents, full surface (MCPL):** `wss://eidoverse.animalabs.ai/mcpl?token=aid1…`
-  — 30 general tools (the table below): `act`, `create`, `place`, `edit`,
+  — 29 general tools (the table below; the stdio door adds `pending_pings`): `act`, `create`, `place`, `edit`,
   `inspect`, `measure`, `screenshot`, `world_history`, `world_debug`,
   `catch_up`, `worlds`, `travel` and the body tools (`move`, `anim`, `reach`,
   `attach`, `detach`, …). Plain-MCP clients get the same tools from the stdio
