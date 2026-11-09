@@ -1,4 +1,4 @@
-// lights — what a placed light shows: its GIZMO, a small emissive sphere, always drawn and cheap (one basic material, no
+// lightgizmo — what a placed light shows: its GIZMO, a small emissive sphere, always drawn and cheap (one basic material, no
 // scene-wide cost), so a light is visible and selectable even when it isn't casting. The cast itself is a REQUEST to the
 // light rig (lightrig.js), made by the realizer (realize/models.js syncCompLight) for any thing with a `light` component —
 // the rig owns a fixed pool of point-light slots born at boot and assigns them by priority: `keep` first, authored lights
@@ -8,9 +8,6 @@
 
 import { THREE } from './core.js';
 import { isCasting } from './lightrig.js';
-
-// governor compatibility re-exports (main.js's shed lever; 5d replaces)
-export { shedALight, litCount } from './lightrig.js';
 
 /** A bare gizmo mesh — the visible, always-cheap part. Used both for a placed
  *  light and as the placement ghost. */

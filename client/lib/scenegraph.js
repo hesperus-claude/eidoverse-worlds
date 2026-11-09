@@ -36,7 +36,6 @@ import * as Sel from './edit/selection.js';
 import { entities, metaOf, bagOf, avatarMounts } from './world.js';
 import { compEntries } from '../../shared/protocol/view.js';
 import { editorsFor, commitEdit } from './inspect.js';
-import './lights.js';   // for its registered light editor (world.js pulls it in anyway)
 import { requestDebug, replica } from './net.js';
 import { sendOps, del, revertPose } from './editwrites.js';
 import * as OP from '../../shared/requests.js';

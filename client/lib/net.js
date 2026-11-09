@@ -1099,8 +1099,8 @@ async function handle(msg, at) {
       noteRefusal(msg.error, msg.refused);   // before the snapshot, an error is the join's refusal: its close shows these words
       // Server-side refusals are the user's problem to see, not the console's.
       toast(msg.error, 'warn');
-      // ...and any module holding an optimistic preview needs to hear it: a
-      // refused verb never folds (lights.js rolls its edits back off this).
+      // ...and any module holding an optimistic preview can hear it (no lib module listens today): a
+      // refused verb never folds.
       // The wire names no verb — every refusal on this socket is ours.
       bus.emit('verb-refused', { error: String(msg.error ?? '') });
       break;

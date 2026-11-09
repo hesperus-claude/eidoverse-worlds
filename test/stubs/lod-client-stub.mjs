@@ -9,7 +9,7 @@
 //                "baked" one and the original otherwise, and the test can
 //                HOLD every load open and release it by hand, so a tier swap
 //                can be caught mid-flight
-//   colliders.js / lightrig.js / lights.js — recorded, never built
+//   colliders.js / lightrig.js / lightgizmo.js — recorded, never built
 //   world.js     its maps only (entities, mounts, edit holds, findPart)
 //
 // Every side effect the test asserts on is a plain array or Map here.
@@ -90,7 +90,7 @@ export const reindexCollider = () => {};
 // what the real colliders.js and lightrig.js do on the realizer's word (realize/lifecycle.js release)
 bus.on('realized', ({ id, owner }) => { removeCollider(id); releaseCaster(id); releaseOwner(owner); });
 
-// ---- lightrig.js / lights.js ------------------------------------------------
+// ---- lightrig.js / lightgizmo.js -------------------------------------------
 /** inferred lamps (attachLamps) by owner, as the realizer drives them: owner -> times attached; plus the log */
 export const lampOwners = new Map();
 export const lampLog = [];

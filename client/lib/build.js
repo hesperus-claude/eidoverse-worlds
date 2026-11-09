@@ -17,7 +17,7 @@ import { LIGHT_DEFAULTS } from '../../shared/components.js';
 import { THREE, scene, camera, canvas } from './core.js';
 import { bus, report } from './base.js';
 import { loadGLB, libLabels, modelName } from './assets.js';
-import { makeLightGizmo } from './lights.js';
+import { makeLightGizmo } from './lightgizmo.js';
 import { entities, metaOf, bagOf, editHolds } from './world.js';
 import { reindexCollider } from './colliders.js';
 import { heightAt } from './terrain.js';

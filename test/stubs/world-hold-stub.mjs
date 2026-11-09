@@ -49,7 +49,7 @@ export const foldSkyEntry = () => null;
 // occupants.js / seatcore.js
 export const occupyCorrectionFor = () => null;
 export const applySeatCorrection = () => {};
-// lights.js
+// lightgizmo.js
 export const makeLight = () => null;
 export const updateLight = () => {};
 export const disposeLight = () => {};

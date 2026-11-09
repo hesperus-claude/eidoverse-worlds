@@ -27,7 +27,7 @@ import { loadGLB, retainGLB, releaseGLB, evictIdleProtos, lodRecipeReady, gpuPre
 import { makeModelQuality, chooseTier } from '../lod_policy.js';
 import { colliders, fitCollider, removeCollider, reindexCollider, refitCollider } from '../colliders.js';
 import { registerCaster, releaseCaster, requestLight, updateRequest, releaseLight } from '../lightrig.js';
-import { makeLightGizmo } from '../lights.js';
+import { makeLightGizmo } from '../lightgizmo.js';
 // ../../../ — not ../../ — so the path resolves to the repo's shared/ on disk
 // (bun tests) and still clamps to /shared/ in the browser (server/routes.ts)
 import { lightOf, colliderOf } from '../../../shared/components.js';

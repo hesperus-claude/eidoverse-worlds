@@ -27,7 +27,7 @@ const SPY = fileURLToPath(new URL('../stubs/unknown-comp-report-spy.mjs', import
 plugin({
   name: 'components-wire-stub',
   setup(b) {
-    for (const f of ['^\\.\\./(core|assets|colliders|lightrig|lights|world|materials)\\.js$', '^\\./(core|world|colliders|remotes)\\.js$']) {
+    for (const f of ['^\\.\\./(core|assets|colliders|lightrig|lightgizmo|world|materials)\\.js$', '^\\./(core|world|colliders|remotes)\\.js$']) {
       b.onResolve({ filter: new RegExp(f) }, () => ({ path: STUB }));
     }
     // the realizer's report(), recorded; everyone else gets the real base.js (the real bus)

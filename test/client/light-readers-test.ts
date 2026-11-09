@@ -3,7 +3,7 @@
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/light-readers-test.ts
 //
-// lights.js, matoverride.js, inspect.js and realize/models.js boxOf are real. inspect.js runs in the inspect harness
+// lightgizmo.js, matoverride.js, inspect.js and realize/models.js boxOf are real. inspect.js runs in the inspect harness
 // (test/protocol/inspectharness.ts); the realizer in the lod-client stub cone (test/stubs/lod-client-stub.mjs); the light rig
 // is a Set of the keys that hold a slot.
 // @ts-nocheck
@@ -17,11 +17,11 @@ const castingKeys = (globalThis.__castingKeys = new Set());
 plugin({
   name: "light-readers",
   setup(b) {
-    for (const f of ["^\\.\\./core\\.js$", "^\\.\\./assets\\.js$", "^\\.\\./colliders\\.js$", "^\\.\\./lightrig\\.js$", "^\\.\\./lights\\.js$", "^\\.\\./world\\.js$", "^\\.\\./materials\\.js$"]) {
+    for (const f of ["^\\.\\./core\\.js$", "^\\.\\./assets\\.js$", "^\\.\\./colliders\\.js$", "^\\.\\./lightrig\\.js$", "^\\.\\./lightgizmo\\.js$", "^\\.\\./world\\.js$", "^\\.\\./materials\\.js$"]) {
       b.onResolve({ filter: new RegExp(f) }, (a) => (a.importer.replace(/\\/g, "/").includes("/client/lib/realize/") ? { path: LOD } : undefined));
     }
     b.onResolve({ filter: /^\.\/(lightrig|materials)\.js$/ }, (a) =>
-      (/\/client\/lib\/(lights|matoverride)\.js$/.test(a.importer.replace(/\\/g, "/")) ? { path: a.path, namespace: "light-readers" } : undefined));
+      (/\/client\/lib\/(lightgizmo|matoverride)\.js$/.test(a.importer.replace(/\\/g, "/")) ? { path: a.path, namespace: "light-readers" } : undefined));
     b.onLoad({ filter: /.*/, namespace: "light-readers" }, (a) => ({
       loader: "js",
       contents: a.path.includes("lightrig")
@@ -31,7 +31,7 @@ plugin({
   },
 });
 
-const { makeLightGizmo, lightCasting } = await import("../../client/lib/lights.js");
+const { makeLightGizmo, lightCasting } = await import("../../client/lib/lightgizmo.js");
 const { materialsOf } = await import("../../client/lib/matoverride.js");
 const { liveFor, setEditHooks } = await import("../../client/lib/inspect.js");
 const lod: any = await import("../stubs/lod-client-stub.mjs");
