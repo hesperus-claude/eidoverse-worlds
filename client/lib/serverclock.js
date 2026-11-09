@@ -11,7 +11,7 @@
 //                  late moves it by no more than that rule's leak) and used only until a round trip lands.
 // Its own module so a small realizer (sounds.js) can read it without pulling the body code in.
 import { foldOffset } from '../../shared/clockoffset.js';
-let oneWay = null;            // from one-way samples: shared/clockoffset.js foldOffset's { offset, at, stream }
+let oneWay = null;            // from one-way samples: shared/clockoffset.js foldOffset's { offset, at }
 let rtt = [];                 // [{rtt, offset}] most recent round trips
 const RTT_KEEP = 8;
 const STEP_SLACK_MS = 50;     // drift between asks a sample may show and still be the same clock (0.6 ms/s over 80 s)

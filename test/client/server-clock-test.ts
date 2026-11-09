@@ -303,7 +303,7 @@ console.log("\n— the browser takes the clock as its server clock —\n");
   // largest sample wins, so a late one moves it by no more than the leak: it
   // comes down by at most 2 ms for each second since the previous sample,
   // 100 ms at once.
-  const { foldOffset, LEAK_MS_PER_S, LEAK_MAX_MS, STREAM_BLEND } = await import("../../shared/clockoffset.js");
+  const { foldOffset, LEAK_MS_PER_S, LEAK_MAX_MS } = await import("../../shared/clockoffset.js");
   const s0 = foldOffset(null, 5_000, 0);
   const show = (s: any) => JSON.stringify(s);
   check("the rule: the first sample sets the estimate", s0.offset === 5_000, show(s0));
@@ -311,16 +311,13 @@ console.log("\n— the browser takes the clock as its server clock —\n");
   check("…a better sample wins at once", foldOffset(s0, 6_000, 1_000).offset === 6_000, show(foldOffset(s0, 6_000, 1_000)));
   check("…a drift down is followed: 100 s on, a sample 0.05 s lower is taken, inside the 0.1 s the leak allows", foldOffset(s0, 4_950, 100_000).offset === 4_950, show(foldOffset(s0, 4_950, 100_000)));
   check("…at 2 ms a second at most: 30 s on, a sample 5 s lower brings it down 0.06 s", LEAK_MS_PER_S === 2 && foldOffset(s0, 0, 30_000).offset === 4_940, show(foldOffset(s0, 0, 30_000)));
-  const early = foldOffset({ offset: 5_000, at: 1_000, stream: 5_000 }, 4_000, 500);
+  const early = foldOffset({ offset: 5_000, at: 1_000 }, 4_000, 500);
   check("…and a sample stamped before the previous one lets nothing leak, and keeps the later time", early.offset === 5_000 && early.at === 1_000, show(early));
   check("…and an hour on, a sample 5 s late brings it down no more than 100 ms", LEAK_MAX_MS === 100 && foldOffset(s0, 0, 3_600_000).offset === 4_900, show(foldOffset(s0, 0, 3_600_000)));
   check("a non-finite sample or time isn't a sample",
     foldOffset(s0, Infinity, 1_000) === s0 && foldOffset(s0, -Infinity, 1_000) === s0 && foldOffset(s0, NaN, 1_000) === s0
       && foldOffset(s0, 6_000, NaN) === s0 && foldOffset(null, Infinity, 0) === null,
     show([foldOffset(s0, Infinity, 1_000), foldOffset(s0, -Infinity, 1_000), foldOffset(s0, NaN, 1_000), foldOffset(s0, 6_000, NaN), foldOffset(null, Infinity, 0)]));
-  check("the stream offset starts at the first sample", s0.stream === 5_000, show(s0));
-  check("…and blends each sample in at 0.08, a late one included, as the one estimate did before",
-    STREAM_BLEND === 0.08 && foldOffset(s0, -15_000, 1_000).stream === 5_000 * 0.92 - 15_000 * 0.08, show(foldOffset(s0, -15_000, 1_000)));
 
   // The early socket: the boot script opens the socket and buffers what comes
   // while the module graph loads, and connect() drains it later. Run the boot

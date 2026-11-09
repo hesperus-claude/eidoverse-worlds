@@ -29,12 +29,4 @@ is behind the last one's, is followed at the same rate while samples come at lea
 The server sends a world frames only while some client there streams its body's pose, as an agent does every tick and
 a browser with a body does from its frame loop, moving or not, while its tab is shown. A world with nobody streaming
 (spectators only, or bodies whose tabs are hidden) gets none, so there the estimate holds until a frame, or this
-client's next join's clock message, brings a sample. That is the cost of not trusting late samples. The stream offset
-follows it within a few dozen samples.
-
-## The stream offset
-
-Every sample blended in at STREAM_BLEND: the server's clock as the frames arrive, about one mean delay early.
-Interpolating remote bodies reads it (remotes.js streamNow): its INTERP_MS is a jitter buffer behind the frames as they
-come, so a frame late by the usual delay isn't late. Every other reader wants the server's true time and reads the
-offset.
+client's next join's clock message, brings a sample. That is the cost of not trusting late samples.
