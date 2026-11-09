@@ -1,4 +1,4 @@
-// server/mainknew.ts — which account the main-era (pre-v4) server recorded for a name, so a translation can bind a name-only
+// server/mainknew.ts — which account the main-era server recorded for a name, so a translation can bind a name-only
 // owner, and moderation.ts a name-only server ban, to an account. Read:
 //   - WORLDS_DIR/.principals.json {sub: {name, kind, first, last}}: every account a verified door saw, by case-insensitive name;
 //   - every other main-era log in WORLDS_DIR (log.jsonl, or log.original.jsonl once translated in place): the {id, sub} pairs
