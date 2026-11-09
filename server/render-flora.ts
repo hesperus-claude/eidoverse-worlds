@@ -1,4 +1,4 @@
-// Used outside this repo: eido-bridge (the native-renderer bridge) imports projectFlora from here; keep it until that moves.
+// Used outside this repo: the native-renderer bridge imports projectFlora from here; keep it until that moves.
 // Same seeded placement/biome definitions as Three.js; geometry and draw budget
 // are renderer-specific. This module never mutates folded state.
 import { mapGrassArgs, presetStrokes } from '../client/lib/flora_args.js';

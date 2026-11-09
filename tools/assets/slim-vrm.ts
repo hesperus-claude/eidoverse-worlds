@@ -1,3 +1,4 @@
+// Used outside this repo: Orrery's avatar push runs this file by path; move it only together with Orrery.
 // slim-vrm — resize a VRM/GLB's embedded textures down to web-sane dimensions.
 //
 // Tripo exports ship 8192×8192 JPEGs: ~67 megapixels PER AVATAR that every
