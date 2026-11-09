@@ -133,7 +133,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["drag-q", "server/drag-q-test.ts", 1], // the rotate gizmo's live drag carries the full orientation
   ["components-corpus", "shared/components-corpus-test.ts", 1], // the component view is lossless on every committed world
   ["component-needs", "shared/component-needs-test.ts", 1], // Add Component brings its needs; Remove names its dependants
-  ["scriptnew-expect", "client/scriptnew-expect-test.ts", 1], // house 6340433633: the editor's new-script card sends expect from the thing as planned, not as it stands after the upload
+  ["scriptcard-expect", "client/scriptcard-expect-test.ts", 1], // house 6340433633: the editor's new-script card sends expect from the thing as planned, not as it stands after the upload
   ["role-grammar", "shared/role-grammar-test.ts", 1], // D7: one role-id grammar (grab, sockbody, rolespanels, commands)
   ["rot", "shared/rot-test.ts", 1], // shared/rot.js: quaternion orientation, and no host transcendental (R1: lyingFrame had three)
   ["one-binding", "client/one-binding-test.ts", 1], // a shared constant, grammar or table has one binding: importers carry no copy (reaches, rounding, roles, rot numerics, names key)

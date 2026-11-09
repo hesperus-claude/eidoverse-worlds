@@ -32,7 +32,7 @@ import { defsRegistry } from './defs.js';
 import { WORLD_ID, describeWorld, worldPick, worldChoice } from '../../shared/worldentity.js';
 import { WEATHERS } from '../../shared/forecast.js';
 import { copiesOf } from '../../shared/blueprint.js';
-import { openNewScript, mayScript } from './scriptnew.js';
+import { openNewScript, mayScript } from './scriptcard.js';
 import { structureTools, currentTool as structureTool, setTool as setStructureTool, newBuilding } from './structure_ui.js';
 import { starterModels } from './catalog.js';
 import { spawnAhead } from './worldquad.js';
@@ -759,7 +759,7 @@ function inspectorFields() {
 
   const mine = behaviors.filter((b) => b.attach === id);
   // Scripts: its own group, so it never folds under the VR-only Add Component rows above. The new-script button sits
-  // under Transform when the schema has sections, else here (scriptnew.js)
+  // under Transform when the schema has sections, else here (scriptcard.js)
   const scriptsUp = !!schema.sections && id !== WORLD_ID;
   if (mine.length || (id !== WORLD_ID && !scriptsUp)) f.push({ t: 'group', k: 'behaviors', label: mine.length ? `Scripts (${mine.length})` : 'Scripts', open: isOpen(id, 'behaviors') });
   if (mine.length) f.push({ t: 'list', k: 'scripts', rows: mine.map((b) => ({ id: b.id, label: `${running(b) ? '▶' : '⏸'} ${b.id}`, sub: `${b.timers ? `${b.timers}⏲ ` : ''}${b.status ?? ''}`, actions: [{ k: 'unbind', label: 'remove', danger: true }] })) });

@@ -8,7 +8,7 @@
 //       places it turned and sized, as ONE create
 //   SC  the Inspector's "Add Script…" makes a script: upload, then ONE act (script:<name> + its use reaction); a
 //       visitor's use runs it; the Inspector lists it
-// The writes go through the real edit code (structure_ui.js, build.js, scriptnew.js, editpanels.js); gestures are
+// The writes go through the real edit code (structure_ui.js, build.js, scriptcard.js, editpanels.js); gestures are
 // driven at their seams (a mousedown on the canvas, synthetic keydowns, the card's own buttons), as client-check does.
 // @ts-nocheck
 import fs from "node:fs";

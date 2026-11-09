@@ -301,7 +301,7 @@ time.
 | 128 | drag-q | main | `test/server/drag-q-test.ts` | bun | 0.2 s | 180 s |
 | 129 | components-corpus | main | `test/shared/components-corpus-test.ts` | bun | 0.2 s | 180 s |
 | 130 | component-needs | main | `test/shared/component-needs-test.ts` | bun | 0.6 s | 180 s |
-| 131 | scriptnew-expect | main | `test/client/scriptnew-expect-test.ts` | bun | 0.5 s | 180 s |
+| 131 | scriptcard-expect | main | `test/client/scriptcard-expect-test.ts` | bun | 0.5 s | 180 s |
 | 132 | role-grammar | main | `test/shared/role-grammar-test.ts` | bun | 0.3 s | 180 s |
 | 133 | rot | main | `test/shared/rot-test.ts` | bun | 0.1 s | 180 s |
 | 134 | one-binding | main | `test/client/one-binding-test.ts` | bun | 0.3 s | 180 s |

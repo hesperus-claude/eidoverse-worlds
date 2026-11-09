@@ -338,7 +338,7 @@
  "test/shared/rot-test.ts": {
   "own-ok": 1
  },
- "test/client/scriptnew-expect-test.ts": {
+ "test/client/scriptcard-expect-test.ts": {
   "own-ok": 1
  },
  "test/shared/shape-attach-test.ts": {

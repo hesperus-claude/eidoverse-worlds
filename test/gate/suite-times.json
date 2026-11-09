@@ -57,7 +57,7 @@
  "boot-init": 1.6,
  "editor-range": 0.4,
  "editschema": 0.9,
- "scriptnew-expect": 0.2,
+ "scriptcard-expect": 0.2,
  "role-grammar": 0.1,
  "rot": 0.2,
  "one-binding": 1.8,
