@@ -17,7 +17,8 @@ worlds/
 worlds-dev/
 backups/
 
-# the asset library is fetched at runtime (EIDOVERSE_DIR), not vendored
+# the asset library is fetched at runtime (EIDOVERSE_DIR), not vendored; the server's optimize output
+# (OPT_DIR, default assets/opt/: thumbs, store, checks) lands under assets/ too
 assets/
 *.glb
 *.vrm
@@ -39,14 +40,11 @@ assets/
 !patched/**/*.hdr
 
 # generated
-assets/opt/thumbs/
 *.zip
 
 # local claude/mcp config
 .mcp.json
 .memsearch/
-tools/node_modules/
-
 
 # Piper voice models: ~60MB each, fetched by the client at runtime
 # (user's disk or HuggingFace+OPFS) and never served by us. The .onnx.json
@@ -55,14 +53,9 @@ tools/node_modules/
 client/voices/*.onnx
 client/accept-*.onnx*
 
-# Assets/opt overlay exclusions (these are on prod only
-assets/opt/eidoverse/
-
 # a SYMLINK named node_modules dodges the dir-only pattern above — the
 # worktree-symlink footgun that shipped a Mac path to the VPS (2026-08-12)
 node_modules
-client/node_modules
-mcpl/node_modules
 
 # macOS Finder droppings -- two got committed in eae165b
 .DS_Store
