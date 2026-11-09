@@ -3,6 +3,21 @@
 How a new component gets into the engine without breaking a world. The rules are `spec/PROTOCOL.md` §4 and §10; this
 is the checklist that follows from them. R and Hesperus, 2026-10-10.
 
+## Files you'll touch (promoting a component; `picture` is a good template)
+
+1. `shared/protocol/componentspec.js`: the definition (fields, defaults, `absentMeans`, `help`, `aliases`)
+2. `spec/registry-pin.json`: re-pinned by `bun test/protocol/pretrans-check.ts --pin`
+3. `shared/<name>.js`: what the value means, for every reader (e.g. `shared/picture.js`)
+4. `shared/protocol/authority/checks.js`: checks beyond the shape, and `dropped` pointers
+5. `shared/components.js`: the Add Component catalogue line
+6. `shared/editschema.js`: the Inspector card
+7. `client/lib/<name>s.js`: the browser host (e.g. `client/lib/pictures.js`)
+8. `client/main.js`: a side-effect `import './lib/<name>s.js'`, or the host never loads
+9. `mcpl/agent.ts`: the `spoken` list, if agents should read it
+10. `spec/PROTOCOL.md` §4 (only if a reader should meet it first), and tests: `test/shared/editschema-test.ts` plus a browser probe
+
+The rungs below say why each one is needed.
+
 ## Draft, trial, reserved, stable: four words, two different questions
 
 **Draft** is a rung of this ladder: a namespaced component (`<handle>/<name>`) the authority has **not admitted** to its
@@ -108,7 +123,7 @@ A draft needs:
 - **its offer**: Add Component lists it under a **"drafts"** heading, amber chip, with the hint "unproven: this client
   reads it; the engine doesn't" — ONLY on a client that registered a reader for it (a server, or an agent's `inspect`,
   has none and never offers it);
-- **tests**: the card's edits (`test/shared/editschema-test.ts`) and the reader in a browser (`test/protocol/shiplist-probe.ts`);
+- **tests**: the card's edits (`test/shared/editschema-test.ts`) and the reader in a browser (a probe in `test/client/`, `<name>-probe.mjs`);
 - **a page**: what each field means, its units, and **what its absence means**, written now (see rung 3).
 
 A draft can't change a rule: the authority doesn't read it. Anything that needs the authority (a check, an effect on

@@ -317,7 +317,7 @@ function start() {
   // 🔴 ONE TRANSPORT, EXACTLY ONE PLAYBACK OWNER (#104 amendment 6). The in-process SFU is not a flag or a URL
   // param, it is the only voice path the client has: "exactly one playback owner" is only impossible to violate when
   // a second owner cannot initialise. If cutover acceptance fails, the remedy is deploying the previous release
-  // (docs/operator/CUTOVER-ROLLBACK.md), not a runtime branch back to a transport this bundle no longer contains.
+  // (docs/history/CUTOVER-ROLLBACK.md), not a runtime branch back to a transport this bundle no longer contains.
   window.__voiceTransport = 'pending:sfu';
   import('./lib/voicesfubridge.js').then((m) => { m.initVoiceSfu(CONFIG.name); window.__voiceTransport = 'sfu'; })
     .catch((e) => { window.__voiceTransport = 'failed:sfu'; window.__voiceTransportError = String(e); console.error('voice init failed', e); });

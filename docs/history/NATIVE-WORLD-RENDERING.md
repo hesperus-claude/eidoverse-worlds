@@ -1,5 +1,7 @@
 # Native world projection (version 1)
 
+Historical (moved from docs/reference/ 2026-11-08): upstream #248's `render-scene` lane, which this server never served.
+
 **Not served by this server.** Join snapshots carry no `renderSceneVersion`:
 upstream's `server/render-scene.ts` read the first protocol's fold (it was deleted here, unserved), so this server doesn't offer
 the lane (server/server.ts `buildSnapshot`). The native client reaches this server through

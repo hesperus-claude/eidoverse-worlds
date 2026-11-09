@@ -377,7 +377,7 @@ engine has them; no component names them yet); capsules, convex and compound
 shapes; flying bodies colliding with each other mid-flight under two
 different launches is engine-defined attribution (the touching launch);
 shared live physics between several hands is solved one way everywhere that
-ships (research 10-11, C): one simulator per thing, a holder-side theft
+ships: one simulator per thing, a holder-side theft
 switch, claims ordered by the arbiter; the second hand, where it exists at
 all (Bonelab Fusion, MIT, `LabFusion/src/Entities`), is a force inside the
 holder's sim. §4.1 fixes the same here (`steal`, admission order, `cohold`
@@ -418,4 +418,4 @@ the log stays exact for everyone.
 
 ## Lost at the edge
 
-A flight that crosses the world's edge is lost there and then: the sim layer reports it rested where it is (`lost`), the rest is admitted without the engine's resting flag, and the authority sends it home on the same pass. Bounds bound x, z and the sky (`max[1]`); the floor is the terrain's, never `bounds.min[1]` (the default bounds' min y sits above the default heightfield). (10-11, attack-physics P1/P2.)
+A flight that crosses the world's edge is lost there and then: the sim layer reports it rested where it is (`lost`), the rest is admitted without the engine's resting flag, and the authority sends it home on the same pass. Bounds bound x, z and the sky (`max[1]`); the floor is the terrain's, never `bounds.min[1]` (the default bounds' min y sits above the default heightfield).

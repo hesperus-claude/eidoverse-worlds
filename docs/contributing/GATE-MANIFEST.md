@@ -13,6 +13,10 @@ bun test/gate/run.ts --siblings          # clones/pins agent-framework, mcpl-cor
 CHROME=/path/to/chrome EIDOVERSE_DIR=/path/to/eidoverse-video bun test/gate/run.ts    # or: bun run test:protocol
 ```
 
+`tools/protocol/.siblings/` is the last thing under `tools/protocol/`, and it stays there on purpose: `mcpl/package.json`
+and `mcpl/bun.lock`, `services/captionbot/package.json`, `test/gate/run.ts` and `deploy/deploy-vps.sh` all name that
+path, as does an operator's shard script outside this repo. Moving it means changing all of them and re-locking in one step.
+
 Exit 0 means the gate passed. Exit 1 means a suite failed, a suite or a check was skipped, or the preflight found a
 problem (it lists each one). Exit 2 means a bad argument.
 
@@ -159,9 +163,9 @@ PR's own head as `prHead` and the merge's parents as `mergeOf`), whether the tre
 every suite's result and a hash of its output, and one hash over all of them. That receipt, not a sentence in a PR
 comment, is the evidence of a pass.
 
-Known gap, said plainly: the macOS and Windows paths were written and tested on Linux (the macOS process path against
-`ps`, the Windows tree walk on fixed tables, the no-`/proc` sandbox path by switching the reading off). Their first real
-runs are that workflow's.
+The macOS and Windows paths were first written on Linux (the macOS process path against `ps`, the Windows tree walk on
+fixed tables, the no-`/proc` sandbox path by switching the reading off). They now run for real in that workflow, so its
+macOS and Windows jobs, not a Linux run, are the evidence for them.
 
 ## Suites
 

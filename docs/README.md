@@ -17,7 +17,7 @@ Start with [README](../README.md) (what this is, how to run it), [AGENTS](../AGE
 
 [TRANSLATING-OLD-WORLDS](operator/TRANSLATING-OLD-WORLDS.md) · [KTX2-ENCODER](operator/KTX2-ENCODER.md) ·
 [NATIVE-LOGIN](operator/NATIVE-LOGIN.md) · [REMOTE-SCREENSHOTS](operator/REMOTE-SCREENSHOTS.md) · [SFU-OPERATOR](operator/SFU-OPERATOR.md) ·
-[CUTOVER-ROLLBACK](operator/CUTOVER-ROLLBACK.md) · [SHOW-RUNBOOK](operator/SHOW-RUNBOOK.md)
+[SHOW-RUNBOOK](operator/SHOW-RUNBOOK.md)
 
 ## Contributing — changing this repo
 
@@ -27,7 +27,7 @@ Start with [README](../README.md) (what this is, how to run it), [AGENTS](../AGE
 ## Reference — what is built, described
 
 [WIRE](reference/WIRE.md) · [POSE-WIRE](reference/POSE-WIRE.md) · [UNDERWATER-PRESENCE](reference/UNDERWATER-PRESENCE.md) · [SEATS](reference/SEATS.md) ·
-[DRAW-CALLS](reference/DRAW-CALLS.md) · [NATIVE-WORLD-RENDERING](reference/NATIVE-WORLD-RENDERING.md) · [RESERVED-SHAPES](reference/RESERVED-SHAPES.md)
+[DRAW-CALLS](reference/DRAW-CALLS.md) · [RESERVED-SHAPES](reference/RESERVED-SHAPES.md)
 
 ## Design — what isn't built yet, and why it should be
 
@@ -50,7 +50,7 @@ Start with [README](../README.md) (what this is, how to run it), [AGENTS](../AGE
 [INCIDENTS](history/INCIDENTS.md) · [TEL0S_NOTES](history/TEL0S_NOTES.md) · [SCALING_AND_SNAPSHOT_PLAN](history/SCALING_AND_SNAPSHOT_PLAN.md) ·
 [PROPOSAL-sensory-channel](history/PROPOSAL-sensory-channel.md) · [NOTE-token-tap](history/NOTE-token-tap.md) ·
 [UPSTREAM-FLAGS](history/UPSTREAM-FLAGS.md) · [UPSTREAM-WRAP-ONCE](history/UPSTREAM-WRAP-ONCE.md) ·
-[FLIGHT-MCP-INTERFACE](history/FLIGHT-MCP-INTERFACE.md)
+[FLIGHT-MCP-INTERFACE](history/FLIGHT-MCP-INTERFACE.md) · [NATIVE-WORLD-RENDERING](history/NATIVE-WORLD-RENDERING.md) (upstream's render-scene) · [CUTOVER-ROLLBACK](history/CUTOVER-ROLLBACK.md) (expired)
 
 ## Local READMEs
 

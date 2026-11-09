@@ -1,5 +1,8 @@
 # Cutover rollback — the operator runbook
 
+**Expired; do not follow it.** The voice cutover's window has closed (moved from docs/operator/ 2026-11-08). Never roll back
+across the current protocol's log rewrite: a release from before it can't read today's world logs, so "no data migrates" below no longer holds.
+
 The #132 contract (review, 2026-08-18): *"bounded deployment rollback to the
 previous release during the migration acceptance window if cutover fails —
 ordinary release rollback, not an ongoing product architecture."* This is that
