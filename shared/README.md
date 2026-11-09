@@ -43,4 +43,7 @@ importers, but not all.
 - **no runtime importer**: `protocol/kernelspec.js` (the kernel pin's pure half, read by
   test/protocol/kernel-check.ts) and `protocol/scriptaudit.js` (an auditor's re-run, docs/guide/SCRIPTS.md).
 
+`conformance/{motion,water}.json` aren't code: they are vectors the native (Unreal) port reproduces; CONTRIBUTING
+"Where a file goes" says where every vector lives.
+
 Every file's first line says what it is: `head -qn1 shared/*.js shared/protocol/*.js`.
