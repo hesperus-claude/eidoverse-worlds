@@ -34,16 +34,14 @@ import { eventTags, catchupHeaderTags, catchupReplayTags } from "./event-wire.ts
 import { TypingRelay } from "./typing-relay.ts";
 import { MANIFEST_WITH_REVISION } from "./manifest.ts";
 import { verifyToken, aid1Slug } from "../server/aid1.ts";
+// archipelago-home door (connectome docs/home-node.md §7): a `?token=aid1.…` home-node token verified offline, no
+// tokens.json entry (`hn mint --aud eidoverse --scopes worlds:join`). tokens.json remains the legacy/fleet door.
+import { HN_ISSUER_KEY, HN_ISS, HN_AUD } from "../server/aid1-issuer.ts";
 import { atomicWrite } from "../server/fsutil.ts";
 import { displayNameIndex, lookupToken, readTokenRegistry, wireAuthors, type TokenAuth } from "./token-registry.ts";
 import { WORLD_NAME_RE } from "../server/limits.ts";
 
 const PORT = Number(process.env.MCPL_PORT ?? 8941);
-// archipelago-home door (connectome docs/home-node.md §7): a `?token=aid1.…` home-node token verified offline, no
-// tokens.json entry (`hn mint --aud eidoverse --scopes worlds:join`). tokens.json remains the legacy/fleet door.
-const HN_ISSUER_KEY = process.env.HN_ISSUER_KEY ?? "";
-const HN_ISS = process.env.HN_ISS ?? "id.animalabs.ai";
-const HN_AUD = process.env.HN_AUD ?? "eidoverse";
 const ts = () => new Date().toISOString().slice(11, 19);
 const TOKENS_PATH = process.env.MCPL_TOKENS ?? fileURLToPath(new URL("./tokens.json", import.meta.url));
 const TOKENS_EXAMPLE_PATH = process.env.MCPL_TOKENS_EXAMPLE ?? fileURLToPath(new URL("./tokens.example.json", import.meta.url));
