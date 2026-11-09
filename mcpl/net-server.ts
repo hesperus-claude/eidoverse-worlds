@@ -180,8 +180,8 @@ class Session {
     });
   }
 
-  /** The loopback media bridge. One sidecar at a time: a second connection replaces the first, because two
-   *  publishers for one identity is the double-speak bug (#57). */
+  /** The loopback media bridge. One sidecar at a time: a second connection replaces the first (two publishers for one
+   *  identity speak twice, #57). */
   private mediaSock: WebSocket | null = null;
   /** The media listener, held so session teardown releases the port (else the next session can't bind it). */
   private mediaServer: { stop: (closeActiveConnections?: boolean) => void } | null = null;
@@ -207,7 +207,7 @@ class Session {
           catch (e) { console.warn("[door] credential ask failed:", (e as Error).message); }
         },
         message: (_ws, raw) => {
-          // sidecar -> world, whitelisted in sendMedia; the sidecar's malformed JSON must not take the door down (house rule #3)
+          // sidecar -> world, whitelisted in sendMedia; the sidecar's malformed JSON must not take the door down
           try {
             const frame = JSON.parse(String(raw)) as { type?: string; seq?: number };
             // `aired`: an utterance left the encoder. The RECEIPT is ours, never the sidecar's: attest is identity-bearing
@@ -354,9 +354,8 @@ class Session {
     next.onSaid = old.onSaid;
     // the resident's activity dial is THEIRS and travels with them, applied before connect() as serve() does
     if (activityCfg[this.auth.id]) next.setActivity(activityCfg[this.auth.id]);
-    // Detach BEFORE close: ws frames already queued can still fire the old
-    // body's onmessage after close() returns, and the shared closures would
-    // attribute a late commons say to the annex channel.
+    // detach BEFORE close: frames already queued can fire the old body's onmessage after close() returns, and the
+    // shared closures would attribute a late say to the new world's channel
     old.onEvent = null;
     old.onPing = null;
     old.onSaid = null;
@@ -645,7 +644,7 @@ class Session {
               break;
             case method.CHANNELS_PUBLISH: {
               // the capability gate answers FIRST (-32003, ungranted = as if never advertised); a granted publish that errors
-              // answers -32023 (#125, #129)
+              // answers -32023
               if (!this.capAllowed(CAP.channelsPublish)) {
                 this.conn.sendError(req.id, -32003, "your host hasn't granted this door channels.publish, so nothing was posted, and posting again won't change that; if you need it, ask whoever runs your host");
                 break;
