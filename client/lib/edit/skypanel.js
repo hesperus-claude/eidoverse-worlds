@@ -1,8 +1,5 @@
-// skypanel — the ☀ sky section of the world panel (split from build.js).
-//
-// Everything in this panel PREVIEWS; only the commit button writes to the
-// world. The log is history (every entry replays for every future joiner);
-// trying things out is not.
+// skypanel — the sky section of the world panel. Everything here PREVIEWS; only the commit button writes to the world
+// (every log entry replays for every future joiner; trying things out shouldn't).
 
 import { sendOps } from './writes.js';
 import { bus, report } from '../base.js';
@@ -23,18 +20,15 @@ import { modelQuality, dialModelQuality } from '../realize/models.js';
 const SLIDERS = [
   ['hours', 'time', 0, 24, 0.1, 12],
   ['rate', 'rate', 0, 48, 0.5, 0],
-  ['azimuth', 'azim', 0, 360, 5, 180],   // shown in degrees, stored in radians (shape audit 10-16)
+  ['azimuth', 'azim', 0, 360, 5, 180],   // shown in degrees, stored in radians
   ['sun', 'sun', 0, 2.5, 0.05, 1],
   ['ambient', 'ambnt', 0, 2.5, 0.05, 1],
   ['fill', 'fill', 0, 2.5, 0.05, 1],
   ['exposure', 'expos', 0.3, 1.8, 0.05, 1],
   ['fog', 'fog', 0, 3, 0.05, 1],
 ];
-// Named times beat eight raw sliders for the 95% case — you want "golden",
-// not hours=17.4, exposure=0.86. The presets themselves are DATA now
-// (§24, defs/sky/_presets.json) — authoring conveniences only: they fill
-// the sliders and preview; commit writes concrete args, so the log never
-// stores a preset name and logged meaning never depends on the def file.
+// Presets (defs/sky/_presets.json) are authoring conveniences: they fill the sliders and preview; commit writes concrete
+// args, so the log never stores a preset name.
 
 export function paintSky(body) {
   if (body.dataset.init) { body._sync?.(); body._readState?.(); return; }
@@ -107,7 +101,7 @@ export function paintSky(body) {
       const v = Number(inputs[key].value);
       if (key === 'hours' || key === 'azimuth' || v !== dflt) a[key] = key === 'azimuth' ? v * Math.PI / 180 : v;
     }
-    delete a.world;   // never stored (shape audit 10-16); sun and fill are registered sky fields
+    delete a.world;   // never stored
     return a;
   };
 
@@ -151,8 +145,7 @@ export function paintSky(body) {
     (v) => preview({ clouds: v }));
   body.appendChild(clRow);
 
-  // (no "world" select: the sky stores no world, and earth is the only one drawn: sky.js SKY_WORLDS)
-  // the sky system (SWEEP-3 S1): the detailed sky, or the basic one a weak GPU can draw; world data, committed with ✓
+  // the sky system: the detailed sky, or the basic one a weak GPU can draw; world data, committed with ✓
   const { row: syRow, select: sy } = selectRow('sky', [['eidoverse', 'detailed'], ['skymesh', 'basic']], 'eidoverse',
     (v) => preview({ system: v }));
   body.appendChild(syRow);
@@ -161,9 +154,7 @@ export function paintSky(body) {
   sqRow.title = 'local performance setting — not shared with the world'; void sq;
   body.appendChild(sqRow);
 
-  // Cloud budget is YOURS, not the world's: it never becomes a verb. The
-  // march's cost is per-fragment, so a big display pays several times what a
-  // small window does for the same sky.
+  // the cloud budget is YOURS, never a verb (the march's cost is per fragment)
   const { row: cqRow, select: cq } = selectRow('clouds⚙', CLOUD_QUALITY, getCloudChoice(),
     (v) => { setCloudQuality(v); flashHint(`clouds: ${v} (yours only). The first time a setting is used, your GPU may pause a few seconds to compile it`); });
   cqRow.title = 'local performance setting — not shared with the world';
@@ -189,18 +180,13 @@ export function paintSky(body) {
   bus.on('cloud-cap', syncCap);
   syncCap();
 
-  // The meadow budget is likewise YOURS (#60) — a persisted cap on how much
-  // of the field this machine draws. Species/seed/extent stay world state;
-  // the auto governor may thin below the cap under load, never above it.
+  // the grass budget is likewise YOURS: a persisted cap on how much of the field this machine draws; the auto governor
+  // may thin below the cap under load, never above it
   const { row: gqRow, select: gq } = selectRow('grass⚙', GRASS_QUALITY, null, null);
   gq.setAttribute('aria-label', 'grass quality — local only, never shared with the world');
-  // Live dial state as visible text, not a tooltip (keyboard and screen-reader
-  // users must learn the governor's shed too). The select is the RESIDENT's
-  // cap, ⚙× the GOVERNOR's session dial, ×draws what min() yields.
+  // live dial state as visible text (screen readers too): the select is the cap, ⚙× the governor's dial, → what draws
   const gqState = document.createElement('span');
-  // NOT `.v` (the sliders' fixed 34px readout column would wrap it). The
-  // visible half fits the default 232px panel on one line; the aria-live
-  // announcement reads a whole sentence via a visually-hidden twin.
+  // not `.v` (the sliders' fixed readout column would wrap it); the aria-live twin reads a whole sentence
   gqState.style.cssText = 'margin-left:auto; white-space:nowrap; color:var(--accent); font-size:10px;';
   gqState.setAttribute('aria-live', 'polite');
   const gqStateEye = document.createElement('span');
@@ -213,9 +199,7 @@ export function paintSky(body) {
     gq.value = getGrassQuality();
     const shed = getGrassShed(), eff = getGrassDensity();
     const active = shed < 1 && gq.value !== 'off';
-    // Applied truth (#74): the same report the programmatic surface serves —
-    // one source, so the row can never claim a density the renderer didn't.
-    // A false cap outranks governor detail for the row's scarce pixels.
+    // the same applied report code reads (getGrassApplied), so the row never claims a density the renderer didn't
     const rep = getGrassApplied();
     const bad = rep.field && rep.status !== 'applied';
     if (bad) {
@@ -244,24 +228,16 @@ export function paintSky(body) {
 
   // render scale lives in Settings › Video (videopanel.js) — a local performance dial, not a sky property
 
-  // The geometry tier is YOURS too: which version of each placed object THIS
-  // machine fetches. 'auto' reduces far objects, sooner under GPU pressure;
-  // 'full' never reduces; 'eco' always reduces sooner. No dial reduces what
-  // you stand beside, and bodies are never reduced. Persisted; never a verb.
+  // the model tier is YOURS too: which version of each object THIS machine fetches (realize/models.js dialModelQuality)
   const { row: mqRow, select: mq } = selectRow('models⚙',
     MODEL_QUALITY.map((v) => [v, v === 'auto' ? 'auto' : v === 'full' ? 'full detail' : 'eco (reduce sooner)']),
     modelQuality.quality,
-    // the whole behaviour lives in models.js (dialModelQuality: set, persist,
-    // and say whether a reduced tier can be asked from this browser at all)
-    // so the product-door harness gates it; this row only binds and shows
     (v) => flashHint(dialModelQuality(v)));
   mq.setAttribute('aria-label', 'model detail tier — local only, never shared with the world');
   mqRow.title = 'local performance setting — not shared with the world';
   body.appendChild(mqRow);
 
-  // Sliders that only the BASIC sky answers (on the real sky the engine owns
-  // sun direction and its bounce fill), hidden there rather than greyed.
-  // sun/ambient/fog work on BOTH paths (§12.6).
+  // sliders only the BASIC sky answers (the detailed sky owns sun direction and fill): hidden there, not greyed
   const BASIC_ONLY = new Set(['azimuth', 'fill']);
   const basicRows = [];
   const syncBasicOnly = () => {
@@ -297,26 +273,19 @@ export function paintSky(body) {
   bus.on('sky-ready', syncBasicOnly);
   bus.on('sky-state', syncBasicOnly);
 
-  // The sun can follow a REAL clock: `clock: real` makes the world's hour BE
-  // the named timezone's wall hour (DST included, hoursAt owns the formula)
-  // and the time slider yields. World policy like everything else here — it
-  // previews live and commits with ✓. Clearing stashes undefined so the JSON
-  // the verb carries simply drops the keys (a null would linger in the fold).
-  //
-  // WHICH clocks the row offers is a def (defs/sky/_clocks.json, option value
-  // = the IANA tz); the commit writes concrete clock/tz args, so the log never
-  // stores a clock's def name.
+  // a real clock: a `tz` makes the world's hour that timezone's wall hour (shared/forecast.js hoursAt) and the time
+  // slider yields. Clearing stores undefined so the verb's JSON drops the key. Which clocks the row offers is a def
+  // (defs/sky/_clocks.json, value = the IANA tz); the commit writes the tz itself.
   const { row: ckRow, select: ck } = selectRow('clock',
     [['', 'authored (slider)']], '', null);
   const fillClocks = () => defsRegistry().then((reg) => {
-    const sa = skyArgs(); const want = typeof sa.tz === 'string' ? sa.tz : ck.value;   // a tz present is the wall clock (shape audit 10-16)
+    const sa = skyArgs(); const want = typeof sa.tz === 'string' ? sa.tz : ck.value;   // a tz present is the wall clock
     ck.textContent = '';
     ck.appendChild(new Option('authored (slider)', ''));
     for (const c of Object.values(reg.skyClocks ?? {})) {
       if (c?.tz) ck.appendChild(new Option(c.label ?? c.tz, c.tz));
     }
-    // a world already committed to a tz the def no longer lists: show the
-    // truth (the raw tz) rather than silently displaying "authored"
+    // a tz the def no longer lists still shows (as itself), never as "authored"
     if (want && ![...ck.options].some((o) => o.value === want)) {
       ck.appendChild(new Option(`real time — ${want}`, want));
     }
@@ -324,12 +293,9 @@ export function paintSky(body) {
   }).catch((e) => report('sky clocks', e));
   fillClocks();
   bus.on('defs-updated', fillClocks);
-  // Under a real clock the world's hour IS that city's time, so time and rate do nothing: hidden like the basic-only
-  // rows; the clock row itself
-  // says what's driving the hour. The presets still set weather/clouds/light, but not their hour.
+  // under a real clock time and rate do nothing: hidden, like the basic-only rows; presets still set the look, not the hour
   const syncClockUi = () => {
-    // the clock the commit will SEND, not what the select shows: while you have unsaved edits a remote clock change
-    // doesn't reach the select
+    // the clock the commit will SEND (gather), not what the select shows
     const g = gather(); const real = typeof g.tz === 'string' && g.tz !== '';
     for (const k of ['hours', 'rate']) {
       const input = inputs[k], row = input?.parentNode; if (!input || !row) continue;
@@ -363,15 +329,12 @@ export function paintSky(body) {
   body.appendChild(commit);
 
   body._sync = () => {
-    // Nothing unsaved: everything in `local` was committed and the log now speaks for it, so forget it. Kept, it went
-    // on overriding later remote changes (a clock put back to authored left time/rate hidden; ✓ re-sent stale knobs).
-    // With edits pending (a panel re-open) it's the person's work: keep it.
+    // nothing unsaved: the log speaks for `local` now, so forget it (kept, it overrode later remote changes); with
+    // edits pending it's the person's work: keep it
     if (!commit.classList.contains('dirty')) for (const k of Object.keys(local)) delete local[k];
     const a = skyArgs();
     for (const [key, , , , , dflt] of SLIDERS) {
-      // under a real clock hours/rate stay stored:
-      // load them (the rows are hidden) as what the world
-      // would return to
+      // under a real clock hours/rate stay stored: loaded (rows hidden) as what the world would return to
       inputs[key].value = key === 'azimuth' ? (typeof a.azimuth === 'number' ? +(a.azimuth * 180 / Math.PI).toFixed(1) : dflt) : (a[key] ?? dflt);
       inputs[key].parentNode.querySelector('.v').textContent = inputs[key].value;
     }

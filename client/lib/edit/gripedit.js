@@ -1,13 +1,12 @@
 // gripedit — the grip editor: position and pose how things are grabbed.
 //
-// Grips stay data inside grabbable.grips (one validated write). The editor draws a GHOST HAND at the selected grip and
-// binds its own move / turn handles to it: a local-only proxy, never an entity (Godot's preview hand is the same idea).
-// On release it writes the whole grabbable once. Mirror writes the other hand's grip; Try it puts the thing in my hand.
+// Grips are data inside grabbable.grips. The editor draws a GHOST HAND at the selected grip with move / turn handles on
+// a local-only proxy (never an entity) and writes the whole grabbable once on release. Mirror writes the other hand's
+// grip; Try it puts the thing in my hand.
 //
-// The palm frame is shared/grab.js's (+Z out of the palm, +Y little→index). Its X differs by side, MEASURED on a real
-// avatar (test/labs/palm-frame.lab.ts): the right palm's +X points to the wrist, the left's along the
-// fingers. So the ghost's points below are the right hand's, and the left's are the same with x negated; and a grip
-// mirrored across the thing's X plane is M·R·diag(-1, 1, 1) (M the reflection), which keeps the palm out and the index up.
+// The palm frame is shared/grab.js's (+Z out of the palm, +Y little→index). Its X differs by side (measured:
+// test/labs/palm-frame.lab.ts): the ghost's points are the right hand's, the left's negate x; a grip mirrored across
+// the thing's X plane is M·R·M (M = diag(-1, 1, 1)), which keeps the palm out and the index up.
 
 import { THREE, scene, camera, canvas } from '../core.js';
 import { bus } from '../base.js';
@@ -21,7 +20,7 @@ import { flashHint } from '../ui.js';
 import { checkGrabbable, HANDS, ROLES, GRASPS } from '../../../shared/grab.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
-// the right hand's joints in its palm frame (metres), from R's avatar; ring is between middle and little
+// the right hand's joints in its palm frame (metres), from a measured avatar; ring is between middle and little
 const R_PTS = {
   wrist: [0.122, -0.004, -0.041],
   thumb: [[0.082, 0.069, -0.016], [0.035, 0.096, -0.021], [-0.022, 0.115, -0.025]],

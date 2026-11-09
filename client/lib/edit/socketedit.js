@@ -1,14 +1,8 @@
-// socketedit — the seat-anchor authoring grammar (split from build.js, §R4).
+// socketedit — seat-anchor authoring. Sockets are child entities of their host, shown in build mode as gold gizmos:
+// click to select, drag to refine, Q/E to face, Del to remove. Each commit is one write to the socket child.
 //
-// Sockets are child entities of their host (PLAN-sockets-entities), shown in build mode as gold gizmos: click to
-// select, drag to refine, Q/E to face, Del to remove. Each commit is one write to the socket child itself.
-//
-// build.js stays the gesture ROUTER (one pointer, one key ladder — two
-// modules both listening on the canvas would re-fight every contested
-// click); this module owns everything after "it was a seat gesture". The
-// hooks it needs back from the core (mode, selection, undo, the inspector
-// bar) are build.js exports — the modules call across the seam at gesture
-// time only, so the import cycle is eval-safe by construction.
+// build.js stays the gesture ROUTER (one pointer, one key ladder) and hands seat gestures here; the build.js exports
+// this needs are called at gesture time only, so the import cycle is safe.
 
 import * as OP from '../../../shared/requests.js';
 import { sendOps } from './writes.js';
@@ -45,15 +39,13 @@ function makeSeatGizmo() {
   nose.position.set(0, 0, 0.16);
   nose.rotation.x = Math.PI / 2;              // the arrow is the sit-facing
   g.add(seat, nose);
-  // markers are pointed at, never raycast INTO — picking is ray-to-point, so
-  // these meshes must not catch the placement/selection rays around them
+  // picking is ray-to-point (pickSeat): these meshes must not catch the placement/selection rays
   g.traverse((o) => { o.raycast = () => {}; o.renderOrder = 9; o.userData.noCamCollide = true; });
   return g;
 }
 
-/** Rebuild all markers from the fold's records. Parented to the entity ROOT in
- *  model frame — the anchor's rest spot, matching socketWorldPos semantics
- *  (reach never oscillates with a part's motion, neither should the gizmo). */
+/** Rebuild all markers from the fold. Parented to the host's ROOT in model frame: the anchor's rest spot, which
+ *  doesn't swing with a part's motion. */
 export function refreshSocketGizmos() {
   for (const [k, { g }] of seatGizmos) { g.parent?.remove(g); seatGizmos.delete(k); }
   if (!isBuilding()) return;
@@ -85,9 +77,8 @@ function refreshSeatHighlight() {
   }
 }
 
-/** Ray-to-point picking, the bodydrag-joint trick: a 7cm marker against a
- *  busy mesh is unhittable by triangle raycast and trivially hittable by
- *  distance-to-center. Tolerance grows a little with camera distance. */
+/** Ray-to-point picking (as bodydrag.js's joints): a 7 cm marker against a busy mesh is unhittable by triangle raycast
+ *  and easy by distance-to-centre. Tolerance grows a little with camera distance. */
 const _spV = new THREE.Vector3();
 function pickSeat(ray) {
   let best = null, bestD = Infinity;
@@ -140,9 +131,8 @@ function worldYawOf(root) {
   return Math.atan2(_saV.x, _saV.z);
 }
 
-/** The name of the motion-animated part the hit landed in, if any — that is
- *  the `part` that makes an anchor RIDE. Only parts a motion comp actually
- *  names count: naming arbitrary mesh nodes would freeze junk into the log. */
+/** The motion-animated part the hit landed in, if any: the `part` an anchor RIDES. Only parts a motion comp names
+ *  count. */
 function partUnderHit(id, hitObj) {
   const bag = bagOf(id) ?? {};
   const names = new Set();
@@ -155,9 +145,8 @@ function partUnderHit(id, hitObj) {
   return null;
 }
 
-/** A click on a plank MID-SWING must not bake the swing's phase into the
- *  anchor: carry the hit point back through the part's displacement to where
- *  it sits at rest (the inverse of mountTransform's ride). */
+/** A click on a part mid-swing must not bake the swing's phase into the anchor: carry the hit point back to where the
+ *  part sits at rest. */
 function unrideHitPoint(root, partName, wp) {
   const part = partName ? findPart(root, partName) : null;
   const b = part?.userData?.mbase;
@@ -201,8 +190,7 @@ function placeSeatAt(e) {
   if (!hit) { flashHint(html`that missed the thing — click ON it, or <kbd>Esc</kbd>`); return; }
   seatArm = null;
   const { pos, part } = seatFromHit(id, root, hit);
-  // face the declarer: you are looking at the seat from where an occupant's
-  // knees would point. Q/E refines from there.
+  // face the declarer (you look at the seat from where an occupant's knees would point); Q/E refines
   const yaw = +(Math.atan2(camera.position.x - hit.point.x, camera.position.z - hit.point.z) - worldYawOf(root)).toFixed(3);
   const names = new Set(socketsOf(id).map((x) => x.name));
   let slot = 'seat', n = 2;
@@ -213,9 +201,8 @@ function placeSeatAt(e) {
   flashHint(html`<b>${slot}</b> declared${part ? ' (rides ' + part + ')' : ''} — drag refines · <kbd>Q</kbd><kbd>E</kbd> face · <kbd>Del</kbd> removes`);
 }
 
-/** The core's mousedown hands seat gestures here FIRST — a gizmo is small
- *  and deliberate, and the mesh it floats over would otherwise win every
- *  contested click. Returns true when the press was a seat gesture. */
+/** build.js's mousedown hands seat gestures here FIRST (the mesh a gizmo floats over would otherwise win every click).
+ *  Returns true when the press was a seat gesture. */
 export function socketMouseDown(e) {
   if (seatArm) { placeSeatAt(e); return true; }
   mouse.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
@@ -227,9 +214,7 @@ export function socketMouseDown(e) {
   return true;
 }
 
-/** A selected seat anchor holds the editing keys before things do. Returns
- *  true whenever a seat is selected — matching the old ladder, where seat
- *  selection consumed the whole key set. */
+/** A selected seat anchor holds the editing keys before things do: true whenever a seat is selected. */
 export function socketKeyDown(e) {
   if (!seatSel) return false;
   if (e.code === 'KeyQ') turnSeat(e.shiftKey ? 0.02 : Math.PI / 12);   // keys: seatTurn
@@ -238,8 +223,7 @@ export function socketKeyDown(e) {
   return true;
 }
 
-/** Called each frame from updateBuild while a seat drag is armed: the anchor
- *  slides along ITS OWN entity's surfaces — it cannot fall off the thing. */
+/** Each frame (build.js updateBuild) while a seat drag is armed: the anchor slides along its own host's surfaces. */
 export function updateSocketDrag() {
   if (!seatDrag?.armed || !seatSel) return;
   raycaster.setFromCamera(mouse, camera);
@@ -274,8 +258,7 @@ function removeSeat() {
   deselectSocket();
 }
 
-// The seat drag's own arm/commit listeners (DRAG_SLOP tells a click from a
-// drag). They touch only seat state, so their order against the core's doesn't matter.
+// the seat drag's arm/commit listeners (DRAG_SLOP tells a click from a drag); they touch only seat state
 const DRAG_SLOP = 4;
 addEventListener('mousemove', (e) => {
   if (seatDrag && !seatDrag.armed
@@ -289,11 +272,8 @@ addEventListener('mouseup', () => {
 });
 
 
-// ---- the inspector's sockets GESTURES --------------------------------
-// The card is shared/editschema.js. What only this module adds:
-// '+ socket here' arms the click-to-place, a row click selects that gizmo, a live
-// drag on a slot's channels moves the gizmo before the merged comp commits.
-// Components ▸ + seat…: the first seat in ONE step
+// ---- the inspector's sockets gestures: the card is shared/editschema.js's; '+ socket here' (and Components ▸ + seat)
+// arms the click-to-place, a row click selects that gizmo
 registerHandler('comp', (id, _obj, k, _v, opts) => { if (k !== 'add:seat' || opts?.live) return false; armSocketPlacement(id); return true; });
 registerHandler('sockets', (id, _obj, k, value) => {
   if (k === 'add') { armSocketPlacement(id); return true; }

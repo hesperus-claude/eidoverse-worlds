@@ -1,9 +1,6 @@
-// gizmo — three's TransformControls on the selected thing, in build mode.
-//
-// The precise version of build.js's move / rotate / scale drag: axis handles you can see. build.js vetoes its
-// mesh-grab while a handle is hot (setPointerVeto), and both commit the same way: ONE request with the full pose on
-// release, others watching the drag at pose cadence. Rotate commits the full orientation q (design §5).
-// Things whose transform the schema makes read-only get no gizmo: a handle you can't drag is a lie.
+// gizmo — three's TransformControls on the selected thing, in build mode: the precise version of build.js's drag.
+// build.js vetoes its mesh-grab while a handle is hot (setPointerVeto); both commit the same way: ONE request with the
+// full pose on release, others watching the drag at pose cadence. A thing whose transform is read-only gets no gizmo.
 
 import { THREE, scene, camera, canvas } from '../core.js';
 import { bus } from '../base.js';
@@ -12,7 +9,7 @@ import { sendDrag } from '../net.js';
 import { registerSystem } from '../frameloop.js';
 import { sceneSelected } from '../scenegraph.js';
 import { getTool, getSpace, isBuilding, refreshOutline, setPointerVeto, setEscapeHook } from './build.js';
-import * as Edits from './writes.js';   // slice 3b: a release is one request with expect
+import * as Edits from './writes.js';
 import { reindexCollider } from '../colliders.js';
 import { engage, release } from './keyhints.js';
 import { boxOf } from '../realize/models.js';
@@ -27,11 +24,10 @@ let controls = null;
 let helper = null;
 let attachedId = null;
 let start = null;        // { rec, scale, comps? } at drag start (the components the release's expect names)
-let cancelled = false;   // Esc during the drag — the thing goes back, and the release writes nothing (§3a)
+let cancelled = false;   // Esc during the drag: the thing goes back, the release writes nothing
 let lastSent = 0;
-// the pivot (Roblox's PivotOffset): with a `pivot` comp the handles ride a PROXY at the pivot, oriented as
-// the thing, and the thing follows the proxy: objWorld = proxy × offset (offset fixed at drag start). A turn or a size
-// then goes about the pivot; nothing about the thing's own record changes but its pose.
+// the pivot (Roblox's PivotOffset): with a `pivot` comp the handles ride a PROXY at the pivot, oriented as the thing,
+// and the thing follows it: objWorld = proxy × offset (offset fixed at drag start), so a turn or a size goes about the pivot.
 const proxy = new THREE.Object3D(); proxy.name = 'edit-gizmo-pivot';
 let viaProxy = false, offset = null;
 const _m = new THREE.Matrix4(), _pq = new THREE.Quaternion(), _pp = new THREE.Vector3(), _ps = new THREE.Vector3();
@@ -68,9 +64,9 @@ const MODE = { move: 'translate', rotate: 'rotate', scale: 'scale', pivot: 'tran
  *  thing's transform is read-only; a light has no orientation or scale to drag. */
 function editable(id, mode) {
   const rec = foldRecord(id); const obj = entities.get(id);
-  // a lock doesn't stop the drag: the release asks the door, and a person who may lift it is asked (§5).
-  // A thing parented to another: three parents it (realize/models.js), so its position IS the local transform the schema's
-  // pos.* edits, the frame the mesh drag already uses; a part socket (a moving node) stays out.
+  // a lock doesn't stop the drag: the release asks the authority, which asks a person who may lift it.
+  // A parented thing: three parents it (realize/models.js), so its position IS the local transform pos.* edits; a
+  // thing riding a part socket (a moving node) stays out.
   const rides = !!rec?.parent;
   if (!rec || !obj || (rides && obj.parent !== entities.get(rec.parent.to ?? rec.parent))) return false;
   const sc = inspectSchema(rec, id);
@@ -80,11 +76,9 @@ function editable(id, mode) {
 }
 
 function sync() {
-  // a drag in flight keeps its handles even if a lock lands meanwhile — the release asks the door, which says so
-  // (and offers to move it anyway); detaching mid-drag left the preview stranded with nothing sent
+  // a drag in flight keeps its handles even if a lock lands meanwhile: the release asks the authority
   if (start) return;
   const id = sceneSelected();
-  // scenegraph's selection is THE selection (a tree click never sets build.js's viewport `selected`)
   const want = isBuilding() && !gripEditing() && id && MODE[getTool()] && editable(id, MODE[getTool()]) ? id : null;   // the grip editor's handles replace these
   if (!want) { if (attachedId) { controls?.detach(); attachedId = null; viaProxy = false; } return; }
   const c = ensure();
@@ -155,16 +149,15 @@ function endDrag() {
   const id = attachedId; const obj = id && entities.get(id);
   if (!obj || !start?.rec) { start = null; return; }
   const rec = foldRecord(id) ?? start.rec;
-  // only the fields this gesture moved and this thing HAS (shared/editschema.js
-  // poseEdits) — editOps coalesces them into one whole transform
+  // only the fields this gesture moved and this thing HAS (shared/editschema.js poseEdits); editOps makes them one transform
   const mode = { translate: 'move', rotate: 'rotate', scale: 'scale' }[controls.mode];
   const o = obj.quaternion;
   const pose = { pos: obj.position.toArray(), q: [o.x, o.y, o.z, o.w], scale: obj.scale.toArray() };
   // about a pivot, a turn or a size ALSO moves the origin (it swings round the pivot): send the position with it
   const set = viaProxy && mode !== 'move' ? { ...poseEdits(rec, id, 'move', pose), ...poseEdits(rec, id, mode, pose) } : poseEdits(rec, id, mode, pose);
-  const { ops, errors } = editOps(rec, id, set);   // the door asks about locks
+  const { ops, errors } = editOps(rec, id, set);   // the authority asks about locks
   if (errors.length || !ops.length) { start = null; return; }
-  // presence until now; the release is ONE request, expecting where the drag started
+  // the drag was presence; the release is ONE request, expecting where the drag started
   const what = `${controls.mode === 'translate' ? 'move' : controls.mode === 'rotate' ? 'turn' : 'size'} ${id}`;
   const base = start.comps ? { [id]: start.comps } : null; start = null;
   bus.emit('gizmo-release', { id, ops });

@@ -1,12 +1,10 @@
-// scriptplan — plans the editor's "new script". A person fills in a small card (a name, what starts it, the
-// source); this plans the SAME two
-// requests an agent sends (docs/guide/SCRIPTS.md, "the loop"):
+// scriptplan — plans the editor's "new script" (scriptcard.js draws the card): the SAME two requests an agent sends
+// (docs/guide/SCRIPTS.md, "the loop"):
 //   1. upload {text}                                     → {src}   (not an act: a blob in the world's store)
 //   2. one batch (one act, one Ctrl+Z):
 //        set {id, component: 'script:<name>', value: {src, scope, on, every?}}
 //        set {id, component: 'reactions', value: {<action>: {kind: 'script', script: <name>}}, merge: true}   (on use)
-// Pure: no DOM, no network (client/lib/edit/scriptcard.js draws the card and sends; test/protocol/build-check.ts K runs these
-// requests through the real authority and sandbox).
+// Pure: no DOM, no network. test/protocol/build-check.ts K runs these requests through the real authority.
 import { set } from "../../../shared/requests.js";
 
 /** A starting point that runs as it stands and shows the loop: use it, and it speaks. */

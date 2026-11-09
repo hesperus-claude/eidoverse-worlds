@@ -1,9 +1,5 @@
-// rows — the house row builders, one copy.
-//
-// Every tuning panel in this client is the same three-element row: a name span,
-// a control, a readout. The builders are DUMB on purpose: they own layout and
-// wiring, never state; state lives in the table the caller hands in (TUNING,
-// HAIR_TUNING, a def bag), which keeps "reset" a write-then-repaint everywhere.
+// rows — the house row builders (name span, control, readout). They own layout and wiring, never state: state lives in
+// the table the caller hands in, so "reset" is write-then-repaint everywhere.
 
 const mk = (tag, className, cssText) => {
   const n = document.createElement(tag);
@@ -59,8 +55,7 @@ export function sliderTable(fields, obj, {
 
 /** A labelled checkbox row. get/set keep the state in the caller's table. */
 export function checkRow(labelText, get, set, { className = 'row' } = {}) {
-  // label first, the box in the control column (the label text right-justified and the interactables
-  // left-justified against the same invisible line); still a <label>, so a click on the words toggles it
+  // a <label>, so a click on the words toggles it
   const wrap = mk('label', className === 'row' ? 'row wide' : className);
   const cb = mk('input');
   cb.type = 'checkbox';

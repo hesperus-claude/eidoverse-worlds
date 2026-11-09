@@ -1,5 +1,5 @@
-// catalog — the world panel's catalog sections (the palette): the model library, the avatar roster, and the drag-in upload door.
-// This module is how a thing gets INTO your hand; build.js (ghost, select, drag, undo) is what your hand does with it.
+// catalog — the world panel's palette sections: the model library, the avatar roster, and drag-in upload. How a
+// thing gets INTO your hand; build.js (holdGhost) is what your hand does with it.
 
 import { enc } from '../../../shared/protocol/names.js';
 import * as OP from '../../../shared/requests.js';
@@ -13,8 +13,7 @@ import { holdGhost } from './build.js';
 import { paintGround } from './groundpanel.js';
 import { paintSky } from './skypanel.js';
 
-// The starter vocabulary. Everything else arrives through the catalog or an
-// `asset` verb, so this list is a doorway, not a limit.
+// the curated starters; everything else arrives through the library search or an upload
 const STARTER = [
   ['crate (red)', 'eidoverse/assets/models/crate_large_red.glb'],
   ['crate (blue)', 'eidoverse/assets/models/crate_large_blue.glb'],
@@ -67,14 +66,13 @@ async function paintBuild(body) {
   grid.className = 'grid';
   body.appendChild(grid);
 
-  // Every optimization's status, from the server's own verdicts (/library-models `opt`, store-variants.ts
-  // variantStatus): nothing may fail silently. Refused / deferred / stale shows an amber chip, a built LOD a quiet one.
-  // Text goes through textContent/title only — reasons are server-written but derived from uploaded content.
+  // every optimization's status, from the server's verdicts (/library-models `opt`, server/store-variants.ts
+  // variantStatus): refused / deferred / stale shows an amber chip, a built LOD a quiet one. Text goes through
+  // textContent/title only: reasons derive from uploaded content.
   const PASS = { min: 'compressed copy', ktx2: 'GPU textures', lod: 'LOD' };
   const WORD = { built: 'built', 'not-needed': 'not needed', unsupported: 'not supported', refused: 'refused',
     stale: 'will be re-checked', deferred: 'deferred', pending: 'not processed yet' };
-  // The corner row: the loupe's overall rank as a colored pill (shared/perfrank.js, same rule and colors as
-  // Debug › Perf › Loupe), then LOD / ⚠ chips. Hover explains each.
+  // the corner row: the perf rank as a coloured pill (shared/perfrank.js, as Debug › Perf › Loupe), then LOD / ⚠ chips
   const CAT = { tris: 'triangles', draws: 'draw calls', texMB: 'texture memory', bones: 'bones', mats: 'materials', alpha: 'transparent materials' };
   const chipRow = (card) => {
     let row = card.querySelector('.opt-row');
@@ -92,9 +90,8 @@ async function paintBuild(body) {
     + `  ${p.tris.toLocaleString()} tris · ${p.draws} draws · ${p.mats} materials · ${p.texMB} MB textures (desktop worst case)`
     + `${p.alpha ? ` · ${p.alpha} transparent` : ''}${p.bones ? ` · ${p.bones} bones` : ''}`
     + `${p.unsizedImages ? ` · ${p.unsizedImages} image(s) not sized` : ''}`;
-  // pill = what it costs IF YOU LOAD IT (the file a viewer is served); the hover also gives the original upload's
-  // ↻ — re-run this object's GPU-texture + LOD passes (POST /rebuild, signed-in or door-keyed): a refusal asked again,
-  // a built variant rebuilt in place. Inside the card's <button>, so a click must never reach the card (placement).
+  // ↻: re-run this model's GPU-texture + LOD passes (POST /rebuild, signed-in or token-keyed). Inside the card's
+  // <button>, so a click must never reach the card (placement).
   const rebuildChip = (card, path, bad) => {
     const chip = document.createElement('b');
     chip.className = 'opt-rebuild';
@@ -105,8 +102,8 @@ async function paintBuild(body) {
     chip.setAttribute('aria-label', chip.title);
     chip.style.cssText = 'position:relative;display:inline-block;width:auto;font-size:10px;line-height:1;padding:1px 5px;border-radius:4px;'
       + `pointer-events:auto;cursor:pointer;background:rgba(0,0,0,.55);color:#e8e8e8;opacity:${bad ? 1 : 0.55}`;
-    // a ≥ 22 px hit area for a finger or VR laser without growing the drawn chip; 3 px on the left, under the row's
-    // 4 px gap, so it never covers the chip beside it
+    // a >= 22 px hit area for a finger or laser without growing the drawn chip; 3 px on the left so it never covers
+    // the chip beside it
     const hit = document.createElement('i');   // not a <span>: a card's name is its first span
     hit.style.cssText = 'position:absolute;inset:-6px -8px -6px -3px';
     chip.appendChild(hit);
@@ -135,8 +132,8 @@ async function paintBuild(body) {
     chip.onkeyup = (e) => { if (e.key === ' ') { e.stopPropagation(); e.preventDefault(); } };   // Space activates a button on keyup
     chipRow(card).appendChild(chip);
   };
-  // tooltips live ON the thing they explain: the pill carries the perf numbers, the LOD/⚠ chips each pass's
-  // status and reason; the card itself just names the model (in full — the label under it truncates at 48)
+  // tooltips live on the thing they explain: the pill carries the perf numbers (what it costs if you load it, and
+  // the original upload's), the LOD/⚠ chips each pass's status; the card names the model in full
   const optBadge = (card, opt, perf, perfOriginal, path, rebuildable, fullName) => {
     if (fullName) card.title = fullName;
     if (perf) {
@@ -178,7 +175,7 @@ async function paintBuild(body) {
         : '<div style="width:100%;aspect-ratio:1"></div>';
       // the picture gets its own positioned box so the status row sits ON the image (bottom-right), clear of the
       // label strip the previews carry along their top edge and of the name below
-      card.innerHTML = `<div class="pv" style="position:relative;width:100%;line-height:0">${img}</div><span>${escapeHtml(it.name)}</span>`;   // server-supplied name (§24k hygiene)
+      card.innerHTML = `<div class="pv" style="position:relative;width:100%;line-height:0">${img}</div><span>${escapeHtml(it.name)}</span>`;   // server-supplied name: escaped
       card.querySelector('img')?.addEventListener('error', (e) => { e.currentTarget.style.visibility = 'hidden'; });
       card.onclick = () => holdGhost(it.path, it.name);
       optBadge(card, it.opt, it.perf, it.perfOriginal, it.path, it.rebuildable, (it.path?.split('/').pop() ?? it.name).replace(/\.glb$/i, '').replace(/_/g, ' '));
@@ -187,12 +184,11 @@ async function paintBuild(body) {
     if (!items.length) grid.innerHTML = '<div style="color:var(--dim);font-size:11px">nothing matched</div>';
   };
 
-  // The catalog agents already had (mcpl list_library), served to people with each model's _preview.jpg.
+  // the catalog agents have (mcpl list_library), with each model's _preview.jpg
   const starter = () => STARTER.map(([name, path]) =>
     ({ name, path, preview: path.replace(/\.glb$/, '_preview.jpg') }));
-  // the starters paint at once from the list, then again with the catalog's record for each (opt / perf /
-  // rebuildable), so they carry the same rank, chips and ↻ as a search. One request: each starter's full stem
-  // matches only itself. A starter the catalog doesn't know stays plain.
+  // the starters paint at once, then again with the catalog's record for each (opt / perf / rebuildable), in one
+  // request; a starter the catalog doesn't know stays plain
   const enrichStarters = async () => {
     const rows = starter();
     const stems = STARTER.map(([, p]) => p.split('/').pop().replace(/\.glb$/, '').toLowerCase());
@@ -258,8 +254,8 @@ async function paintAvatars(body) {
     const img = card.querySelector('img');
     img.addEventListener('error', () => { img.remove(); });
     card.title = name;   // the portrait names itself; the perf numbers live on the pill
-    // the loupe's rank of this body AS LOADED (stamped by a wearer's client — routes.ts avatarRoster; absent until
-    // someone has worn this version): the same pill as the library cards, on the portrait's bottom-right
+    // the perf rank of this body as loaded (stamped by a wearer's client, server/routes.ts avatarRoster; absent
+    // until someone has worn it): the same pill as the library cards
     if (perf) {
       const pill = document.createElement('b');
       pill.className = 'opt-rank';

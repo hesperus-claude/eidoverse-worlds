@@ -1,17 +1,10 @@
-// structure_ui — the griddled-building editor's hosted half.
+// structure_ui — the griddled-building editor's client half (docs/research/griddled-structures.md).
 //
-// Thin on purpose. Every edit is a pure function in shared/structure-edit.js,
-// so this file only has to answer three questions: which building, where on its
-// grid, and which tool. The edit itself, the preview, and the undo entry are
-// all the same call — a preview cannot disagree with what commits, because it
-// IS what commits, drawn instead of sent.
+// Every edit is a pure function in shared/structure-edit.js, so this file answers three questions: which building,
+// where on its grid, which tool. The preview draws the same result that commits.
 //
-// One component carries a whole building, so an edit re-sends it wholesale, as
-// ONE request with `expect` on the building as this viewer saw it: if
-// someone else changed it since, the authority refuses (`changed`) rather than one
-// edit silently eating the other. Undo is the editor's one undo (Ctrl+Z: the
-// door's undo of MY act, writes.js), so it always lands on the building that
-// act changed, and keeps theirs where someone changed it since.
+// One component carries a whole building, so an edit re-sends it whole as ONE request with `expect` on the building
+// as this viewer saw it: a concurrent change is refused (`changed`), never silently eaten. Undo is writes.js's.
 
 import * as OP from '../../../shared/requests.js';
 import { sendOps } from './writes.js';
@@ -26,7 +19,7 @@ import {
   drawRoom, eraseRoom, setTile, pickWalledEdge,
 } from '../../../shared/structure-edit.js';
 
-const TOOLS = [   // [key, label, hint, icon] — icons.js glyphs (no emoji: the old 🚪 🪟 were the only colour in the bar)
+const TOOLS = [   // [key, label, hint, icon] — icons.js glyphs, no emoji
   ['room', 'room', 'drag a rectangle: floor and walls right round it', 'square'],
   ['wall', 'wall', 'click an edge — or the middle of a cell for a diagonal', 'brickWall'],
   ['door', 'door', 'click a wall', 'doorOpen'],
@@ -58,9 +51,7 @@ function hitGrid(ev, b) {
     ((ev.clientX - r.left) / r.width) * 2 - 1,
     -((ev.clientY - r.top) / r.height) * 2 + 1);
   const ray = new THREE.Raycaster();
-  // the raycaster reads camera.matrixWorld, which is only refreshed during
-  // render — a pick taken in the same tick as a camera move uses the OLD
-  // matrix and lands somewhere else entirely
+  // camera.matrixWorld is only refreshed during render: a pick in the same tick as a camera move would use the old one
   camera.updateMatrixWorld();
   ray.setFromCamera(ndc, camera);
   const y = (b.ent.pos?.[1] ?? 0) + floorOf(b.data);
@@ -109,7 +100,7 @@ function apply(b, at, commit, upTo = null) {
     }
     case 'door':
     case 'window': {
-      // the nearest edge that EXISTS, not the nearest edge — see pickWalledEdge
+      // the nearest edge that HAS a wall (pickWalledEdge)
       const e = pickWalledEdge(g, at.lx, at.lz);
       next = e ? setAperture(g, e, tool) : null; break;
     }
@@ -126,7 +117,7 @@ function apply(b, at, commit, upTo = null) {
   }
 }
 
-/** Preview by drawing the RESULT — the same function that would commit. */
+/** Preview by drawing the result that would commit. */
 function showGhost(b, next) {
   clearGhost();
   try {
@@ -168,7 +159,7 @@ function aimPoint(ev) {
   const cs = getComputedStyle(document.body);
   const left = parseFloat(cs.getPropertyValue('--edit-left-edge')) || 0;
   const right = document.body.classList.contains('edit-workspace') ? (parseFloat(cs.getPropertyValue('--edit-right-w')) || 0) : 0;
-  // lower middle: the ground is below the horizon (the old floating bar sat low in the view too)
+  // lower middle: the ground is below the horizon
   return { clientX: left + (innerWidth - left - right) / 2, clientY: 40 + (innerHeight - 40) * 0.7 };
 }
 
@@ -192,8 +183,7 @@ export function newBuilding(ev) {
 }
 
 // ---- pointer ----------------------------------------------------------------
-// mousedown, not pointerdown: build.js reads canvas picking off mouse events and
-// synthetic PointerEvents never reach it (a lesson already paid for once).
+// mousedown, not pointerdown: build.js picks off mouse events, and synthetic PointerEvents never reach it
 
 function onDown(ev) {
   if (!active || !tool || ev.button !== 0) return;
@@ -273,9 +263,7 @@ function refreshGrid() {
 
 let active = false;
 
-/** Build mode owns the structure tools: they arrive with it and leave with it,
- *  rather than floating over a world nobody is editing. Their buttons live in
- *  the edit workspace's Create panel (the viewport stays clean). */
+/** Build mode owns the structure tools: they arrive and leave with it. Their buttons are the Build panel's (panels.js). */
 export function setStructureMode(on) {
   if (active === on) return active;
   active = !!on;
@@ -300,7 +288,6 @@ export function initStructureUI() {
   // a building appearing or changing under us moves the lattice with it
   bus.on('entity', (ev) => { if (active && ev?.kind !== 'collider') refreshGrid(); });
 
-  // The tools' DOM is the Create panel (panels.js, docked beside the Hierarchy) and the viewport's
-  // armed-tool strip (layout.js): both read structureTools(), arm with setTool, undo with undo().
+  // the tools' DOM is the Build panel (panels.js) and the viewport's armed-tool strip (layout.js): both read structureTools()
   return true;
 }

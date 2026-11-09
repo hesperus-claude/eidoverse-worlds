@@ -1,7 +1,6 @@
-// House dropdowns — every native <select> in the chrome becomes a button that opens a list in the panel's own colours
-// (Chromium paints its OWN blue hover inside a native popup, out of CSS's reach). The <select> stays in the DOM,
-// hidden, as the value store: panels keep reading sel.value and listening for 'change' — a skin, not a rewrite. A
-// MutationObserver skins selects that panels build later.
+// House dropdowns — every <select> in the chrome becomes a button opening a list in the panel's colours (a native
+// popup's hover is out of CSS's reach). The <select> stays in the DOM, hidden, as the value store: panels keep reading
+// sel.value and listening for 'change'. A MutationObserver skins selects built later.
 import { fsvg } from '../icons.js';
 import { bus } from '../base.js';
 
@@ -51,9 +50,8 @@ export function skinSelect(sel) {
       row.onclick = () => { if (sel.value !== o.value) { sel.value = o.value; sel.dispatchEvent(new Event('change', { bubbles: true })); } closePop(); };
       pop.appendChild(row);
     }
-    // In a headset the panel is a texture rasterised from ITS OWN element (domquad stages frames under #xr-stage),
-    // so a list appended to <body> is never drawn — the click landed and nothing appeared. Open it inside the
-    // staged frame instead, positioned in that frame's box, so it is in the quad and the trigger reaches its rows.
+    // In a headset the panel is a texture of ITS OWN element (domquad stages frames under #xr-stage), so a list on
+    // <body> is never drawn: open it inside the staged frame, positioned in that frame's box.
     const host = btn.closest('#xr-stage .frame');
     const r = btn.getBoundingClientRect();
     pop.style.minWidth = `${Math.max(r.width, 120)}px`;   // before measuring: the clamps below read the list's real width

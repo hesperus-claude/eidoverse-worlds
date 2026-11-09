@@ -1,12 +1,7 @@
-// scriptcard — the editor's "new script" card.
-//
-// A small centre card on the selected thing: a name, what starts it (someone using it, or a timer), what it may change,
-// whether it may speak, and the source (a template that runs as it stands). Create plans the requests an agent sends
-// (client/lib/edit/scriptplan.js) and sends them through the editor's one write path (writes.js):
-//   upload {text} → {src}, then ONE batch: script:<name> {src, scope, on, every?} + (on use) its reaction. One act, so
-//   one Ctrl+Z takes it off again.
-// A refusal (the scripts permission, a syntax error, a scope beyond your rights) is shown on the card in the authority's words,
-// and the card stays open with what you typed. Esc or Cancel closes it; nothing is written until Create.
+// scriptcard — the editor's "new script" card: a name, what starts it (use or a timer), what it may change, whether it
+// may speak, and the source. Create plans the requests (scriptplan.js) and sends them through writes.js: upload {text}
+// → {src}, then ONE batch (script:<name> + its reaction) — one act, one Ctrl+Z. A refusal is shown on the card in the
+// authority's words and the card stays open.
 //
 //   openNewScript(id) → Promise<{ok, id, name} | {ok: false}>
 import * as Edits from './writes.js';
@@ -73,8 +68,8 @@ export function openNewScript(id) {
       try {
         const up = await Edits.send(plan.upload, { what: `upload the script '${plan.name}'`, record: false });
         if (!up.ok) { err.textContent = refusalText(`upload the script '${plan.name}'`, up); return; }
-        // expect is the thing as planned (`thing`, read at Create), not as it stands after the upload: the action was picked
-        // from it, so a reaction someone added meanwhile refuses the batch instead of being overwritten (house 6340433633)
+        // expect is the thing as read at Create, not after the upload: a reaction someone added meanwhile refuses the
+        // batch instead of being overwritten (test/client/scriptcard-expect-test.ts)
         const r = await Edits.sendOps(plan.install(up.src), { what: `script '${plan.name}' on ${id}`, base: { [id]: thing } });
         if (!r.ok) { err.textContent = refusalText(`script '${plan.name}' on ${id}`, r); return; }
         finish({ ok: true, id, name: plan.name, action: plan.action });

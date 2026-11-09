@@ -1,15 +1,8 @@
-// build — the human's authoring surface.
+// build — the human's authoring surface: moving, correcting and unmaking things, with undo (the verbs agents always
+// had). Placement helpers are the drag semantics (DESIGN.md): the ghost lands ON the table, not beside it.
 //
-// Moving, correcting and unmaking things, with undo — the verbs agents always had, for humans.
-//
-// Placement helpers are the drag semantics, per DESIGN.md: the ghost lands ON the table rather than beside it,
-// because the collider tops that compute walkable ground are the same data as "what can I put things on".
-
-// SPLIT (R4): this file is the gesture CORE — mode, selection, ghost, drag,
-// undo, and the one pointer/key router. The panel sections live beside it
-// (catalog.js models+avatars+upload, groundpanel.js, skypanel.js), and the
-// seat-anchor grammar in socketedit.js; the router here hands seat gestures
-// across that seam and never re-implements them.
+// This file is the gesture CORE: mode, selection, ghost, drag, undo, and the one pointer/key router. The panels live
+// beside it (catalog.js, groundpanel.js, skypanel.js, panels.js); seat gestures are handed to socketedit.js.
 
 import { svg as iconSvg } from '../icons.js';
 import * as OP from '../../../shared/requests.js';
@@ -37,7 +30,7 @@ import { claimEscape } from '../windows.js';
 import { isOwner } from '../../../shared/protocol/roles.js';
 import { currentTool as structureTool, setTool as setStructureTool } from './structure_ui.js';   // an armed building tool is Esc's first rung
 import { state } from '../state.js';   // one rule for who may author (and one name for them), shared with the scene panel
-import * as Edits from './writes.js';   // slice 3b: every write here is a request
+import * as Edits from './writes.js';
 import { refreshSocketGizmos, resetSockets, armSocketPlacement, socketArmed, socketSelected,
   cancelSocketArm, deselectSocket, socketMouseDown, socketKeyDown, updateSocketDrag } from './socketedit.js';
 
@@ -51,48 +44,27 @@ let ghost = null;         // { obj, lib, yaw, scale, bp? } — a thing not yet p
 let selected = null;      // { id, obj } — the selection's primary thing, resolved to its object (edit/selection.js is the truth)
 let dragging = null;      // { id, offset, plane } while moving a selection
 
-// Editing is a MODE.
-//
-// It was always-live, on the theory that "select anything, any time" is closer
-// to the one-verb-surface ideal. In a world you look around by dragging, that
-// theory is wrong: every camera drag that happens to start on an object picks
-// it up and moves it, and the world quietly rearranges itself while you are
-// just trying to see. Looking is the default; editing is something you say you
-// are doing.
+// Editing is a MODE: in a world you look around by dragging, an always-live editor would move whatever a camera drag
+// started on. Looking is the default; editing is something you say you are doing.
 let buildMode = false;
 export const isBuilding = () => buildMode;
 claimEscape(() => (buildMode ? 'edit' : null));   // build mode owns Esc (its own ladder) — the frames' close-all yields
 
-/** May this client enter edit mode at all? PERMISSIVE WHEN UNKNOWN, denying only on a known-insufficient role (the
- *  house idiom, generate.js's `net.myRights?.gen !== false`): net.myRights is `undefined` until the snapshot or a
- *  live grant, and a build click that vanishes on a slow join is worse than one refused out loud. */
-// No edit mode on a phone: a coarse pointer on a screen whose short side is phone-sized; tablets, headset browsers and
-// touch laptops keep edit mode. Viewing and playing are untouched. This never reads XR state, so VR edit mode stays
-// possible in principle.
+/** No edit mode on a phone (a coarse pointer on a phone-sized screen); tablets, headsets and touch laptops keep it. */
 export const editSurface = () => !(globalThis.matchMedia?.('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 600);
+/** May this client enter edit mode? PERMISSIVE WHEN UNKNOWN: net.myRights is `undefined` until the snapshot or a live
+ *  grant, and the authority decides anyway; a build click that vanishes on a slow join is worse than one refused out loud. */
 export const mayEdit = () => {
   if (!editSurface()) return false;
   const r = net.myRights; const role = r?.role;
-  // the build permission, whatever the role is called (recut B1: never a role name); rights not known yet: allow, the authority decides
+  // the build permission, never a role name
   if (Array.isArray(r?.permissions)) return r.permissions.includes('build');
   return role === undefined || isOwner(r);
 };
 
 export function setBuildMode(on, { quiet = false } = {}) {
-  // The gate the wrench advertises, applied at the one chokepoint every entry
-  // point funnels through: toggleBuildMode, the dock action, KeyB, and the two
-  // quiet callers (holdGhost, armSocketPlacement — "I picked a thing to place",
-  // which is exactly the build intent the server refuses). Gating only the
-  // keybind would have been half a fix, which is the shape of mistake this
-  // review round already caught once.
-  //
-  // ONLY the `on` direction. Leaving always works, or a client demoted
-  // mid-session is trapped in build mode with no way out.
-  //
-  // R, 2026-09-11, on why this is not merely cosmetic: "Builder is true by
-  // default, but if it's a server where builder/not builder is delineated,
-  // Edit is unpinned and gray." The rail says you cannot; the keyboard should
-  // not disagree with the rail.
+  // the rights gate, at the one chokepoint every entry funnels through (the wrench, KeyB, holdGhost, armSocketPlacement).
+  // ONLY the `on` direction: leaving always works, or a client demoted mid-session is trapped in build mode.
   if (on && !mayEdit()) {
     if (!quiet) flashHint(editSurface() ? 'builder mode needs build rights in this world' : 'builder mode is for a desktop (or tablet); on a phone you can look around and play');
     return buildMode;
@@ -102,8 +74,6 @@ export function setBuildMode(on, { quiet = false } = {}) {
   document.body.classList.toggle('build-mode', on);
   if (!on) { cancelGhost(); deselect(); resetSockets(); }
   refreshSocketGizmos();   // anchors are visible exactly while you are editing
-  // Saying you are building puts the tools in front of you: the workspace's Build tab (layout.js) is the catalog.
-  // The legacy World frame opens only if it was open before.
   if (!quiet) {
     flashHint(on
       ? html`builder mode — <kbd>G</kbd> move · <kbd>E</kbd> rotate · <kbd>R</kbd> scale · <kbd>Q</kbd> select · <kbd>F</kbd> find · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>B</kbd> leaves`
@@ -114,13 +84,11 @@ export function setBuildMode(on, { quiet = false } = {}) {
 }
 export const toggleBuildMode = () => setBuildMode(!buildMode);
 
-// The TOOL is what a drag does: move, rotate and scale (the Q/E and ,/. gestures with the pointer); select never
-// moves anything. The gizmos read the same tool state.
+// The TOOL is what a drag does: move, rotate, scale, pivot; select never moves anything. gizmo.js reads the same state.
 let tool = 'move';
 export const getTool = () => tool;
-// transform space per tool: world = the world's axes, object = the thing's own axes (three's 'local'). Gimbal (the
-// Euler rings in the rotate order) needs its own gizmo: not yet. Scale is always the thing's own axes. Kept per viewer
-// (a view choice, never logged).
+// transform space per tool: world = the world's axes, object = the thing's own (three's 'local'); scale is always the
+// thing's own. Kept per viewer, never logged.
 export const SPACES = { move: ['world', 'object'], rotate: ['world', 'object'], scale: ['object'] };
 const space = (() => { try { return { move: 'world', rotate: 'world', scale: 'object', ...JSON.parse(localStorage.getItem('ew-tool-space') ?? '{}') }; } catch { return { move: 'world', rotate: 'world', scale: 'object' }; } })();
 export const getSpace = (t = tool) => space[t] ?? 'world';
@@ -144,9 +112,8 @@ export function setTool(t) {
 export const hasGhost = () => ghost !== null;
 export const hasSelection = () => selected !== null;
 setPointerClaim(() => ghost !== null || !!dragging?.armed);
-// the gizmo (gizmo.js) vetoes the mesh-grab while one of its handles is hot —
-// a probe, not an import: gizmo imports us
-// several handle sets may own a press (the gizmo, the grip editor's): any one vetoes
+// handle sets (gizmo.js, gripedit.js) veto the mesh-grab while one of their handles is hot: a probe, not an import
+// (they import us); any one vetoes
 const pointerVetoes = [];
 const pointerVeto = () => pointerVetoes.some((f) => f());
 export function setPointerVeto(fn) { pointerVetoes.push(fn); }
@@ -159,16 +126,15 @@ outline.visible = false;
 outline.userData.noCamCollide = true;
 scene.add(outline);
 
-// the selection line lives IN the one status bar (ui.js claimStatus, DESIGN-status-bar.md): a node it owns, claimed at
-// priority 4 while something is selected, released when nothing is. The lock checkbox rides inside the node.
+// the selection line lives in the one status bar (ui.js claimStatus): a node claimed at priority 4 while something is
+// selected, released when nothing is. The lock checkbox rides inside it.
 let inspector = null;
 function ensureInspector() {
   if (!inspector) { inspector = document.createElement('div'); inspector.className = 'edit-selbar'; }
   return inspector;
 }
 const showSelbar = () => claimStatus('selection', { priority: 4, node: ensureInspector() });
-/** The inspector bar as a surface other editors write to — seatedit paints
- *  its anchor line through this rather than reaching into the element. */
+/** The selection bar as a surface other editors write to (socketedit.js paints its anchor line through this). */
 export function setInspectorHtml(line) {   // text, or markup built with html`` (markup.js)
   paint(ensureInspector(), line);
   showSelbar();
@@ -187,10 +153,9 @@ function showInspector(id) {
         : `<span style="color:var(--dim)">drag move · <kbd>Shift</kbd>+drag up/down · ` +
           `<kbd>G</kbd> move · <kbd>E</kbd> rotate · <kbd>R</kbd> scale · <kbd>F</kbd> find · <kbd>X</kbd> remove · <kbd>Esc</kbd> done</span>`) +
     `<label title="nail it down: while locked, nobody's drags, edits or scripts change it (server-enforced) — sitting on it and using it (doors, handlers) stay open; a builder who may lift the lock edits through it" style="display:flex;gap:4px;align-items:center;cursor:pointer">` +
-    // an icon, never an emoji (R, 10-10: emoji only in the Chat pane and on the action bar — "illegal pretty much everywhere else")
+    // an icon, never an emoji (emoji belong to the Chat pane and the action bar only)
     `<input type="checkbox" data-bact="lock"${locked ? ' checked' : ''}><span class="sp-ico" aria-hidden="true">${iconSvg(locked ? 'lock' : 'lockOpen', 14)}</span> lock</label>`;
-  // no '+ seat' here (a stray click seated people on a sign): a seat is added where components are, Add Component ▸
-  // Sockets ▸ '+ socket here'.
+  // no '+ seat' here: a seat is added where components are (Add Component ▸ Sockets)
   inspector.querySelector('[data-bact="lock"]').onchange = (ev) => {
     const on = ev.target.checked;
     Edits.lock(id, on).then(() => { if (selected?.id === id) showInspector(id); });
@@ -219,10 +184,9 @@ export function deselect() {
 export function refreshOutline() {
   if (selected) outline.box.setFromObject(selected.obj);
 }
-// ONE selection: edit/selection.js is the truth; `selected` is its primary resolved to an object, set on its event and
-// re-resolved each edit-mode frame (a model swapped under it, a thing gone) with the box re-measured, so it tracks a
-// thing that moves. The residency sweep must never demote what someone is editing — editHolds is id-based because
-// promotion swaps the object out from under a userData flag.
+// ONE selection: edit/selection.js is the truth; `selected` is its primary resolved to an object, re-resolved on its
+// event and each edit-mode frame (a model swapped under it, a thing gone), the box re-measured. editHolds keeps the
+// residency sweep from demoting what someone is editing (id-based: promotion swaps the object).
 function followSelection() {
   const sid = buildMode ? primaryThing() : null; const obj = sid != null ? entities.get(sid) : null;
   if (obj) {
@@ -251,9 +215,8 @@ function ghostify(obj) {
   obj.userData.noCamCollide = true;
 }
 
-// Create ▸ Box/Sphere/Cylinder/Plane/Capsule: a mesh thing (componentspec `mesh`), held as its own grey ghost and
-// placed with a click, standing on the floor (its origin is its base centre, the authority's boxOfM). Q/E turn it; ,/. scale
-// its default size. The lib is '@mesh:<shape>'.
+// Create ▸ Box/Sphere/Cylinder/Plane/Capsule: a `mesh` thing, held as a grey ghost standing on the floor (its origin is
+// its base centre, as the authority's boxOfM has it). Q/E turn it; ,/. scale it. The lib is '@mesh:<shape>'.
 const meshOf = (lib) => (typeof lib === 'string' && lib.startsWith('@mesh:') ? lib.slice(6) : null);
 function meshGhost(shape, [x, y, z]) {
   const r = x / 2;
@@ -266,9 +229,8 @@ function meshGhost(shape, [x, y, z]) {
   obj.castShadow = false; obj.userData.noCamCollide = true;
   return obj;
 }
-// Create ▸ Picture: a standalone image (Godot's Sprite3D): pick a file, it goes to the store, then a 1 m plate
-// is in hand and placed with a click, facing the camera's way like any ghost; its height follows the image once it loads.
-// Q/E turn it, ,/. size its width. The lib is '@picture:<src>'.
+// Create ▸ Picture: pick a file (it goes to the store), then a 1 m plate is in hand; its height follows the image once
+// it loads. Q/E turn it, ,/. size its width. The lib is '@picture:<src>'.
 const pictureOf = (lib) => (typeof lib === 'string' && lib.startsWith('@picture:') ? lib.slice(9) : null);
 export async function holdPicture() {
   const { pickPicture } = await import('../realize/pictures.js');
@@ -305,10 +267,8 @@ export async function holdGhost(lib, label) {
   } catch (e) { report('ghost', e); }
 }
 
-/** Carry a COPY of a blueprint as the ghost (design §3, step 6b): the whole tree,
- *  each part at its local pose under its parent — the same nesting the renderer
- *  builds for a mounted child — so what you aim is what lands. Committing places
- *  it as the authority's create {from: hash}: one act, one Ctrl+Z step. */
+/** Carry a COPY of a blueprint as the ghost: the whole tree, each part at its local pose under its parent, so what
+ *  you aim is what lands. Committing is the authority's create {from: hash}: one act, one Ctrl+Z. */
 export async function holdBlueprint(hash, record) {
   const why = record ? placeRefusal(record) : 'that blueprint is not in this world\'s store';
   if (why) { flashHint(`can't place it: ${why}`, 5000); return false; }
@@ -361,9 +321,8 @@ export function cancelGhost() {
   if (ghost) { scene.remove(ghost.obj); ghost = null; release(); }
 }
 
-// Turn and size the thing in hand BEFORE the click: Q / E turn (15°, Shift 1°), , / . size (×1.1, Shift ×1.01), clamped
-// as the scale tool clamps. (Roblox's R / T and GridMap's S / D do this elsewhere; here R is the scale tool and D walks,
-// so this editor's own keys win.)
+// Turn and size the thing in hand before the click: Q / E turn (15°, Shift 1°), , / . size (×1.1, Shift ×1.01), clamped
+// as the scale tool clamps. (Not R / T or S / D: R is the scale tool and D walks.)
 const GHOST_TURN = Math.PI / 12, GHOST_TURN_FINE = Math.PI / 180, GHOST_SIZE = 1.1, GHOST_SIZE_FINE = 1.01;
 /** The thing in hand, for tests and the hint: {yaw, scale} or null. */
 export const ghostPose = () => (ghost ? { yaw: ghost.yaw, scale: ghost.scale, lib: ghost.lib, bp: ghost.bp?.hash ?? null } : null);
@@ -378,30 +337,25 @@ function ghostKey(e) {
   return true;
 }
 
-/** Where the pointer is aiming, snapped onto whatever surface is under it.
- *  Raycasting real entities first is what turns "drops at y=0 beside the
- *  table" into "lands on the table". */
+/** Where the pointer is aiming, snapped onto whatever surface is under it (entities first, so a thing lands ON the
+ *  table), else the ground. */
 function aimPoint(skipId = null) {
   raycaster.setFromCamera(mouse, camera);
   const targets = [];
   for (const [id, o] of entities) if (o && id !== skipId) targets.push(o);
   let hits = raycaster.intersectObjects(targets, true);
-  // a mounted child is drawn INSIDE its parent's object, so the parent's recursive hit test would find the very
-  // thing being dragged under the pointer (and it would climb toward the camera). Skip its whole subtree.
+  // a mounted child is drawn INSIDE its parent's object: skip the dragged thing's whole subtree, or it climbs toward the camera
   const skipObj = skipId != null ? entities.get(skipId) : null;
   if (skipObj) hits = hits.filter((h) => { for (let o = h.object; o; o = o.parent) if (o === skipObj) return false; return true; });
-  // a thing hidden in MY view still catches what I place: it is solid for everyone, and my private view must never
-  // shape a shared write
+  // a thing hidden in MY view still catches what I place: my private view must never shape a shared write
   if (hits.length) {
     const h = hits[0];
-    // only treat near-horizontal faces as placement surfaces — a wall should
-    // not catch a chair
+    // only near-horizontal faces are placement surfaces: a wall should not catch a chair
     const n = h.face?.normal ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : null;
     if (!n || n.y > 0.6) return { point: h.point.clone(), onto: h.object.userData.entityId ?? null };
   }
   if (raycaster.ray.intersectPlane(groundPlane, _hit)) {
-    // clamp to placeable range — a ray toward the horizon meets the ground
-    // plane hundreds of metres out
+    // clamp to placeable range: a ray toward the horizon meets the ground plane hundreds of metres out
     const d = _hit.clone().sub(myState.pos); d.y = 0;
     const MAX = 20;
     if (d.length() > MAX) _hit.copy(myState.pos).addScaledVector(d.normalize(), MAX);
@@ -422,8 +376,7 @@ export function updateBuild() {
   }
   if (dragging?.armed && selected) {
     if (tool === 'rotate') {
-      // ~1° per px, drag right = clockwise from above — a turn about world UP,
-      // composed on the full orientation, so a tilted thing turns where it lies
+      // ~1° per px, drag right = clockwise from above: a turn about world UP composed on the full orientation
       _turn.setFromAxisAngle(_up, -(dragging.clientX - dragging.startX) * 0.012);
       selected.obj.quaternion.copy(_turn).multiply(dragging.startQuat);
       reindexCollider(selected.id); refreshOutline(); relayDrag();
@@ -431,8 +384,7 @@ export function updateBuild() {
       { const k = Math.exp((dragging.clientX - dragging.startX) * 0.006); const sc = selected.obj.scale.copy(dragging.startScale).multiplyScalar(k); sc.set(...sc.toArray().map((v) => THREE.MathUtils.clamp(v, 0.1, 12))); }   // keeps a stretched thing's proportions
       reindexCollider(selected.id); refreshOutline();
     } else if (dragging.vertical) {
-      // map screen-vertical pixels to world metres at the object's depth, so a
-      // drag feels the same whether the thing is near or far
+      // screen-vertical pixels → world metres at the object's depth, so a drag feels the same near or far
       const fov = camera.fov * Math.PI / 180;
       const pxToWorld = (2 * dragging.depth * Math.tan(fov / 2)) / innerHeight;
       const dy = (dragging.startY - dragging.clientY) * pxToWorld;   // up = raise
@@ -446,17 +398,14 @@ export function updateBuild() {
     } else {
       const aim = aimPoint(selected.id);
       if (aim) {
-        // keep the grab offset: you grabbed a crate by its corner, not by its pivot
+        // keep the grab offset (you grabbed a crate by its corner, not its pivot); a drop onto a surface still rests ON it
         if (dragging.world) {
-          // the grab offset, the aim and the result are WORLD points; a mounted child's object position is local
-          // to its parent (turned, scaled), so the world target is brought into that frame last (research 44 #5)
+          // WORLD points; a mounted child's position is local to its parent, so the target enters that frame last
           _w.copy(aim.point).add(dragging.grab);
           if (aim.onto) _w.y = aim.point.y;
           setWorldPosition(selected.obj, _w);
         } else {
           selected.obj.position.copy(aim.point).add(dragging.grab);
-          // dropping onto a surface should still rest ON it, not float by the
-          // offset you happened to grab at
           if (aim.onto) selected.obj.position.y = aim.point.y;
         }
         reindexCollider(selected.id);
@@ -486,9 +435,8 @@ function relayDrag() {
   sendDrag(selected.id, [p.x, p.y, p.z], new THREE.Euler().setFromQuaternion(q, 'YXZ').y, [q.x, q.y, q.z, q.w]);
 }
 
-// remote drags: apply transiently, no log involvement. A live drag is a CLAIM: while samples flow, `by` is editing
-// `id`; an amber box marks it and the Hierarchy says 'editing: <name>'; it lapses on the last sample (`end`) or
-// CLAIM_MS of silence. Presence only.
+// remote drags: applied transiently, no log involvement. A live drag is a CLAIM: while samples flow, `by` is editing
+// `id` (an amber box, and the Hierarchy says 'editing: <name>'); it lapses on the last sample (`end`) or CLAIM_MS of silence.
 const CLAIM_MS = 1500;
 const claims = new Map();   // id -> { by, at, box }
 const claimBox = () => { const b = new THREE.Box3Helper(new THREE.Box3(), 0xe0a33a); b.userData.noCamCollide = true; scene.add(b); return b; };
@@ -515,8 +463,8 @@ bus.on('snapshot-adopted', () => { for (const id of [...claims.keys()]) endClaim
 function commitSpawn() {
   const p = ghost.obj.position;
   const id = '$new';   // the authority mints its id; the reply's ids map says what it became
-  // one request: create (a model, or a light: a thing with a light component), or create {from} for a blueprint copy
-  // a copy's root keeps the record's own size, times the size it was given in hand
+  // one request: create (a model, a mesh, a picture, a light, an empty), or create {from} for a blueprint copy, whose
+  // root keeps the record's own size times the size it was given in hand
   const rootScale = () => { const s = ghost.bp.record?.root?.components?.find((c) => c.type === 'Transform')?.params?.scale; return Number.isFinite(s) ? s : 1; };
   let sent;
   if (ghost.bp) sent = Edits.copyBlueprint(ghost.bp.hash, { pos: [p.x, p.y, p.z], q: [0, Math.sin(ghost.yaw / 2), 0, Math.cos(ghost.yaw / 2)], ...(ghost.scale !== 1 ? { scale: Array(3).fill(+(rootScale() * ghost.scale).toFixed(4)) } : {}) });
@@ -526,9 +474,8 @@ function commitSpawn() {
   else if (pictureOf(ghost.lib)) sent = Edits.sendOps([OP.create(id, { transform: { pos: [p.x, p.y, p.z], q: [0, Math.sin(ghost.yaw / 2), 0, Math.cos(ghost.yaw / 2)] }, components: { picture: { src: pictureOf(ghost.lib), width: +ghost.scale.toFixed(3) }, label: 'picture' } })], { what: 'hang a picture', expect: false });
   else if (ghost.lib === '@light') sent = Edits.sendOps([OP.create(id, { transform: { pos: [p.x, p.y + 0.9, p.z] }, components: { light: { ...LIGHT_DEFAULTS } } })], { what: 'place a light', expect: false });   // a touch off the floor: a hanging bulb
   else sent = Edits.sendOps([OP.create(id, { model: ghost.lib, transform: { pos: [p.x, p.y, p.z], q: [0, Math.sin(ghost.yaw / 2), 0, Math.cos(ghost.yaw / 2)], scale: ghost.scale } })], { what: `place ${libLabels.get(ghost.lib) ?? ghost.lib}`, expect: false });
-  // what you just placed is the selection, so you can tweak it straight away (as Roblox, Unity and Godot do). A
-  // blueprint copy selects its root: the first thing the authority names that rides nothing else it made. The thing
-  // arrives a frame or two after the reply.
+  // what you just placed is the selection (a blueprint copy: its root, the first thing made that rides nothing else
+  // made); it arrives a frame or two after the reply
   const bp = !!ghost.bp;
   Promise.resolve(sent).then((r) => {
     if (!r?.ok) return;
@@ -544,9 +491,7 @@ function selectWhenHere(id, ms = 3000) {
   go();
 }
 
-// ---- lock: `comp {id, type: "lock", data: true}` nails a thing down. The SERVER enforces it (place/remove/punt/
-// mount/spawn/light refused on a locked id for everyone, locker included); these guards keep the local gesture honest:
-// no preview that would snap back, and a hint that teaches the unlock.
+// ---- lock: the `lock` component (writes.js lock) nails a thing down; the authority enforces it for everyone
 function isLocked(id) { return !!bagOf(id)?.lock; }
 function commitPlace(before) {
   if (!selected) return;
@@ -567,11 +512,10 @@ export function undo() {
   deselect(); return Edits.undo();
 }
 
-// Edit mode's panels own the selection the inspector SHOWS (a tree pick doesn't touch `selected`, which only a
-// viewport pick sets), so panels.js installs its remover here (it can't be imported: panels.js imports us).
+// panels.js installs its remover here (it can't be imported: panels.js imports us): Del acts on every selected thing
 let removeHook = null;
 export function setRemoveHook(fn) { removeHook = fn; }
-/** What the keys act on: the inspector's selection, else the viewport's. */
+/** What the keys act on: the selection's primary thing. */
 const keyTarget = () => primaryThing();
 /** Edit ▸ delete: the same act as the Del key. */
 export function removeKeyTargets() { if (keyTarget()) removeTargets(); }
@@ -625,15 +569,12 @@ canvas.addEventListener('mousedown', (e) => {
   // an armed seat placement outranks everything, the ghost included
   if (socketArmed()) { socketMouseDown(e); e.preventDefault(); return; }
   if (ghost) return;                        // click-to-place handled on click
-  // gizmo picks next — a marker is small and deliberate, and the mesh it
-  // floats over would otherwise win every contested click
+  // seat gizmos pick next: the mesh a marker floats over would otherwise win every contested click
   if (socketMouseDown(e)) { e.preventDefault(); return; }
   if (pointerVeto()) return;                // a gizmo handle under the pointer owns this press
-  // pick from THIS event's coordinates: anything that presses without moving first (a touch, a synthetic click) has
-  // left `mouse` stale
+  // pick from THIS event's coordinates: a press without a move first (a touch, a synthetic click) leaves `mouse` stale
   const hit = pickHit((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
-  // a press on nothing: a DRAG from here orbits the camera; only a click that didn't travel deselects (an orbit that
-  // threw away the selection every time would make looking around a thing impossible)
+  // a press on nothing: a DRAG from here orbits the camera; only a click that didn't travel deselects
   if (!hit && e.shiftKey) { const d = document.createElement('div');   // keys: selectExtend
     d.className = 'edit-marquee'; d.style.display = 'none'; document.body.append(d);
     marquee = { x: e.clientX, y: e.clientY, el: d }; addEventListener('mousemove', marqueeMove); addEventListener('mouseup', marqueeEnd); e.preventDefault(); return; }
@@ -643,16 +584,13 @@ canvas.addEventListener('mousedown', (e) => {
   while (root && !root.userData.entityId) root = root.parent;
   if (!root) return;
   const id = root.userData.entityId;
-  // Ctrl-click EXTENDS the selection (panels.js owns the set; Shift is the
-  // vertical drag here, so it can't double as the extend modifier it is in
-  // the tree). No drag starts from an extend.
+  // Ctrl-click EXTENDS the selection (panels.js); no drag starts from an extend
   if (e.ctrlKey || e.metaKey) { bus.emit('edit-extend', id); e.preventDefault(); return; }   // keys: selectExtend
   // Shift: a click adds it to (or takes it from) the selection, as in the tree; a Shift press that TRAVELS is
   // still the vertical drag, so the thing is selected only once it starts to move
   const shiftPick = e.shiftKey && !!primaryThing() && primaryThing() !== id;   // keys: selectExtend
   if (!shiftPick) select(id);
-  // A press is a SELECT. It only becomes a drag once the pointer actually
-  // travels — otherwise clicking a thing to look at its label moved it.
+  // a press is a SELECT; it becomes a drag once the pointer travels (DRAG_SLOP)
   const aim = aimPoint(id);
   // the drag reckons in WORLD space (a mounted child's object position is in its parent's frame)
   const world = true;
@@ -667,9 +605,7 @@ canvas.addEventListener('mousedown', (e) => {
     startX: e.clientX,
     startY: e.clientY,
     clientY: e.clientY,
-    // Shift held at grab = a VERTICAL drag: the ground-plane raycast can't
-    // express height, so hold Shift and the pointer's up/down maps to world Y
-    // with the horizontal position pinned. The standard editor gesture.
+    // Shift held at grab = a VERTICAL drag: the pointer's up/down maps to world Y, horizontal position pinned
     vertical: e.shiftKey,   // keys: meshMove
     shiftPick,
     clientX: e.clientX,
@@ -683,8 +619,7 @@ canvas.addEventListener('mousedown', (e) => {
   e.preventDefault();
 });
 
-// Arm the drag only after a few pixels of travel — the same threshold every
-// desktop UI uses to tell a click from a drag.
+// arm the drag only after a few pixels of travel (click vs drag)
 const DRAG_SLOP = 4;
 addEventListener('mousemove', (e) => {
   if (!dragging) return;
@@ -693,8 +628,7 @@ addEventListener('mousemove', (e) => {
   if (tool === 'select') return;                // select: a press picks, travel never moves
   if (!dragging.armed
       && Math.hypot(e.clientX - dragging.startX, e.clientY - dragging.startY) > DRAG_SLOP) {
-    // the press selected it; travel is where a move would begin — a locked
-    // thing refuses here, before any preview exists to snap back
+    // the press selected it; travel is where a move begins
     dragging.armed = true;
     if (dragging.shiftPick) { select(dragging.id); dragging.shiftPick = false; }
     engage('meshMove');
@@ -727,14 +661,13 @@ canvas.addEventListener('click', (e) => {
 
 // ============================================================ keys
 
-/** Something mid-gesture that Esc should cancel before anything else (gizmo.js). */
-// Esc goes to each hook in turn, newest first (the grip editor, then the gizmo's drag); the first that takes it ends it
+// Esc hooks (gizmo.js, gripedit.js): tried newest first; the first that takes it ends it
 const escapeHooks = [];
 const escapeHook = () => escapeHooks.some((f) => f());
 export function setEscapeHook(fn) { escapeHooks.unshift(fn); }
 bus.on('key', (e) => {
   if (e.code === 'Escape') {
-    // §3a: Esc during a drag cancels it and writes nothing; the thing goes back to where the log has it
+    // Esc during a drag cancels it and writes nothing; the thing goes back to where the log has it
     if (dragging?.armed) { const id = dragging.id; dragging = null; Edits.revertPose(id); flashHint('move cancelled — nothing written'); return; }
     if (escapeHook()) return;
     if (structureTool()) setStructureTool(null);   // an armed building tool drops first (the viewport strip says "Esc to drop")
@@ -745,9 +678,7 @@ bus.on('key', (e) => {
     else if (buildMode) setBuildMode(false);
     return;
   }
-  // Undo stays available outside build mode — you may only notice the mistake
-  // after you have gone back to looking.
-  // redo is Ctrl+Shift+Z or Ctrl+Y (the authority's undo of my undo)
+  // undo stays available outside build mode; redo is Ctrl+Shift+Z or Ctrl+Y
   if ((e.ctrlKey || e.metaKey) && ((e.code === 'KeyZ' && e.shiftKey) || e.code === 'KeyY')) {   // keys: undo
     e.preventDefault?.(); Edits.redo(); return; }
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); undo(); return; }   // keys: undo
@@ -761,8 +692,7 @@ bus.on('key', (e) => {
   if (ghostKey(e)) return;
   // a selected seat anchor holds the editing keys before things do
   if (socketKeyDown(e)) return;
-  // Tool keys, every one OFF the walking set (WASD walks): G move (Blender), E rotate and R scale (Maya), Q select,
-  // F find, X or Del removes, Esc steps out, B toggles the mode.
+  // tool keys, every one OFF the walking set (WASD walks): Q select, G move, E rotate, R scale, P pivot, F find, X removes
   if (!e.ctrlKey && !e.metaKey && !e.altKey) {   // keys: toolKeys
     const t = { KeyQ: 'select', KeyG: 'move', KeyE: 'rotate', KeyR: 'scale', KeyP: 'pivot' }[e.code];   // P: the pivot (Maya's D; D walks here)
     if (t) {   // the active tool's key again steps its space (G G: move in the thing's own axes), saying so
