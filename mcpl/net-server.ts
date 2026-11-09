@@ -24,12 +24,13 @@ import {
   type ChannelsPublishResult,
 } from "@animalabs/mcpl-core";
 import {
-  CHAT, EIDO, CAP, tags, speechTags, capabilityMatches, MCPL_ADVERTISEMENT, FEATURE_SETS,
+  CAP, capabilityMatches, MCPL_ADVERTISEMENT, FEATURE_SETS,
 } from "./declaration.ts";
 import { WorldAgent } from "./agent.ts";
 import { shown } from "../shared/shown.js";
 import { toolList, handleTool, type ToolCtx } from "./tools.ts";
 import { pingDelivery, type WirePing } from "./ping-wire.ts";
+import { eventTags, catchupHeaderTags, catchupReplayTags } from "./event-wire.ts";
 import { TypingRelay } from "./typing-relay.ts";
 import { MANIFEST_WITH_REVISION } from "./manifest.ts";
 import { verifyToken, aid1Slug } from "../server/aid1.ts";
@@ -496,12 +497,12 @@ class Session {
       if (ev.kind === "say") {
         if (!this.channelOpen && !ev.mention) return; // door closed: chatter stops, knocks get through
         this.deliver(ev.text!, authorOf(ev.who), ev.mention
-          ? { tags: speechTags("say", declares, true), mentioned: true, ...md }
-          : { tags: speechTags("say", declares), ...md });
+          ? { tags: eventTags("say", { declares, mention: true }), mentioned: true, ...md }
+          : { tags: eventTags("say", { declares }), ...md });
       } else if (ev.kind === "act") {
         // embodied transitions (a gesture, a pose struck or released, sitting down): ambient, so a closed door mutes them
         if (this.channelOpen) this.deliver(`* ${ev.who} ${ev.text}`, { id: "world", name: this.agent.world },
-          { tags: speechTags("act", declares), ...md });
+          { tags: eventTags("act", { declares }), ...md });
       } else if (ev.kind === "activity") {
         // The ambient-activity pulse: at most one per window, only while something happens within the activity radius.
         // A host opts in by matching `eidoverse:activity-digest` (or `chat:ambient`); a closed door mutes it.
@@ -510,7 +511,7 @@ class Session {
           this.heldActivity.push(`[${new Date(ev.ts).toISOString().slice(11, 16)}Z] ${ev.text}`);
           if (this.heldActivity.length > 8) this.heldActivity.shift();
         } else if (this.channelOpen) this.deliver(`* ${ev.text}`, { id: "world", name: this.agent.world },
-          { tags: tags(CHAT.ambient, EIDO.activityDigest), metadata: { activity: true } });
+          { tags: eventTags("activity"), metadata: { activity: true } });
       } else if (ev.kind === "weather") {
         // the sky changed on its own (forecast boundary, override, day phase): one ambient notice per boundary;
         // pull-only hosts get it from the `activity` tool's held ring
@@ -518,17 +519,17 @@ class Session {
           this.heldActivity.push(`[${new Date(ev.ts).toISOString().slice(11, 16)}Z] ${ev.text}`);
           if (this.heldActivity.length > 8) this.heldActivity.shift();
         } else if (this.channelOpen) this.deliver(`* ${ev.text}`, { id: "world", name: this.agent.world },
-          { tags: tags(CHAT.ambient, EIDO.weather), metadata: { weather: true } });
+          { tags: eventTags("weather"), metadata: { weather: true } });
       } else if (ev.kind === "world-change") {
         // a visible change nearby (an emitter starting/changing/ending): ambient, held for pull-only hosts like weather
         if (!this.granted(CAP.channelsIncoming)) {
           this.heldActivity.push(`[${new Date(ev.ts).toISOString().slice(11, 16)}Z] ${ev.text}`);
           if (this.heldActivity.length > 8) this.heldActivity.shift();
         } else if (this.channelOpen) this.deliver(`* ${ev.text}`, { id: "world", name: this.agent.world },
-          { tags: tags(CHAT.ambient, EIDO.worldChange, EIDO.particles), metadata: { worldChange: true, ...(declares ? { declares } : {}) } });
+          { tags: eventTags("world-change"), metadata: { worldChange: true, ...(declares ? { declares } : {}) } });
       } else if (this.channelOpen) {
         this.deliver(`* ${ev.who} ${ev.kind === "arrive" ? "arrived in the world" : "left the world"}`,
-          { id: "world", name: this.agent.world }, { tags: tags(CHAT.ambient, EIDO.presence), ...md });
+          { id: "world", name: this.agent.world }, { tags: eventTags(ev.kind), ...md });
       }
     };
     this.agent.onPing = (p) => {
@@ -566,11 +567,11 @@ class Session {
       const missedSeq = said.filter((m) => m.who !== this.auth.id && this.agent.mentionsMe(m.text));
       if (missedSeq.length) {
         this.deliver(`While you were away, ${missedSeq.length} message${missedSeq.length === 1 ? "" : "s"} mentioned you:`,
-          { id: "world", name: this.agent.world }, { tags: tags(CHAT.ambient, EIDO.catchup) });
+          { id: "world", name: this.agent.world }, { tags: catchupHeaderTags() });
         for (const m of missedSeq.slice(-10)) {
           // ORIGINAL addressing + the catchup marker; deliver() renders the author itself
           this.deliver(m.text, authorOf(m.who),
-            { tags: tags(CHAT.mention, EIDO.catchup), mentioned: true });
+            { tags: catchupReplayTags(), mentioned: true });
         }
       }
     }
@@ -579,9 +580,9 @@ class Session {
       const missed = this.agent.inbox.filter((m) => m.kind === "say" && m.ts > since && m.who !== this.auth.id && this.agent.mentionsMe(m.text ?? ""));
       if (missed.length) {
         this.deliver(`While you were away, ${missed.length} message${missed.length === 1 ? "" : "s"} mentioned you:`,
-          { id: "world", name: this.agent.world }, { tags: tags(CHAT.ambient, EIDO.catchup) });
+          { id: "world", name: this.agent.world }, { tags: catchupHeaderTags() });
         for (const m of missed.slice(-10)) this.deliver(m.text ?? "", authorOf(m.who),
-          { tags: tags(CHAT.mention, EIDO.catchup), mentioned: true });
+          { tags: catchupReplayTags(), mentioned: true });
       }
     }
     lastSeen[this.auth.id] = Date.now();
