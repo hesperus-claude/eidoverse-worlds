@@ -1675,9 +1675,7 @@ export class WorldAgent {
       const pp = this.people.get(actor)?.pose;
       if (!pp || Math.hypot(pp.p[0] - this.pos.x, pp.p[2] - this.pos.z) <= this.activityRadiusM)
         this.act30.says.set(actor, (this.act30.says.get(actor) ?? 0) + 1);
-      // A null regex means this body has no usable name (a malformed tokens
-      // entry). Not being mentionable is degraded, not fatal — the body still
-      // hears the room; it just cannot be addressed by name.
+      // a null regex means this body has no usable name (a malformed tokens entry): it still hears the room
       const mention = this.mentionsMe(String(args.text)) || this.isMe(args.to);   // the name, the credential's display name (#184), or a say addressed to me
       if (mention) this.ping({ ts, kind: "mention", who: actor, text: args.text });
       this.onEvent?.({ ts, kind: "say", who: actor, text: args.text, mention });
@@ -2182,9 +2180,8 @@ export class WorldAgent {
       // summary without `lie` accuses nothing.
       const cls = decideSupportClass({ w, d, h, lie: Number.isFinite(g.lie) ? g.lie * a3[1] : 0 });
       if (cls.uneven) {
-        // the certification is a MODEL-frame bound; this spawn's scale must
-        // not stretch it past the agreed world bound (#94 review B1) — a
-        // grid certified to 3cm serves a ×1.25 spawn (3.75cm) but not a ×2
+        // the certification is a MODEL-frame bound; this spawn's scale must not stretch it past the world bound
+        // (a grid certified to 3cm serves a ×1.25 spawn but not a ×2)
         const stretched = Number.isFinite(g.topGrid?.certSpread) && g.topGrid.certSpread * a3[1] > CERT_MAX_WORLD;
         const fit = !stretched && await registerSupportGrid(this.supportHolder, bid, g.topGrid, xform);
         if (fit) ids.push(bid);
@@ -2271,7 +2268,7 @@ export class WorldAgent {
       this.inbox.push({ ts, kind: "act", who: this.name, text }); this.onEvent?.({ ts, kind: "act", who: this.name, text });
     }
   }
-  /** Start an anim that lasts: the one in its own layer before it ends with why "replaced" (R 15:34; a once overlays). */
+  /** Start an anim that lasts: the one in its own layer before it ends with why "replaced" (a once overlays). */
   animBegan(a: WorldAgent["anims"][number], holdAt: number | null = null) {
     this.animEnded("replaced", (b) => b.kind === a.kind);
     this.anims.push(a); if (a.bodyMode && isBodyMode(a.bodyMode)) { this.bodyMode = a.bodyMode; if (a.bodyMode === "sit" && a.clip) this.sitRest = a.clip; }
@@ -2392,10 +2389,8 @@ export class WorldAgent {
       // WATER (upstream #242) is the mover's too: handed the world's level (env.waterAt, asked per point: a dry pocket's
       // edge) and this body's measured stature, the stride wades (dragged) or swims (afloat at the chest) — no water arithmetic here.
       const wl = this.levelHere(), wet = this.water?.level != null;
-      // feet on the live ground BEFORE the stride: terrain that loads late or changes under the walker lifts the body here, so
-      // the mover judges a ledge AHEAD against where the feet now stand — not against a y the ground has since left (the
-      // lifecycle test's mid-walk terrain swap; before 10-15 one refused stride, then the feet clamp, then on)
-      // (colliding, the feet below do this themselves, falling to a lower floor rather than jumping to it)
+      // feet on the live ground BEFORE the stride: terrain that loads late or changes under the walker lifts the body here,
+      // so the mover judges a ledge AHEAD against where the feet now stand (colliding, the feet below do this themselves)
       if (!colliding0 && !this.flight && !this.draggedBy && this.pins.size === 0) { const g0 = floorAt(this.pos.x, this.pos.z); if (Number.isFinite(g0) && (wl == null || g0 >= wl)) this.pos.y = g0; }
       const r = walkToward({ pos: [this.pos.x, this.pos.y, this.pos.z], target: [T.x, T.z], dt, run: T.run, tolerance: T.tolerance ?? MOVER.arrive.tolerance, room,
         ...(wet ? { height: this.stature() } : {}) },
@@ -2501,12 +2496,11 @@ export class WorldAgent {
     this.pendingAnim = null; // one-shot: rides exactly one packet
   }
 
-  /** Consent first, then the real tumble (the browsers' Verlet on this body's own VRM skeleton), the slump only when
-   *  the sim can't serve. Either way the event lands. */
   /** Another body did something to mine: an act from them, in the inbox and to the host (`* who text`), never their speech. */
   private bodyNotice(who: string, text: string) {
     const ts = Date.now(); this.inbox.push({ ts, kind: "act", who, text }); this.onEvent?.({ ts, kind: "act", who, text });
   }
+  /** Consent first, then the real tumble (physics.ts HeadlessBody), the canned slump only when the sim can't serve. */
   knockDown(by: string, lean: number[] | null, notice: string) {
     if (this.draggedBy) return;   // consent is the authority's: a shove my table refuses never reaches me (it sends the table on join)
     // knocked over standing, the root is at the feet's height until something
