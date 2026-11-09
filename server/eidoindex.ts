@@ -1,15 +1,10 @@
-// server/eidoindex.ts — which file on this host holds the bytes an eido:sha256/<hex> address names (spec/EIDO-URIS.md §2:
-// the origin host is a resolver): a translated world's models are addresses, never this host's paths.
-//   - a store blob is named by the first 16 hex of its upload's sha256 (server/upload.ts), so an address is found by that
-//     prefix and checked against the whole digest of the bytes. Some blobs on a long-lived host no longer hash to their
-//     name (rewritten in place after upload): their address is the digest of the bytes this host actually has, recorded
-//     in the index, and the translator lists them (storeNameMatches) so the operator knows;
-//   - a library model's address is its ORIGINAL's (LIBRARY_DIR), never the optimized mirror in OPT_DIR, which is a
-//     different byte string (§1a); whoever computes one (the translator) records it in OPT_DIR/eido-index.json; the model
-//     catalogue notes each one it hashes at measure for this process (noteEido).
-// A model is stored as its library path, so nothing a world needs to LOAD depends on this index; it resolves an
-// address stored before (translate-v1@8–@11) and a model-hash's bytes (/eido/sha256/<hex>).
-// The address always names the original; /library/eido/… may still serve the host's rendition (routes.ts).
+// server/eidoindex.ts — which file on this host holds the bytes an eido:sha256/<hex> address names (spec/EIDO-URIS.md §2).
+//   - a store blob is named by the first 16 hex of its upload's sha256 (server/upload.ts): found by prefix, checked against the
+//     whole digest. A blob rewritten in place no longer hashes to its name; its real digest goes in the index (storeNameMatches
+//     lets the translator list them);
+//   - a library model's address is its original's (LIBRARY_DIR), never the optimized mirror's; the translator records it in
+//     OPT_DIR/eido-index.json, and the catalogue notes each one it hashes for this process (noteEido).
+// Nothing a world needs to load depends on this index: it resolves addresses stored by older translations and /eido/sha256/<hex>.
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";

@@ -1,7 +1,5 @@
-// server/custody.ts — the authority's governance keys (PROTOCOL §2.4, §3d C1), held outside every log.
-// One sequencer key per keys file, and one key per identity that founds a world through this server, so two worlds one
-// person founds here carry the same keys and only genesis's nonce tells them apart. Keys never enter a log; the file
-// is written 0600. Same layout and key encoding as the lab's custody (the protocol lab's authority.js custodyOf).
+// server/custody.ts — the authority's governance keys (spec/PROTOCOL.md §2.4, §3d C1), held outside every log, 0600.
+// One sequencer key per keys file, and one key per identity founding a world through this server.
 import { appendDurable, readLogBytes, replaceDurable, mkdirDurable, withFileLock } from "./durable.ts";
 import fs from "node:fs";
 import path from "node:path";
@@ -12,7 +10,7 @@ type Key = { pub: string; priv: string };
 type File = { sequencer?: Key; operator?: Key; holders: Record<string, Key> };
 
 /** How long a mint waits for another process's mint to finish before it gives up. */
-const LOCK_WAIT_MS = envNumber("EIDO_CUSTODY_LOCK_WAIT_MS", 10_000, (n) => n > 0);   // how long a mint waits on a held lock (a slow host may raise it)
+const LOCK_WAIT_MS = envNumber("EIDO_CUSTODY_LOCK_WAIT_MS", 10_000, (n) => n > 0);
 const mk = (): Key => {
   const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
   return { pub: "ed25519:" + (publicKey.export({ format: "jwk" }) as { x: string }).x, priv: privateKey.export({ format: "der", type: "pkcs8" }).toString("base64") };
@@ -35,10 +33,8 @@ function openCustody(file: string) {
     c.sequencer ??= d.sequencer; c.operator ??= d.operator; c.holders = { ...(d.holders ?? {}), ...c.holders }; };
   // durably: a key handed out must survive a crash, or the genesis it signed (already synced) names a key no one holds
   const save = () => replaceDurable(file, JSON.stringify(c, null, 1), 0o600);
-  // A mint reads the file, adds a key and writes the whole file back, so two processes minting at once (the server and a
-  // found / translate tool) would each write back what it read and the later rename would drop the other's key. The read,
-  // the mint and the write therefore run holding `<file>.lock` (durable.ts withFileLock): a process waits for it, and
-  // removes one whose holder is gone.
+  // a mint writes the whole file back, so two processes minting at once would drop each other's keys: read, mint and
+  // write run under `<file>.lock` (durable.ts withFileLock)
   const lock = `${file}.lock`;
   const minting = (missing: () => boolean, mint: () => void) => {
     if (!missing()) return;

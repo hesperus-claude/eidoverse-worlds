@@ -1,7 +1,5 @@
-// The server's heartbeat (overhaul charter §4): ONE scheduler for everything on a cadence (TEL0S_NOTES §3). Each cadence
-// is a REGISTERED SYSTEM: named, error-isolated (one system's throw costs that system one beat, never its neighbours or
-// the process), and measured at GET /tick. The base interval keeps setInterval's wall-clock drift: cadences are "at
-// least everyMs apart", not a fixed timestep.
+// The server's heartbeat (docs/design/OVERHAUL-CHARTER.md §4): one scheduler for everything on a cadence. Each system is
+// named, error-isolated (a throw costs it one beat) and measured at GET /tick. Cadences are "at least everyMs apart", not a fixed timestep.
 
 export type TickSystem = {
   name: string;
@@ -14,15 +12,13 @@ const systems: (TickSystem & { lastRun: number; stat: Stat })[] = [];
 let timer: ReturnType<typeof setInterval> | null = null;
 let baseMs = 0;
 
-/** Register a cadenced system. Order of registration is order of execution
- *  within a beat — keep fast fanouts (frames) first. */
+/** Register a cadenced system. Registration order is execution order within a beat: fast fanouts (frames) first. */
 export function registerSystem(sys: TickSystem) {
   systems.push({ ...sys, lastRun: 0,
     stat: { runs: 0, lastMs: 0, worstMs: 0, errors: 0, lastError: null } });
 }
 
-/** Start the heartbeat. `base` is the finest cadence any system needs (the
- *  stage-frame FRAME_MS today); coarser systems ride accumulators on it. */
+/** Start the heartbeat. `base` is the finest cadence any system needs; coarser ones ride on it. */
 export function startTick(base: number) {
   if (timer) throw new Error("tick already started");
   baseMs = base;
@@ -36,7 +32,6 @@ export function startTick(base: number) {
         s.fn(now);
         s.stat.lastError = null;
       } catch (err) {
-        // a system's throw is ITS failure: recorded, logged, contained
         s.stat.errors++;
         s.stat.lastError = String(err);
         console.error(`[tick:${s.name}]`, err);
@@ -45,8 +40,7 @@ export function startTick(base: number) {
       s.stat.runs++;
       s.stat.lastMs = ms;
       if (ms > s.stat.worstMs) s.stat.worstMs = ms;
-      // an overrun eats the NEXT beat's budget — say so once in a while
-      // (every 50th) rather than silently or noisily
+      // an overrun eats the next beat's budget: say so every 50th run
       if (ms > s.everyMs && s.stat.runs % 50 === 1) {
         console.warn(`[tick:${s.name}] ran ${ms.toFixed(1)}ms against a ${s.everyMs}ms cadence`);
       }
