@@ -1,4 +1,4 @@
-# The eidoverse live-wire protocol — as-built for log dialect v4
+# The eidoverse live-wire protocol — as built, for the current log dialect
 
 Status: **as-built inventory**, first frozen 2026-08-22 (branch
 `overhaul/rimward`), revised for the protocol. This is the surface a new
