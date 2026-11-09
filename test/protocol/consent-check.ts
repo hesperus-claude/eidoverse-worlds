@@ -1,7 +1,8 @@
 // consent tool: names from the wire never reach a plain object's prototype (security pass 2, H-0); a refused change
 // changes nothing; every retired argument says where to go (R 10-28: two gates, two lists)
 import { setConsent, decide, tableOf, migratePresence } from "../../shared/protocol/consent.js";
-let fails = 0; const ok = (c: boolean, n: string, d: any = "") => { console.log((c ? "ok   " : "FAIL ") + n + (c ? "" : "  " + JSON.stringify(d))); if (!c) fails++; };
+import { suite } from "../gate/suite.ts";
+const { ok, na, mode, done } = suite("consent-check");
 const P: any = {};
 for (const op of ["allow", "block", "unlist"]) for (const who of ["__proto__", "constructor", "prototype"]) {
   const r = setConsent(P, "u-attacker", { [op]: who });
@@ -65,9 +66,10 @@ ok(decide(P, "u-bbbbbbbbbbbbbbbbbbbb", "u-alice", "shove").mode === "deny", "C5 
   const w2 = open(), bodies = Object.keys(w2.presence.bodies ?? {}).length;   // the restart: a new process opens the same directory
   for (const [who, at] of [[A, [0, 0, 0]], [B, [1, 0, 0]]] as const) call(w2, who, "move", { to: at });
   const read: any = call(w2, A, "consent"), shove: any = call(w2, B, "body", { to: A, kind: "shove" });
-  const mode = (() => { try { return fs.statSync(path.join(dir, CONSENT_FILE)).mode & 0o777; } catch { return null; } })();
-  ok(set.ok && (read.table?.block ?? []).includes(B) && shove.refused?.code === "consent" && (process.platform === "win32" ? mode !== null : mode === 0o600) && bodies === 0,
-    "C11 a block survives a restart: the reopened authority refuses the blocked person, the read returns it, the file is 0600 (POSIX; Windows has no mode bits); bodies don't survive", { set, read: read.table, shove, mode, bodies }); }
+  const file = path.join(dir, CONSENT_FILE);
+  ok(set.ok && (read.table?.block ?? []).includes(B) && shove.refused?.code === "consent" && fs.existsSync(file) && bodies === 0,
+    "C11 a block survives a restart: the reopened authority refuses the blocked person, the read returns it; bodies don't survive", { set, read: read.table, shove, bodies });
+  mode("C11b …and the consent file is 0600", file, 0o600); }
 // C12 (bot review of #260, #2): the consent file is replaced durably: written whole through a short write, its directory synced
 // after the rename (a new name isn't on disk until its directory is: POSIX)
 { const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
@@ -84,6 +86,7 @@ ok(decide(P, "u-bbbbbbbbbbbbbbbbbbbb", "u-alice", "shove").mode === "deny", "C5 
     if (shorts === 0 && tmpFds.has(fd) && typeof b !== "string" && len > 1) { shorts++; return o.write.call(fs, fd, b, off, len - 1, ...r); } return o.write.call(fs, fd, b, off, len, ...r); };
   let set: any; try { now += 1000; set = request(w, A, "consent", { block: B }); } finally { Object.assign(fs, { openSync: o.open, fsyncSync: o.sync, writeSync: o.write }); }
   let saved: any = null; try { saved = JSON.parse(fs.readFileSync(path.join(dir, CONSENT_FILE), "utf8")); } catch { /* torn or absent */ }
-  ok(set?.ok && (process.platform === "win32" ? dirSynced === 0 : dirSynced >= 1), "C12 a block's consent file: its directory is synced after the rename (Windows can't sync a directory)", { set: set?.ok, dirSynced });
+  if (process.platform === "win32") na("C12 a block's consent file: its directory is synced after the rename", "Windows can't sync a directory");
+  else ok(set?.ok && dirSynced >= 1, "C12 a block's consent file: its directory is synced after the rename", { set: set?.ok, dirSynced });
   ok(set?.ok && shorts === 1 && Object.keys(saved?.consent?.[A]?.block ?? {}).includes(B), "C12b …and a short write still lands the whole file (the injected short write is taken)", { shorts, saved }); }
-console.log(`[consent-check] ${fails ? fails + " failed" : "all pass"}`); process.exit(fails ? 1 : 0);
+done();

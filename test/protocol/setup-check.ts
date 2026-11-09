@@ -18,13 +18,13 @@ import path from "node:path";
 import { generateKeyPairSync, sign as cryptoSign } from "node:crypto";
 import http from "node:http";
 import { ENGINE, scratch, linkFile, canLinkFiles } from "../gate/common.ts";
+import { suite } from "../gate/suite.ts";
 import { tryUntil } from "../gate/wait.ts";
 import { freePort } from "../harness/harness.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 
 const root = scratch("setup");
-let pass = 0, fail = 0;
-const ok = (cond, what, detail?) => { if (cond) { pass++; console.log(`  ok   ${what}`); } else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail).slice(0, 500)}` : ""}`); } };
+const { ok, na, mode, done } = suite("setup-check");
 
 const pair = generateKeyPairSync("ed25519");
 const spki = pair.publicKey.export({ type: "spki", format: "der" }) as Buffer;
@@ -102,10 +102,8 @@ const operatorAtJoin = (port, { headers, agentToken }: any = {}) => new Promise(
 });
 const stored = (W) => { const f = path.join(W, ".operators.json"); return fs.existsSync(f) ? { list: JSON.parse(fs.readFileSync(f, "utf8")).operators, mode: fs.statSync(f).mode & 0o777 } : null; };
 const replies = [];   // every reply body, to look for the token in
-const WIN = process.platform === "win32";
-/** The stored file is private: 0600 where POSIX modes exist; on Windows (no modes on NTFS) a plain file, no temp left beside it. */
-const privately = (W, st) => { const f = path.join(W, ".operators.json");
-  return WIN ? fs.lstatSync(f).isFile() && !fs.readdirSync(W).some((n) => /^\.operators\.json\.[0-9a-f]+\.tmp$/.test(n)) : st?.mode === 0o600; };
+/** The stored file is a plain file with no temp left beside it (its 0600 is a mode() row: not applicable on Windows). */
+const plainFile = (W) => fs.lstatSync(path.join(W, ".operators.json")).isFile() && !fs.readdirSync(W).some((n) => /^\.operators\.json\.[0-9a-f]+\.tmp$/.test(n));
 const modeOf = (f) => fs.statSync(f).mode & 0o777;
 /** Run the setup page's script against a fake location: what it posted (null: nothing) and what it said. */
 async function runPage(html, { hash = "", search = "" }) {
@@ -139,7 +137,8 @@ const t1 = tokenOf(s.log());
   const claim = await post(s.port, { token: t1 }, cookie(ANN)); replies.push(claim.text);
   const j = JSON.parse(claim.text || "{}"), st = stored(W1), after = await operatorAtJoin(s.port, { headers: cookie(ANN) });
   ok(claim.status === 200 && j.words === "You're this server's operator." && j.account === "human:test:ann", "SU3 …and then a signed-in person's claim works: \"You're this server's operator.\"", claim);
-  ok(JSON.stringify(st?.list) === JSON.stringify(["human:test:ann"]) && privately(W1, st), "SU3 the operator is stored in <worlds>/.operators.json, 0600 (Windows: a plain file, no temp left)", st);
+  ok(JSON.stringify(st?.list) === JSON.stringify(["human:test:ann"]) && plainFile(W1), "SU3 the operator is stored in <worlds>/.operators.json, a plain file with no temp left", st);
+  mode("SU3b …and it is 0600", path.join(W1, ".operators.json"), 0o600);
   ok(before === false && after === true, "SU3 isOperator is live: the same session's old-world join said not-operator before the claim, operator after (no restart)", { before, after });
   const again = await post(s.port, { token: t1 }, cookie(BEA)), page = await get(s.port), none = await missing(s.port); replies.push(again.text);
   ok(again.status === 404 && page.status === 404 && again.text === none.text && page.text === none.text && JSON.stringify(stored(W1)?.list) === JSON.stringify(["human:test:ann"]) && (await operatorAtJoin(s.port, { headers: cookie(BEA) })) === false,
@@ -226,22 +225,25 @@ for (const [tag, bearer] of [["w20", "tok-rowan"], ["w21", "tok-nobody"]]) {   /
 }
 
 // ---- a planted symlink beside the operators file (SU9) ----
-if (!canLinkFiles()) console.log("  SKIP SU9 (both rows): file symlinks need Developer Mode on Windows, so the planted link can't be made here");
+if (!canLinkFiles()) for (const r of ["SU9 a planted .operators.json.tmp symlink is never followed", "SU9 a symlinked .operators.json is refused"])
+  na(r, "file symlinks need Developer Mode on Windows, so the planted link can't be made here");
 else {
 { const W = worldsDir("w10"), victim = path.join(root, "victim-tmp"); fs.writeFileSync(victim, "victim\n", { mode: 0o644 });
   linkFile(victim, path.join(W, ".operators.json.tmp")); const vmode = modeOf(victim), a = await start(W);
   const claim = await post(a.port, { token: tokenOf(a.log()) }, cookie(ANN)), st = stored(W);
-  ok(claim.status === 200 && fs.readFileSync(victim, "utf8") === "victim\n" && modeOf(victim) === vmode && (WIN || vmode === 0o644) && !fs.lstatSync(path.join(W, ".operators.json")).isSymbolicLink()
-    && fs.lstatSync(path.join(W, ".operators.json.tmp")).isSymbolicLink() && JSON.stringify(st?.list) === JSON.stringify(["human:test:ann"]) && privately(W, st),
-    "SU9 a planted .operators.json.tmp symlink is never followed: the claim stores a fresh 0600 file, the symlink's target untouched", { claim, st, victim: fs.readFileSync(victim, "utf8") });
+  ok(claim.status === 200 && fs.readFileSync(victim, "utf8") === "victim\n" && modeOf(victim) === vmode && !fs.lstatSync(path.join(W, ".operators.json")).isSymbolicLink()
+    && fs.lstatSync(path.join(W, ".operators.json.tmp")).isSymbolicLink() && JSON.stringify(st?.list) === JSON.stringify(["human:test:ann"]) && plainFile(W),
+    "SU9 a planted .operators.json.tmp symlink is never followed: the claim stores a fresh file, the symlink's target untouched", { claim, st, victim: fs.readFileSync(victim, "utf8") });
+  mode("SU9b …the fresh file is 0600", path.join(W, ".operators.json"), 0o600); mode("SU9b …and the target keeps its 0644", victim, 0o644);
   await a.stop(); }
 { const W = worldsDir("w11"), victim = path.join(root, "victim-target"), body = JSON.stringify({ operators: [] }); fs.writeFileSync(victim, body, { mode: 0o644 });
   linkFile(victim, path.join(W, ".operators.json")); const vmode = modeOf(victim), a = await start(W);
   const claim = await post(a.port, { token: tokenOf(a.log()) }, cookie(ANN));
-  const got = { status: claim.status, link: fs.lstatSync(path.join(W, ".operators.json")).isSymbolicLink(), body: fs.readFileSync(victim, "utf8") === body, mode: modeOf(victim) === vmode && (WIN || vmode === 0o644),
+  const got = { status: claim.status, link: fs.lstatSync(path.join(W, ".operators.json")).isSymbolicLink(), body: fs.readFileSync(victim, "utf8") === body, mode: modeOf(victim) === vmode,
     op: await operatorAtJoin(a.port, { headers: cookie(ANN) }), said: /symlink/.test(a.log()) };
   ok(got.status === 500 && got.link && got.body && got.mode && got.op === false && got.said,
     "SU9 a symlinked .operators.json is refused (not stored, not operator, the console says why), the link and its target unchanged", { got, log: a.log().slice(-300) });
+  mode("SU9b …and that target keeps its 0644", victim, 0o644);
   await a.stop(); }
 }
 
@@ -255,5 +257,4 @@ else {
 { const p = freePort(8968, 5, 8968); ok(p !== 8968 && p !== 8970 && p > 8968, "SU12 freePort skips the live sequencers' ports 8968 and 8970", p);
   const p2 = freePort(8970, 5, 8970); ok(p2 !== 8970 && p2 > 8970, "SU12b …from a window that starts on 8970 too", p2); }
 
-console.log(`[setup-check] ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+done();
