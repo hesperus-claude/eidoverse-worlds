@@ -37,6 +37,7 @@ function worker() {
  *  silently 404 there. */
 function wasmBundle(wasmPaths) {
   return {
+    // piper-tts-web 1.0.4's hashed chunk: client/package.json pins that version exactly
     js: new URL('../node_modules/@mintplex-labs/piper-tts-web/dist/piper-o91UDS6e.js',
                 import.meta.url).href,
     wasm: new URL(wasmPaths.piperWasm, location.href).href,

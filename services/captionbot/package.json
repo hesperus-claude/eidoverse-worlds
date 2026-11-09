@@ -1,6 +1,7 @@
 {
   "name": "eido-captionbot",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "description": "The projector's captioner: stream audio → VAD + STT → a bounded captions comp on the screen entity (voicebot run backwards)",
   "scripts": {
