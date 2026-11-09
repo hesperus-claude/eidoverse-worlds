@@ -1,25 +1,11 @@
 // buildcheck-queue — the sequencer's side of the build check: one check at a time, each in its own process
-// (server/buildcheck-run.ts), cached by what was checked.
-//
-// Reports are cached in memory and on disk (OPT_DIR/checks/), keyed by the model's BYTES (a digest), the scale and
-// CHECK_VERSION. The digest is remembered per path against size, mtime, ctime and inode (restoring an mtime moves the
-// ctime, so it can't fake that). Concurrent asks for one check share the run.
-//
-// The door is public (GET /check), so everything it can grow is bounded:
-//   · new work is granted per address and for the whole process (server/ratewindow.ts, the heightmap
-//     export's gate) — a cached answer, or one already running, is never refused;
-//   · the queue holds at most checkConfig.queueMax waiting jobs (and queueBytes of snapshots); past that a
-//     check is refused 503 in words;
-//   · snapshots are written at enqueue (a queued check runs on exactly the bytes that were asked about,
-//     never on the source reopened later) but ONE per distinct model — named by its digest and shared by
-//     every scale and job of it, deleted when the last of them is done. Scales are parameters, not files;
-//   · reports are kept LRU in memory (memoMax); on disk the oldest-written past diskMax are pruned.
-// Scale is NOT bucketed coarser than 0.01: the check's verdicts are thresholds on scaled geometry (a
-// doorway against the body's width, a riser against its step), so a bucket would answer for a scale the
-// thing isn't placed at, and flip a verdict near its edge. The gate above bounds the cost instead.
-//
-// The worker is owned to the end: output drained (stdout capped, stderr's tail kept), SIGTERM at the timeout, SIGKILL
-// after a grace, and the queue moves on even if it is never seen to exit.
+// (server/buildcheck-run.ts). Reports are cached in memory and on disk (OPT_DIR/checks/), keyed by the model's digest, the scale
+// and CHECK_VERSION; concurrent asks for one check share the run.
+// The door is public (GET /check), so everything it can grow is bounded: new work is granted per address and per process
+// (server/ratewindow.ts), the queue holds at most queueMax jobs and queueBytes of snapshots, and reports are kept LRU.
+// A queued check runs on a snapshot of exactly the bytes asked about, one per distinct model. Scale is keyed to 0.01, not
+// bucketed coarser: the verdicts are thresholds on scaled geometry, and a bucket would flip one near its edge.
+// The worker is owned to the end: output drained, SIGTERM at the timeout, SIGKILL after a grace.
 
 import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -27,8 +13,7 @@ import { OPT_DIR, ROOT } from "./config.ts";
 import { atomicWrite } from "./fsutil.ts";
 import { windowLimiter } from "./ratewindow.ts";
 
-/** Bump when what a check finds changes (server/buildcheck.ts, the navgrid
- *  moves it walks, the collider rules): stored reports from before are stale. */
+/** Bump when what a check finds changes (server/buildcheck.ts, the navgrid, the collider rules): stored reports from before are stale. */
 export const CHECK_VERSION = 4;   // 4: the walking body is MOVER.body (radius 0.2, was 0.32)
 /** The worker and its limits; tests swap the runner for a misbehaving one. */
 export const checkConfig = {
@@ -174,9 +159,7 @@ function cached(key: string): unknown {
   return undefined;
 }
 
-/** Read a stream to its end, keeping at most `cap` bytes (the head, or with
- *  `tail` the last ones) — always draining, so the writer never blocks on a
- *  full pipe. */
+/** Read a stream to its end, keeping at most `cap` bytes (the head, or with `tail` the last ones); always draining, so the writer never blocks. */
 async function drain(stream: ReadableStream<Uint8Array>, cap: number, tail = false): Promise<{ text: string; over: boolean }> {
   const parts: Uint8Array[] = [];
   let kept = 0, over = false;

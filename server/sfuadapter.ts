@@ -26,7 +26,7 @@ export function sfuState(world: string): SfuWorldState {
   let s = worlds.get(world);
   if (!s) {
     s = {
-      // the incarnation is opaque, NOT monotonic (amendment 2), and durable across restarts (transport.ts)
+      // the incarnation is opaque, not monotonic, and durable across restarts (transport.ts)
       incarnation: currentIncarnation(),
       sfu: new Sfu({ onNegotiationNeeded: (legId) => {
         const send = senders.get(wkey(world, legId));
@@ -66,8 +66,7 @@ export function mintSfuCredential(world: string, id: string, primaryGen: number,
   // create the actual leg: a bookkeeping record of a peer connection is not one
   s.sfu.createLeg(id, mediaGen);
   applyStandingConsent(s, id);   // consent given before this leg existed still counts
-  // world/id/primaryGen ride along so the client can PRESENT the full claim set (amendment 1): admitParticipant
-  // checks world, id, primaryGen, mediaGen and incarnation before the nonce
+  // world/id/primaryGen ride along so the client presents the full claim set: admitParticipant checks them all before the nonce
   return { nonce, incarnation: s.incarnation, identity: relayIdentity(id, mediaGen),
            world, id, primaryGen, mediaGen,
            transport: "sfu" as const, iceServers: iceServers() };
@@ -163,7 +162,7 @@ function applyStandingConsent(s: SfuWorldState, newLegId: string) {
   }
 }
 
-/** Moderator mute: not consent (amendment 3); enforced at the SOURCE, so one call silences a speaker for everyone. */
+/** Moderator mute: not consent; enforced at the source, so one call silences a speaker for everyone. */
 export function setSfuModeratorMute(world: string, speakerId: string, mutedFlag: boolean) {
   // ONE STORE: the SFU enforces the mute, so the SFU owns the fact; sfuDiag reads it back through diag().muted
   sfuState(world).sfu.setMuted(speakerId, mutedFlag);
@@ -200,7 +199,7 @@ export function sfuDiag(world: string) {
   return {
     ...d,
     transport: "sfu", active: true, incarnation: s.incarnation,
-    // voice service state must be observable (A2), and /relay-diag is where an operator looks
+    // voice service state must be observable, and /relay-diag is where an operator looks
     service: voiceServiceState(),
     moderatorMuted: d.muted,          // one store, read back from the enforcement point
     deafened: d.deafened,
@@ -228,7 +227,7 @@ export async function sfuNegotiate(world: string, legId: string,
     for (const speakerId of s.sfu.routesFor(legId)) send({ type: "sfu-route", speaker: speakerId });
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    // ask for in-band FEC explicitly (#104 §8 item 4): a default is not a contract; the client measures fecPacketsReceived
+    // ask for in-band FEC explicitly: a default is not a contract; the client measures fecPacketsReceived
     // a leg retired while the offer was being made (revokeSfuLeg cleared its resolver before this await returned), or
     // re-minted under the same id: no offer to a dead leg, no stale offer to its successor, no resolver left behind
     if (s.sfu.getLeg(legId)?.pc !== pc) throw new Error(`leg ${legId} retired mid-negotiation`);
@@ -249,7 +248,7 @@ export async function sfuNegotiate(world: string, legId: string,
 }
 
 export function sfuAcceptAnswer(world: string, legId: string, sdp: string, claimedGen?: number) {
-  // an answer must name its leg's current generation (A2); required, not opt-in: a stale predecessor would omit it
+  // an answer must name its leg's current generation; required, not opt-in: a stale predecessor would omit it
   if (claimedGen == null) {
     console.warn(`[sfu] answer for ${legId} names no generation — dropped`);
     return;

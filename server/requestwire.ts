@@ -1,17 +1,9 @@
 // server/requestwire.ts — the ws messages that reach a world's authority. server.ts consults this table first.
-//
-//   request {type: "request", id, verb, args} → {type: "reply", id, verb, ok, reply}, reply = the authority's own answer
-//           (kept whole under `reply`: an authority reply has fields of its own, such as inspect's `id`). Any request
-//           (create, set, delete, place, batch, use, say, undo, publish, update, grab/put/throw/move/drop/wait, and the
-//           reads look/inspect/measure/find/lint/history/schema/help). The asker is stamped from the connection
-//           (L4), never read from the payload. Spectators may only read.
-//   world-fork, world-reset
-//           an owner copies the world to a new name, or erases it to zero (archived, founded again by its owners).
-//   world-found
-//           a signed-in person founds a new, empty world they own (server/worldlog.ts foundOwnedWorld: caps and names).
-//
-// Requests from one client run in order: an async warm-up (measuring a model) never lets a later request overtake an
-// earlier one.
+//   request {type: "request", id, verb, args} → {type: "reply", id, verb, ok, reply}, reply = the authority's own answer, whole.
+//           The asker is stamped from the connection, never read from the payload. Spectators may only read.
+//   world-fork, world-reset   an owner copies the world to a new name, or erases it to zero (archived, founded again).
+//   world-found               a signed-in person founds a new, empty world they own (server/worldlog.ts foundOwnedWorld).
+// Requests from one client run in order: an async warm-up never lets a later request overtake an earlier one.
 import { forkWorld, foundOwnedWorld, recheckFix } from "./worldlog.ts";
 import { worldExists, worlds } from "./world.ts";
 import type { Client, World } from "./world.ts";
@@ -44,8 +36,7 @@ export function whois(w: World, args: Any) {
   if (!want && !/^u-[a-z2-7]{20}(?:[a-z2-7]{4})?$/.test(q)) return { ok: false, refused: { code: "shape", reason: `"${q.slice(0, 40)}" has no letters or digits to look up`, fix: "the name someone goes by here, as their nameplate shows it" } };
   const people = [...known].filter((id) => id === q || (dir.nameOf(id) != null && foldName(dir.nameOf(id)!) === want) || (here.has(id) && foldName(here.get(id)!) === want))
     .map((id) => { const k = dir.entry(id)?.kind;
-      // no kind of participant (§6a rule 3): their own declared word while here, else nothing; the account facts (a guest, an
-      // imported name with no account yet) are about the account, never about what holds it
+      // no kind of participant: their own declared word while here, else nothing; the account facts are about the account
       return { id, name: here.get(id) ?? dir.nameOf(id) ?? id, ...(said.has(id) ? { declares: said.get(id) } : {}), ...(k === "anon" ? { guest: true } : k === "imported" ? { imported: true } : {}), role: log.roleOf(id), here: here.has(id), banned: isBanned(log.live, id) }; });
   return { ok: true, name: q, people, ...(people.length ? {} : { note: `nobody called "${q}" has been in this world (it only knows people who were here)` }) };
 }
@@ -86,11 +77,9 @@ export function gagged(c: Client, type: string): boolean {
   const w = c.world; if (!w?.log || !c.actorId || !QUIET.has(type)) return false;
   return type === "caption" && !!w.log.mutedHere(c.actorId);
 }
-/** A guest has no account: a fresh connection is a fresh identity, so a mute on one would be shed by
- *  reconnecting (R 10-07). When a mute lands on a guest present here, it is also filed against their
- *  connection's hashed address in this world (moderation.ts: at most a day, never past its own end), and server.ts gives
- *  it to every new guest from that address at join. Lifting one (unmute) lifts that record. A signed-in
- *  person's identity already carries; nothing is filed for them. `verb` is the authority's act; `actor` the identity that did it. */
+/** A guest has no account, so a mute on one would be shed by reconnecting: it is also filed against their connection's hashed
+ *  address in this world (moderation.ts: at most a day), and server.ts gives it to every new guest from that address at join.
+ *  Lifting one (unmute) lifts that record. `verb` is the authority's act; `actor` the identity that did it. */
 export function guestSanctionByAddress(w: World, actor: string, by: string, verb: string, who: string, reason?: string): string | null {
   const kind = verb === "mute" || verb === "unmute" ? "mute" : null;
   if (!kind || !w.log) return null;
@@ -145,8 +134,8 @@ export const REQUEST_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
     const rid = msg.id ?? null;
     const args = msg.args && typeof msg.args === "object" && !Array.isArray(msg.args) ? msg.args : {};
     const verb = String(msg.verb ?? "");
-    // the envelope carries the transaction outcome too, as `txn` (PROTOCOL §7: committed | rolled-back | ambiguous; ok only
-    // when committed). Never `outcome`: the body verbs' replies already use that word for asked | allowed
+    // the envelope carries the transaction outcome too, as `txn` (spec/PROTOCOL.md §7: committed | rolled-back | ambiguous).
+    // Never `outcome`: the body verbs' replies already use that word
     let answered = false;
     const reply = (r: Any) => { answered = true; ws.send(JSON.stringify({ type: "reply", id: rid, verb, ok: r.ok === true, ...(typeof r?.txn === "string" ? { txn: r.txn } : {}), reply: r })); };
     if (c.spectator && !READS.has(verb)) { reply({ ok: false, refused: { code: "spectator", reason: "spectators may read, not write", fix: "join embodied" } }); return; }
@@ -176,14 +165,13 @@ export const REQUEST_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
       // a guest's sanction is also filed by address, BEFORE the reply: a file that couldn't be written is said in the
       // reply (`warning`) and the moderated line, never swallowed after the ack
       let unsaved: string | null = null;
-      // a guest has no account: a fresh connection is a fresh identity, so its ban (at most a day) also names its
-      // connection's address in this world, or reconnecting would shed it (review 10-07)
+      // a guest's ban (at most a day) also names their connection's address in this world, or reconnecting would shed it
       if (r?.ok && verb === "ban" && typeof args.who === "string") for (const t of w.clients) if (t.actorId === args.who && t.anonymous && t.addr) {
         const until = Math.min(Date.now() + ADDR_BAN_MS, r.until ?? Infinity);
         serverBans[banKey(null, t.addr, w.name)] = { by: c.id, ts: Date.now(), name: t.id, addr: t.addr, until, world: w.name, who: String(args.who), ...(args.reason ? { reason: String(args.reason) } : {}) };
         unsaved ??= saveServerBans();
       }
-      // a guest's mute also names their address here, and its lift lifts that (R 10-07)
+      // a guest's mute also names their address here, and its lift lifts that
       if (r?.ok && ["mute", "unmute"].includes(verb) && typeof args.who === "string" && args.who !== cap.actorId)
         unsaved ??= guestSanctionByAddress(w, cap.actorId, c.id, verb, String(args.who), typeof args.reason === "string" ? args.reason : undefined);
       // an unban also lifts the address entry a guest's ban left
@@ -211,9 +199,8 @@ export const REQUEST_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
           // the moderator's own line carries no warning: their reply said it
           for (const t of w.clients) if (t.actorId !== who) { try { t.ws.send(JSON.stringify({ type: "moderated", verb, by: c.id, text: t === c ? said : text })); } catch { /* gone */ } } }
       }
-      // a ban or kick the authority accepted takes the person out NOW (H4b: a ban used to leave the banned person present,
-      // talking until they chose to leave); a kicked person may come straight back (R 10-28). A guest has no account to ban,
-      // so their ban also names their connection's address in this world for a day (moderation.ts), or they'd reconnect as a fresh guest.
+      // a ban or kick the authority accepted takes the person out now; a kicked person may come straight back. A guest's ban
+      // also names their connection's address in this world for a day (moderation.ts), or they'd reconnect as a fresh guest.
       if (r?.ok && (verb === "ban" || verb === "kick")) {
         const who = String(args.who);
         for (const t of [...w.clients]) if (t.actorId === who) {
@@ -300,7 +287,7 @@ export const REQUEST_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
         if (worlds.get(w.name) === w) worlds.delete(w.name);
         w.broadcast({ type: "world-reset", world: w.name, by: c.id });
         return err("the world was erased (its history is archived), but the server couldn't open the fresh world just now: it opens again from disk at the next join, and if that fails too, ask whoever runs this server (what failed is in its log). There is nothing more to erase right now"); }
-      // what the world does now, and whether to reset again (house 6340433633): world.ts retires a log that was moved aside
+      // what the world does now, and whether to reset again: world.ts retires a log that was moved aside
       else return err(e?.logMoved
         ? "the reset failed partway: the world's old log was moved aside (the server's log says where), so this world takes no writes until the server's operator puts it back. Resetting again is safe: it finishes the erase, and the old log stays in the archive this attempt made"
         : `the reset failed and the world's log is where it was, so the world goes on as before: ${String(e?.message ?? e)}`); }

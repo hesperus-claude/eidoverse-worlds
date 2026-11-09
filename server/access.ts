@@ -1,15 +1,15 @@
-// WORLD ACCESS: who may come in, decided by the world (docs/decisions/WORLD-ACCESS.md). The facts are the world's own
-// components, read by one pure function both the server and the client import (shared/protocol/access.js):
+// World access: who may come in, decided by the world (docs/decisions/WORLD-ACCESS.md). The facts are the world's own
+// components, read by one pure function the server and the client share (shared/protocol/access.js):
 //   @world.access {join: anyone|signed-in|listed, watch?: "anyone", max?, soft?, minAccountDays?}
 //   @world.default-role, roles:<id> {role, …, until?}
-// This module is the one place every DOOR asks:
-//   entryFor      — the decision for a connection or an HTTP caller: bans → kick → operator / moderation powers →
-//                   the world's access (shared entryOf) → account age → capacity (embodied joins only)
-//   httpCaller    — who is asking over HTTP (cookie session, or a bearer the door takes)
-//   doorFor       — a world's door, read from disk when the world isn't loaded (a /worlds listing never loads one)
-//   settleAccess  — after roles or access change: remove whoever may no longer stay (4010)
-//   sweepAccess   — timed grants: warn five minutes out, then the authority writes the end (expire-roles) and settle
-// It never imports server.ts: the session's expel is injected by the caller. Not carried over from upstream: see the doc.
+// Every door asks here:
+//   entryFor      the decision for a connection or an HTTP caller: bans → kick → operator / moderation powers → the
+//                 world's access (shared entryOf) → account age → capacity (embodied joins only)
+//   httpCaller    who is asking over HTTP (cookie session, or a bearer the door takes)
+//   doorFor       a world's door, read from the index when the world isn't loaded (a /worlds listing never loads one)
+//   settleAccess  after roles or access change: remove whoever may no longer stay (4010)
+//   sweepAccess   timed grants: warn five minutes out, then the authority writes the end (expire-roles) and settle
+// Never imports server.ts: the session's expel is injected by the caller.
 
 import { WORLDS_DIR, JOIN_TOKEN } from "./config.ts";
 import { serverBans, findBan, doorLocked, LOCKED_WHY } from "./moderation.ts";
@@ -72,12 +72,9 @@ export function doorFor(name: string): Door | null {
   return live ? doorOfWorld(live) : doorOfEntry(name, e);
 }
 
-/** Who goes past this door whatever it says: operators, and owners and holders of a moderation power (what @world.access
- *  always said). The one reading for entryFor and discoverable. The bypass is for people this world LISTS (an explicit role
- *  row): a power handed to everyone through default-role or role-defs must not open an invite-only door (final review M1,
- *  10-18); an ended timed grant is absent at `now` (security review 10-18 M6): the door reads it as not listed, loaded or not,
- *  before the authority's sweep writes its end (expire-roles), so an unloaded world's HTTP reads and a join don't honour it
- *  indefinitely. */
+/** Who goes past this door whatever it says: operators, and owners and holders of a moderation power. Only people this
+ *  world lists (an explicit role row): a power handed out through default-role or role-defs must not open an invite-only
+ *  door. An ended timed grant is absent at `now`, before the authority's sweep writes its end. */
 function bypassOf(wc: Record<string, any>, account: string | null, actorId: string | null, now: number): { listed: boolean; bypass: boolean } {
   const eff = actorId ? effectiveOf(wc, actorId, { anon: !account }) : null;
   const listed = !!actorId && listedIn(wc, actorId, now);
@@ -122,14 +119,12 @@ export function discoverable(door: Door | null, who: Who | null, now = Date.now(
   const { bypass } = bypassOf(door.wc, account, actorId, now);
   return entryOf(door.wc, { actor: actorId ?? undefined, anon: !account, bypass, trustedRenderer: !!who?.trustedRenderer }, door.name, now).may !== "none";
 }
-// ---- what a name is to someone (§F F-3: no existence oracle; Mica 11-05, #23 rulings 4 and "timing oracle") ----
-/** What `who` may be told about `name`: `door` (a saved world discoverable to them), `interrupted` (an in-place conversion
- *  stopped mid-swap) or `old` (saved in an older format), else `unavailable`, what a missing world gets. Decided from the
- *  access index (worldindex.ts lookup: the same calls for every name, no world opened): the two diagnoses go only to the
- *  operator and, for an old world, its recognised owner (worldindex.ts ownerIn, from the owners the entry holds: no log
- *  read, no CLI). Anyone else gets `unavailable` from the same lookup, as a missing name does. `proven` is the account a
- *  credential proved (upgrade.ts provenWho), never a typed name. A Promise only while an old world's owners are still being
- *  read (it appeared or changed a moment ago). */
+// ---- what a name is to someone (no existence oracle) ----
+/** What `who` may be told about `name`: `door` (a saved world discoverable to them), `interrupted` (a conversion stopped
+ *  mid-swap) or `old` (an older format), else `unavailable`, what a missing world gets. Decided from the access index
+ *  (worldindex.ts lookup: the same calls for every name, no world opened); the two diagnoses go only to the operator and,
+ *  for an old world, its recognised owner (worldindex.ts ownerIn). `proven`: the account a credential proved, never a typed
+ *  name. A Promise only while an old world's owners are still being read. */
 export type Told = { kind: "door"; door: Door } | { kind: "unavailable" } | { kind: "interrupted" }
   | { kind: "old"; old: OldWorld; operator: boolean; owner: "bound" | "name" | null; ownerName?: string };
 export function toldOf(name: string, who: Who | null, proven: { account: string; name: string } | null = null): Told | Promise<Told> {
@@ -159,13 +154,12 @@ export function youAt(door: Door, who: Who | null): { you: "enter" | "watch" | "
   return { you: watch ? "none" : "watch", why: embody.why };
 }
 
-/** Who is asking, over HTTP: the session cookie the join takes (auth.ts sessionOfRequest), or an `Authorization: Bearer` credential the
- *  join door takes (an enrolled agent's bearer, an aid1 agent credential). Null = anonymous (a JOIN_TOKEN bearer proves
- *  the door key, not who). Never the URL: credentials in query strings end up in logs. The cookie wins here; the join and
- *  setup take an explicit credential over it — either way one the sender holds (#260 bot 4). */
+/** Who is asking, over HTTP: the session cookie the join takes (auth.ts sessionOfRequest), or an `Authorization: Bearer`
+ *  credential the join door takes. Null = anonymous (a JOIN_TOKEN bearer proves the door key, not who). Never the URL:
+ *  credentials in query strings end up in logs. The cookie wins here; the join and setup take an explicit credential over it. */
 export function httpCaller(req: Request): Who | null {
   const s = sessionOfRequest(req);
-  if (s && (s.scopes.includes("worlds:join") || s.scopes.includes("worlds:spectate"))) return whoAccount(s.sub);   // one sign-in, every world (main #255: a session's old nativeWorld no longer narrows it)
+  if (s && (s.scopes.includes("worlds:join") || s.scopes.includes("worlds:spectate"))) return whoAccount(s.sub);   // one sign-in, every world
   return bearerCaller(req) ?? null;
 }
 /** The account and credential name an HTTP caller proves (httpCaller's, with the name an old world's owner check reads). */
@@ -189,7 +183,7 @@ export const bearerOf = (req: Request): string => /^Bearer\s+(\S+)$/i.exec(req.h
 /** A request's hashed address (never kept raw), as a guest's ban names it: the upgrade and the HTTP reads hash alike. */
 export const hashedAddress = (req: Request, srv?: Parameters<typeof addressOf>[1]) =>
   new Bun.CryptoHasher("sha256").update(`eidoverse-addr:${addressOf(req, srv)}`).digest("hex").slice(0, 24);
-/** Who a read is for: the caller, else a guest at their hashed address, so a guest's address ban holds at the reads (#260 bot 5). */
+/** Who a read is for: the caller, else a guest at their hashed address, so a guest's address ban holds at the reads. */
 export function httpVisitor(req: Request, srv?: Parameters<typeof addressOf>[1]): Who {
   return httpCaller(req) ?? { account: null, addr: hashedAddress(req, srv) };
 }
@@ -236,7 +230,7 @@ export function sweepAccess(worlds: Iterable<World>, expel: Expel, now = Date.no
     }
     const ended = w.log.expireRoles();
     if (ended.length) console.log(`[world:${w.name}] timed grant(s) ended: ${ended.join(", ")}`);
-    // a world without custody can't log the end, but the door already reads it as over: settle anyway (#260 bot 14)
+    // a world without custody can't log the end, but the door already reads it as over: settle anyway
     if (ended.length || timedGrants(wc).some((g: { until: number }) => g.until <= now)) settleAccess(w, expel, now);
   }
   if (warned.size > 4096) warned.clear();

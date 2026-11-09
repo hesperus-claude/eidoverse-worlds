@@ -1,12 +1,6 @@
-// eidoverse-worlds sequencer — the world itself.
-//
-// A World is one world as this server holds it: its log (server/worldlog.ts WorldLog: the authority over the world's
-// directory) and the embodied plane in flight (connected clients, the dirty-pose batch, stage-frame bookkeeping, never
-// persisted). Every world this server serves speaks the current protocol: a directory that holds only an old log (the first
-// protocol's log.jsonl) is refused at open, with the command that translates it (tools/import-v1/, run once by the
-// operator).
-// The registry (getWorld/worldExists/worlds) lives here too; the boot sweep that wakes scripted worlds stays in
-// server.ts — waking scripted worlds with the server is boot policy, not world mechanics.
+// The world itself: its log (server/worldlog.ts WorldLog, the authority over the world's directory) and the embodied plane in
+// flight (connected clients, the dirty-pose batch, stage-frame bookkeeping; never persisted). A directory holding only an old
+// log is refused at open with the command that translates it. The registry (getWorld/worldExists/worlds) lives here too.
 
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -18,8 +12,7 @@ import { gateReach } from "./reachgate.ts";
 import { WORLD_NAME_RE } from "./limits.ts";
 import { accessTrace } from "./worldindex.ts";
 
-// The settle rule (what a pose looks like TO SOMEONE ELSE) lives in server.ts, where source-text gates pin it (§15.1);
-// the log needs it for rememberPose, so it arrives by injection at boot.
+// The settle rule (what a pose looks like to someone else) lives in server.ts; the log needs it for rememberPose, so it is injected at boot.
 let settle: (pose: unknown) => Record<string, unknown> | null = () => {
   throw new Error("settledPose not wired — server.ts wires it at boot");
 };
@@ -49,14 +42,12 @@ export type Client = {
   sfuMuted?: boolean; sanctionKey?: string;
   tokenVerified?: boolean; // this leg presented the identity's own bearer at join
   trustedRenderer?: boolean; // a renderer that presented RENDERER_TOKEN: may watch any world (access.ts)
-  auxBound?: boolean;  // this aux leg is bound to the primary's identity authority (token bearer OR matching login sub) — the B1 admission result, reused by the B3 attest gate
-  gen?: number;        // surfaceSession: server-issued transport epoch for THIS leg, monotonic, never reused; a superseded gen's rtc/attestation messages are refused (takeover retires the GENERATION, not just the socket)
+  auxBound?: boolean;  // this aux leg is bound to the primary's identity (token bearer or matching login sub)
+  gen?: number;        // this leg's transport epoch, monotonic, never reused; a superseded gen's rtc/attestation messages are refused
   legGen?: number;     // this leg's WORLD-scoped generation (World.legGen): survives sequencer restarts, rides caption entries
   presenceSession?: string; // `session` on arrive and snapshot.present: the joining page's id, else a token for this leg (server.ts presenceSession)
-  surface?: string;    // (name, surface) session model: "world" = the embodied primary (default);
-                       // anything else = an auxiliary media leg (voice, vr-hands, …) — invisible,
-                       // poseless, log-mute, rtc-capable, and REAPED when its primary dies.
-                       // Per-surface last-writer-wins (prior art: Discord voice legs, XMPP resources).
+  surface?: string;    // "world" = the embodied primary (default); anything else is an auxiliary media leg (voice, vr-hands, …):
+                       // invisible, poseless, log-mute, rtc-capable, reaped when its primary dies. Per-surface last-writer-wins.
   renderer?: boolean;  // an invisible browser renderer (legacy): donates rendering for its world
   roam?: boolean;      // a renderer the screenshot broker may send to any world that has none (screenshots.ts)
   capture?: import("./screenshots.ts").CaptureCapability; // opt-in embodied/native donor
@@ -124,8 +115,8 @@ export class World {
       c.lastPose = p as Client["lastPose"]; this.dirty.set(c.id, p);   // the next frame carries the pose without the hand
     }
   }
-  /** Speech is arrival-only (R 10-18): the world's log keeps every say, people receive speech only for the time they were
-   *  present, and only an ADMIN reads the master log's speech back: the owner and anyone holding readChat (AGENTS.md catch_up); a server operator only by a role here. */
+  /** Speech is arrival-only: the log keeps every say, people receive speech only for the time they were present, and only
+   *  whoever holds readChat (owners always) reads it back (AGENTS.md catch_up). */
   /** who reads speech back past their own arrival: whoever holds the readChat permission (owners hold every one) */
   isAdmin(c: Client): boolean { return !!c.actorId && this.log.may(c.actorId, "readChat"); }
   /** The log seq at or below which this identity may not read a say back: null for an admin (no floor), else the
@@ -215,15 +206,14 @@ export class World {
 
 export const worlds = new Map<string, World>();
 
-// a function DECLARATION on purpose (§15.1): module-scope callers rely on hoisting
-/** Does this world exist (in memory or on disk) WITHOUT creating it? getWorld() founds on miss; founding is not joining
- *  (RFC-005 §3.2.7). The same test forkWorld uses to refuse an occupied name. */
+// a function declaration on purpose: module-scope callers rely on hoisting
+/** Does this world exist (in memory or on disk) without creating it? getWorld() founds on miss. The same test forkWorld uses. */
 export function worldExists(name: string): boolean {
   if (!WORLD_NAME_RE.test(name)) return false;
   return worlds.has(name) || worldDirNamed(name);
 }
-/** Is there a world directory spelled exactly `name`? On a case-insensitive filesystem existsSync finds "commons" for
- *  "Commons", and a second World over one log is a second authority (#260 bot 17): a name is served in its own case only. */
+/** Is there a world directory spelled exactly `name`? A case-insensitive filesystem finds "commons" for "Commons", and a
+ *  second World over one log is a second authority: a name is served in its own case only. */
 export function worldDirNamed(name: string): boolean {
   if (!existsSync(join(WORLDS_DIR, name))) return false;
   const now = Date.now();   // the listing is kept 5 s; a miss re-lists, so a new world is known at once (was routes.ts knownWorld)
