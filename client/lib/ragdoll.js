@@ -1,34 +1,16 @@
-// ragdoll — a body going limp, simulated by ONE machine and streamed.
+// ragdoll — a body going limp, simulated by ONE machine (the body's owner) and streamed.
 //
-// The sync model is the whole point, and it is not "make physics
-// deterministic" — that is unwinnable across machines. It is single authority:
+// Single authority, not determinism: the owner streams the resulting sparse bone rotations through the presence
+// `pose` field (the channel a held pose already uses, so remotes need no new receiver code), and when it settles,
+// captures the final bones as a held pose, so a late joiner gets the settled result, never a replay. The server
+// never simulates and never sees a bone.
 //
-//   * Only the body's OWNER simulates (the VRChat model the design mandates:
-//     you own your avatar). Nobody else runs physics.
-//   * The owner streams the resulting sparse bone rotations through the
-//     presence `pose` field — the exact channel a held pose already uses, so
-//     remotes render a ragdoll with zero new receiver code: it is just a pose
-//     that changes every frame.
-//   * When it settles, the owner CAPTURES the final bones as a held pose. That
-//     rides lastPose, so a late joiner or a reconnect gets the settled RESULT,
-//     never a replay of the tumble. If it should be permanent, the same bones
-//     commit as a `pose` verb into the log.
+// The simulator is a Verlet particle skeleton with MASS (constraints split by inverse mass), VOLUME (bones are
+// capsules), HANDEDNESS (knees and elbows bend one way, from a body frame the particles supply: _frame) and a FIXED
+// STEP (so the physics is not a function of framerate). Everything anatomical is measured from the rig at
+// construction, because the shipped avatars disagree about nearly everything.
 //
-// So physics lives on the presence plane (lossy, ephemeral, one authority) and
-// its outcome becomes state. The server never simulates and never sees a bone.
-//
-// The simulator is a Verlet particle skeleton — small, stable, and more than
-// convincing enough for a cosmetic flop; not a jointed rigid-body solver. It
-// carries four things: MASS (constraints split by inverse mass, so heavy parts
-// win), VOLUME (bones are capsules, not beads), HANDEDNESS (knees and elbows
-// bend one way, from a body frame the particles supply: _frame), and A FIXED
-// STEP (Verlet's inertia term is a position delta, so raw frame time makes the
-// physics a function of framerate). Everything anatomical is MEASURED from the
-// rig at construction, because the shipped avatars disagree about nearly
-// everything.
-//
-// The reasons and the numbers behind the rules below: docs/research/verlet-ragdoll.md
-// (cited as verlet-ragdoll.md §N).
+// The reasons and numbers behind the rules: docs/research/verlet-ragdoll.md (cited as verlet-ragdoll.md §N).
 
 import { THREE } from './core.js';
 import { BEHIND, CONE, HINGE, TWIST, TWIST_PARENT, RADIUS_FRAC, torsoRadius } from '../../shared/joints.js';
@@ -46,21 +28,17 @@ import { BodyEngineBase } from './bodyengine.js';
 const CHAINS = SEGMENTS;
 export { JOINTS, DRIVEN_BONES, closestParams };
 
-// BONES are the segments that have physical volume — the things that collide
-// and the things a viewer sees. hips->upperLeg and chest->upperArm are bones
-// here even though no CHAIN drives them; on rigs with an upperChest/shoulder
-// pair goLimp neutralizes the in-between bones first (avatar.js setLimp) so
-// the span is rigid, as this model assumes.
+// BONES are the segments with physical volume (they collide and are seen). hips->upperLeg and chest->upperArm are
+// bones though no chain drives them; avatar.js setLimp neutralizes any upperChest/shoulder in between so the span
+// is rigid, as this model assumes.
 const BONES = [
   ...CHAINS,
   ['hips', 'leftUpperLeg'], ['hips', 'rightUpperLeg'],
   ['chest', 'leftUpperArm'], ['chest', 'rightUpperArm'],
 ];
 
-// BRACES carry no volume and are never drawn or collided: they truss the trunk
-// so it behaves like one body that limbs hang off, instead of a noodle that
-// shears and folds. Their rest lengths must come from the NEUTRAL pose (the
-// `rest` constructor argument): a diagonal's length changes with the pose.
+// BRACES carry no volume and are never drawn or collided: they truss the trunk into one body the limbs hang off.
+// Their rest lengths come from the NEUTRAL pose (the `rest` constructor argument): a diagonal changes with the pose.
 const BRACES = [
   ['leftUpperArm', 'rightUpperArm'],     // shoulder bar
   ['leftUpperLeg', 'rightUpperLeg'],     // pelvis bar
@@ -69,9 +47,7 @@ const BRACES = [
 ];
 const LINKS = [...BONES, ...BRACES];
 
-// Relative mass per joint. Only ratios matter — every constraint splits by
-// inverse mass, so these decide who moves when two parts disagree. Roughly
-// anatomical: the pelvis and chest are the body, everything else hangs off them.
+// Relative mass per joint (only ratios matter): the pelvis and chest are the body, everything else hangs off them.
 const MASS = {
   hips: 12, spine: 8, chest: 10, neck: 2, head: 5,
   leftUpperArm: 2.5, rightUpperArm: 2.5,
@@ -229,19 +205,12 @@ function twistAbout(q, axis) {
 
 export class Ragdoll extends BodyEngineBase {
   /** @param avatar   the OWNER's Avatar.
-   *  @param lean     optional topple velocity in m/s — see below.
-   *  @param rest     optional map joint -> neutral-rest WORLD position, from
-   *                  Avatar.restBonePositions(). It must be captured with the
-   *                  root where it is NOW: everything else read out of it is a
-   *                  difference and so translation-free, but hipsOffset is the
-   *                  pelvis's height above the ROOT, and a snapshot taken at a
-   *                  different root height is wrong by exactly that difference.
-   *  @param seedVel  optional map joint -> velocity (m/s), to inherit motion
-   *                  from a sim being replaced mid-flight. Everything anatomical is
-   *                  measured against THIS, not against the live skeleton: a
-   *                  body that goes limp mid-stride must not inherit the
-   *                  stride's angles as its idea of "rest", or its knees adopt
-   *                  the walk cycle's bend as their zero. */
+   *  @param lean     optional topple velocity in m/s (see _topple).
+   *  @param rest     optional map joint -> neutral-rest WORLD position (Avatar.restBonePositions()), captured with
+   *                  the root where it is NOW: hipsOffset is the pelvis's height above the root. Every limit is
+   *                  measured against this, not the live skeleton, or a body limp mid-stride takes the stride's
+   *                  angles as its zero.
+   *  @param seedVel  optional map joint -> velocity (m/s), to inherit motion from a sim replaced mid-flight. */
   constructor(avatar, lean = null, rest = null, seedVel = null) {
     super(avatar);                    // lifecycle fields — see bodyengine.js
     this.acc = 0;
@@ -260,15 +229,12 @@ export class Ragdoll extends BodyEngineBase {
       this.nodes[j] = node;
       const wp = node.getWorldPosition(new THREE.Vector3());
       this.p[j] = wp.clone();
-      // A sim built mid-motion must INHERIT that motion: Verlet keeps velocity
-      // in p - prev, and a fresh sim (prev = p) is a body at a dead stop.
+      // a sim built mid-motion inherits it: Verlet keeps velocity in p - prev
       const v = seedVel?.get?.(j) ?? (seedVel && !seedVel.j ? seedVel[j] : null);
       this.prev[j] = v ? wp.clone().addScaledVector(v, -FIXED_DT) : wp.clone();
       this.pre[j] = wp.clone();      // step-start position, for the settle test
     }
-    // A handover snapshot outranks the bones: it is where the particles
-    // actually were, at what speed. Applied after the bone read so a caller
-    // with no snapshot still works.
+    // a handover snapshot outranks the bones: where the particles actually were, at what speed
     if (seedVel?.j) {
       for (const s of seedJoints(seedVel)) {
         if (!this.p[s.name]) continue;
@@ -285,16 +251,11 @@ export class Ragdoll extends BodyEngineBase {
       this.rest[j] = (rest && rest[j]) ? rest[j].clone() : this.p[j].clone();
     }
 
-    // ---- how it goes over.
-    //
-    // `lean` is a velocity in m/s, applied weighted by HEIGHT: none at the
-    // lowest joint, all of it at the highest — a topple about the feet, which
-    // is what a body whose support fails does. A uniform shove would only
-    // slide it and pancake it (verlet-ragdoll.md §4).
+    // how it goes over: `lean` (m/s) is applied weighted by height, a topple about the feet; a uniform shove would
+    // only slide and pancake it (verlet-ragdoll.md §4)
     if (lean) this._topple(lean);
 
-    // inverse mass. A missing entry gets the lightest plausible weight rather
-    // than infinite mass — an unpinned particle that never moves is worse.
+    // inverse mass; a missing entry gets the lightest plausible weight, never infinite mass
     this.iw = {};
     for (const j of Object.keys(this.p)) this.iw[j] = 1 / (MASS[j] ?? 1);
     this._pinFrom = new Map();        // each pin's target at frame start
@@ -314,11 +275,8 @@ export class Ragdoll extends BodyEngineBase {
     const toLocal = (world, out) =>
       out.set(world.dot(r0), world.dot(u0), world.dot(f0));
 
-    // ---- FLEX: symmetric cones between adjacent links, off the rest angle
-    //
-    // A link only has a DIRECTION if it has a LENGTH: a row whose rest link is a
-    // micro-link (a spine authored millimetres above the hips) is skipped, or
-    // solver jitter reads as flexion and thrashes the trunk (verlet-ragdoll.md §3).
+    // ---- FLEX: symmetric cones between adjacent links, off the rest angle. A row whose rest link is a micro-link
+    // (a spine authored millimetres above the hips) is skipped: jitter would read as flexion (verlet-ragdoll.md §3).
     this.flex = [];
     const FLEX_MIN_LINK = 0.03;
     for (const [a, b, c, max] of FLEX) {
@@ -371,11 +329,9 @@ export class Ragdoll extends BodyEngineBase {
         n: new THREE.Vector3().crossVectors(_a, _c.normalize()).normalize(),
       });
     }
-    // A HANDOVER MUST CARRY THE TRANSPORTED AXES: the hinge normal is physical
-    // state, and a doll rebuilt mid-tumble from the REST normals fires a full
-    // correction into its hands on the first step (verlet-ragdoll.md §5). A
-    // snapshot carries them (`h`, in this.hinge order); one that doesn't
-    // (another engine's) gets normals derived from where the limbs ARE.
+    // a handover carries the transported hinge axes (`h`, in this.hinge order): they are physical state, and a doll
+    // rebuilt from the REST normals fires a correction on its first step (verlet-ragdoll.md §5). A snapshot without
+    // them (another engine's) gets normals derived from where the limbs are.
     if (seedVel?.j) {
       const h = Array.isArray(seedVel.h) && seedVel.h.length === this.hinge.length * 3 ? seedVel.h : null;
       this.hinge.forEach((H, i) => {
@@ -394,13 +350,9 @@ export class Ragdoll extends BodyEngineBase {
     // ---- capsules: every BONE is a fat segment, and pairs of them push apart
     this._buildCapsules();
 
-    // per-driven-bone rest reference, expressed in its TWIST PARENT's frame.
-    //
-    // restLocal is this bone's rest frame seen from the frame it hangs off. Each
-    // step the live direction is expressed in that same parent frame and the
-    // minimal arc from restLocal's own axis carries the frame across — a
-    // function of current state only, with no memory and therefore no drift.
-    // Roll is then nobody's accident: it is `tw`, integrated below.
+    // per-driven-bone rest reference (restLocal), in its TWIST PARENT's frame. Each step the minimal arc from
+    // restLocal's axis to the live direction carries the frame across: a function of current state only, so no
+    // drift; roll is `tw`, integrated below.
     this._frame(this.p);
     _mat.makeBasis(this.frame.r, this.frame.u, this.frame.f);
     const bodyRest = new THREE.Quaternion().setFromRotationMatrix(_mat);
@@ -449,19 +401,15 @@ export class Ragdoll extends BodyEngineBase {
     this.bodyRest = bodyRest;
 
     this.rootStartY = avatar.root.position.y;
-    // How far the model origin sits below the hips — MEASURED, never assumed
-    // (it varies widely across avatars), from the NEUTRAL pose so a walk
-    // cycle's hip motion doesn't bake in (verlet-ragdoll.md §6).
+    // how far the model origin sits below the hips: measured from the neutral pose (verlet-ragdoll.md §6)
     this.hipsOffset = this.rest.hips
       ? this.rest.hips.y - avatar.root.position.y
       : 0.82;
     this._measureHipsLocal(this.rest.hips);   // ...and sideways (bodyengine.js)
   }
 
-  /** The body's own frame, from its own particles: right across the pelvis, up
-   *  the spine, forward as their cross product. That cross product IS the
-   *  anatomical forward, for VRM 0.x and 1.0 alike (verlet-ragdoll.md §9) —
-   *  the whole reason a knee can be told which way to bend. */
+  /** The body's own frame, from its particles: right across the pelvis, up the spine, forward their cross product,
+   *  which is the anatomical forward for VRM 0.x and 1.0 alike (verlet-ragdoll.md §9). */
   _frame(p) {
     const { r, u, f } = this.frame;
     if (p.leftUpperLeg && p.rightUpperLeg) r.copy(p.leftUpperLeg).sub(p.rightUpperLeg);
@@ -518,9 +466,7 @@ export class Ragdoll extends BodyEngineBase {
 
   // ---- one rendered frame's worth of physics --------------------------------
   _solve() {
-    // Approach to sleep: once the body is nearly still, damp hard (island
-    // sleeping), or the lightest distal particle — always a hand — chatters
-    // forever and streams presence to the deadline.
+    // once the body is nearly still, damp hard (island sleeping), or a hand chatters forever
     const damp = this.maxV < TUNING.SETTLE_V * 4 ? TUNING.SLEEP_DAMP : TUNING.DAMP;
     const n = Math.max(1, TUNING.SUBSTEPS | 0);
     const sdt = FIXED_DT / n;
@@ -537,11 +483,8 @@ export class Ragdoll extends BodyEngineBase {
     this._world();
     this._limits();
 
-    // ---- how fast is it REALLY moving?
-    //
-    // Distance actually travelled this frame, not Verlet's (p - prev): every
-    // limit carries its correction into prev, so a joint parked on its limit
-    // has a prev that describes no motion and would block the settle forever.
+    // speed = distance actually travelled this frame, not Verlet's (p - prev): limits carry their correction into
+    // prev, so a joint parked on its limit would otherwise never settle
     let moved = 0;
     for (const j of JOINTS) {
       const p = this.p[j]; if (!p) continue;
@@ -572,10 +515,8 @@ export class Ragdoll extends BodyEngineBase {
 
   }
 
-  /** Pinned joints go exactly where their pins say. With TUNING.PIN_VEL, prev
-   *  carries the PIN's own velocity, scaled to the substep, so a pinned joint
-   *  moves at the speed the cursor moves and a swung body keeps its momentum
-   *  when let go (verlet-ragdoll.md §2). */
+  /** Pinned joints go exactly where their pins say. With TUNING.PIN_VEL, prev carries the pin's own velocity, so a
+   *  swung body keeps its momentum when let go (verlet-ragdoll.md §2). */
   _pin(dt) {
     if (!this.pins?.size) { this._pinFrom.clear(); return; }
     const k = dt / FIXED_DT;               // this substep, as a fraction of a frame
@@ -584,8 +525,7 @@ export class Ragdoll extends BodyEngineBase {
       const from = this._pinFrom.get(j);
       this.p[j].copy(t);
       if (!TUNING.PIN_VEL) continue;                       // position only
-      // A pin just set, or dragged faster than any hand moves, is a TELEPORT:
-      // land it dead. Only continuous motion carries velocity.
+      // a pin just set, or dragged faster than any hand moves, is a teleport: land it dead
       _v.copy(t).sub(from ?? t);
       if (!from || _v.lengthSq() > PIN_JUMP * PIN_JUMP) this.prev[j].copy(t);
       else this.prev[j].copy(t).sub(_v.multiplyScalar(k));
@@ -607,10 +547,8 @@ export class Ragdoll extends BodyEngineBase {
     }
   }
 
-  /** Capsule-vs-capsule: the bone SHAFTS push apart, not just their endpoints.
-   *  The correction lands on all four endpoints, weighted by where along each
-   *  segment the contact fell and by inverse mass — so a wrist bounces off the
-   *  chest rather than shoving it. */
+  /** Capsule-vs-capsule: the bone shafts push apart. The correction lands on all four endpoints, weighted by where
+   *  the contact fell and by inverse mass, so a wrist bounces off the chest rather than shoving it. */
   _capsules() {
     if (!TUNING.ON_CAPSULE) return;
     for (const { A, B, min } of this.pairs) {
@@ -632,8 +570,7 @@ export class Ragdoll extends BodyEngineBase {
       a1.addScaledVector(_n, -pen * wA1);
       b0.addScaledVector(_n, pen * wB0);
       b1.addScaledVector(_n, pen * wB1);
-      // Inelastic, for the same reason the joint limits are (see _stop): a soft
-      // push never fully clears the overlap, so resting limbs would trade energy forever.
+      // inelastic, as the joint limits are (see _stop): a soft push leaves resting limbs trading energy forever
       _s1.copy(_n);
       this._stop(A.a, -1); this._stop(A.b, -1);
       this._stop(B.a, 1); this._stop(B.b, 1);
@@ -641,9 +578,7 @@ export class Ragdoll extends BodyEngineBase {
   }
 
   _terrain() {
-    // NOTE: this contact is a pure vertical clamp, so a grounded body can CREEP
-    // while an arm fights its limits. Open: a tuned ground-friction law
-    // (verlet-ragdoll.md §8).
+    // a pure vertical clamp, so a grounded body can creep while an arm fights its limits (open: verlet-ragdoll.md §8)
     for (const j of JOINTS) {
       const p = this.p[j]; if (!p) continue;
       const g = heightAt(p.x, p.z) + this._clear(j);
@@ -655,9 +590,7 @@ export class Ragdoll extends BodyEngineBase {
    *  treats a radius as horizontal, so nothing else holds a joint up). */
   _clear(j) { return Math.max(0.02, this.radius[j] ?? 0.05); }
 
-  /** Terrain AND props, through resolveColliders — the SAME routine the walking
-   *  controller uses — so a body drapes over a crate or a desk instead of
-   *  sinking through it. Lights carry no collider. */
+  /** Terrain and props, through resolveColliders (the walking controller's routine), so a body drapes over a crate. */
   _world() {
     if (!TUNING.ON_GROUND) return;
     for (const j of JOINTS) {
@@ -683,18 +616,14 @@ export class Ragdoll extends BodyEngineBase {
     }
   }
 
-  /** Move the distal particle of a joint so its bone points at `dir`, and
-   *  carry the move into `prev` so the correction does not read as velocity.
-   *  Distal-only because the tables are ordered proximal->distal: the sweep
-   *  is feed-forward, and no clamp disturbs a triple already solved this pass. */
+  /** Move the distal particle so its bone points at `dir`, carrying the move into `prev` so it reads as no velocity.
+   *  Distal-only: the tables run proximal->distal, so no clamp disturbs a triple already solved this pass. */
   _swing(b, c, dir, lb) {
     const pb = this.p[b], pc = this.p[c];
     const wb = this.iw[b], wc = this.iw[c], ws = wb + wc;
     if (ws <= 0) return;
     _t.copy(dir).multiplyScalar(lb).sub(pc).add(pb);   // Δ = dir·lb − (pc − pb)
-    // A correction worth half the bone is a teleport: land it DEAD (prev = p).
-    // Merely skipping the carry is the opposite — the next integrate reads the
-    // teleport as speed (verlet-ragdoll.md §3).
+    // a correction worth half the bone is a teleport: land it dead (prev = p) (verlet-ragdoll.md §3)
     const dead = _t.lengthSq() > lb * lb * 0.25;
     _s1.copy(_t).normalize();                // the direction we are correcting
     _u.copy(_t).multiplyScalar(wc / ws);
@@ -705,13 +634,8 @@ export class Ragdoll extends BodyEngineBase {
     if (dead) this.prev[b].copy(pb); else { this.prev[b].add(_u); this._stop(b, -1); }
   }
 
-  /** A joint limit is a hard STOP, not a spring: keep the position and remove
-   *  only the velocity component that was driving INTO the limit. Contact, not
-   *  restitution (verlet-ragdoll.md §3).
-   *
-   *  `side` is +1 for the particle moved along the correction and -1 for the
-   *  one moved against it; the violating component has the opposite sign in
-   *  each case, and both are removed by the same projection. */
+  /** A joint limit is a hard stop, not a spring: keep the position, remove only the velocity component driving into
+   *  the limit (verlet-ragdoll.md §3). `side` is +1 for the particle moved along the correction, -1 against it. */
   _stop(j, side) {
     const vn = _s2.copy(this.p[j]).sub(this.prev[j]).dot(_s1);
     if (vn * side < 0) this.prev[j].addScaledVector(_s1, vn);
@@ -784,9 +708,8 @@ export class Ragdoll extends BodyEngineBase {
       _b.copy(pc).sub(pb); const lb = _b.length();
       if (la < 1e-5 || lb < 1e-5) continue;
       _a.divideScalar(la); _b.divideScalar(lb);
-      // TRANSPORT the hinge axis to stay perpendicular to the upper link, never
-      // rebuild it from the body frame: the rebuilt axis flips sign when the
-      // limb lines up with forward (verlet-ragdoll.md §3).
+      // transport the hinge axis, never rebuild it from the body frame: the rebuilt axis flips sign when the limb
+      // lines up with forward (verlet-ragdoll.md §3)
       const n = _n.copy(H.n);
       n.addScaledVector(_a, -n.dot(_a));
       if (n.lengthSq() < 1e-8) {
@@ -820,10 +743,8 @@ export class Ragdoll extends BodyEngineBase {
     }
   }
 
-  /** Apply a velocity height-weighted about the lowest joint: none at the
-   *  bottom, all of it at the top. On a standing body that is a topple about
-   *  the feet (see the constructor note); on a lying one the span is shallow,
-   *  so the same rule rolls it away from the push instead. */
+  /** Apply a velocity height-weighted about the lowest joint: a topple about the feet on a standing body, a roll
+   *  away from the push on a lying one. */
   _topple(lean) {
     let lo = Infinity, hi = -Infinity;
     for (const j of JOINTS) {
@@ -837,16 +758,10 @@ export class Ragdoll extends BodyEngineBase {
     }
   }
 
-  /** Pin a joint to a world-space target — a grabbed joint in a hand, or a
-   *  joint NAILED somewhere (bodydrag's persistent pins). A body may carry
-   *  several at once. While set, the joint has infinite mass (constraints move
-   *  the REST of the body toward the pin) and is snapped to the target each
-   *  substep. setPin(joint, null) releases that joint alone; setPin(null)
-   *  releases everything. */
+  /** Pin a joint to a world-space target (a hand, or bodydrag's nails); several at once is fine. A pinned joint has
+   *  infinite mass and snaps to the target each substep. setPin(joint, null) releases one; setPin(null) all. */
   setPin(joint, target, _firm = false) {
-    // `_firm` (nail vs hand — see ammodoll.setPin) is accepted for engine
-    // interface parity and deliberately unused: a Verlet pin zeroes inverse
-    // mass, which IS the rigid nail — there is no softer hand mode to pick.
+    // `_firm` (nail vs hand, ammodoll.setPin) is accepted for interface parity and unused: a Verlet pin is already rigid
     this.pins ??= new Map();
     const unpin = (j) => { this.iw[j] = 1 / (MASS[j] ?? 1); this.pins.delete(j); };
     if (!joint) { for (const j of [...this.pins.keys()]) unpin(j); return; }
@@ -859,15 +774,10 @@ export class Ragdoll extends BodyEngineBase {
     this.iw[joint] = 0;
   }
 
-  // pinned + impulse live on BodyEngineBase — the cap, the topple application
-  // and the clock restarts are the shared law; _topple above is this engine's
-  // half of it.
+  // pinned + impulse live on BodyEngineBase; _topple above is this engine's half
 
-  /** Everything this sim IS, as plain numbers: where every joint is and how
-   *  fast it is going, in world coordinates. A handover carries this rather
-   *  than a pose, so the receiver continues instead of restarting
-   *  (verlet-ragdoll.md §5). Format and rounding are rigmeasure.js's
-   *  (snapshotPacker), shared with the other engine. */
+  /** Every joint's world position and velocity: a handover carries this rather than a pose, so the receiver continues
+   *  instead of restarting (verlet-ragdoll.md §5). Format: rigmeasure.js snapshotPacker, shared with ammodoll. */
   snapshot() {
     const pack = snapshotPacker();
     for (const name of JOINTS) {
@@ -877,9 +787,7 @@ export class Ragdoll extends BodyEngineBase {
       pack.add(name, q, _v);
     }
     const s = pack.pack();
-    // the transported hinge axes — physical state the particles alone do not
-    // carry (see the constructor's handover note). Optional in the format:
-    // a receiver without hinges (another engine) ignores it.
+    // the transported hinge axes (see the constructor's handover note); optional, another engine ignores it
     s.h = this.hinge.flatMap((H) => [H.n.x, H.n.y, H.n.z]);   // exact, like p/v
     return s;
   }
@@ -898,10 +806,7 @@ export class Ragdoll extends BodyEngineBase {
     let n = 0;
     while (this.acc >= FIXED_DT && n < MAX_FRAMES) { this._solve(); this.acc -= FIXED_DT; n++; }
     if (n === MAX_FRAMES) this.acc = 0;
-    // remember where each pin was THIS frame; next frame's velocity is measured
-    // against it. Per frame, because that is the rate the cursor moves it at —
-    // sampling per substep reads the same target twice and calls the second
-    // one motionless.
+    // where each pin was this frame, for next frame's pin velocity (per frame, the rate the cursor moves it at)
     if (this.pins?.size) {
       for (const [j, t] of this.pins) {
         const f = this._pinFrom.get(j);
@@ -911,9 +816,7 @@ export class Ragdoll extends BodyEngineBase {
 
     this.steps++;
     this.frames += n;
-    // the clock law is the base's; the thresholds (and the hysteresis band —
-    // it takes real motion to restart the countdown, not a flicker) are this
-    // engine's tuned numbers. Settle is measured in SECONDS, not frames.
+    // the clock law is the base's; the thresholds and hysteresis band are this engine's numbers (seconds, not frames)
     this._settleTick(dt, this.maxV < TUNING.SETTLE_V,
       this.maxV > TUNING.SETTLE_V * TUNING.SETTLE_RESET);
 

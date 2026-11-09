@@ -1,10 +1,6 @@
-// ?mintthumbs — render a portrait for every body on the roster and post them
-// back, then stop. Contribution-as-you-wear keeps the roster fresh, but it
-// cannot SEED it: a first visitor met one portrait and seventeen blank cards.
-// This is the one-time (and after-adding-VRMs) pass that gives it a baseline.
-//
-// Dynamically imported by main.js — the normal boot never pays for this file,
-// and this file never starts the normal boot.
+// ?mintthumbs — render a portrait for every body on the roster, post them back, then stop. Contribution-as-you-wear
+// keeps the roster fresh but cannot seed it; this is the one-time (and after-adding-VRMs) baseline pass.
+// Dynamically imported by main.js, so the normal boot never loads this file.
 
 import { CONFIG } from './base.js';
 import { contributeThumbnail } from './avatar.js';

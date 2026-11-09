@@ -1,9 +1,6 @@
-// presence — present / away / busy, for the profile icon's corner dot
-// (bottom-right, the Discord/Slack convention). Automatic between
-// present and away (tab hidden, or no input for AWAY_S); busy is a choice made
-// in the profile and held until you change it. Rides every pose packet as
-// `presence` (net.js; shared/presencewire.js is the validator) — no receiver reads it at this rung;
-// applyPresenceWire has no caller yet.
+// presence — present / away / busy, for the profile icon's corner dot. Automatic between present and away
+// (tab hidden, or no input for AWAY_S); busy is chosen in the profile and held until changed. Rides every
+// pose packet as `presence` (net.js; shared/presencewire.js validates, remotes.js applies).
 import { bus } from './base.js';
 
 export const STATES = ['present', 'away', 'busy'];
@@ -14,8 +11,7 @@ let lastInput = performance.now();
 
 export const presence = () => manual ?? auto;
 export function setPresence(s) {
-  // away and busy are CHOICES and hold until you choose present (which hands
-  // control back to the clock).
+  // away and busy hold until you choose present, which hands control back to the clock
   manual = (s === 'away' || s === 'busy') ? s : null;
   emit();
 }

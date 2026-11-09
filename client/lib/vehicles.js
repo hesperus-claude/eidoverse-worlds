@@ -1,5 +1,5 @@
-// client/lib/vehicles.js — driving a hull from its helm (port of upstream main's client/lib/vehicles.js updateVehicle): this
-// client steps the hull with shared/drive.js and streams its pose; the authority checks each step (authority/drive.js).
+// vehicles — driving a hull from its helm: this client steps the hull with shared/drive.js and streams its pose; the
+// authority checks each step (shared/protocol/authority/drive.js).
 import { bus, CONFIG } from './base.js';
 import { entities, bagOf } from './world.js';
 import { avatarMounts } from './mounts.js';
@@ -8,8 +8,8 @@ import { keys } from './controller.js';
 import { reindexCollider } from './colliders.js';
 import { driveOf, isHelmC, stepDrive } from '../../shared/drive.js';
 
-const SEND_MS = 66;   // ~15 Hz, upstream's lease cadence
-// `local`: the hull's pose as I drive it; the log's periodic commits (a step behind) never pull it back, only a refusal does
+const SEND_MS = 66;   // ~15 Hz
+// `local`: the hull's pose as I drive it; only a refusal (snap) pulls it back, never the log's lagging commits
 let vel = [0, 0, 0], lastSent = 0, level = 0, driving = null, local = null;
 
 /** The hull my seat drives (its id), or null: my mount is a helm (station.input {move: 'drive'}) on a thing with drive. */
@@ -34,10 +34,9 @@ export function updateHelm(dt) {
   return true;
 }
 function leaveHelm() { if (driving) { driving = null; vel = [0, 0, 0]; level = 0; local = null; } }
-// my seat ended (I got up, was knocked off, or it went): updateHelm runs only while I'm seated or being carried off a
-// seat (main.js me-drive), so the helm I left is let go here; its hull's relayed moves show again, and a later seat at that helm starts from where the hull is
+// my seat ended: let the helm go here (updateHelm only runs while seated, main.js me-drive), so the hull's relayed moves show again
 bus.on('mount', ({ id, to }) => { if (id === CONFIG.name && !to) leaveHelm(); });
-// the authority's answers: someone else's hull moving (relayed), or my step refused (snap back to the pose that stands)
+// the authority's answers: someone else's hull moving (relayed), or my step refused (snap back)
 bus.on('drive', ({ id, pos, q, by, snap }) => {
   const o = entities.get(id); if (!o || !Array.isArray(pos) || pos.length !== 3 || !Array.isArray(q) || q.length !== 4) return;
   if (!snap && driving === id) return;
