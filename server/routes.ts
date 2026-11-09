@@ -72,7 +72,7 @@ import { interruptedVisitorText } from "./oldworlds.ts";
 import { setupPage, setupClaim } from "./setup.ts";
 import { setupOpen } from "./operators.ts";
 import { ClientLogRate, ClientLogStore, LIMITS as CLIENTLOG_LIMITS, scrub, holdsPrivateKey, boundLines } from "./clientlog.ts";
-import { readCapped } from "./reqbody.ts";
+import { readCapped, readCappedBytes } from "./reqbody.ts";
 
 import { recordComponents } from "../shared/protocol/view.js";
 import { WORLD_NAME_RE } from "./limits.ts";
@@ -425,7 +425,7 @@ const ROUTES: Route[] = [
     handler: async ({ req, url }) => {
       if (!HN_ISSUER_KEY) return new Response(JSON.stringify({ error: "identity door not configured" }), { status: 503, headers: { "content-type": "application/json" } });
       let tok = "";
-      try { tok = String(((await req.json()) as { token?: string }).token ?? ""); } catch { /* fall through */ }
+      try { tok = String((JSON.parse((await readCapped(req, 64 * 1024)) ?? "") as { token?: string }).token ?? ""); } catch { /* fall through */ }   // an id token is ~1 KB
       const v = verifyToken(tok, { issuerId: HN_ISSUER_KEY, iss: HN_ISS, aud: HN_AUD });
       if (!v.ok) {
         console.log(`[auth] login token rejected: ${v.reason}`);
@@ -557,8 +557,8 @@ const ROUTES: Route[] = [
       if (!actor) {
         return j({ error: "a named actor is required — a tokens.json bearer or an aid1 credential; the authority token may not write seat profiles" }, 401);
       }
-      const text = await req.text();
-      if (new TextEncoder().encode(text).length > MAX_PROPOSAL_BYTES) {
+      const text = await readCapped(req, MAX_PROPOSAL_BYTES);
+      if (text === null) {
         return j({ error: `proposal exceeds ${MAX_PROPOSAL_BYTES} bytes` }, 413);
       }
       let record: unknown;
@@ -758,8 +758,8 @@ const ROUTES: Route[] = [
     handler: async ({ req, srv }) => {
       // Load-performance beacon (client/lib/loadwork.js): append-only capped JSONL of timing lines and a UA.
       try {
-        const body = await req.text();
-        if (body.length < 100_000) {
+        const body = await readCapped(req, 100_000);
+        if (body !== null) {
           const dest = join(WORLDS_DIR, ".perflogs.jsonl");
           const big = existsSync(dest) && Bun.file(dest).size > 5_000_000;
           if (!big) {
@@ -835,9 +835,9 @@ const ROUTES: Route[] = [
       const force = url.searchParams.get("force") === "1";
       if (existsSync(dest) && !force) return new Response(JSON.stringify({ ok: true, existed: true, perf: !!perf }),
         { headers: { "content-type": "application/json" } });
-      const body = new Uint8Array(await req.arrayBuffer());
+      const body = await readCappedBytes(req, 400_000);
+      if (body === null) return new Response("thumb too large", { status: 413 });
       if (body.length === 0 && perf) return new Response(JSON.stringify({ ok: true, meta: true, perf: true }), { headers: { "content-type": "application/json" } });
-      if (body.length > 400_000) return new Response("thumb too large", { status: 413 });
       if (body.length < 8 || body[0] !== 0x89 || body[1] !== 0x50) return new Response("not a PNG", { status: 415 });
       writeFileSync(dest, body);
       console.log(`[thumb] ${safe} (${(body.length / 1000).toFixed(0)}KB${force ? ", forced" : ""})`);

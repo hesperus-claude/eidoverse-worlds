@@ -12,6 +12,7 @@ import { agentTokens, aid1JoinIdentity, sessionOfRequest } from "./auth.ts";
 import { worlds } from "./world.ts";
 import { atomicWrite } from "./fsutil.ts";
 import { ingestHeightmap } from "./heightmap.ts";
+import { readCappedBytes } from "./reqbody.ts";
 import { checkFile } from "./buildcheck-queue.ts";
 import { envNumber } from "./limits.ts";
 
@@ -427,8 +428,8 @@ async function uploadBy(req: Request, url: URL, srv: UploadSrv): Promise<Respons
   if (Date.now() - u.t > 60_000) { u.t = Date.now(); u.n = 0; }
   u.n++; uploadWin.set(ip, u);
   if (u.n > 4) return new Response("upload rate limit (4/min)", { status: 429 });
-  const body = new Uint8Array(await req.arrayBuffer());
-  if (body.length > UPLOAD_CAP) return new Response(`too large (${UPLOAD_CAP / 1e6}MB cap)`, { status: 413 });
+  const body = await readCappedBytes(req, UPLOAD_CAP);
+  if (body === null) return new Response(`too large (${UPLOAD_CAP / 1e6}MB cap)`, { status: 413 });
   // main's script store left with the old protocol: say where a script goes now (decision table row 12)
   if (url.searchParams.get("as") === "script") return new Response(SCRIPT_MOVED, { status: 415 });
   if (url.searchParams.get("as") === "image") {

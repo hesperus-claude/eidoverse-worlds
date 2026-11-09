@@ -44,6 +44,8 @@
 //                 yields mid-request (tel0s #260 11-06). Zero, no baseline.
 //   prod-imports-test  server/, shared/, mcpl/ or client/ importing from test/: a deploy without test/ loses the feature
 //                 silently (server/geometry.ts's topGrid, review 11-08). Zero, no baseline.
+//   whole-body    `await req.text()/json()/arrayBuffer()/formData()` in server/: the whole body is buffered before any size
+//                 check (Bun's only bound is 128 MB). Read through server/reqbody.ts readCapped / readCappedBytes. Zero.
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -112,6 +114,12 @@ export const prodImportsTest = (text: string) => [...text.matchAll(/["'`](?:\.\.
 export function prodImportsTestHits(root = ENGINE): string[] {
   return ["server", "shared", "mcpl", "client"].flatMap((d) => walk(path.join(root, d), [])).filter((p) => /\.(?:[cm]?[jt]s)$/.test(p))
     .flatMap((p) => fs.readFileSync(p, "utf8").split("\n").flatMap((l, n) => (prodImportsTest(l) ? [`${relTo(root, p)}:${n + 1}`] : [])));
+}
+/** A request body read whole, before any cap. */
+export const wholeBody = (text: string) => [...text.matchAll(/\bawait\s+req\.(?:text|json|arrayBuffer|formData|blob)\(\s*\)/g)].length;
+export function wholeBodyHits(root = ENGINE): string[] {
+  return walk(path.join(root, "server"), []).filter((p) => !p.endsWith("reqbody.ts"))
+    .flatMap((p) => fs.readFileSync(p, "utf8").split("\n").flatMap((l, n) => (wholeBody(l) ? [`${relTo(root, p)}:${n + 1}`] : [])));
 }
 /** A spawn of the mcpl server with no MCPL_STATE writes mcpl/state.json in the checkout (CI 40956937323: client-tools imports
  *  every test, so a top-level spawn runs). True when the text spawns net-server.ts without naming MCPL_STATE. */
@@ -239,6 +247,11 @@ if (import.meta.main) {
   check(`H${i++} prod-imports-test: caught in its known-bad form (2), and not in a path that only mentions a test`, prodImportsTest(`import("../test/stubs/x.mjs"); new URL("../../test/a.ts", u)`) === 2 && prodImportsTest(`// see test/server/x-test.ts; "./latest/"`) === 0, "pattern");
   const prodTestHits = prodImportsTestHits();
   check(`H${i++} prod-imports-test: server/, shared/, mcpl/ and client/ import nothing from test/ (${prodTestHits.length ? "found" : "none"})`, prodTestHits.length === 0 && fs.existsSync(path.join(ENGINE, "server/server.ts")), prodTestHits.join("\n      "));
+
+  // whole-body (review 11-08): every request body in server/ is read under a cap
+  check(`H${i++} whole-body: caught in its known-bad form (3), and not in a capped read`, wholeBody("await req.json(); await req.text(); await req.arrayBuffer();") === 3 && wholeBody("await readCapped(req, 1024); req.json") === 0, "pattern");
+  const bodyHits = wholeBodyHits();
+  check(`H${i++} whole-body: server/ reads no request body whole (${bodyHits.length ? "found" : "none"})`, bodyHits.length === 0 && fs.existsSync(path.join(ENGINE, "server/reqbody.ts")), bodyHits.join("\n      "));
 
   // then the gate's code against the baseline (may only go down)
   const now = measure();
