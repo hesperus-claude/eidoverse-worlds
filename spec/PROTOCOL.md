@@ -210,8 +210,7 @@ A `change` entry's `op` and `body` are one of:
   (a key written by anyone else in between is a new life, never merged with
   the old). A verifier re-running the gate re-runs it on the **unmarked ops
   only**. A tool that rewrites a batch's `ops` remaps `cascade` with
-  them. (Added to the batch body before release as `followUps`;
-  `cascade` since this vocabulary.)
+  them.
 - A shape or grammar error anywhere in an entry (an unknown field, a bad id
   or component name, a nested batch) makes the **whole entry** malformed. A
   semantic no-op (a missing entity, an absent component) skips only that
