@@ -109,3 +109,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Vendored directories (notice kept beside the files)
+
+- `client/vendor/three-addons/htmlmesh.js` — three.js `HTMLMesh.js`, MIT; notice in `client/vendor/three-addons/LICENSE-three-MIT.txt`, changes in its header.
+- `client/vendor/piper/` — piper_phonemize wasm build (MIT glue) with espeak-ng compiled in and its data (GPL-3.0); source, digests and terms in `client/vendor/piper/NOTICE.md`.
+- `client/vendor/ammo/` — ammo.js (Bullet Physics port), zlib per the header line of `ammo.wasm.js`; no version or commit recorded.
+
+## Credited, licence not yet recorded
+
+- `client/lib/xrwarm.js` — a shader-warming pattern from BasisVR (MIT, © 2024 Luke B Doolan), cited in its header.
+- `client/lib/vegetation/vegetation_shrub_gen.js` — SeedThree's dichotomous plant math (`src/core/dichotomous.js`); licence and commit not on disk.
+- `client/lib/ammodoll.js` — ported from socketteer/ragdoll-physics (tables carried verbatim, per commit `9d6abcd69`); licence and commit not on disk.
