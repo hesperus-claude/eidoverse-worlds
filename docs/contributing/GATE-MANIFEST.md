@@ -13,6 +13,10 @@ bun test/gate/run.ts --siblings          # clones/pins agent-framework, mcpl-cor
 CHROME=/path/to/chrome EIDOVERSE_DIR=/path/to/eidoverse-video bun test/gate/run.ts    # or: bun run test:protocol
 ```
 
+`tools/protocol/.siblings/` is the last thing under `tools/protocol/`, and it stays there on purpose: `mcpl/package.json`
+and `mcpl/bun.lock`, `services/captionbot/package.json`, `test/gate/run.ts` and `deploy/deploy-vps.sh` all name that
+path, as does an operator's shard script outside this repo. Moving it means changing all of them and re-locking in one step.
+
 Exit 0 means the gate passed. Exit 1 means a suite failed, a suite or a check was skipped, or the preflight found a
 problem (it lists each one). Exit 2 means a bad argument.
 
