@@ -4,8 +4,7 @@
 /** Band edges in v (0..1) for re-marching a width x height equirect in strips of equal COST (see attachBakedDome's
  *  comment: rows are weighted by an inverse-elevation march-chord estimate). Shared by the cadence and the boot bake. */
 export function bandCuts(width, height, cloudPasses, passTexelBudget) {
-  const ROWS = Math.max(1, height | 0);   // weight the TEXEL rows: a band can't be thinner than one, and 256 coarse rows
-                                          // under 168 bands left 79 empty and horizon bands ~6× the rest
+  const ROWS = Math.max(1, height | 0);   // weight the texel rows: a band can't be thinner than one
   const bands = Math.min(ROWS, Math.max(1, Math.ceil((width * height * cloudPasses) / passTexelBudget)));
   const w = [];
   let wSum = 0;

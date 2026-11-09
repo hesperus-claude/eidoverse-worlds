@@ -1,9 +1,6 @@
-// worldquad — the desk's world frame as a VR quad, on the same-source pattern:
-// spawn the curated starters through the SAME verb build.js sends (same id
-// minting, same undo entry), and preview the sky presets through the SAME
-// previewSky the desk's preset buttons call. The desk's 'log to world' for
-// the sky lives in a closure with the clock rules (skypanel gather()) — not
-// duplicated here; the quad says 'preview' and the desk commits.
+// worldquad — the desk's world frame as a VR quad: spawns starters through the same verb edit/build.js sends and
+// previews sky presets through the same previewSky the desk's buttons call. Committing a sky stays on the desk
+// (edit/skypanel.js gather() owns the clock rules); the quad only previews.
 import * as OP from '../../shared/requests.js';
 import { sendOps } from './edit/writes.js';
 import { bus } from './base.js';
@@ -27,8 +24,8 @@ function fields() {
       rows: Object.keys(presets).map((name) => ({ id: name, label: name, actions: [{ k: 'sky', label: 'preview' }] })) },
   ];
 }
-/** A model 1.5 m ahead, at your feet's height, facing the way you face — the hand-free place (a headset has no
- *  cursor to carry a ghost). One undo entry. Also the Create panel's VR body (edit/panels.js). */
+/** A model 1.5 m ahead, at your feet's height, facing the way you face (a headset has no cursor to carry a ghost).
+ *  One undo entry. Also used by the Create panel in VR (edit/panels.js). */
 export function spawnAhead(lib) {
   const yaw = myState.yaw ?? 0;
   const p = [myState.pos.x + Math.sin(yaw) * 1.5, myState.pos.y, myState.pos.z + Math.cos(yaw) * 1.5];
@@ -37,7 +34,7 @@ export function spawnAhead(lib) {
 }
 function dispatch(k, id) {
   if (k === 'spawn' && id) {
-    spawnAhead(id);   // then grab it
+    spawnAhead(id);
   } else if (k === 'sky' && presets[id]) {
     previewSky({ ...skyArgs(), ...presets[id] });
     bus.emit('xr:repaint');

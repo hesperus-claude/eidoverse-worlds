@@ -1,24 +1,15 @@
 // quadcolour — the VR panels' colour, delivered as authored.
 //
-// WHY (VR panes looked washed out; only our panels, not other pages):
-// the quads are MeshBasicMaterial with toneMapped:false, and WebGPURenderer (both its backends — the WebGL 2 one is
-// what Chromium runs, desktop and headset) IGNORES material.toneMapped: tone mapping and the sRGB encode happen in ONE
-// output pass over the whole frame (Renderer._renderOutput; `toneMapped` is read only by the classic WebGLRenderer).
-// So every panel pixel went through ACES Filmic at the world's exposure: measured on the real renderer, --brand
-// #8fe8c8 left as #b4dbce, --attn #ffc46b as #e6cc8a, the panel #051414 as #000404 (test/client/xr-quad-colour-probe.mjs).
-//
-// The cure without a second pass (the XR frame has one output pass, per eye, and panels are in the scene): the quad's
-// colour node applies the EXACT INVERSE of three's acesFilmicToneMapping at the live toneMappingExposure, so the
-// output pass lands on the authored value (measured exact to the 8-bit level for every house token).
-//
-// Then the VR-only look (colours read less vibrant in a headset): saturation and contrast in
-// display (sRGB-encoded) space, applied to the quads only — never the design tokens, never the desktop.
-// `gradeSRGB` (quadgrade.js) is the JS twin of the shader's grade; test/client/quadcolour-test.mjs holds both to the same numbers.
+// WebGPURenderer ignores material.toneMapped: tone mapping and the sRGB encode happen in one output pass over the whole
+// frame, so panel pixels went through ACES Filmic at the world's exposure and read washed out
+// (test/client/xr-quad-colour-probe.mjs). The cure: the quad's output node applies the exact inverse of three's
+// acesFilmicToneMapping at the live exposure, so the output pass lands on the authored value.
+// On top, a VR-only saturation/contrast grade in sRGB space, quads only (never the design tokens or the desktop);
+// quadgrade.js holds its JS twin and test/client/quadcolour-test.mjs holds both to the same numbers.
 import * as THREE from 'three';
 import { GRADE_DEFAULT, GRADE_RANGE, LUMA, loadGrade, clampTo, storeGrade, ACES_IN_INV, ACES_OUT_INV, ACES_FIT } from './quadgrade.js';
 import { Fn, vec3, vec4, mat3, texture, uniform, toneMappingExposure, sRGBTransferOETF, sRGBTransferEOTF, dot, mix, clamp, sqrt, max } from 'three/tsl';
 
-// the inverse's constants live in quadgrade.js beside their JS twin (acesFilmicInverseJS), which the unit test round-trips
 const { A, B, C, D, E } = ACES_FIT;
 
 const uSat = uniform(1), uCon = uniform(1);
@@ -44,9 +35,8 @@ const rrtInv = (y) => {
 export const acesFilmicInverse = Fn(([lin]) => {
   const y = mat3(...ACES_OUT_INV).mul(clamp(lin, 0, 1));
   const v = vec3(rrtInv(y.x), rrtInv(y.y), rrtInv(y.z));
-  // NOT clamped at 0: a saturated hue (--brand's red channel, a strong yellow) needs a NEGATIVE linear input for
-  // ACES's channel-mixing input matrix to land it; the output pass reads a HalfFloat target (three's default
-  // outputBufferType), which carries it. Clamped, #8fe8c8 came out #a0e8c8.
+  // not clamped at 0: saturated hues need a negative linear input for ACES's input matrix to land them; the output
+  // pass reads a HalfFloat target, which carries it
   return mat3(...ACES_IN_INV).mul(v).mul(0.6).div(toneMappingExposure);
 });
 
@@ -62,11 +52,10 @@ export function quadMaterial(mesh, renderer) {
   const graded = clamp(mix(vec3(y), s, uSat).sub(0.5).mul(uCon).add(0.5), 0, 1);
   const lin = sRGBTransferEOTF(graded);
   const aces = renderer?.toneMapping === THREE.ACESFilmicToneMapping;
-  // outputNode, not colorNode: NodeMaterial clamps its lit result at 0 ('force unsigned floats', NodeMaterial.js
-  // setup) and the inverse needs negatives; outputNode replaces that result whole. The map stays the diffuse colour,
-  // so alphaTest still cuts the frame's rounded corners from the texture's alpha.
+  // outputNode, not colorNode: NodeMaterial clamps its lit result at 0 and the inverse needs negatives. The map stays
+  // the diffuse colour, so alphaTest still cuts the rounded corners from the texture's alpha.
   m.outputNode = vec4(aces ? acesFilmicInverse(lin) : lin, t.a);
-  m.toneMapped = false;   // honoured by the classic WebGLRenderer only; kept so the intent reads the same everywhere
+  m.toneMapped = false;   // honoured by the classic WebGLRenderer only; kept so the intent reads the same
   mesh.material = m; old.dispose();
   // HTMLMesh.dispose() disposes `material` from its closure (the old one) — keep ours from leaking
   const dispose = mesh.dispose; if (dispose) mesh.dispose = function () { m.dispose(); return dispose.call(this); };

@@ -22,10 +22,9 @@ const batches = new DrawBatches({ warm: async (mesh, live) => {
 batches.enabled = CONFIG.params.get('batching') !== '0';
 let lastRender = {};
 
-/** Render something that is NOT the world's eye pass (a sky bake, a thumbnail, a snapshot, the desktop mirror)
- *  without disturbing WebXR: three's XRManager.updateCamera(cam) runs inside EVERY renderer.render() while presenting
- *  and rewrites the SHARED stereo camera from `cam.parent`, so a parentless camera would pop the eyes to the playspace
- *  origin. XR off around the pass, render target saved and restored. */
+/** Render something that is not the world's eye pass (a sky bake, a thumbnail, the desktop mirror) without disturbing
+ *  WebXR: while presenting, every renderer.render() rewrites the shared stereo camera from `cam.parent`, so a parentless
+ *  camera would pop the eyes to the playspace origin. XR off around the pass; render target saved and restored. */
 export function renderAside(sc, cam, target = null) {
   const xr = renderer.xr;
   if (!xr?.isPresenting) { const rt = renderer.getRenderTarget(); renderer.setRenderTarget(target); try { return renderer.render(sc, cam); } finally { renderer.setRenderTarget(rt); } }
@@ -35,16 +34,14 @@ export function renderAside(sc, cam, target = null) {
   finally { renderer.setRenderTarget(rt); xr.enabled = was; if (xr.isPresenting) xr.updateCamera(camera); }   // the eyes are rebuilt from the RIG before anything else renders
 }
 
-// RENDER CENSUS: count every renderer.render() per animation frame while presenting and remember the last one that
-// was NOT the main pass (camera type/fov/parent, target). A second render into the eye framebuffer with a non-XR
-// camera is exactly a wide frame stamped across both eyes.
+// Render census: count every renderer.render() per animation frame while presenting and remember the last one that
+// was not the main pass. A second render into the eye framebuffer with a non-XR camera is a wide frame stamped across
+// both eyes.
 export const renderCensus = { perFrame: 0, maxPerFrame: 0, foreign: null, frames: 0 };
 let mainPassCam = null;
-if (typeof renderer.render === 'function') { const orig = renderer.render.bind(renderer);   // node-side suites mock core.js with a renderer that has no render (wing-owner-wire-test)
+if (typeof renderer.render === 'function') { const orig = renderer.render.bind(renderer);   // node-side suites mock core.js with a renderer that has no render
   renderer.render = (sc, cam) => {
-    // a lost GPU (gpulost.js handled it: reloading, or stopped with the notice) draws nothing, by ANY pass (the world,
-    // the XR mirror, sky bakes, avatar asides): each render into a dead device throws before three's callDepth--, and
-    // every such throw leaves a new render context and a fresh, retained shader build behind
+    // a lost GPU (gpulost.js) draws nothing, by any pass: each render into a dead device throws and leaks a render context
     if (globalThis.__gpuLost?.fired) return;
     renderCensus.perFrame++;
     if (renderer.xr?.isPresenting && cam !== mainPassCam) {
@@ -53,17 +50,15 @@ if (typeof renderer.render === 'function') { const orig = renderer.render.bind(r
     }
     return orig(sc, cam);
   }; }
-// …and compiles nothing: every pipeline warm (assets, flora, terrain, XR entry, instance batches) goes through this one
-// method, and a page stopped after a second loss stays connected and keeps receiving world updates
+// …and compiles nothing: every pipeline warm goes through this one method
 if (typeof renderer.compileAsync === 'function') { const origCompile = renderer.compileAsync.bind(renderer);
   renderer.compileAsync = (...args) => (globalThis.__gpuLost?.fired ? Promise.resolve() : origCompile(...args)); }
 export function renderCensusTick() { renderCensus.frames++; if (renderCensus.perFrame > renderCensus.maxPerFrame) renderCensus.maxPerFrame = renderCensus.perFrame; renderCensus.perFrame = 0; }
 export const renderCensusPeek = () => renderCensus.foreign;
 export function renderCensusTake() { const o = { max: renderCensus.maxPerFrame, foreign: renderCensus.foreign }; renderCensus.maxPerFrame = 0; renderCensus.foreign = null; return o; }
 
-// ENTRY CURTAIN: while up, the eye pass draws a closed dark sphere around the head (the page's own
-// --bg) instead of the world — cheap, one material — so the headset gets frames (no runtime construct)
-// while the scene compiles behind it (xr.js). Not a splash: no text yet; the world simply arrives.
+// Entry curtain: while up, the eye pass draws a closed dark sphere around the head plus a head-locked splash plate
+// instead of the world, so the headset gets frames while the scene compiles behind it (xr.js).
 let curtain = null, curtainOn = false; const _yAxis = new THREE.Vector3(0, 1, 0);
 export function setXRCurtain(on) {
   curtainOn = !!on;
@@ -71,12 +66,12 @@ export function setXRCurtain(on) {
     curtain = new THREE.Scene();
     const shell = new THREE.Mesh(new THREE.SphereGeometry(4, 24, 16), new THREE.MeshBasicNodeMaterial({ color: 0x0b0f12, side: THREE.BackSide, depthTest: false, depthWrite: false }));
     shell.frustumCulled = false; shell.renderOrder = 0; curtain.add(shell); curtain.userData.shell = shell;
-    // THE SPLASH, head-locked 1.6 m out: the mark (its paths read from #splash so there is one drawing of it),
-    // eidoverse / worlds, and 'entering VR' with the dots breathing — repainted 3×/s while the curtain is up.
-    const c = document.createElement('canvas'); c.width = 1024; c.height = 1024; const g = c.getContext('2d');
+    // the splash plate, 1.6 m out: the mark (paths read from #splash, one drawing of it), 'eidoverse / worlds' and
+    // 'entering VR' with breathing dots, repainted 3×/s while the curtain is up
+    const c =document.createElement('canvas'); c.width = 1024; c.height = 1024; const g = c.getContext('2d');
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
     const logo = document.querySelector('#splash .sp-logo');
-    const paths = [...(logo?.querySelectorAll('path') ?? [])].map((el) => new Path2D(el.getAttribute('d')));   // frame + peg, at rest (boot is over by now)
+    const paths = [...(logo?.querySelectorAll('path') ?? [])].map((el) => new Path2D(el.getAttribute('d')));
     const [vbx, vby, vbw] = (logo?.getAttribute('viewBox') ?? '0 0 100 100').split(/[\s,]+/).map(Number);
     const font = getComputedStyle(document.documentElement).getPropertyValue('--font').trim() || 'system-ui, sans-serif';
     const paint = (dots) => {
@@ -91,7 +86,7 @@ export function setXRCurtain(on) {
     };
     paint(0); curtain.userData.paint = paint; curtain.userData.lastDots = -1;
     const text = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), new THREE.MeshBasicNodeMaterial({ map: tex, transparent: true, depthTest: false }));
-    quadMaterial(text, renderer);   // the splash's colours as authored, not ACES-washed (the VR panels' path)
+    quadMaterial(text, renderer);   // colours as authored, not tone-mapped (quadcolour.js)
     text.frustumCulled = false; text.renderOrder = 1; curtain.add(text); curtain.userData.text = text;
   }
 }
@@ -99,16 +94,15 @@ export const xrCurtainOn = () => curtainOn;
 /** Render the world from another camera the way the main pass does (draw batches included): the desktop mirror. */
 export const renderWorldFrom = (cam) => batches.render(renderer, scene, cam);
 let healed = 0;
-// EW.overdraw holds the live frame while it swaps every material for a counting clone (overdraw.js)
+// overdraw.js holds the live frame while it swaps every material for a counting clone
 let worldHold = false;
 export function setWorldHold(on) { worldHold = !!on; }
 export function renderWorld() {
   if (worldHold) return;
-  if (globalThis.__gpuLost?.fired) return;   // a lost GPU draws nothing (see renderer.render above); skip the rest of renderWorld too
+  if (globalThis.__gpuLost?.fired) return;
   mainPassCam = camera;
-  // SELF-HEAL: a frame that aborts between binding its frame-buffer target and restoring leaves that target bound,
-  // and every later frame renders INTO it and blits it onto itself (a black canvas, no errors). Off-XR, a bound
-  // target at the top of the main pass can only be that.
+  // self-heal: a frame that aborted mid-render leaves its target bound, and every later frame would render into it
+  // (a black canvas, no errors); off-XR, a bound target at the top of the main pass can only be that
   if (!renderer.xr?.isPresenting && renderer.getRenderTarget() !== null) {
     const rt = renderer.getRenderTarget(); renderer.setRenderTarget(null);
     if (healed++ < 3) tee(`[render] unbound a stale target at frame start (${rt.constructor.name} ${rt.width}x${rt.height}) — an earlier frame aborted mid-render`);
@@ -116,19 +110,17 @@ export function renderWorld() {
   if (curtainOn && renderer.xr?.isPresenting) {
     renderer.xr.updateCamera(camera);
     const xc = renderer.xr.getCamera(); const e = xc.matrixWorld.elements; curtain.userData.shell.position.set(e[12], e[13], e[14]);
-    { const t = curtain.userData.text; if (t) { const yaw = Math.atan2(e[8], e[10]); t.quaternion.setFromAxisAngle(_yAxis, yaw); t.position.set(e[12] - Math.sin(yaw) * 1.6, e[13], e[14] - Math.cos(yaw) * 1.6); } }   // LEVEL with the horizon: yaw follows the head, pitch/roll do not
+    { const t = curtain.userData.text; if (t) { const yaw = Math.atan2(e[8], e[10]); t.quaternion.setFromAxisAngle(_yAxis, yaw); t.position.set(e[12] - Math.sin(yaw) * 1.6, e[13], e[14] - Math.cos(yaw) * 1.6); } }   // yaw follows the head; pitch/roll do not
     { const d = Math.floor(performance.now() / 300) % 4; if (d !== curtain.userData.lastDots) { curtain.userData.lastDots = d; curtain.userData.paint?.(d); const t = curtain.userData.text; if (t?.material?.map) t.material.map.needsUpdate = true; } }
     renderer.render(curtain, camera);
     return;
   }
   const before = { ...renderer.info.render };
-  if (renderer.xr?.isPresenting) renderer.xr.updateCamera(camera);   // WE build the eyes (cameraAutoUpdate is false while presenting — xr.js); whatever rendered aside this frame, the eye pass starts from the rig
-  gpuBegin();                     // Debug › gpu timer: brackets the world pass (no-op while the timer is off)
+  if (renderer.xr?.isPresenting) renderer.xr.updateCamera(camera);   // we build the eyes (cameraAutoUpdate is off while presenting, xr.js): the eye pass starts from the rig
+  gpuBegin();                     // Debug › gpu timer brackets the world pass (no-op while off)
   try { batches.render(renderer, scene, camera); } finally { gpuEnd(); }
   const after = renderer.info.render;
-  // Count this render and its nested shadow/output passes, independently of
-  // sky bakes or earlier captures in the same animation frame. Never reset the
-  // renderer's shared counters: other diagnostics own their own intervals.
+  // this render's own deltas (nested shadow/output passes included); never reset the renderer's shared counters
   lastRender = {
     drawCalls: after.drawCalls - before.drawCalls,
     triangles: after.triangles - before.triangles,
@@ -138,9 +130,8 @@ export function renderWorld() {
   };
 }
 
-/** On-demand inventory before batching, by source type and library. Material
- *  groups are not total GPU draws (shadows, transparency and output add passes);
- *  `render.drawCalls` above is the measured total. No per-frame survey cost. */
+/** On-demand inventory before batching, by source type and library. Material groups are not total GPU draws
+ *  (shadows, transparency and output add passes); `render.drawCalls` is the measured total. */
 function sourceSurvey() {
   const frustum = new THREE.Frustum().setFromProjectionMatrix(
     new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
