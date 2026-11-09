@@ -1,21 +1,12 @@
-// seatlab — #101's measuring instrument, now a tools harness (Phase B
-// evidence hygiene: a laboratory bench must not ship as client runtime, so
-// it lives here and the client never imports it).
+// seatlab — the seat-measuring instrument (#101). A bench, not client runtime:
+// the client never imports it. See README.md beside it.
 //
-// Browser-loaded: import specifiers are ABSOLUTE (/lib/...), so the module
-// works served from anywhere: serve it as a static module (copy it under client/lib/) and `await import('/lib/seatlab.js')`
-// from the browser console. (An `upload {text}` request stores a world-script blob, sha256:<hex>, for the
-// authority's scripts, not an importable URL.) Pure math lives in
-// /lib/seatcore.js where bun tests pin it; this file only observes scenes
-// and lab instances.
-//
-// The _v lesson (design-round evidence amendment, conceded): the passive
-// instrument used to compute the seat claim through shared scratch
-// registers, and the forward-vector reuse clobbered the socket position
-// before its Y was read — invisible at y≈0, corrupt everywhere else. The
-// seat claim is now seatcore.seatClaim (pure arguments cannot alias), the
-// registers below are single-purpose, and the nonzero-Y regression in
-// test/client/seatcore-test.ts pins the function the instrument leans on.
+// Browser-loaded: import specifiers are absolute (/lib/...), so serve it as a
+// static module (copy it under client/lib/) and `await import('/lib/seatlab.js')`
+// from the console. Pure math lives in client/lib/seatcore.js, pinned by
+// test/client/seatcore-test.ts; this file only observes scenes and lab instances.
+// The scratch registers below are single-purpose: aliasing one once corrupted
+// the seat claim at nonzero Y (seatClaim takes plain arguments for that reason).
 //
 // All quantities in WORLD metres. Signed gaps are (landmark − seat surface):
 // positive = the landmark floats above the authored seat.
@@ -38,7 +29,7 @@ const _box = new THREE.Box3();
 export function measureSeat(occupantId, { localAvatar = null } = {}) {
   const m = avatarMounts.get(occupantId);
   if (!m) return { error: `${occupantId} is not mounted` };
-  // m.to is the seat's socket child (PLAN-sockets-entities); its host is the thing
+  // m.to is the seat's socket child; its host is the thing
   const ss = seatSocket(m.to);
   const parent = ss?.host != null ? entities.get(ss.host) : null;
   if (!parent) return { error: `mount parent ${ss?.host ?? m.to} not present` };
@@ -48,8 +39,7 @@ export function measureSeat(occupantId, { localAvatar = null } = {}) {
   const seatPos = socketWorldPos(m.to, _sock);
   if (!seatPos) return { error: `socket ${m.to} unresolvable` };
   parent.getWorldQuaternion(_q);
-  // pure math on captured values — the register-aliasing class of error is
-  // structurally impossible here (and pinned at nonzero Y by the bun test)
+  // pure math on captured values: no register can alias
   const claim = seatClaim([seatPos.x, seatPos.y, seatPos.z], [_q.x, _q.y, _q.z, _q.w]);
   const seat = { world: seatPos.toArray().map((n) => +n.toFixed(4)) };
   seat.parentYaw = +claim.parentYaw.toFixed(4);
@@ -72,8 +62,8 @@ export function measureSeat(occupantId, { localAvatar = null } = {}) {
   root.updateWorldMatrix(true, true);
   const rootY = root.getWorldPosition(_work).y;
 
-  // every landmark CANDIDATE, none blessed (the Phase A amendment): a hips
-  // origin can be rig metadata; bounds are geometry; the truth is for the table
+  // every landmark CANDIDATE, none blessed: a hips origin can be rig metadata,
+  // bounds are geometry; the acceptance table decides
   const candidates = { root: +(rootY - seatY).toFixed(4) };
   let hipsRawY = null, hipsNormY = null;
   if (humanoid) {
@@ -87,9 +77,8 @@ export function measureSeat(occupantId, { localAvatar = null } = {}) {
   const bounds = { height: +(_box.max.y - _box.min.y).toFixed(4),
     width: +(_box.max.x - _box.min.x).toFixed(4), depth: +(_box.max.z - _box.min.z).toFixed(4) };
 
-  // the composition's own word for this seat (#101): what mountTransform
-  // declared — profiled or approximate-with-reason — measured alongside the
-  // geometry so the acceptance table can assert both at once
+  // what mountTransform declared for this seat (profiled or approximate-with-reason),
+  // reported beside the geometry so the acceptance table can assert both
   const sw = mountTransform(occupantId, _work, { path: rec?.avatarPath ?? null, av: avatar });
 
   return {
@@ -111,31 +100,26 @@ export function measureAllSeats(opts = {}) {
   return [...avatarMounts.keys()].map((id) => measureSeat(id, opts));
 }
 
-// ---- the detached lab (Phase A rev 2, carried whole) ------------------------
-// Measurements happen on instances the lab OWNS — constructed, pulled
-// off-scene, measured, disposed. No live resident is ever posed, re-clipped
-// or moved: the passive measureSeat above only reads, and everything below
-// touches only lab-created bodies (Phase A review B1).
+// ---- the detached lab -------------------------------------------------------
+// Measurements happen on instances the lab OWNS — constructed off-scene,
+// measured, disposed. No live resident is ever posed, re-clipped or moved.
 
-/** Measure one avatar instance's sit-pose geometry, with full animation
- *  receipts (Phase A review B2) and a MEASURED contact candidate (review
- *  B3): the lowest skinned vertex among those weighted ≥ minWeight to the
- *  pelvis bone set, under the settled pose — an actual support surface, not
- *  a joint origin. Root is neutralized to the origin, so every Y is
- *  root-local = the signed gap above an authored seat once mounted.
+/** Measure one avatar instance's sit-pose geometry, with animation receipts
+ *  and a MEASURED contact candidate: the lowest skinned vertex weighted
+ *  ≥ minWeight to the pelvis bone set, under the settled pose. Root is
+ *  neutralized to the origin, so every Y is the signed gap above an authored
+ *  seat once mounted.
  *
- *  Phase B evidence amendment: the winner is RECORDED (mesh, vertex index,
- *  coordinate) alongside its support patch — the pelvis-set vertices within
- *  radiusXZ of it and within the contact band above it. A healthy underside
- *  is a cluster; a skirt hem or loose accessory is an isolated winner, and
- *  the patch statistics are how validation (seatcore.validateProfile) and a
- *  human reviewer both see the difference. No minimum is auto-promoted. */
+ *  The winner is recorded (mesh, vertex index, coordinate) with its support
+ *  patch — the pelvis-set vertices within radiusXZ and the contact band above
+ *  it. A healthy underside is a cluster; a skirt hem or accessory is an
+ *  isolated winner, which seatcore.validateProfile and a human reviewer both
+ *  see in the patch statistics. No minimum is auto-promoted. */
 export function labAvatar(av, { pose = 'sitchair', settleMs = 1200, steps = 72, radiusXZ = 0.1 } = {}) {
   if (!av?.root) return { error: 'no avatar' };
   const vrm = av.vrm ?? null;
   if (!vrm?.humanoid) {
-    // the legible refusal: no humanoid mapping means no seat landmark exists
-    // to derive — say so, never guess
+    // no humanoid mapping means no seat landmark to derive: say so, never guess
     return { rig: 'unsupported', refusal: 'no humanoid mapping — no seat landmark derivable' };
   }
   av.root.position.set(0, 0, 0); av.root.rotation.set(0, 0, 0); av.root.scale.set(1, 1, 1);

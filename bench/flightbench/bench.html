@@ -2,26 +2,15 @@
 <meta charset="utf-8">
 <title>flight bench — deterministic</title>
 <!--
-  flight bench — a fixed-step preview whose CLOCK IS THE CAPTURE'S.
+  flight bench — a fixed-step preview whose clock is the capture's
+  (bench/flight-capture.mjs drives it).
 
-  There is no requestAnimationFrame here, and that is the whole design. mica:
-  "Playwright/Chromium advances exactly 1/60s per frame and screenshots the
-  rendered page/canvas after each step... This avoids rAF/MediaRecorder
-  dropped-frame ambiguity." So the page exposes
+  No requestAnimationFrame: the page exposes window.__flightBench.step(dt) and
+  does nothing until someone calls it, so a dropped frame cannot exist. The
+  overlay is drawn into the frame, not composited afterwards.
 
-      window.__flightBench.step(dt)
-
-  and does nothing at all until someone calls it. A dropped frame cannot exist,
-  because a frame is not a thing that happens on time -- it is a thing that
-  happens when the capture says so.
-
-  The overlay is drawn INTO the frame, not composited afterwards, so the
-  numbers a viewer reads are the numbers that state actually held. A telemetry
-  burn-in cannot drift from its footage.
-
-  DEFAULT OFF: nothing here runs until enableFlight() is called with an
-  explicit dev capability provider. Loading this page in a browser by hand
-  gives you a grid and a message saying so.
+  DEFAULT OFF: nothing runs until enableFlight() is called with a dev
+  capability provider. Opened by hand, the page shows a grid and says so.
 -->
 <style>
   html,body { margin:0; background:#0b0d12; color:#c9ccd6;
@@ -95,10 +84,8 @@ const snapshot = () => st && ({
   events: events.slice(-6),
 });
 
-// ---- render. Deliberately schematic: this is an INSTRUMENT, not a viewer.
-// A side elevation plus a plan view shows descent, wander and spiral at once,
-// which is what Mythos needs to measure period, damping and terminal velocity.
-// A pretty render of the avatar would show him less.
+// ---- render. Schematic on purpose: a side elevation plus a plan view shows
+// descent, wander and spiral at once (period, damping, terminal velocity).
 function draw() {
   g.fillStyle = '#0b0d12'; g.fillRect(0, 0, W, H);
   if (!st) return;

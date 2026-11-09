@@ -1,20 +1,9 @@
-// servergate — the step-7 battery, one command.
-//
+// servergate — the server's wire-contract battery, one command. Baseline it green before touching server.ts.
 //   bun tools/operator/servergate.ts             # the core battery
 //   bun tools/operator/servergate.ts --only permtest,smoke
-//
-// The server split (TEL0S_NOTES §15) walks through a dense lattice of
-// wire-contract suites, each with its own env header. This runner makes
-// that lattice one command: for every external-server tool it boots a
-// fresh scratch sequencer (own WORLDS_DIR, own port, the tool's exact
-// env), runs the tool, kills the sequencer by child handle (§ Windows: its
-// whole tree, procgroup.ts killChild — the PID we hold is bun's own since we
-// spawn process.execPath, never the PATH shim), and prints a PASS/FAIL table.
-// Self-booting suites (smoke, authtest, support-lifecycle) just run. (Protocol v1
-// removed 2026-10-07: the v1 wire matrices — comptest, modtest, locktest, leasetest,
-// worldops, compfold, behaviortest, collide-fold — went with it; their successors
-// are in test/protocol/ (bun run test:protocol).) Baseline this GREEN before touching server.ts; run it after
-// every slice.
+// For each `server: true` row it boots a scratch sequencer (own WORLDS_DIR and port), runs the tool, kills the
+// sequencer's whole tree (procgroup.ts killChild) and prints a PASS/FAIL table. Self-booting suites just run.
+// The protocol suites live in the gate (bun run test:protocol), not here.
 
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -43,9 +32,7 @@ function freePort(from: number): number {
 
 const reap = killChild;
 
-// ---- the battery ------------------------------------------------------------
-// `server: true` → boot a scratch sequencer and hand the tool WORLD_URL/
-// JOIN_TOKEN/HTTP. `env` on either kind is the tool's documented header.
+// the battery: `server: true` → a scratch sequencer, handed to the tool as WORLD_URL/JOIN_TOKEN/HTTP; `env` is the tool's header
 
 type Row = { name: string; tool: string; server?: boolean; serverEnv?: Record<string, string>; env?: Record<string, string>; timeoutMs?: number };
 const BATTERY: Row[] = [
@@ -91,9 +78,7 @@ for (const row of BATTERY) {
       env.WORLD_TOKEN = env.WORLD_TOKEN ?? "test-door";
       env.WORLDS_DIR = join(scratch, "worlds");
     }
-    // stdout/stderr go to a FILE, never a pipe: a verbose tool fills an
-    // undrained pipe buffer, blocks on write, and "hangs" until the
-    // timeout — the first baseline run spent 37 minutes learning this
+    // stdout/stderr go to a file, never a pipe: a verbose tool blocks on an undrained pipe until the timeout
     const logPath = join(LOGDIR, `${row.name}.log`);
     const run = Bun.spawn([process.execPath, join(ROOT, row.tool)], {
       cwd: ROOT, env, stdout: Bun.file(logPath), stderr: Bun.file(logPath),

@@ -1,19 +1,17 @@
-// editworkspace-bench — the edit WORKSPACE's own chrome, in a real browser (R's 09-30 pass):
+// editworkspace-bench — the edit WORKSPACE's own chrome, in a real browser.
 //
 //   bun bench/editworkspace-bench.ts        (the default ../eidoverse-video library)
 //
 //   the corner   the ∃ in the top-left cell, the mic / ear (/ goggles) folded to its right exactly as
 //                the HUD folds them, the menus after them, the glyphs in the editor's greys;
 //   the wrench   the way out: amber on purpose, titled "leave build mode (B)", the only amber on the rail;
-//   Build        Build | Hierarchy tabs in the left column (Build replaced Create in step 5, 10-02; its
-//                World section and @world are worldentity-test's); the six building tools as tiles (structure_ui's
-//                TOOLS), "new building", an honest "undo building edit"; the armed tool's strip across the
-//                top of the viewport and Esc to drop it; the Library (add light, search, the starters as
-//                picture tiles that put the model in your hand); and a VR body that says what it can't do;
+//   Build        Build | Hierarchy tabs in the left column (the World section is worldentity-test's); the six
+//                building tools as tiles (structure_ui's TOOLS), "new building", "undo building edit"; the
+//                armed tool's strip across the top of the viewport and Esc to drop it; the Library (add light,
+//                search, the starters as picture tiles); and a VR body that says what it can't do;
 //   leaving      the workspace chrome is no longer PAINTED (not merely [hidden]) and the ∃ is home.
 //
-// Its own browser on purpose: headless leaks heap with time (a dead WebGPU device; HEAD idles at ~50 MB/s,
-// measured 09-30), so a long bench sharing one renderer OOMed it.
+// Its own browser on purpose: a long headless bench sharing one renderer leaks heap and OOMs.
 
 import { scratchBench, mkCheck, sleep } from '../test/harness/harness.ts';
 
@@ -61,8 +59,8 @@ console.log('\nthe corner (R, 09-30): ∃ top-left, mic / ear beside it as on th
   const below = await evalJson(`(() => { const d = [...document.querySelectorAll('#dock button[data-toggles]')].filter((b) => getComputedStyle(b).display !== 'none'); const t = document.querySelector('.edit-tool'); return { firstDock: d[0].getBoundingClientRect().top, ear: document.querySelector('#earbtn').getBoundingClientRect().bottom, lastDock: d.at(-1).getBoundingClientRect().bottom, tool: t.getBoundingClientRect().top }; })()`);
   check('…the panel buttons start under the bar, and the tools start below the wrench', (below as any).firstDock >= 40 && (below as any).tool >= (below as any).lastDock, below);
   check('the wrench closes the dock, in the column', !!g.wrench && g.wrench.t >= 40 && g.wrench.r <= 48, JSON.stringify(g.wrench));
-  // grey-on-grey when OFF: the editor's dim grey, not the HUD's; live is the brand teal here too (R, gym 10-17 20:44), so it
-  // is never the bar's text grey (mictoggle reads its inks off the button)
+  // OFF = the editor's dim grey (not the HUD's); live = the brand teal; never the bar's text grey
+  // (mictoggle reads its inks off the button)
   const ink = await evalJson(`(() => { const s = (sel) => { const g = document.querySelector(sel + ' svg g'); return g ? getComputedStyle(g).stroke : null; }; const probe = document.createElement('i'); document.body.append(probe); const c = (v) => { probe.style.color = v; return getComputedStyle(probe).color; }; const out = { mic: s('#micbtn'), ear: s('#earbtn'), dim: c('#8e8e96'), text: c('#d8d8dc'), brand: c(getComputedStyle(document.documentElement).getPropertyValue('--brand').trim()) }; probe.remove(); return out; })()`);
   const k = ink as any;
   check('mic / ear ink: the editor grey when off, the brand when live — never the bar\'s text grey', [k.mic, k.ear].every((v) => v === k.dim || v === k.brand) && k.mic !== k.text, JSON.stringify(k));

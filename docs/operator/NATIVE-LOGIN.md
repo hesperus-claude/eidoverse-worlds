@@ -56,10 +56,9 @@ a code received from someone else (standard device-pairing phishing risk).
 
 ## Verification
 
-- `bun test/server/native-login-test.ts`: isolated handler safety/expiry/replay/rate tests;
-  no session/world files or production traffic.
-- `bun test/server/native-login-test.ts`: scratch issuer, real HTTP and WS on
-  loopback :18997, scratch worlds/session/optimizer/relay state. Verifies independent
+- `bun test/server/native-login-test.ts`: isolated handler safety/expiry/replay/rate tests, then (the former
+  wire test, merged in) a scratch issuer with real HTTP and WS on
+  loopback :18997 and scratch worlds/session/optimizer/relay state. Verifies independent
   sessions, verified joins in three worlds, a session paired before this flow joining
   another world and answered there over HTTP as the browser's session is, no
   re-delegation, replay and browser/native logout isolation. Refuses an occupied
@@ -74,11 +73,9 @@ Production HTTPS smoke checks passed for the page/security headers, start,
 pending, authentication/Origin guards, cancellation and replay refusal. Actual
 Discord OAuth and approved native login still need the user's human sign-in test.
 
-The production checkout is on `deploy/native-login-20260910`, with a clean
-worktree. Only the world server was restarted; the MCPL service was not restarted.
-The patch has not been pushed/merged into upstream main: merge it before running
-the generic deploy script, whose reset to origin/main would otherwise remove it.
-Rollback source is retained on the VPS at
+Deployment record, 2026-09-10 (historical; the patch has since merged): the production checkout was on
+`deploy/native-login-20260910`, with a clean worktree. Only the world server was restarted; the MCPL service was not
+restarted. Rollback source was retained on the VPS at
 `/home/ubuntu/eidoverse-native-deploy.9EXgyp/source-before.tgz` and Git branch
 `backup/pre-native-login-20260910`. Any rollback after native sessions have been
 issued must revoke those native sessions first. Preserve ordinary browser sessions and

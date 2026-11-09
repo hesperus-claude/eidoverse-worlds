@@ -1,21 +1,10 @@
-// A tool, not a gate test: a sweep of the host's serving roots, not of the repo.
-// image-container-sweep — every embedded image in every GLB/VRM under the
-// serving roots, checked against its own declared mimeType.
-//
-// The optimizer now refuses to WRITE a file whose images are not images
-// (server/optimize.ts, #122). This is the other half: variants written before
-// that guard existed are still on disk and still being served, and nothing
-// else in the tree ever looks at them again. One sweep says whether the
-// library is clean.
-//
+// image-container-sweep — a tool, not a gate test: every embedded image in every GLB/VRM under the host's serving
+// roots, checked against its declared mimeType. The optimizer refuses to write such a file (server/optimize.ts
+// findImageLies, #122); this finds the variants written before that guard.
 //   bun run tools/assets/image-container-sweep.ts              # OPT_DIR + LIBRARY_DIR
 //   bun run tools/assets/image-container-sweep.ts <dir|file>…  # explicit roots
-//   bun run tools/assets/image-container-sweep.ts --host https://…  # a live server
-//
-// Exit 0 clean, 1 if anything lies about its own bytes. The --host form reads
-// /library-list and fetches each entry with ?ktx2=1, which is the shape a
-// capable browser actually receives — the only view that would have caught the
-// threshold-lantern.
+//   bun run tools/assets/image-container-sweep.ts --host https://…  # a live server: /library-list, each entry fetched with ?ktx2=1
+// Exit 0 clean, 1 if anything lies about its own bytes.
 
 import { readdirSync, statSync, existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -25,9 +14,7 @@ import { OPT_DIR, LIBRARY_DIR } from "../../server/config.ts";
 const argv = process.argv.slice(2);
 const hostFlag = argv.indexOf("--host");
 const host = hostFlag >= 0 ? argv[hostFlag + 1] : null;
-// `hostFlag + 1` is 0 when --host is absent, which would silently swallow the
-// first positional root — the check must not quietly examine fewer files than
-// it was handed.
+// without --host, hostFlag + 1 is 0: don't drop the first positional root
 const roots = argv.filter((a, i) => !a.startsWith("--") && !(hostFlag >= 0 && i === hostFlag + 1));
 
 let checked = 0, broken = 0, unreadable = 0;
@@ -37,8 +24,7 @@ function report(label: string, bytes: Uint8Array) {
   let lies;
   try { lies = findImageLies(bytes); }
   catch (e) {
-    // Not every .glb on disk is a container we can walk (a .failed marker's
-    // sibling, a partial write). Say so rather than counting it clean.
+    // a partial write or a .failed marker's sibling isn't a container: say so rather than count it clean
     unreadable++;
     console.log(`  ? ${label} — ${(e as Error).message}`);
     return;

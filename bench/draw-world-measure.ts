@@ -8,7 +8,7 @@ import { ownedWorld } from '../test/harness/probe-harness.mjs';
 import { qFromYaw } from '../shared/rot.js';
 import { helloOf } from '../shared/protocol/hello.js';
 
-// founded and owned by the driver's id (TRUST_NAMES), so its creates are admitted (#260 house I419)
+// founded and owned by the driver's id (TRUST_NAMES), so its creates are admitted
 const world = await ownedWorld({ worlds: ['draw-probe'], owner: 'draw-driver', env: { ACT_RATE: '250', TRUST_NAMES: '1' } });
 let browser, ws;
 const errors = [];
@@ -19,7 +19,7 @@ try {
     ws.onmessage = (e) => { const m=JSON.parse(e.data); if(m.type==='snapshot') resolve(m); if(m.type==='error') reject(Error(m.error)); };
     ws.onerror = reject;
   });
-  // the request/reply path (#260 house I420): {type:'request', id, verb, args} → {type:'reply', id, reply}
+  // the request/reply path: {type:'request', id, verb, args} → {type:'reply', id, reply}
   let reqSeq = 0;
   const request = (verb, args) => new Promise((resolve, reject) => {
     const rid = ++reqSeq;

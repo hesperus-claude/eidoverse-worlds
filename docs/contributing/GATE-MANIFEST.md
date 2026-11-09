@@ -58,7 +58,8 @@ The preflight also fails, naming what to fix, when:
 
 Every lane is required. They run in this order:
 
-1. **core** covers transactions and security: `kernel`, `gov-reserved`, `nov1`, `vocab`, `authority` (which holds the
+1. **core** covers the pins, transactions and security: the spec and hygiene checks (`kernel`, `trig`, `laws`,
+   `engine`, `normative`, `gov-reserved`, `diffcheck`, `hygiene`, `procgroup`), `nov1`, `vocab`, `authority` (which holds the
    storage and durability rows), `access`, `identity`, `scars`, `reset-race`, `txn` (every request ends committed,
    rolled-back or ambiguous; one request capability rechecked at both await-to-commit seams) and `txn-mutants` (each
    `txn` row turns red under its mutation). It runs first, and the first failure or skip stops the gate.

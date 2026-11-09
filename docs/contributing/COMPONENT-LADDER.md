@@ -38,15 +38,15 @@ definition in `shared/protocol/componentspec.js`; `schema` returns it, and the I
   (the avatar guard rails' names, PROTOCOL §7a).
 - **reserved inside a trial component**: a field or a kind can be held the same way, refused with code `reserved` while
   its name is kept for an addition later (the registry's `reservedFields` / `reservedKinds`, pinned):
-  - `station`: `poses`, `sync`, `approach`, `enter`, `leave`, `reach`, `look`, `input`, `fromSeat` (researched in
-    RESEARCH-socket-body-2026-10-06, built in shared/sockbody.js's reader, unused in any stored world; each comes back
-    with its `absentMeans`). `hold` (bone overrides over the pose) is cut, not held.
+  - `station`: `poses`, `sync`, `approach`, `enter`, `leave`, `reach`, `look`, `fromSeat` (researched 2026-10-06,
+    read by shared/sockbody.js, unused in any stored world; each comes back with its `absentMeans`). `hold` (bone
+    overrides over the pose) is cut, not held.
   - `grabbable`: `fx` (presence-only particles while use is held). A grip's `hold` is cut.
   - `terrain`: the kind `raster` (an imported height raster; no reader draws or walks it yet, so its fields stay
     unregistered).
   - `physics`: `surface` (was `material`), `friction`, `restitution`, `frictionCombine`,
-    `restitutionCombine`, `linearDamping`, `angularDamping`, `centerOfMass` (the vocabulary every engine shares; units,
-    limits and meanings of absence held in `reservedShape`/`absentMeans`; they open when an engine reads them). `mass` and
+    `restitutionCombine`, `linearDamping`, `angularDamping`, `centerOfMass` (the vocabulary every engine shares; the
+    shape they were sketched with is docs/reference/RESERVED-SHAPES.md, no longer pinned; they open when an engine reads them). `mass` and
     `density` stay open: the body shove reads them.
     `layers`, `mask`, `ccd` are cut, not held.
 - **cut fields that say where they went** (the registry's `dropped`): a write of one is refused with a pointer, a
@@ -82,11 +82,11 @@ removed, changed or narrowed. Then:
   naming every break and why, in the same commit as the pin;
 - a **break on a stable name** never re-pins, acknowledged or not.
 
-The pin also records what is held or closed inside a trial name (PROTOCOL §4): `reservedKinds` (the kinds above),
-`reservedShape` (what a reserved field will mean when it opens: `physics`' units, limits and combine enums) and
-`nestedEnums` (a nested grammar's closed vocabularies, by path: `structure`'s aperture kinds, wall axes, tile halves). A
-`nestedEnums` member removed trips D8 like an enum's; a change to `reservedKinds` or `reservedShape` shows only in the
-pin's diff for now.
+The pin also records what is held or closed inside a trial name (PROTOCOL §4): `reservedFields`, `reservedKinds` (the
+names and kinds above) and `nestedEnums` (a nested grammar's closed vocabularies, by path: `structure`'s aperture kinds,
+wall axes, tile halves). A `nestedEnums` member removed trips D8 like an enum's; a change to `reservedFields` or
+`reservedKinds` shows only in the pin's diff for now. No shape is pinned for a reserved field (physseeds PH4); the
+sketches live in docs/reference/RESERVED-SHAPES.md.
 
 Not pinned, but refused by the same registry: a definition's `stamped` fields (the sky's `ts`, `override`,
 `forecast.epoch`) are the authority's alone, and a write carrying one is refused `stamped`, naming the act that owns it.

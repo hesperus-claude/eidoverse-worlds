@@ -112,12 +112,3 @@ The GPU bench owns a temporary HTTP listener. The world probes own scratch
 sequencers; they do not join or restart a resident world. The full-client probe
 needs the normal asset library. `SFU_TEST_CHROME` selects the browser for the draw
 probes; otherwise they use installed macOS Chrome or Playwright's managed browser.
-
-Two broader checks exposed existing issues outside this change:
-
-* `parts-test.ts` cannot import `surfaceUnder` from its collider stub, reproduced
-  on untouched `main` at `e7a0f96`.
-* `object-lod-test.ts` fails its catalog assertion in a checkout containing
-  library LOD variants. An empty baseline checkout passes; adding an existing
-  LOD filename to that baseline reproduces `/library-models` exposing the
-  variant. The catalog route is unchanged by this work.

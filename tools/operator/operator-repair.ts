@@ -1,10 +1,10 @@
-import { helloOf } from "../../shared/protocol/hello.js";
 // tools/operator/operator-repair.ts — one server operator's request into a world, from the command line (docs/operator/TRANSLATING-OLD-WORLDS.md).
 // usage: EIDO_SESSION=<ew_sess cookie> | EIDO_AGENT_TOKEN=<token>  [EIDO_KEY=<door key>]
 //        bun tools/operator/operator-repair.ts <server url> <world> <verb> ['<args as JSON>']
 //   verb whois {name} looks someone up; every other verb is operator-repair (spec/PROTOCOL.md "Operator repair").
 //        WORLDS_DIR=<dir> bun tools/operator/operator-repair.ts bind <world> <identity-or-name> <account> [--by <who asked>]
 //   on the host: an imported identity (a main-era name with no account yet) is worn by that account from now on (tools/operator/operator-bind.ts)
+import { helloOf } from "../../shared/protocol/hello.js";
 if (process.argv[2] === "bind") { const { bindCli } = await import("./operator-bind.ts"); const { WORLDS_DIR } = await import("../../server/config.ts"); process.exit(bindCli(process.argv.slice(3), WORLDS_DIR)); }
 const [url, world, verb, json = "{}"] = process.argv.slice(2);
 if (!url || !world || !verb) { console.error("usage: bun tools/operator/operator-repair.ts <server url> <world> <verb> ['<args JSON>']   (EIDO_SESSION or EIDO_AGENT_TOKEN names you)"); process.exit(2); }

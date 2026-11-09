@@ -14,12 +14,12 @@ const NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 type Out = { ok: true; id: string; name: string; account: string; logged: string | null; warn?: string } | { ok: false; refused: string };
 
 /** The identities with a record of their own in world `dir`: an entry they wrote, a role they hold, a ban or mute on them.
- *  A third party's mention (a recipient of someone else's speech) is not theirs (#260 Stella q3). */
+ *  A third party's mention (a recipient of someone else's speech) is not theirs. */
 function ownIn(dir: string): Set<string> {
   const out = new Set<string>(), mine = (id: unknown) => { if (typeof id === "string" && isMinted(id)) out.add(id); };
   const lines = (f: string) => { const p = path.join(dir, f); return fs.existsSync(p) ? fs.readFileSync(p, "utf8").split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }) : []; };
   const log = readLog(fs.readFileSync(path.join(dir, "world.jsonl")));
-  for (const e of acceptedEntries(log, { ops: true })) mine(e?.actor);   // only an entry the reader accepts (#260 Stella 10-30)
+  for (const e of acceptedEntries(log, { ops: true })) mine(e?.actor);   // only an entry the reader accepts
   for (const m of lines("world.mod.jsonl")) { mine(m?.actor); if (m?.verb === "ban" || m?.verb === "mute") mine(m.who); }
   const wc = fold(log).entities?.["@world"]?.c ?? {};
   for (const k of Object.keys(wc)) if (k.startsWith("roles:")) mine(k.slice(6));
@@ -44,7 +44,7 @@ export function bindIdentity(worldsDir: string, world: string, who: string, acco
   dir.bind(id, account);
   const out: Out = { ok: true, id, name, account: `${account.split(":").slice(0, 2).join(":")}:… (tag ${accountTag(account)})`, logged: "world.mod.jsonl" };
   const rec = { ts: Date.now(), actor: "system", verb: "bind", who: id, by: String(by).slice(0, 64), operator: true };
-  // the bind is in the directory already: a failed append is said, never undone (a retry would refuse: bound = not imported; bot #192)
+  // the bind is in the directory already: a failed append is said, never undone (a retry would refuse: bound = not imported)
   try { modLogAt(path.join(wd, "world.mod.jsonl")).appendMod(rec); } catch (e) { out.logged = null; out.warn = `bound, but world.mod.jsonl took no record (${(e as Error)?.message ?? e}): add this line by hand: ${JSON.stringify(rec)}`; }
   return out;
 }

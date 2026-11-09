@@ -1,29 +1,12 @@
 // collider-survey — how badly does one bounding box lie, across a real library?
-//
 //   bun tools/assets/collider-survey.ts <dir-or-glb> [<dir-or-glb> ...]
-//
-// colliders.js decide(): room-scale (>=16m² and >=2.2m) collides against real
-// triangles, tall-and-thin becomes a pillar, a floor-shaped thing whose box top
-// lies (this survey's rule) goes exact, and everything else is ONE box whose top
-// face is the only ground it can report.
-//
-// Before changing that rule, this measures the thing the rule should be asking
-// about — "is the top of the bounding box where a body would actually stand?"
-// — across every mesh available, so a threshold can be picked from where real
-// objects fall rather than from the one that annoyed us.
-//
-// Two metrics per mesh, deliberately:
-//
-//   lie_ray   the honest one. Cast a grid of rays straight down, take the
-//             surface height per column, and compare the MEDIAN of those to
-//             bbox.max.y. Needs a BVH, which is fine offline and not fine in
-//             fitCollider — the BVH is the thing we are deciding whether to
-//             build.
-//   lie_cheap the shippable one. Bucket vertices into the same grid, keep the
-//             max y per cell, median those. One linear pass, no BVH, a few ms.
-//
-// If lie_cheap tracks lie_ray across the library, decide() can afford the test
-// at fit time. If it does not, the idea is wrong and better to know now.
+// colliders.js decide() gives most things one box whose top face is the only ground it can report. Before changing that
+// rule, this measures "is the top of the bounding box where a body would stand?" across every mesh available, so a
+// threshold is picked from where real objects fall. Two metrics per mesh:
+//   lie_ray   the honest one: a grid of downward rays, median surface height vs bbox.max.y (needs a BVH: fine offline,
+//             not at fitCollider time, where the BVH is the thing being decided)
+//   lie_cheap the shippable one: vertices bucketed into the same grid, max y per cell, median; one pass, no BVH
+// If lie_cheap tracks lie_ray across the library, decide() can afford the test at fit time.
 
 import { readdirSync, statSync } from 'node:fs';
 import { join, basename, extname } from 'node:path';
@@ -208,11 +191,8 @@ for (const t of [0.05, 0.10, 0.15, 0.20, 0.30]) {
 }
 
 // ---- the candidate rule -----------------------------------------------------
-// A bare lie threshold flags cars, sharks and rubble alongside the blanket,
-// because a rounded 1.2m-tall thing also sits below its own bbox top. The
-// distinguishing fact about a blanket is not that it lies — it is that it is
-// FLOOR-SHAPED and lies: wide enough to stand on, low enough that standing on
-// it is the only thing you would ever do with it. So gate on shape first.
+// A bare lie threshold flags cars, sharks and rubble with the blanket (a rounded thing also sits below its box top).
+// A blanket is floor-shaped AND lies: wide enough to stand on, low enough that standing is all you'd do. Shape first.
 const FOOT_MIN = 2.0;    // m² — smaller than this and nobody stands on it
 const H_MAX = 0.8;       // m  — taller than this it is furniture, not ground
 const LIE_MIN = 0.10;    // m  — below this the box top is honest enough
@@ -227,9 +207,7 @@ for (const r of flat) {
     `foot ${r.foot.toFixed(1).padStart(5)}  h ${r.h.toFixed(2)}  lie ${r.lieRay.toFixed(3)}  (cheap ${r.lieCheap.toFixed(3)})`);
 }
 
-// Does the cheap proxy hold up WITHIN the population the rule applies to? The
-// library-wide error is dominated by tall structured meshes (a watchtower, a
-// perimeter wall) that this gate excludes before the metric is ever consulted.
+// does the cheap proxy hold up within the population the rule applies to? (tall meshes dominate the library-wide error)
 if (flat.length) {
   const e = flat.map((r) => Math.abs(r.lieCheap - r.lieRay));
   const worst = flat.reduce((a, b) => (Math.abs(a.lieCheap - a.lieRay) > Math.abs(b.lieCheap - b.lieRay) ? a : b));
@@ -242,9 +220,7 @@ if (flat.length) {
 }
 
 // ---- sensitivity ------------------------------------------------------------
-// H_MAX is the knob with teeth: it decides whether "floor-shaped" means only
-// blankets and rugs, or reaches up into sofas, wrecks and vehicles. Nobody
-// should pick it from taste, so show what each setting actually reclassifies.
+// H_MAX decides whether "floor-shaped" stops at rugs or reaches sofas and wrecks: show what each setting reclassifies
 console.log('\n  sensitivity — what each height gate would reclassify (foot >= 2m², lie > 0.10m):');
 for (const hmax of [0.6, 0.8, 1.0, 1.2, 1.5, 2.2]) {
   const hit = rows.filter((r) => r.kind === 'box' && r.foot >= FOOT_MIN && r.h <= hmax && r.lieRay > LIE_MIN);

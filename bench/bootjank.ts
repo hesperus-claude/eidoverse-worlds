@@ -11,17 +11,13 @@
 //
 // bootbench asks "when is the first frame"; this asks "how bad are the next
 // two thousand". A document-start hook wraps the WebGPU device/queue entry
-// points (createRenderPipeline / createShaderModule / writeBuffer /
-// writeTexture / copyExternalImageToTexture) and a rAF loop records every
-// frame's duration with the GPU work that landed inside it, plus longtask
-// spans and 1Hz samples of EW.frame()'s per-system bill. The report is a
-// timeline of the worst frames, each attributed: compile, upload, or CPU.
+// points and a rAF loop records every frame's duration with the GPU work that
+// landed inside it, plus longtask spans and 1Hz samples of EW.frame()'s
+// per-system bill. The report is a timeline of the worst frames, each
+// attributed: compile, upload, or CPU.
 //
-// The world is a byte-copy of worlds/commons — the actual world whose early
-// roughness prompted this tool — served by a scratch sequencer so nothing
-// appends to the real log.
-//
-// Scaffolding: a scratch sequencer, CDP, and the Windows shim rule (spawn process.execPath, never the PATH bun).
+// The world is a byte-copy of worlds/commons served by a scratch sequencer,
+// so nothing appends to the real log. Spawns process.execPath, never the PATH bun.
 
 import { existsSync, mkdtempSync, rmSync, mkdirSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -41,14 +37,8 @@ const HEADED = has("headed");
 const ECHO = has("console");
 const MBIT = num("mbit", 0);
 const WIDE = has("wide");
-const HEAVYJOIN = has("heavyjoin");   // a 21MB-avatar resident arrives at t≈+12s
-                                      // after boot — measures the VRM-parse halt
-                                      // (the same main-thread path an avatar
-                                      // SWITCH takes, §19b)
-const GRASSDIAG = has("grassdiag");   // §22: run EW.grassDiag() post-boot and
-                                      // print its table. Combine with
-                                      // --pixels N to force the GPU-bound
-                                      // regime the diag needs to show deltas.
+const HEAVYJOIN = has("heavyjoin");   // a 21MB-avatar resident joins at t≈+12s: measures the VRM-parse halt
+const GRASSDIAG = has("grassdiag");   // run EW.grassDiag() post-boot (pair with --pixels N to make it GPU-bound)
 const PIXELS = num("pixels", 0);      // renderer.setPixelRatio(N) post-boot
 const SECS = num("secs", WIDE ? 25 : HEAVYJOIN ? 50 : GRASSDIAG ? 75 : 40);
 
@@ -70,8 +60,7 @@ if (!WIDE && !existsSync(join(ROOT, "worlds", "commons", "world.jsonl"))) {
 }
 
 // --wide: the libs an arrival should and should NOT fetch. Distinct sets, so
-// the network log is an unambiguous witness (§16.2.C: far entities never
-// load at join — the join gate works from position, geom or no geom).
+// the network log is an unambiguous witness (far entities never load at join).
 const NEAR_LIBS = [
   "eidoverse/assets/models/scifi_art_deco_office_desk.glb",
   "eidoverse/assets/models/streetlight_lamp_light_street_blade_runner_cyberpunk.glb",
@@ -254,10 +243,9 @@ if (MBIT > 0) {
 
 // ---- the document-start recorder --------------------------------------------
 // Installed before any module runs. Wraps the GPU entry points so each frame
-// knows what landed inside it; times the SYNCHRONOUS cost of pipeline/shader
-// creation (Chrome defers real compilation to the GPU process, so a long rAF
-// gap right AFTER creations is the compile stall even when the sync ms is 0 —
-// the correlation is the attribution, the sync ms is a bonus).
+// knows what landed inside it. Chrome compiles in the GPU process, so a long
+// rAF gap right AFTER pipeline creation is the compile stall even when the
+// synchronous ms is 0.
 
 const RECORDER = `(() => {
   if (globalThis.__jank) return;
@@ -364,8 +352,7 @@ if (HEAVYJOIN) {
   console.log(dim(`  heavy resident joins at t=${(heavyAt / 1000).toFixed(1)}s (aletheia.vrm, 21MB)…`));
   const first = heavyJoin("heavyguest");
   // leave, then a SECOND wearer of the same body: the first parse pooled at
-  // departure, so the rejoin must be a pool hit — §19b's whole point. The
-  // loadLog witness is a "pool-hit" line for aletheia.
+  // departure, so the rejoin must be a pool hit (loadLog says "pool-hit").
   await sleep(10_000);
   console.log(dim("  heavy resident leaves (body → pool)…"));
   try { first.close(); } catch { /* fine */ }
@@ -476,8 +463,7 @@ for (const r of [...resources].sort((a, b) => b.bytes - a.bytes).slice(0, 8)) {
 }
 
 if (data.bills?.length) {
-  // EW.frame() returns an ARRAY of {name, ms, every, enabled} (ms is an
-  // EWMA, α=0.05 — it shows sustained load, never a single spike)
+  // EW.frame() returns [{name, ms, every, enabled}]; ms is an EWMA (sustained load, not spikes)
   console.log(`\n${bold("── frame bill over time")}  ${dim("(per-system EWMA ms, 1Hz samples — top 5 at each)")}`);
   for (const b of data.bills.filter((_: any, i: number) => i % 5 === 0 || i === data.bills.length - 1)) {
     const rows = (Array.isArray(b.bill) ? b.bill : [])

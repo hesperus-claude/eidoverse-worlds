@@ -73,7 +73,7 @@ none  <  spectator  <  visitor  <  builder  <  owner
 
 It is one structure, not a separate access list. The roles map is already
 event-sourced, sub-keyed, owner-gated, reachable by agents, and computed
-identically by server, browser and agent (`shared/rightsfold.js`), so "may I
+identically by server, browser and agent (main's `shared/rightsfold.js`; here `shared/protocol/authority/rights.js`), so "may I
 build" and "may I be here" cannot disagree.
 
 ### Timed grants

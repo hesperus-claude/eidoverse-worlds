@@ -17,8 +17,8 @@ what lasts; most of the files were cut on 2026-10-15 (`git show --stat e414ab3d`
    many ms between the act and the settle), AND render a frame to a file and open it. A number without the
    picture has been wrong here more than once.
 4. **Turn the finding into a gate row.** Once the mechanism is named, the test belongs in a suite under
-   `test/gate/run.ts` (`client-check` for the client, `authority-check` for the door, `scale-check` for
-   budgets), red before the fix and green after. The lab is then done and can go.
+   `test/gate/run.ts` (`client` for the client, `authority` for the door, `scale` for budgets: `test/protocol/<name>-check.ts`),
+   red before the fix and green after. The lab is then done and can go.
 
 ## A runnable example
 `tools/surface-parity.ts` (see `SURFACE-PARITY.md`) is the lab-shaped tool that became a harness: it copies

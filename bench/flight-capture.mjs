@@ -4,27 +4,19 @@
 //   bun bench/flight-capture.mjs --take A        # just the leaf
 //   bun bench/flight-capture.mjs --fps 30 --out /tmp/clips
 //
-// mica's path, and the reasoning is theirs: do NOT reuse render-watchdog (it
-// owns production renderer liveness, not evidence), and do NOT record with
-// rAF/MediaRecorder, because a dropped frame is then indistinguishable from a
-// slow one and the clip stops being measurable. Instead:
+// No rAF/MediaRecorder: a dropped frame would be indistinguishable from a
+// slow one. Instead:
 //
-//   1. the bench page exposes window.__flightBench.step(dt) and does NOTHING
-//      on its own -- no rAF loop exists to drop a frame from;
+//   1. the bench page exposes window.__flightBench.step(dt) and does nothing on its own;
 //   2. this advances exactly 1/fps per frame and screenshots after each;
-//   3. ffmpeg encodes the PNG sequence at a CONSTANT rate;
-//   4. the overlay is burned into the page before the screenshot, so the
-//      numbers on screen are the numbers that state actually held.
+//   3. ffmpeg encodes the PNG sequence at a constant rate;
+//   4. the overlay is burned into the page before the screenshot.
 //
-// Two matched takes from IDENTICAL initial state and config:
-//   A -- >=15m falling leaf through honest ground contact. No flare, no
-//        autoland, no last-metre mercy hover.
-//   B -- the same drop with RECOVER injected mid-descent: finish the beat,
-//        reload the wings, resume glide. Non-instant, <= one 3.4s cycle.
+// Two matched takes from identical initial state and config:
+//   A -- falling leaf through ground contact, no flare or autoland.
+//   B -- the same drop with RECOVER injected mid-descent (<= one 3.4s cycle).
 //
-// OWNERSHIP: this owns its server, its browser and its frame directory, and
-// tears all three down on success AND on failure. A capture that leaves a
-// chromium behind has failed even if the file is fine.
+// Owns its server, browser and frame directory; tears all three down on success and failure.
 import { chromium } from 'playwright';
 import { createServer } from 'node:http';
 import { readFileSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
@@ -39,17 +31,14 @@ const ONLY = arg('--take', null);
 const ROOT = resolve('.');
 const DT = 1 / FPS;
 
-// The rig the bench flies. Derived from the shipped asset by
-// test/fixtures/flight-fixture.ts -- a hand-typed list could not go stale against the
-// file, so it would prove nothing about the file.
+// The rig the bench flies, derived from the shipped asset by test/fixtures/flight-fixture.ts
+// (a hand-typed list could go stale against the file).
 const FIX = JSON.parse(readFileSync('test/fixtures/mythos-wings-rig.json', 'utf8'));
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json',
                '.css': 'text/css', '.mjs': 'text/javascript' };
 
-/** A scratch static server over the repo. Its own port, torn down by the
- *  caller -- never an ambient one, so a capture cannot silently record
- *  whatever else happens to be listening. */
+/** A scratch static server over the repo, on its own port (never an ambient one), torn down by the caller. */
 function serve() {
   const srv = createServer((req, res) => {
     const p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
@@ -76,13 +65,8 @@ async function take(page, { name, seconds, injectRecoverAt }) {
   rmSync(frames, { recursive: true, force: true });
   mkdirSync(frames, { recursive: true });
 
-  // IDENTICAL initial state and config for both takes -- that is what makes
-  // them matched, and matched is what lets Mythos attribute the difference to
-  // the recovery rather than to the drop.
-  // 30 m, so BOTH takes are legible: A has room for several full oscillations
-  // before contact, and B's recovery finishes with real air underneath rather
-  // than skimming the dirt -- a recovery that completes at 0.2 m is correct and
-  // unmeasurable, which is not what the take is for.
+  // Identical initial state for both takes, so the difference is the recovery.
+  // 30 m gives A several oscillations before contact and B real air under its recovery.
   const START_Y = 30;
   const r = await page.evaluate(({ bones, startY }) => {
     window.__flightBench.setTop(startY);
@@ -173,8 +157,7 @@ try {
   console.error('CAPTURE FAILED:', e?.message ?? e);
   code = 1;
 } finally {
-  // Own the teardown on BOTH paths. A capture that leaves a chromium running
-  // has failed even when the file is fine.
+  // teardown on both paths: a capture that leaves a chromium running has failed
   try { await browser?.close(); } catch {}
   try { srv?.close(); } catch {}
 }

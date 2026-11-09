@@ -1,7 +1,6 @@
 // bake-seat-clip: regenerate patched/…/sitting_normal_chair.vrma (config.ts PATCH_DIR, served first), lowered onto the seat.
-// The stock clip is floor-origin but seats put the root on the surface, so the hips track is lowered by Δ ≈ 0.409 in the
-// clip (createVRMAnimationClip scales it per rig; restHipsPosition comes from the rest graph, so the scale is untouched).
-// Re-derive from the seated mass, never a single minimum vertex: Δ = rest height / 0.865 — see docs/research/seat-clip-delta.md.
+// The stock clip is floor-origin but seats put the root on the surface, so the hips track is lowered by Δ ≈ 0.409
+// (createVRMAnimationClip rescales it per rig). How Δ is derived: docs/research/seat-clip-delta.md.
 // USAGE
 //   bun tools/assets/bake-seat-clip.ts               # write the patched file
 //   bun tools/assets/bake-seat-clip.ts --check       # verify the committed file matches

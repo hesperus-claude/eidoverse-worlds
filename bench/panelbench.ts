@@ -4,11 +4,7 @@
 //
 // The palette sections (build / avatar / ground / sky) and the debug panel
 // lazy-build their DOM on first open, so a construction error there is
-// invisible to every boot gate — lightbench boots the client
-// but never open a panel, which is how these surfaces went their whole lives
-// eyeball-verified only. Born with the R4 split (build.js → palette/
-// groundpanel/skypanel/seatedit + rows.js): the exact change that could
-// silently break a paint is the one that finally bought it a gate.
+// invisible to every boot gate that never opens a panel. This one does.
 
 import { scratchBench, mkCheck, sleep } from '../test/harness/harness.ts';
 

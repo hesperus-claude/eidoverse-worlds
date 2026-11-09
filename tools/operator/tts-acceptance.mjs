@@ -1,25 +1,11 @@
-// tts-acceptance — REAL Piper, real browser, real RTP (#91 r3 B4).
-//
-// HONESTY CONTRACT: NOT part of the merge receipt
-// and not CI — the traveling regressions are tts-test.ts / tts-fault-test.ts
-// (fake engine, run with bun anywhere). This harness is the one-time
-// dev/staging acceptance the r3 review asked for: actual Piper + worker +
-// ORT + a selected local voice producing OUTBOUND AUDIBLE MEDIA, received by
-// an independent listener, through the exact production paths (world `say`
-// verb → speech bus → speakOwnSays → engine → generator → sender). It mutates nothing: own spawned
-// server, throwaway world dir, models fetched from disk.
-//
-//   Requirements: playwright + chromium installed in the repo (a static ESM
-//   import: NODE_PATH does not apply; bare imports resolve from this file, not
-//   the cwd), a piper voice pair:
-//     VOICE_ONNX=/path/voice.onnx VOICE_CFG=/path/voice.onnx.json
-//
-// Emits a provenance-bound receipt (JSON) on stdout: model/config sha256,
-// browser+OS versions, cold and warm load ms, voice identity, the listener's
-// RTP count and level, and each acceptance check.
-//
-// /lib/voice.js went with the SFU move (#260 house I423): the receiving side reads client/lib/voicesfu.js, and the
-// sender-identity / mic-priority section (senderTrackInfo, voicePcs, micDiag) is retired, as nothing exposes it now.
+// tts-acceptance — real Piper, real browser, real RTP (#91). Not CI and not part of the merge receipt: the travelling
+// regressions are test/client/tts-test.ts and tts-fault-test.ts (fake engine). This is the one-time dev/staging acceptance: Piper +
+// worker + ORT + a local voice producing audible media through the production path (say → speech bus → speakOwnSays
+// → engine → generator → sender), received by an independent listener. Own spawned server, throwaway world dir.
+//   VOICE_ONNX=/path/voice.onnx VOICE_CFG=/path/voice.onnx.json bun tools/operator/tts-acceptance.mjs
+// Needs playwright + chromium installed in the repo (static ESM imports resolve from this file).
+// Emits a provenance-bound receipt (JSON) on stdout: model/config sha256, browser+OS, cold and warm load ms, voice
+// identity, the listener's RTP count and level, and each check. The receiving side reads client/lib/voicesfu.js.
 
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
@@ -119,9 +105,7 @@ console.error('\n— an independent listener, and one real say —');
 const listener = await mk('accept-listener');
 await listener.evaluate(async () => (await import('/lib/voiceconsent.js')).setReceiveVoice(true));
 await new Promise(r => setTimeout(r, 2000));
-// Start the audibility sampler BEFORE the say: the first run sampled AFTER
-// the utterance finished and read peak 0.000 against 350 delivered packets —
-// a harness lie, not a product one. Sample through the whole window.
+// sample audibility through the whole window, not after the utterance (that read peak 0.000 against 350 packets)
 const levelP = listener.evaluate(async () => {
   const v = await import('/lib/voicesfu.js');
   let level = 0;

@@ -1013,7 +1013,7 @@ lift it, re-set it, or send a request with `throughLock: true` (the log
 records only the edit); anyone lower is refused. A setter who is demoted takes
 their locks' strength down with them; a lock whose setter is unknown is
 builder strength. In a world with no owner every lock is member strength
-(nobody is above builder there, §2.3), so no lock outlasts the reach of anyone who may build. It is a soft barrier, not ownership: clients ask before
+(nobody is above builder there, §7 "Roles"), so no lock outlasts the reach of anyone who may build. It is a soft barrier, not ownership: clients ask before
 acting through one. A lock has no level of its own; a stored `{rank}` (an
 older log) reads as locked and its rank is ignored.
 
@@ -1053,7 +1053,7 @@ owed before this section is complete.
 *sequencer* is the chain-writer role whose key genesis names (§12, §13); the
 *operator* is the human in custody of the host (the operator key, repairs,
 the redaction decider); the *host* is the machine or service that runs them
-(`docs/decisions/LOG-VOCABULARY.md` §1.10). The *owner* (the role, §6: the world's). A *builder* (anyone whose
+(`docs/decisions/LOG-VOCABULARY.md` §1.10). The *owner* (the role, §7: the world's). A *builder* (anyone whose
 role holds `build`). The *invoker* (whoever's request this is). The
 *affected participant* (whoever's body a request touches). A *sponsor*
 (whoever's rights a script acts with, §8).

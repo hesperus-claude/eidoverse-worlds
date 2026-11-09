@@ -2,23 +2,15 @@
 <meta charset="utf-8">
 <title>flight bench 3D — Mythos</title>
 <!--
-  fly.html — the SAME integrator, rendered on the real body.
-  ("the trajectories seem like they might be good, but it's a bit hard to tell
-   what's happening without seeing the actual flying" — Janus)
+  fly.html — the same integrator as bench.html, rendered on the real body.
 
-  bench.html is an instrument: two plots, exact numbers, no clock, one
-  screenshot per fixed step. It answers "is the period 3.4s". It cannot answer
-  "does the falling look like falling", and that question is real -- Mythos's
-  whole §0 stance is about how a body reads to onlookers.
+  bench.html answers "is the period 3.4s"; this answers "does the falling look
+  like falling". It loads the shipped VRM, drives it with shared/flight.js, and
+  lets you watch and fly. Deliberately NOT the eidoverse client: no sequencer,
+  no join, no world, no network — three + three-vrm + the flight modules only.
 
-  So this loads the shipped VRM, drives it with shared/flight.js, and lets you
-  watch and fly. It is deliberately NOT the eidoverse client: no sequencer, no
-  join, no world, no network. three + three-vrm + the flight modules, and
-  nothing that could reach the commons. The isolation argument stays structural
-  -- client/, server/ and mcpl/ still import no flight code.
-
-  FLIGHT IS GATED even here. The dev provider grants Mythos on a compatible
-  rig; everything else is denied, and the capability is re-resolved every frame.
+  Flight is gated even here: the dev provider grants Mythos on a compatible
+  rig, and the capability is re-resolved every frame.
 -->
 <style>
   html,body { margin:0; height:100%; background:#0a0c11; overflow:hidden;
@@ -62,9 +54,8 @@ import { inspectBody } from '/shared/flightbody.js';
 
 const VRM_URL = '/assets/opt/eidoverse/assets/vrms/mythos-wings.vrm';
 const START_Y = 30;
-// How far the body lies along its flight path when flying level, in radians.
-// Not a physics term -- the integrator's pitch is the control input; this is
-// posture, the difference between a glider and a person standing in the air.
+// Posture, not physics: how far the body lies along its flight path when level
+// (the integrator's pitch is the control input).
 const FLY_LEAN = 0.55;   // ~32 degrees nose-down
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -77,8 +68,7 @@ scene.fog = new THREE.Fog(0x0a0c11, 60, 260);
 const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 600);
 camera.position.set(-5, START_Y + 1.4, 0);
 const controls = new OrbitControls(camera, renderer.domElement);
-// The chase releases as soon as a hand is on the mouse, and never takes back
-// over -- a camera that fights the user is worse than one that does nothing.
+// The chase camera releases on the first mouse-down and never takes back over.
 let userLooking = false;
 const want = new THREE.Vector3();
 renderer.domElement.addEventListener('pointerdown', () => { userLooking = true; });
@@ -94,9 +84,7 @@ rim.position.set(-9, 6, -12); scene.add(rim);
 const fill = new THREE.DirectionalLight(0xffd9b0, 0.9);
 fill.position.set(-4, -6, 6); scene.add(fill);           // up-light, so the underside is not a hole
 
-// A ground you can judge height and drift against. The grid is the instrument
-// that survives from bench.html: without a metric floor, 2.5 m/s and 25 m/s
-// look identical on a body with no scale reference.
+// A metric floor to judge height and drift against (a body alone has no scale reference).
 scene.add(new THREE.GridHelper(160, 160, 0x263048, 0x161c2b));
 const g2 = new THREE.GridHelper(160, 16, 0x3d5580, 0x3d5580);
 g2.position.y = 0.01; scene.add(g2);
@@ -122,8 +110,7 @@ vrm = gltf.userData.vrm;
 vrm.scene.traverse(o => { o.frustumCulled = false; });
 scene.add(vrm.scene);
 
-// The rig, read off the body that is actually here -- not a list typed into a
-// file. The capability binds to these names.
+// The rig, read off the loaded body; the capability binds to these bone names.
 vrm.scene.traverse(o => { if (o.isBone) bones.push(o.name); });
 const report = inspectBody(bones);
 
@@ -151,12 +138,9 @@ function reset() {
 }
 
 // ---- wing pose. OPEN spreads and breathes on the 3.4s; LIMP trails, folded
-// back and loose, and is driven by the leaf's own bank so the wings tell the
-// same story the trajectory does.
-// A wingbeat, driven by the same flag that buys the lift -- Janus flew it and
-// found she rose with no animation at all, which reads as a bug even when the
-// physics is right. Downstroke fast, recovery slow: that asymmetry IS what a
-// beat looks like, and a symmetric sine reads as flapping cardboard.
+// back and loose, driven by the leaf's own bank. The wingbeat is driven by the
+// same flag that buys the lift; downstroke fast, recovery slow (a symmetric
+// sine reads as flapping cardboard).
 let flapPhase = 0;
 function poseWings(now, dt, flapping) {
   if (!wings) return;
@@ -214,30 +198,9 @@ function frame(now) {
     }
     // place and orient the body
     vrm.scene.position.set(st.pos.x, st.pos.y, st.pos.z);
-    // FACE THE DIRECTION OF TRAVEL: theta = pi/2 - yaw.
-    //
-    // This took four attempts and the lesson is about EVIDENCE, not geometry.
-    // -yaw + pi was ninety degrees out; -(yaw + pi/2) was a clean hundred and
-    // eighty. Both times I then "verified" the fix with a probe that derived
-    // facing from a cross product of the shoulder line and the spine -- and
-    // that probe had its handedness inverted, so it cheerfully reported +0.85
-    // for a body flying tail-first, twice.
-    //
-    // What settled it was asking a landmark that cannot be reasoned wrong: the
-    // EYE BONES. head -> midpoint-between-eyes is forward, by construction, on
-    // any rig that has a face. That read -0.991 and the argument was over.
-    // __facing() now uses the eyes for exactly this reason.
-    //
-    // PITCH carries a default LEAN, and the two want OPPOSITE signs -- which
-    // is why negating them together left the stick correct and the resting
-    // posture reclining ("maximally tilted forward is basically standing
-    // upright").
-    //
-    // Measured against the spine rather than reasoned about: with the heading
-    // now pi/2 - yaw, a POSITIVE X rotation puts the head ahead of the hips
-    // (forwardLean +0.46 at 0.55 rad), which is the glider posture. The
-    // integrator's pitch is positive = NOSE UP, so it enters negated. Two
-    // conventions, two signs, one expression.
+    // Face the direction of travel: heading = pi/2 - yaw (verified against the
+    // eye bones, see __facing below). Lean is a positive X rotation (head ahead
+    // of hips); the integrator's pitch is positive = nose up, so it enters negated.
     const lean = st.phase === 'LEAF' ? 0 : FLY_LEAN;
     const q = new THREE.Quaternion().setFromEuler(
       new THREE.Euler(lean - st.pitch, Math.PI / 2 - st.yaw, st.bank, 'YXZ'));
@@ -254,12 +217,8 @@ function frame(now) {
         new THREE.LineBasicMaterial({ color: st.wings === 'LIMP' ? 0xc8552b : 0x3d6ea8 }));
       scene.add(trailLine);
     }
-    // CHASE, not overhead. Lerping the target alone leaves the camera behind
-    // on a 30 m fall and she shrinks to a speck exactly when there is most to
-    // see; preserving the initial offset instead pinned a top-down view, which
-    // is the one angle from which a falling leaf looks like a dot. So: hold a
-    // chase offset in the body's own heading, a little behind and above, and
-    // hand control back the moment the user drags.
+    // Chase camera: an offset in the body's own heading, a little behind and
+    // above (an overhead view makes a falling leaf a dot). Released on user drag.
     controls.target.lerp(vrm.scene.position, 0.2);
     if (!userLooking) {
       const back = 5.0, up = 1.4;
@@ -313,9 +272,7 @@ document.getElementById('keys').textContent = pilotHelp() +
 addEventListener('keydown', e => {
   if (e.code === 'KeyT') { if (st) { st = takeOff(cfg, st); for (const v of st.events) events.push(v); } return; }
   if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
-    // The period is the one leaf number Janus wanted to keep tuning ("2 and 3
-    // look good, but the period is a bit too fast"), so it is on its own keys
-    // rather than buried in a preset.
+    // the leaf period gets its own keys: it is the number most often tuned by hand
     const d = e.code === 'BracketRight' ? 0.2 : -0.2;
     const next = Math.max(0.4, Math.min(8, +(cfg.leaf.period + d).toFixed(2)));
     cfg = makeConfig({ leaf: { ...cfg.leaf, period: next } });
@@ -344,8 +301,7 @@ document.getElementById('bReset').onclick = reset;
 
 enable();
 requestAnimationFrame(frame);
-// A probe for the one thing that took three attempts: where is her nose,
-// really, in world space, versus where is she going.
+// Console probes. __facing(): where the nose points in world space vs where the body is going.
 window.__THREE = THREE;
 window.__scene = scene;
 window.__vrm = () => vrm;
@@ -353,10 +309,8 @@ window.__cam = camera;
 window.__userLook = () => { userLooking = true; };
 window.__facing = () => {
   if (!vrm || !st) return null;
-  // From the EYES, not from the quaternion I think I set and not from a cross
-  // product whose handedness I can get wrong: head -> between-the-eyes is
-  // forward on any rig with a face, and it caught two "fixes" that were still
-  // flying tail-first.
+  // Read from the eye bones (head -> between-the-eyes is forward on any rig with
+  // a face), not from the quaternion we set: it catches a body flying tail-first.
   let le = null, re = null, head = null;
   vrm.scene.traverse(o => {
     if (o.name === 'L_Eye') le = o; if (o.name === 'R_Eye') re = o;

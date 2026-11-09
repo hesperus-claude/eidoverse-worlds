@@ -1,12 +1,6 @@
-// bun tools/assets/lod-census.ts <libDir> [outDir] — what each candidate vertex FLOOR would do to a library, under this generation's
-// reducer (its recipe: ratio, screen-space budget, texture-only share, texel cap; permissive retry; preservation and GPU
-// gates): #207 review, blocker 2.
-//
-// The floor only decides which objects ENTER reduction; an object's LOD is the same at any floor it passes. So each model
-// runs once, at the lowest floor asked for, and every floor's census is a filter on the original's vertex count.
-// Per floor: objects that enter, built vs each typed refusal class, the permissive-only builds, and totals: vertices,
-// triangles, bytes and decoded texture MB (glbperf's estimate) of the originals that got a LOD vs their LODs.
-// Writes census.json (every model's row) and census.md to outDir. Sequential, one encoder at a time.
+// bun tools/assets/lod-census.ts <libDir> [outDir] — what each candidate vertex FLOOR would do to a library under the
+// current LOD reducer (#207). The floor only decides which objects enter reduction, so each model runs once at the
+// lowest floor and every floor's census is a filter on vertex count. Writes census.json and census.md to outDir.
 //   FLOORS=12000,1000,500,250 bun tools/assets/lod-census.ts /path/to/models notes-dir
 import { readdirSync, readFileSync, statSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, relative } from "node:path";

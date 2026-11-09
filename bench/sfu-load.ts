@@ -1,12 +1,8 @@
 /**
- * The number that decides the design: pure-JS SRTP cost at room scale.
+ * SFU load: pure-JS SRTP cost at room scale (werift encrypts in JavaScript; #104).
+ * Everyone talks at once by default, so this is a ceiling, not an average.
  *
- * werift encrypts in JavaScript. #104's acceptance table wants N=2/6/12 load,
- * and my own spec pre-registered this as gotcha 3 — "the number that decides
- * whether the design survives". Everyone talks at once (worst case; real rooms
- * have one or two speakers), so this is a ceiling, not an average.
- *
- * Run: bun bench/sfu-load.ts [N] [seconds]
+ * Run: bun bench/sfu-load.ts [N] [seconds] [speakers]
  */
 import { RTCPeerConnection, MediaStreamTrack, RTCRtpCodecParameters, RtpPacket, RtpHeader } from "werift";
 import { Sfu } from "../server/sfu.ts";
@@ -67,11 +63,8 @@ for (let tick = 0; tick < ticks; tick++) {
   }
   await sleep(PTIME_MS);
 }
-// 🔴 TWO WINDOWS, REPORTED SEPARATELY (#130 review). `elapsed` used to include
-// this drain, understating sustained CPU/egress (reviewer's check: reported
-// 3.48 Mbps where the active-send arithmetic gives ~4.86). The drain still
-// exists — delivery accounting needs in-flight packets to land — but rates are
-// computed over the ACTIVE send window and the drain is reported as itself.
+// Two windows, reported separately: rates are computed over the ACTIVE send
+// window; the drain (in-flight packets landing) only counts toward delivery.
 const activeSec = (Date.now() - t0) / 1000;
 await sleep(1000);
 
@@ -81,9 +74,7 @@ const cpuPct = ((cpu.user + cpu.system) / 1000 / (activeSec * 1000)) * 100;  // 
 const memMB = (process.memoryUsage().rss - mem0) / 1048576;
 const d = sfu.diag();
 const heard = peers.reduce((n, p) => n + p.heard, 0);
-// `sent` already sums EVERY peer's packets, so the fanout multiplier is
-// (N-1) per packet — not per peer. (First run read 200%: the formula was
-// wrong, not the SFU. forwarded == sent*(N-1) exactly, which is the proof.)
+// `sent` already sums every peer's packets, so the fanout multiplier is (N-1) per packet, not per peer
 const expected = sent * (N - 1);
 const egressBps = (d.forwarded / activeSec) * (OPUS_BYTES + 12) * 8;
 
