@@ -99,7 +99,7 @@ Nothing shared changes, so nothing can break: a draft is only as real as the rea
 unproven — possibly janky, possibly unsafe — and the editor says so.
 
 A draft needs:
-- **a reader**: the client code that does something with it (`client/lib/…`), which must treat a malformed value as
+- **a reader**: the client code that does something with it (a host in `client/lib/realize/`), which must treat a malformed value as
   absent, never throw, and which **registers what it reads** (`registerDraft` in `shared/drafts.js`: the name, a title,
   a summary, a category, the blank value Add Component writes, and where it applies);
 - **a card**: its fields in the Inspector (`shared/editschema.js`), checked before they are sent;

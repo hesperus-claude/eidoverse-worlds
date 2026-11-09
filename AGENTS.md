@@ -724,8 +724,11 @@ client-side meaning — are code. Pull the repo, then:
   new kind name.
 - **New component semantics on the client** (rendering, UI) → read it from
   the record's flat components (`shared/protocol/view.js` viewState,
-  realized by `client/lib/realize/`); how a name gets into the registry, so
-  the authority can check its shape and `schema` can teach it, is
+  realized by `client/lib/realize/`: each component's host, which registers
+  for its component, and the projections of `state.st`; `livechat.js` is the
+  one member fed by an event, since a live say is a moment, not state); how a
+  name gets into the registry, so the authority can check its shape and
+  `schema` can teach it, is
   `docs/contributing/COMPONENT-LADDER.md`.
 
 House rules, learned the hard way (each one is a past incident):
