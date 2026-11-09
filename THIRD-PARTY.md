@@ -113,7 +113,7 @@ SOFTWARE.
 ## Vendored directories (notice kept beside the files)
 
 - `client/vendor/three-addons/htmlmesh.js` — three.js `HTMLMesh.js`, MIT; notice in `client/vendor/three-addons/LICENSE-three-MIT.txt`, changes in its header.
-- `client/vendor/piper/` — piper_phonemize wasm build (MIT glue) with espeak-ng compiled in and its data (GPL-3.0); source, digests and terms in `client/vendor/piper/NOTICE.md`.
+- `client/vendor/piper/` — the piper_phonemize wasm build and its data, both GPL-3.0 (espeak-ng's library is statically linked into the `.wasm`; its MIT parts stay MIT); source, digests and terms in `client/vendor/piper/NOTICE.md`.
 - `client/vendor/ammo/` — ammo.js (Bullet Physics port), zlib per the header line of `ammo.wasm.js`; no version or commit recorded.
 
 ## Credited, licence not yet recorded
