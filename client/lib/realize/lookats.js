@@ -1,15 +1,15 @@
-// lookats — the browser realizer for `look-at` / `look-at:<part>` (batch 2): a thing, or one of its parts, turns to
-// face something. The component is logged state; the turn is a view each client computes every frame, like motion
-// (motion.js): nothing is logged, nothing is sent. The angle is shared/lookat.js evalLookAt, the same pure function a
-// test runs; this file finds the target and applies the result.
+// lookats — the browser realizer for `look-at` / `look-at:<part>`: a thing, or one of its parts, turns to face
+// something. The component is logged state; the turn is a view each client computes every frame, like motion
+// (motion.js): nothing is logged, nothing is sent. The angle is shared/lookat.js evalLookAt (pure, tested); this file
+// finds the target and applies the result.
 //
 //   a thing's id   its world position (+ offset in its frame), as every client sees it: everyone agrees
 //   @viewer        THIS viewer's eyes: everyone sees it face themselves (Resonite's LookAtUser)
 //   @nearest       the nearest body within range (yours included), its head
 //   u-…            that person's head, within range
-// Beyond range, or with no target, it eases back to rest. It runs after motion (main.js registers it later), so an oscillate or
-// an orbit moves it and then it turns; a rotating motion on the same node is refused at the authority (one driver per node).
-// The authority's geometry (placing, colliders, what stands on what) uses the logged transform, never the turned one.
+// Beyond range, or with no target, it eases back to rest. It runs after motion (main.js registers it later), so an
+// oscillate or an orbit moves it and then it turns; a rotating motion on the same node is refused at the authority
+// (one driver per node). The authority's geometry (placing, colliders) uses the logged transform, never the turned one.
 import { THREE, camera } from '../core.js';
 import { bus, CONFIG } from '../base.js';
 import { identityOf } from '../net.js';
@@ -35,7 +35,7 @@ function targetOf(la, from) {
       const p = r.avatar.root.position; consider([p.x, p.y + 1.5, p.z]); }
     return best;
   }
-  const o = entities.get(dec(T) ?? T); if (!o) return null;   // the component names the protocol id; the scene keys decoded ones   // a deleted target: it rests ("looks at nothing")
+  const o = entities.get(dec(T) ?? T); if (!o) return null;   // the component names the protocol id, the scene keys decoded ones; a deleted target rests
   const off = Array.isArray(la.offset) && la.offset.length === 3 ? la.offset : [0, 0, 0];
   return o.localToWorld(_t.set(off[0], off[1], off[2])).toArray();
 }

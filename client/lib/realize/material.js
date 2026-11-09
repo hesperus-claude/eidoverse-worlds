@@ -1,9 +1,9 @@
 // material — the browser host for the `material` component: an image on a named node of the thing's model
-// (shared/material.js says what a bag means). Main's picture on a part, moved here (a picture is a quad of its own).
+// (shared/material.js says what a bag means). A standalone picture is a quad of its own (pictures.js).
 //
-//   1. NEVER mutate the node's material: glTF materials are shared across primitives and instances, so painting one
+//   1. Never mutate the node's material: glTF materials are shared across primitives and instances, so painting one
 //      screen by writing `map` paints every screen. Clone, texture the clone, restore the original on removal.
-//   2. NEVER dispose the texture: the asset cache owns it (pictures.js imageTexture); the clone is ours to dispose.
+//   2. Never dispose the texture: the asset cache owns it (pictures.js imageTexture); the clone is ours to dispose.
 //   3. A load installs only under the intent revision it was issued for (a new bag, a removal, the entity leaving or
 //      re-realized, a world reset each bump it): the picture host's rule, pictures.js.
 

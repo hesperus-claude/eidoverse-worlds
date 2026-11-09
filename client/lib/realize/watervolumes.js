@@ -7,16 +7,15 @@ import { MAX_WATER, MAX_AIR, mediumAt } from '../../../shared/water.js';
 import { zonesOf, waterVolumes, physicsAreasOf, speedFactorAt, zoneChangeTouches, foldOfView, fogSlots, worldLevelAt, lookOf, lookChangeTouches, waterBox, headingOf } from '../../../shared/zone.js';
 import { worldPose } from '../../../shared/protocol/simlayer.js';
 import { levelWaterInfo, surfaceHeightAt, waterAt as levelWaterAt } from '../water.js';
-// the sky's under-water switch, injected by main.js (setSkyHider): importing sky.js here pulled the whole sky (assets,
-// the boot gate, the baked domes) into everything that imports the controller
+// the sky's under-water switch, injected by main.js (setSkyHider): importing sky.js here would pull the whole sky
+// into everything that imports this module
 let hideSkyForWater = (_on) => {};
 export function setSkyHider(fn) { hideSkyForWater = typeof fn === 'function' ? fn : () => {}; }
 const { uniform, uniformArray, positionWorld, cameraPosition, output, Fn, Loop, If, Break, Continue, float, int, bool, vec2, vec3, vec4,
   array, select, min, max, exp, exp2, distance, all } = TSL;
 let objects = () => new Map();
 export function setWaterObjects(fn) { objects = fn; }
-// The shared wave clock (server time). Injected by main.js: importing remotes.js
-// here closes an import cycle back to controller.js through the XR modules.
+// the shared wave clock (server time), injected by main.js: importing remotes.js here closes an import cycle
 let serverNow = () => Date.now();
 export function setWaterClock(fn) { serverNow = fn; }
 const waters = [], airs = [], airMasks = [], surfaces = [];
@@ -32,8 +31,8 @@ const dryInverse = uniformArray(Array.from({length:MAX_AIR},()=>new THREE.Matrix
 const dryExtent = uniformArray(Array.from({length:MAX_AIR},()=>new THREE.Vector4()));   // xyz half size, w the slots it clears (zone.js fogSlots)
 // does a pocket's mask (dryExtent.w) clear fog slot s? (bit s; floats stay portable TSL)
 const clears = (mask, s) => mask.div(exp2(float(s))).floor().mod(2).greaterThan(0.5);
-// Portable TSL (not raw WGSL): the same shader must compile on the WebGL backend too — VR on a headset
-// without WebGPU-XR forces WebGL (backend_choice.js), and a WGSL-only pass would not build there.
+// Portable TSL (not raw WGSL): the same shader must compile on the WebGL backend too (a headset without WebGPU-XR
+// forces WebGL, backend_choice.js).
 // Segment a→b clipped to the box lo..hi, as [t0, t1] along the segment; t1 <= t0 means a miss.
 const rayBox = Fn(([a, b, lo, hi]) => {
   const t0 = float(0).toVar(), t1 = float(1).toVar(), miss = bool(false).toVar();
@@ -48,8 +47,8 @@ const rayBox = Fn(([a, b, lo, hi]) => {
   }
   return select(miss, vec2(1, 0), vec2(t0, t1));
 });
-// Exact finite-segment clipping, including union of overlapping dry boxes. Water
-// volumes higher in stable id order take priority instead of double-fogging.
+// Exact finite-segment clipping, including the union of overlapping dry boxes. Water volumes higher in stable id
+// order take priority instead of double-fogging.
 const SPANS = MAX_AIR + MAX_WATER;
 const fogFn = Fn(([color, a, b]) => {
   const optical = vec3(0).toVar(), source = vec3(0).toVar(), total = float(0).toVar();
@@ -68,7 +67,7 @@ const fogFn = Fn(([color, a, b]) => {
       const v = rayBox(a, b, mins.element(j2).xyz, maxs.element(j2).xyz);
       spans.element(count).assign(vec2(max(wet.x, v.x), min(wet.y, v.y))); count.addAssign(1);
     });
-    // Insertion sort uses only the active slots (15 boxes in the reference scene).
+    // insertion sort over the active slots only
     Loop({ start: int(1), end: count, type: 'int', name: 's' }, ({ s }) => {
       const v = spans.element(s).toVar(), k = s.toVar();
       Loop(k.greaterThan(0), () => {
@@ -93,7 +92,7 @@ let previousFog = null, installed = false, dirty = true, fold = { entities: {} }
 let skyDome=null, skySaved=null;
 const warned=new Set();
 function warn(message){if(!warned.has(message)){warned.add(message);report('water',new Error(message));}}
-// The painted sky (@world.sky.gradient, OMI_environment_sky) and the sun (the first directional light thing by id, KHR_lights_punctual):
+// The painted sky (@world.sky.gradient, OMI_environment_sky) and the sun (the first directional light thing by id):
 // shared/zone.js lookOf reads both off the fold; null for each the world doesn't author
 function updateEnvironmentSky(look) {
   if(skyDome){scene.remove(skyDome);skyDome.geometry.dispose();skyDome.material.dispose();skyDome=null;}
@@ -111,8 +110,8 @@ function updateEnvironmentSky(look) {
     return;
   }
   skySaved ??= {sunColor:sun.color.clone(),sunIntensity:sun.intensity,sunPosition:sun.position.clone()};
-  // The authored sun owns the rig's sun: the world sky (sky.js) rewrites it every frame, so main.js's sky system calls
-  // applyEnvLight right after it, before materials and the shadow rig read sun.position (lightrig.js fits to it)
+  // the authored sun owns the rig's sun: sky.js rewrites it every frame, so main.js calls applyEnvLight right after,
+  // before materials and the shadow rig (lightrig.js) read sun.position
   envLight={color:new THREE.Color(look.sun.color),intensity:Math.max(0,look.sun.intensity),
     position:new THREE.Vector3().fromArray(look.sun.toward).normalize().multiplyScalar(60)};   // toward the sun, at the sky's 60 m (shadow fit)
   applyEnvLight();
@@ -140,7 +139,7 @@ function clearSurfaces() { for(const o of surfaces){scene.remove(o);o.geometry.d
 function makeSurface(w) {
   const material=new THREE.MeshStandardNodeMaterial({color:Number.isInteger(w.color)?w.color:0x235363,metalness:.12,roughness:.19,side:THREE.DoubleSide,transparent:true,opacity:Number.isFinite(w.opacity)?w.opacity:.72,depthWrite:false});
   const geo=new THREE.PlaneGeometry(w.size[0],w.size[2],256,256).rotateX(-Math.PI/2);
-  // Grade the grid toward its centre instead of spending every vertex at the horizon.
+  // grade the grid toward its centre instead of spending every vertex at the edge
   const positions=geo.attributes.position;
   for(let i=0;i<positions.count;i++){
     const x=positions.getX(i)/(w.size[0]/2),z=positions.getZ(i)/(w.size[2]/2);
@@ -148,8 +147,8 @@ function makeSurface(w) {
   }
   geo.rotateY(headingOf(w.q));   // its own frame, baked at the rebuild a carrier's turn triggers (zoneChangeTouches)
   const p=TSL.positionLocal;
-  // the owner's LIVE centre (a uniform, refreshed per frame): the waves stay in world space as the pool moves,
-  // matching waveHeight — what swimmers float on — instead of the centre it had when the mesh was built
+  // the owner's live centre (a uniform, refreshed per frame): the waves stay in world space as the pool moves,
+  // matching what swimmers float on, instead of the centre it had when the mesh was built
   const centre=uniform(new THREE.Vector2(w.center[0],w.center[2]));
   let h=TSL.float(0),dx=TSL.float(0),dz=TSL.float(0);
   for(const wave of w.waves){
@@ -161,7 +160,7 @@ function makeSurface(w) {
     dz=dz.add(phase.cos().mul(wave.amplitude*k*wave.direction[1]));
   }
   material.positionNode=p.add(TSL.vec3(0,h,0));
-  // Analytic normal plus fine ripples; wavelength amplitudes remain data.
+  // analytic normal plus fine ripples
   const ripple=p.x.mul(2.1).add(p.z.mul(1.7)).add(clock).sin().mul(.035);
   material.normalNode=TSL.transformNormalToView(TSL.vec3(dx.negate().add(ripple),1,dz.negate().sub(ripple)).normalize());
   const o=new THREE.Mesh(geo,material);o.position.set(w.center[0],w.top,w.center[2]);
@@ -219,12 +218,12 @@ function placeUnderBackground(lvl) {
     hideSkyForWater(true);   // every frame: the sky may rebuild its objects
   } else if (backgroundOn) { scene.backgroundNode = backgroundSaved; backgroundSaved = null; backgroundOn = false; hideSkyForWater(false); }
 }
-const NO_WATER = [1e7, 1e7, 1e7];
+const NO_WATER = [1e7, 1e7, 1e7];   // an unreachable point: a segment never meets it (rayBox misses)
 function cameraDryBox() {
   camera.getWorldPosition(_cam);
   for (let i = 0; i < airs.length; i++) { if (!(airMasks[i] & 1)) continue; const a = airs[i], q = a.toLocal([_cam.x, _cam.y, _cam.z]); if (Math.abs(q[0]) <= a.size[0] / 2 && Math.abs(q[1]) <= a.size[1] / 2 && Math.abs(q[2]) <= a.size[2] / 2) return i; }
   return -1;
-}   // an unreachable point: a segment never meets it (rayBox misses)
+}
 /** The camera-dependent half of the optics: the level's fog slot, the under-water background and sky, and the
  *  fog's install. main.js runs it AFTER this frame's movement (and XR), so crossing the surface never renders a
  *  frame with the previous position's water. */
@@ -232,9 +231,8 @@ export function updateWaterView() {
   const lvl = levelSlot(); underLevelNow = !!lvl;
   if (lvl) { mins.array[0].set(...lvl.min, 0); maxs.array[0].set(...lvl.max, 0); absorption.array[0].set(...lvl.absorption, 0); scatter.array[0].set(...lvl.scatter, 0); }
   else { mins.array[0].set(...NO_WATER, 0); maxs.array[0].set(...NO_WATER, 0); }
-  // In dry air below the level (a shaft, a habitat open to the sky) the sky is really there: keep the fog — every
-  // ray out of the pocket still crosses its water — but not the far-water background or the hidden sky.
-  // the pocket the camera stands in (if any) and the surface over it, for the background's per-direction sky
+  // the pocket the camera stands in (if any) and the surface over it: in dry air below the level the background
+  // paints sky where a ray leaves the pocket above the surface, far water elsewhere (underBackground)
   dryIdx.value = lvl ? cameraDryBox() : -1;
   if (lvl) lvlTop.value = lvl.max[1];
   placeUnderBackground(lvl);
@@ -244,7 +242,7 @@ export function updateWaterView() {
   if (!on && installed) { scene.fogNode = previousFog; installed = false; }
 }
 export function updateWater() {
-  // Epoch wrapped for float precision; same clock on every peer.
+  // epoch wrapped for float precision; the same clock on every peer
   clock.value=(serverNow()%3600000)/1000;
   const rebuild=dirty;dirty=false;
   if(rebuild){rebuilds++;clearSurfaces();volumeIds.clear();}

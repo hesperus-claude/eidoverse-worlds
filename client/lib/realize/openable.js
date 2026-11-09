@@ -1,12 +1,11 @@
-// openable — a thing that opens and closes when someone uses it (the behaviour, not the asset: a door, a
-// gate, a lid, a hatch; shared/protocol/componentspec.js `openable`). The log holds its STATE (open: true/false); every client
-// tweens toward it over `time` seconds, the conventional door (Unity/Godot/Roblox recipes, Unreal's door timeline): a
-// turn of `angle` about `axis` through the thing's pivot, or a slide of `slide` in its own frame. The tween is
-// presentation, never logged: a late joiner draws it as it is, with no swing. A part (`part`) moves instead of the whole
-// thing, about the part's own origin (motion.js's part convention).
+// openable — a thing that opens and closes when someone uses it (a door, a gate, a lid, a hatch;
+// shared/protocol/componentspec.js `openable`). The log holds its state (open: true/false); every client tweens toward
+// it over `time` seconds: a turn of `angle` about `axis` through the thing's pivot, or a slide of `slide` in its own
+// frame. The tween is presentation, never logged: a late joiner draws it as it is, with no swing. A part (`part`)
+// moves instead of the whole thing, about the part's own origin (motion.js's part convention).
 //
-// The pure halves (openFraction, openPose) live in motioneval.js (no THREE, no DOM: test/protocol/shiplist-check.ts and an
-// agent can read them); tickOpenables applies them.
+// The pure halves (openFraction, openPose) live in ../motioneval.js (no THREE, no DOM; test/protocol/shiplist-check.ts
+// reads them); tickOpenables applies them.
 import { entities, bags, bagOf, findPart } from '../world.js';
 import { reindexCollider } from '../colliders.js';
 import { qAxisAngle, openFraction, openPose, OPEN_DEFAULTS } from '../motioneval.js';

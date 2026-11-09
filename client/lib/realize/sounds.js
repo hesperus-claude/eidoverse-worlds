@@ -3,32 +3,22 @@
 //
 //   set {id, component: "sound", value: {src, playing?, loop?, volume?, pitch?, near?, radius?, spatial?, t0?, description?}}
 //
-// Graph per sound: <audio> → MediaElementSource → gain (volume) → panner
-// (position, distance falloff) → destination. The panner follows the entity
-// every other frame (registerSystem 'sounds', from main.js) and the listener
-// follows the camera, so walking past the radio sounds like walking past a
-// radio. The meaning of the bag lives in shared/sound.js; this file only
-// renders it.
+// Graph per sound: <audio> → MediaElementSource → gain (volume) → panner (position) → world bus → limiter →
+// destination. The panner follows the entity every other frame (tickSounds, registered by main.js) and the listener follows
+// the camera. The meaning of the bag lives in shared/sound.js; this file only renders it.
 //
 // Rules:
-//   1. ONE AudioContext (client/lib/audioctx.js): a fresh context per sound
-//      would hit Chrome's cap in a room with six radios and go silent.
-//   2. Autoplay: the browser may refuse play() until a gesture. Every sound
-//      rides the shared unlock queue (client/lib/audiounlock.js), which retries
-//      all held elements on the first gesture and SAYS SO in chat.
-//   3. The clock is the SERVER's: with `t0` every client seeks to the same
-//      playhead ((serverNow - t0) mod duration when looping), so a late joiner hears
-//      the same bar as everyone else. Without it, the top of the track.
-//      serverNow() is this client's estimate of the authority's clock
-//      (client/lib/serverclock.js).
-//   4. Replace (same id, new bag): same src → adjust in place (volume, loop,
-//      playing, re-seek on a new t0); new src → tear down and rebuild. A
-//      sound whose entity left the scene keeps its graph but is silenced
-//      (gain 0) until the entity is back — the bag is still authored.
-//   5. The listener has the last word on loudness. Every graph ends in ONE
-//      world bus whose gain is the audio panel's `world volume`
-//      (voiceconsent.js volumeFor('world'), live on 'audio:volume'). The
-//      authored volume stays its own node: what you hear is authored × yours.
+//   1. One AudioContext (../audioctx.js): a fresh context per sound would hit Chrome's cap in a room with six radios.
+//   2. Autoplay: the browser may refuse play() until a gesture. Every sound rides the shared unlock queue
+//      (../audiounlock.js), which retries all held elements on the first gesture and says so in chat.
+//   3. The clock is the server's: with `t0` every client seeks to the same playhead ((serverNow - t0) mod duration
+//      when looping), so a late joiner hears the same bar as everyone else. Without it, the top of the track.
+//      serverNow() is this client's estimate of the authority's clock (../serverclock.js).
+//   4. Replace (same id, new bag): same src → adjust in place (volume, loop, playing, re-seek on a new t0); new src →
+//      tear down and rebuild. A sound whose entity left the scene keeps its graph but is silenced (gain 0) until the
+//      entity is back.
+//   5. The listener has the last word on loudness: every graph ends in one world bus whose gain is the audio panel's
+//      `world volume` (voiceconsent.js volumeFor('world'), live on 'audio:volume'). What you hear is authored × yours.
 //   6. Silent at radius. The distance gain is shared/sound.js gainAt (BasisVR's natural curve: inverse inside, a
 //      (1-t)² taper over the last 5% to exactly 0), applied on the sound's own gain node in the tick. The panner only
 //      places it (HRTF direction, rolloff 0): Web Audio's `inverse` model clamps at maxDistance instead of reaching 0.
@@ -64,7 +54,7 @@ export const _playing = playing;   // probes
 const blocked = new Map();
 export const _blocked = blocked;
 
-// The world bus: one gain for everything placed, set from the listener's own preference, then the limiter.
+// the world bus: one gain for everything placed, set from the listener's own preference, then the limiter
 let worldBus = null, limiter = null;
 function worldGain() {
   if (!worldBus) {
@@ -216,7 +206,7 @@ bus.on('world-reset', () => clearSounds());
 bus.on('media:trust', () => { for (const [id, c] of bags()) if (c?.sound) applyFrom(id, c.sound); });
 function clearSounds() { blocked.clear(); for (const id of [...playing.keys()]) teardown(id); }
 
-// ---- the editor block: how a HUMAN puts a sound on a thing ------------------
+// ---- the editor block: how a human puts a sound on a thing ------------------
 const SOUND_ACCEPT = 'audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4,.mp3,.ogg,.opus,.wav,.webm,.m4a';
 
 async function uploadSound(file) {

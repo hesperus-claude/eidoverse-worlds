@@ -37,8 +37,7 @@ export function buildEmitter(em, { map = null, seed = 0, name = 'particles', bud
   const additive = em.render.blend === 'add';
   const mat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide,
     blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, toneMapped: !additive });
-  // no mrtNode: a merged MRT output drew nothing at all on the WebGL 2 backend, and this client renders no MRT pass
-  // for particles to smear.
+  // no mrtNode: a merged MRT output drew nothing on the WebGL 2 backend, and nothing here needs an MRT pass
   const uRight = uniform(new THREE.Vector3(1, 0, 0)), uUp = uniform(new THREE.Vector3(0, 1, 0));
   const fb = em.render.flipbook, frames = fb.h * fb.v;
   mat.positionNode = Fn(() => {

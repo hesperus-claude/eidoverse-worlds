@@ -1,9 +1,9 @@
 // pictures — the browser host for the `picture` component: a standalone image, a quad of its own (shared/picture.js says
 // what a bag means). An image on a named node of a model is the material component's host (material.js).
 //
-// NEVER dispose a STORE file's texture: loadImageTexture caches by bytes and pins the texture for the session (assets.js
-// §16.2.B: `dispose` is a no-op on cached textures); the cache owns it, the picture borrows it. Same rule as emitter
-// sprites. A LINK's texture is decoded here, uncached (linkTexture: userData.owned), and the quad's dispose frees it.
+// Never dispose a store file's texture: loadImageTexture (assets.js) caches by bytes and pins the texture for the
+// session (`dispose` is a no-op on cached textures); the cache owns it, the picture borrows it. A link's texture is
+// decoded here, uncached (linkTexture: userData.owned), and the quad's dispose frees it.
 
 import { THREE } from '../core.js';
 import { bus } from '../base.js';
@@ -18,11 +18,11 @@ import { clientMayFetch } from '../../../shared/mediasrc.js';
 import { allowUntrusted, RIGHTS_WARNING } from '../mediaprefs.js';
 import { escapeHtml as esc } from '../markup.js';
 
-// THE QUAD (Godot Sprite3D, a Resonite image import): `width` metres wide, its height from the image's aspect,
-// standing on the thing's origin and facing its front (+Z), readable from behind too (a second plane turned π, so the
-// back isn't mirrored). Until the image is decoded, a 1:1 plate at 30% stands in, so the editor's gizmo has something
-// to grab. Cutout transparency (alphaTest 0.5: no sorting, fine in VR). Its world extent is held to 50 m.
-// THE BYTES (shared/mediasrc.js): a store file always; a trusted host's link always; any other link only if this
+// The quad: `width` metres wide, its height from the image's aspect, standing on the thing's origin and facing its
+// front (+Z), readable from behind too (a second plane turned π, so the back isn't mirrored). Until the image is
+// decoded, a 1:1 plate at 30% stands in, so the editor's gizmo has something to grab. Cutout transparency
+// (alphaTest 0.5: no sorting, fine in VR). Its world extent is held to 50 m.
+// The bytes (shared/mediasrc.js): a store file always; a trusted host's link always; any other link only if this
 // viewer turned on "allow untrusted links", else nothing is fetched (the quad shows its empty plate). A link is
 // fetched without credentials or a referrer, and decoded at most 2048 px on its long side.
 const QUAD_MAX_EXTENT = 50;
@@ -31,8 +31,8 @@ const blocked = new Map();   // id → why this browser didn't fetch it (probes)
 export const _blocked = blocked;
 export const _quadOf = (...a) => quadOf(...a);   // picture-note-test: the quad's dispose owns a link's texture
 // A link is loaded as an image, not fetched: the page's CSP lets images come from any https host (img-src) but keeps
-// connect-src to this server and its known services, so a script can't post what it reads anywhere (server/csp.ts).
-// crossOrigin 'anonymous' sends no credentials to another origin and needs its CORS answer (a texture must be clean).
+// connect-src to this server and its known services (server/csp.ts). crossOrigin 'anonymous' sends no credentials
+// and needs the host's CORS answer (a texture must be clean).
 async function linkTexture(url) {
   const img = new Image();
   img.crossOrigin = 'anonymous'; img.referrerPolicy = 'no-referrer'; img.decoding = 'async';
@@ -41,7 +41,7 @@ async function linkTexture(url) {
   const k = Math.min(1, MAX_TEXTURE_PX / Math.max(bmp.width, bmp.height));
   const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(bmp.width * k)); cv.height = Math.max(1, Math.round(bmp.height * k));
   cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height); bmp.close?.();
-  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.userData.owned = true; return tex;   // ours to free (#565)
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.userData.owned = true; return tex;   // ours to free
 }
 function quadOf(picture, aspect, tex) {
   const w = picture.width ?? 1, hgt = w * aspect;
@@ -61,16 +61,12 @@ function holdExtent(root, g, picture, aspect) {
 
 // id → { picture, quad, root, aspect } for every picture currently hung
 const hung = new Map();
-// id → revision of the CURRENT intent for that id. Every change of intent (a
-// new bag, a removal, the entity leaving or re-realized, a world reset) bumps
-// it, and an async hang installs only if its revision is still current: the
-// bag in the fold is the authority, and a load request can outlive it.
+// id → revision of the current intent for that id. Every change of intent (a new bag, a removal, the entity leaving
+// or re-realized, a world reset) bumps it; an async hang installs only if its revision is still current.
 const revision = new Map();
 const bump = (id) => { const r = (revision.get(id) ?? 0) + 1; revision.set(id, r); return r; };
 const current = (id, r) => revision.get(id) === r;
-// id → picture whose entity is not in the scene yet — replay usually
-// delivers the comp before the GLB has landed; the bag is folded and look()
-// is right the whole time, the texture just waits for something to land on.
+// id → picture whose entity is not in the scene yet (replay usually delivers the comp before the GLB has landed)
 const pending = new Map();
 
 /** An image's texture, by the media rule (shared/mediasrc.js): a link decoded here, a library file through the asset
@@ -89,9 +85,8 @@ function takeDown(id) {
 }
 
 async function hang(id, picture, rev) {
-  // The bag is pending from the moment it is current until a hang INSTALLS
-  // it, so a demote/promote during an in-flight load still finds it to rehang:
-  // a picture that is still authored never silently stops being shown.
+  // pending from the moment it is current until a hang installs it, so a demote/promote during an in-flight load
+  // still finds it to rehang
   pending.set(id, picture);
   const root = entities.get(id);
   if (!root) return;
@@ -135,43 +130,32 @@ bus.on('comp', ({ id, type, data }) => {
 
 bus.on('entity', ({ id, kind }) => {
   if (kind === 'remove' || kind === 'demote') {
-    // the subtree left the scene with our quad on it; forget the handle and
-    // bump any load in flight. DEMOTE keeps the bag pending so the promote
-    // re-hangs it; REMOVE clears it (a later spawn starts from its own comps).
+    // the subtree left the scene with our quad on it: forget the handle and bump any load in flight. Demote keeps
+    // the bag pending so the promote re-hangs it; remove clears it (a later spawn starts from its own comps).
     bump(id);
     const h = hung.get(id);
     if (h) { hung.delete(id); h.quad.userData.dispose?.(); if (kind === 'demote') pending.set(id, h.picture); }
-    // the editor's status line is about THIS entity; a later spawn under the
-    // same id is another one and opens with no line
+    // the editor's status line is about this entity; a later spawn under the same id opens with no line
     if (kind === 'remove') { pending.delete(id); notes.delete(id); }
   } else if (kind === 'spawn') {
-    // a promote replaces the subtree: whatever we hung is on the old one,
-    // and whatever was loading for the old one is stale — the re-hang below
-    // is issued under a fresh revision.
+    // a promote replaces the subtree: whatever we hung is on the old one, and whatever was loading for it is stale;
+    // the re-hang below runs under a fresh revision
     const rev = bump(id);
     const h = hung.get(id);
     if (h) { hung.delete(id); h.quad.userData.dispose?.(); pending.set(id, h.picture); }
-    // Whatever is pending — a bag whose entity wasn't here yet, or one
-    // whose load was bumped stale by this very re-realization — is hung
-    // again under the fresh revision.
+    // whatever is pending (a bag whose entity wasn't here yet, or one bumped stale just above) is hung again
     if (pending.has(id)) void hang(id, pending.get(id), rev);
   }
 });
 
-// The block's status line, per entity, kept OUTSIDE the DOM: the scene panel
-// rebuilds every editor on a committed verb's echo, and a refusal has no echo,
-// so the previous hang's echo would wipe the line. The render reads it back.
-//
-// A line is about ONE state of ONE entity. A remove (`kind: 'remove'`) clears
-// it: a new spawn under the same id is a different thing (a demote/promote is
-// the same entity and keeps it). Every line is also stamped with the picture it
-// was said ABOUT, and a picture echo that disagrees retires it (a local status
-// must never read as newer than the world); an echo that agrees keeps it.
+// The block's status line, per entity, kept outside the DOM: the scene panel rebuilds every editor on a committed
+// verb's echo, and a refusal has no echo, so the previous hang's echo would wipe the line. A line is about one state
+// of one entity: a remove clears it (a demote/promote keeps it), and it is stamped with the picture it was said
+// about, so a picture echo that disagrees retires it (a local status must never read as newer than the world).
 const notes = new Map();   // id → { text, warn, about }   (about = pictureKey of the bag the line describes)
 
-/** The four fields a picture IS, normalized, as one comparable string; `none`
- *  for no picture. Echo data and committed data both go through here so a
- *  server-side default or key order can never read as a change. */
+/** The four fields a picture is, normalized, as one comparable string; `none` for no picture. Echo data and
+ *  committed data both go through here so a server-side default or key order never reads as a change. */
 function pictureKey(data) {
   if (data == null) return 'none';
   const n = normalizePicture(data);
@@ -199,17 +183,11 @@ function clearPictures() {
 /** For probes: what is hung where. */
 export const _hung = hung;
 
-// ---- the editor block: how a HUMAN hangs a picture -------------------------
-//
-// The scene panel's generic layer already edits the comp as raw JSON; this is
-// the semantic block (client/lib/edit/inspect.js): a file door that lands the image
-// in the store and fills `src`, the description with its bound, and lit. One verb per
-// gesture — `hang` commits the whole bag, `take down` commits null — and the
-// bag goes through normalizePicture FIRST so a refusal is a hint here, not a
-// console warning after the round-trip.
-//
-// A thing guarded by someone else (comp {type: "guard"}, rights.ts) gets a
-// read-only line: the server would refuse the comp, so the block says who may.
+// ---- the editor block: how a human hangs a picture -------------------------
+// The scene panel's generic layer already edits the comp as raw JSON; this is the semantic block (edit/inspect.js):
+// a file door that lands the image in the store and fills `src`, the description, and lit. One verb per gesture
+// (`hang` commits the whole bag, `take down` commits null), and the bag goes through normalizePicture first so a
+// refusal is a hint here, not a console warning after the round-trip.
 
 const PICTURE_ACCEPT = 'image/png,image/jpeg,image/webp';
 
@@ -251,9 +229,8 @@ registerEditor(({ id, obj, bag, commit }) => {
     </div>`,
     wire(root) {
       const q = (k) => root.querySelector(`[data-pe="${k}"]`);
-      // `about` is the bag this line describes: what a gesture committed, or
-      // (omitted) the bag as it stands now. Survives the repaint; the DOM
-      // below does not — and is retired by any echo that disagrees with it.
+      // `about` is the bag this line describes: what a gesture committed, or (omitted) the bag as it stands now.
+      // Survives the repaint; the DOM does not. Retired by any echo that disagrees with it.
       const msg = (t, warn = false, about = bagOf(id)?.picture ?? null) => {
         notes.set(id, { text: t, warn, about: pictureKey(about) });
         const m = q('msg'); if (m) { m.textContent = t; m.style.color = warn ? 'var(--warn, #e8a33d)' : 'var(--dim)'; }
@@ -271,7 +248,7 @@ registerEditor(({ id, obj, bag, commit }) => {
         ev.target.value = '';
       });
       q('hang')?.addEventListener('click', (ev) => {
-        // part and flip went with the shape audit (10-16: shared/picture.js keeps src/width/description/lit), so the block offers neither (I59)
+        // shared/picture.js keeps src/width/description/lit only, so the block offers nothing else
         const data = { src: q('src').value.trim(), lit: q('lit').value, ...(cur?.width !== undefined ? { width: cur.width } : {}) };
         const said = q('description').value.trim();
         if (said) data.description = said;
@@ -291,9 +268,8 @@ registerEditor(({ id, obj, bag, commit }) => {
   };
 });
 
-// ---- the build-mode inspector's gestures (the fields themselves are the schema's
-// `picture` group, shared/editschema.js). An upload is a GESTURE, not a value:
-// pick a file, send it through the store door, then commit the path like any edit.
+// ---- the build-mode inspector's gestures (the fields are the schema's `picture` group, shared/editschema.js). An
+// upload is a gesture, not a value: pick a file, send it through the store door, then commit the path like any edit.
 function pickFile(accept) {
   return new Promise((resolve) => {
     const inp = Object.assign(document.createElement('input'), { type: 'file', accept });
@@ -301,8 +277,8 @@ function pickFile(accept) {
     inp.click();
   });
 }
-/** Pick an image and send it through the store door, with the rights reminder: its library path, or null (cancelled or
- *  failed, said in a toast). Create ▸ Picture's first step (build.js holdPicture). */
+/** Pick an image and send it through the store door, with the rights reminder: its library path, or null (cancelled
+ *  or failed, said in a toast). Create ▸ Picture's first step (edit/build.js holdPicture). */
 export async function pickPicture() {
   flashHint(`🖼 ${RIGHTS_WARNING}`, 4000);
   const file = await pickFile(PICTURE_ACCEPT); if (!file) return null;

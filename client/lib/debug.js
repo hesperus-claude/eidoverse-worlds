@@ -1,8 +1,5 @@
-// debug — draw what the physics actually thinks the world is.
-//
-// The collider volumes as the solver reads them, and the ragdoll as the solver reads it — not the meshes. Where the
-// two disagree is the whole point: a view that redrew the visible geometry would show nothing wrong (one wireframe
-// would have shown resolveColliders reading every box as an infinite column, at a glance).
+// debug — draw what the physics thinks the world is: the collider volumes as the solver reads them, and the ragdoll
+// as the solver reads it, not the meshes. Where the two disagree is the whole point.
 
 import { THREE, scene } from './core.js';
 import { bus } from './base.js';
@@ -20,11 +17,9 @@ import { makeFrame } from './windows.js';
 import { sliderTable, checkRow, selectRow, btn, sectionHead } from './edit/rows.js';
 import { toast, paintRangesIn } from './ui.js';
 
-// box = an OBB, walkable on top, solid on the sides between min.y and max.y
-// pillar = anything over 2.4m tall, collapsed to a slim centre column so you
-//          can walk under a canopy
-// exact  = collides against its actual triangles; a box would be a lie, so the
-//          BVH is drawn instead
+// box    = an OBB, walkable on top, solid on the sides between min.y and max.y
+// pillar = anything over 2.4 m tall, collapsed to a slim centre column so you can walk under a canopy
+// exact  = collides against its actual triangles, so the BVH is drawn
 const KIND_COLOR = { box: 0x4fd8ff, pillar: 0xffb347, exact: 0x8fe8c8 };
 const RAG_COLOR = { joint: 0xff8fb0, bone: 0xffd166, hit: 0xff3b3b };
 
@@ -44,8 +39,7 @@ const on = { colliders: false, ragdoll: false };
 // ---- shared geometry/material, so N colliders cost N transforms ------------
 let unitBox = null, unitBall = null;
 const lineMats = new Map();
-// depthTest OFF: a debug overlay the world can hide is not much of one. The capsules live INSIDE the avatar mesh, so
-// depth-testing would draw them only where they poke through the skin.
+// depthTest off: the capsules live inside the avatar mesh, so depth-testing would draw them only where they poke through
 const lineMat = (color) => {
   if (!lineMats.has(color)) {
     lineMats.set(color, new THREE.LineBasicMaterial({
@@ -81,8 +75,7 @@ function ensureGroups() {
 
 function kindOf(e) { return e.exact ? 'exact' : e.pillar ? 'pillar' : 'box'; }
 
-/** The BVH, not a box: an exact entity collides against its triangles, so a box would misrepresent it. Falls back to
- *  a box if the helper can't build — a debug view that throws is worse than one that approximates. */
+/** The BVH, not a box: an exact entity collides against its triangles. Falls back to a box if the helper can't build. */
 function exactView(entry) {
   try {
     const geo = entry.exact.bvh.geometry;
@@ -93,8 +86,7 @@ function exactView(entry) {
     helper.opacity = 0.5;
     helper.depth = 8;
     helper.update?.();
-    // The helper's updateMatrixWorld copies the SOURCE mesh's matrix over its own transform, so positioning the helper
-    // is silently undone every frame: sync moves this mesh, not the helper node.
+    // the helper's updateMatrixWorld copies the source mesh's matrix over its own, so sync moves this mesh, not the helper
     helper.userData.source = mesh;
     return helper;
   } catch {
@@ -136,8 +128,7 @@ function syncColliders() {
       }
       continue;
     }
-    // A pillar keeps its full height but only a slim centre footprint — the
-    // clamp lives in LOCAL units, so it scales with the entity like the box.
+    // a pillar keeps its full height but only a slim centre footprint (local units, so it scales with the entity)
     const half = kind === 'pillar' ? 0.25 : null;
     const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
     _c.set(half ? cx : cx, (box.min.y + box.max.y) / 2, half ? cz : cz)
@@ -157,19 +148,16 @@ function syncColliders() {
 }
 
 // ---- the ragdoll's own idea of the body ------------------------------------
-//
-// Joint spheres at their MEASURED radii and the bone capsules between them — the model the solver integrates.
+// Joint spheres at their measured radii and the bone capsules between them: the model the solver integrates.
 
-/** Real capsules, not centre lines: thickness is what stops a forearm passing through a torso, and you can't see
- *  interpenetration in a line. Length (a distance constraint) and radius (measured off the rig) never change once a
- *  tumble starts, so each capsule's geometry is built ONCE and only moved after. */
+/** Real capsules, not centre lines: thickness is what stops a forearm passing through a torso. Length and radius
+ *  never change once a tumble starts, so each capsule's geometry is built once and only moved after. */
 function buildCapsules(rd) {
   disposeCapsules();
   const items = [];
   for (const c of rd.caps ?? []) {
     const len = rd.p[c.a].distanceTo(rd.p[c.b]);
-    // CapsuleGeometry's `length` is the CYLINDER, hemispheres added on top: a cylinder of |ab| puts the cap centres
-    // exactly on the joints, the volume the solver tests.
+    // CapsuleGeometry's `length` is the cylinder, hemispheres added: a cylinder of |ab| puts the cap centres on the joints
     const mesh = onTop(new THREE.LineSegments(
       new THREE.WireframeGeometry(new THREE.CapsuleGeometry(c.r, len, 2, 8)),
       lineMat(RAG_COLOR.bone)));
@@ -183,7 +171,7 @@ function disposeCapsules() {
   ragCaps = null;
 }
 
-// Box volumes: a unit cube built once and SCALED per box, so N volumes cost N transforms.
+// box volumes: a unit cube built once and scaled per box
 let ragVols = null;
 function syncVolumes(vols) {
   if (!ragVols || ragVols.items.length !== vols.length) {
@@ -203,8 +191,7 @@ function syncVolumes(vols) {
   });
 }
 function disposeVolumes() {
-  // NOT m.geometry.dispose(): every box shares the one unit cube, so disposing
-  // it through any single mesh guts all the others.
+  // not m.geometry.dispose(): every box shares the one unit cube
   for (const m of ragVols?.items ?? []) ragGroup?.remove(m);
   ragVols = null;
 }
@@ -212,8 +199,7 @@ let _boxWire = null;
 const unitBoxWire = () => (_boxWire ??= new THREE.WireframeGeometry(new THREE.BoxGeometry(1, 1, 1)));
 
 function syncRagdoll(rd) {
-  // ---- joint spheres, at the radius the GROUND and props are tested against
-  // (which is per-joint, and not the same number as a bone's radius)
+  // ---- joint spheres, at the radius the ground and props are tested against (per joint, not a bone's radius)
   const joints = Object.keys(rd.p);
   if (!ragJoints || ragJoints.count !== joints.length) {
     if (ragJoints) ragGroup.remove(ragJoints.mesh);
@@ -228,8 +214,7 @@ function syncRagdoll(rd) {
   });
   ragJoints.mesh.instanceMatrix.needsUpdate = true;
 
-  // ---- box volumes, for engines that hold boxes rather than capsules (the Bullet rig); the verlet answers with
-  // caps/radius below
+  // ---- box volumes, for engines that hold boxes rather than capsules (the Bullet rig); the verlet answers with caps below
   const vols = rd.volumes?.() ?? [];
   if (vols.length) syncVolumes(vols); else disposeVolumes();
 
@@ -244,8 +229,7 @@ function syncRagdoll(rd) {
     it.mesh.quaternion.setFromUnitVectors(_Y, _dir.divideScalar(len));
     it.hit = false;
   }
-  // ---- and which of them are currently INSIDE each other, which is the whole
-  // question the capsule model exists to answer
+  // ---- and which of them are currently inside each other
   for (const { A, B, min } of rd.pairs ?? []) {
     closestParams(rd.p[A.a], rd.p[A.b], rd.p[B.a], rd.p[B.b], _pr);
     _ca.copy(rd.p[A.a]).lerp(rd.p[A.b], _pr.s);
@@ -261,10 +245,8 @@ function syncRagdoll(rd) {
 }
 
 // ---- the knobs -------------------------------------------------------------
-//
-// Headless metrics have said a ragdoll was fine while it plainly wasn't on screen, so the solver's switches and dials
-// go where someone can watch the body and turn them. Toggling a whole family off mid-tumble is the fastest bisect:
-// if the shape stops being wrong when CONE goes off, it was the cone.
+// The solver's switches and dials, where someone can watch the body and turn them. Toggling a whole family off
+// mid-tumble is the fastest bisect.
 
 const SWITCHES = [
   ['ON_FLEX', 'spine/neck bend'], ['ON_CONE', 'shoulder/hip cone'],
@@ -281,13 +263,10 @@ const DIALS = [
   ['GRAVITY', -20, 0, 0.5], ['SETTLE_V', 0, 0.4, 0.01], ['DEADLINE', 1, 30, 1],
 ];
 const DEFAULTS = {};
-// (the row builders live in rows.js)
 
 // ---- joint limits ----------------------------------------------------------
-//
-// How floppy a RAGDOLL should look inside a joint's real range is a judgement, and judging it from a table of degrees
-// is guesswork (a stiffer trunk can hyperextend the knees). So: pick a joint, drag its ranges, watch the body. Live:
-// retune() pushes the table into the running constraints, so a body already on the floor changes under your hands.
+// How floppy a ragdoll should look inside a joint's range is a judgement: pick a joint, drag its ranges, watch the
+// body. retune() pushes the table into the running constraints, so a body already on the floor changes live.
 
 // what each spec exposes: directional joints carry flex/ext, the rest an x pair
 const LIMIT_FIELDS = [
@@ -304,11 +283,10 @@ const setF = (S, f, v) => {
   else S[f] = v;
 };
 
-/** The retune hook the live-tuning tables share: push the edited table into
- *  the running doll, if one exists and answers. */
+/** The retune hook the live-tuning tables share: push the edited table into the running doll, if one exists. */
 const retune = (method) => () => { providers.ragdoll?.()?.[method]?.(); };
 
-/** The keep-the-answer button: copy the tuned table so a number is never found twice. */
+/** Copy the tuned table to the clipboard. */
 function copyBtn(label, make) {
   return btn(label, async () => {
     const out = make();
@@ -318,8 +296,7 @@ function copyBtn(label, make) {
 }
 
 function buildJointPanel(stack) {
-  // one snapshot of the shipped table, so "reset" means the defaults and not
-  // whatever was on the sliders when the panel was opened
+  // one snapshot of the shipped table, so "reset" means the defaults
   const jointDefaults = JSON.parse(JSON.stringify(JOINT_SPECS));
   const apply = retune('retune');
 
@@ -353,19 +330,16 @@ function buildJointPanel(stack) {
   stack.append(head, table.el, btns);
 }
 
-// ---- hair -------------------------------------------------------------------
-// The hair has no good headless metric ("peak segment speed" can't tell flowing from whipping), so it gets dials and
-// a pair of eyes. Which way an eyelid SHUTS depends on how its bone was rolled, so the sign is a dial. Rigs that export
-// a Limit Rotation constraint (see eido_export.py) use their own value and ignore this one.
+// ---- blink and hair ---------------------------------------------------------
+// Which way an eyelid shuts depends on how its bone was rolled, so the sign is a dial. Rigs that export a Limit
+// Rotation constraint use their own value and ignore this one.
 const BLINK_FIELDS = [
   ['closed', -2, 2, 0.02],   // upper lid
-  ['lower', -2, 2, 0.02],    // lower lid — an upper alone does not shut an eye
+  ['lower', -2, 2, 0.02],    // lower lid: an upper alone does not shut an eye
   ['dur', 0.05, 0.8, 0.01],  // seconds for the whole close-and-open
   ['hz', 0.2, 4, 0.1],
-  // eyeMax 0 pins the eyeballs at rest — the way to tell "the eyes are rigged
-  // wrong" from "the gaze code is turning them wrong" without rebuilding.
-  ['eyeMax', 0, 1.2, 0.02],
-  ['axis', 0, 2, 1],          // 0=x 1=y 2=z — which way the lid hinges
+  ['eyeMax', 0, 1.2, 0.02],  // 0 pins the eyeballs at rest: tells "rigged wrong" from "the gaze code turns them wrong"
+  ['axis', 0, 2, 1],          // 0=x 1=y 2=z: which way the lid hinges
 ];
 
 const HAIR_FIELDS = [
@@ -387,9 +361,8 @@ function buildBlinkPanel(stack) {
   }).el);
 }
 
-// A limp body with no sim of its own falls back to three-vrm, whose springs are tuned for standing (the droop is in
-// the rest shape and stiffness pulls toward a direction that rotates WITH the body), so a body on its side reads as
-// gravity pulling the hair sideways. These two take effect on the next body to go limp.
+// A limp body with no sim of its own falls back to three-vrm, whose springs are tuned for standing, so a body on its
+// side reads as gravity pulling the hair sideways. These two take effect on the next body to go limp.
 const LIMP_FIELDS = [
   ['stiffness', 0, 1, 0.02],   // factor on whatever the rig declared
   ['gravity', 0, 1.5, 0.05],   // floor, not a replacement
@@ -423,19 +396,16 @@ function buildHairPanel(stack) {
 }
 
 // ---- wings ------------------------------------------------------------------
-// Two tables, because a wing has two lives. WING_IDLE is the flap, read fresh every frame by avatar.js, so its sliders
-// bite instantly on a standing body. WING_TUNING is the ragdoll's and needs retuneWings() to reach constraints that
-// exist only while a body is limp: drop her first, then reach for the lower half of this panel.
+// Two tables: WING_IDLE is the flap, read fresh every frame by avatar.js, so its sliders bite instantly on a standing
+// body. WING_TUNING is the ragdoll's and needs retuneWings() to reach constraints that exist only while a body is limp.
 const WING_IDLE_FIELDS = [
   ['deg', 0, 60, 1],        // half-amplitude at the shoulder
   ['hz', 0, 3, 0.02],       // flaps per second
   ['bias', -40, 40, 1],     // permanent lift, degrees
   ['tip', 0, 1.5, 0.05],    // outer segment's share
   ['lag', 0, 0.5, 0.01],    // cycles the tip trails the root
-  ['sweep', 0, 40, 1],      // fore/aft travel — 0 pins the tips to the frontal
-                            // plane, which is the hinge look it exists to fix
-  ['sweepPhase', 0, 0.5, 0.01],  // 0.25 opens the path into an ellipse; 0 or
-                                 // 0.5 collapses it back to a tilted line
+  ['sweep', 0, 40, 1],      // fore/aft travel; 0 pins the tips to the frontal plane (the hinge look)
+  ['sweepPhase', 0, 0.5, 0.01],  // 0.25 opens the path into an ellipse; 0 or 0.5 collapses it to a tilted line
   ['recover', 0.05, 2, 0.05],
 ];
 const WING_SIM_FIELDS = [
@@ -454,7 +424,7 @@ function buildWingPanel(stack) {
   // WING_IDLE needs no retune hook; WING_TUNING is pushed into the live constraints by `apply`
   const idle = sliderTable(WING_IDLE_FIELDS, WING_IDLE, {
     fmt: (f, v) => (f === 'deg' || f === 'bias' || f === 'sweep' ? `${v}°`
-      : f === 'hz' ? `${+(+v).toFixed(2)}Hz`   // the default is 1/3.4: unrounded it printed 0.29411764705882354Hz, 157 px in a 44 px readout
+      : f === 'hz' ? `${+(+v).toFixed(2)}Hz`   // the default is 1/3.4: unrounded it overflows the readout
         : f === 'recover' ? `${(v * 1000).toFixed(0)}ms` : String(+(+v).toFixed(3))),
   });
   const sim = sliderTable(WING_SIM_FIELDS, WING_TUNING, {
@@ -489,8 +459,7 @@ const toastLike = (msg) => toast(msg);
 const viewRow = (label, key, onChange) => checkRow(label,
   () => on[key], (v) => { on[key] = v; onChange?.(v); }, { className: 'row dbg-row' });
 
-/** @param p { ragdoll(), downed(), fps() } — passed in rather than imported,
- *  so this module stays a leaf and never draws main.js into a cycle. */
+/** @param p { ragdoll(), downed(), perf(), bill(), reLimp() }, passed in rather than imported, so this module stays a leaf. */
 export function initDebug(p = {}) {
   providers = p;
   frame = makeFrame('debug', {
@@ -499,15 +468,13 @@ export function initDebug(p = {}) {
   });
   const stack = document.createElement('div');
   stack.className = 'stack';
-  // The frame block is PINNED above everything (its own element, flex:none), so scrolling the settings never hides
-  // the one number the panel is usually opened for.
+  // the frame block is pinned above everything (flex:none), so scrolling the settings never hides it
   framePre = document.createElement('pre');
   framePre.className = 'dbg-stats';
   framePre.style.cssText = 'flex:none;margin:0 0 4px';
   stack.appendChild(framePre);
-  // TEXT TABS BY JOB:
-  // physics = the ragdoll and its tuning, body = the secondary motion that rides a body (blink, hair,
-  // wings), perf = what the frame costs. The frame numbers above stay put whichever tab is chosen.
+  // tabs by job: physics = the ragdoll and its tuning, body = the secondary motion that rides a body (blink, hair,
+  // wings), perf = what the frame costs
   const tabs = dbgTabs(stack, ['physics', 'body', 'perf'], () => frame.visible);
   // the remembered tab is chosen at boot with Debug closed: its groups wait until the panel is on screen
   frame.onShow(tabs.flush);
@@ -541,7 +508,7 @@ export function initDebug(p = {}) {
   phys.appendChild(btns);
 
   const swBox = document.createElement('div');
-  // NOT .stack — that is flex:1 with its own scroller, and nested in the panel's stack it collapses to nothing
+  // not .stack: that is flex:1 with its own scroller, and nested in the panel's stack it collapses to nothing
   swBox.style.cssText = 'display:flex;flex-direction:column;gap:3px';
   for (const [k, label] of SWITCHES) {
     swBox.appendChild(checkRow(label,
@@ -592,10 +559,9 @@ export function initDebug(p = {}) {
   return frame;
 }
 
-// Debug's text tabs: the strip is the profile's .pf-tabs recipe with no glyphs. A group inside a tab is
-// a quiet caption and a body; `build(body)` runs once, lazily, the first time its tab is SEEN (chosen
-// while the panel shows) — so an unvisited tab costs nothing and the panel opens light. A group added to
-// the tab already on screen (perfscope arrives by dynamic import) builds at once.
+// Debug's text tabs (the profile's .pf-tabs recipe). A group inside a tab is a caption and a body; `build(body)`
+// runs once, lazily, the first time its tab is seen, so an unvisited tab costs nothing. A group added to the tab
+// already on screen (perfscope arrives by dynamic import) builds at once.
 function dbgTabs(parent, names, shown) {
   const LS = 'ew-tab-debug';
   const strip = document.createElement('div');
@@ -655,8 +621,7 @@ const fmt = (n, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : '--');
 
 export function updateDebug(now = performance.now()) {
   if (!frame) return;
-  // F1 hides the UI for screenshots; debug lines are UI, whatever layer they live on.
-  // Open in the VR ring counts as shown (the desktop frame isn't 'visible' then), or the quad's numbers freeze.
+  // F1 hides the UI for screenshots; debug lines are UI. Open in the VR ring counts as shown, or the quad's numbers freeze.
   let inXR = false; try { inXR = xrPanelOpen('debug'); } catch { /* not presenting */ }
   const hidden = (!frame.visible && !inXR) || document.body.classList.contains('photo');
   ensureGroups();
@@ -666,8 +631,8 @@ export function updateDebug(now = performance.now()) {
 
   if (on.colliders) syncColliders();
 
-  // the settled pose is the one worth inspecting, and it is exactly when main.js drops its ragdoll reference: hold the
-  // last skeleton while the body is still down
+  // the settled pose is the one worth inspecting, exactly when the ragdoll reference is dropped: hold the last
+  // skeleton while the body is still down
   const live = providers.ragdoll?.();
   if (live?.p) lastRag = live;
   if (!providers.downed?.()) lastRag = null;
@@ -681,8 +646,7 @@ export function updateDebug(now = performance.now()) {
     const k = kindOf(e);
     if (k === 'box') box++; else if (k === 'pillar') pillar++; else exact++;
   }
-  // the pinned frame block: fps + honest ms + worst-of-last-second, then
-  // the per-system bill (EWMA ms) — where the frame actually goes
+  // the pinned frame block: fps + ms + worst-of-last-second, then the per-system bill (EWMA ms)
   const p = providers.perf?.();
   if (framePre && p) {
     const bill = (providers.bill?.() ?? [])
@@ -701,15 +665,13 @@ export function updateDebug(now = performance.now()) {
     `  pillar ${String(pillar).padStart(5)}   slim column, pass under`,
     `  exact  ${String(exact).padStart(5)}   trimesh (BVH)`,
   ];
-  // A tumble's numbers are most worth reading when it STOPS, exactly when main.js drops its reference: keep the last
-  // set and say plainly that it is the last one.
+  // a tumble's numbers are most worth reading when it stops: keep the last set and say that it is the last one
   if (rd?.p) {
     lastRun = [
       `  speed  ${fmt(rd.maxV, 3).padStart(5)} m/s`,
       `  still  ${fmt(rd.settledFor, 2).padStart(5)} s`,
       `  age    ${fmt(rd.elapsed, 2).padStart(5)} s`,
-      // hipsOffset (render root below the hips) is a property of the RIG: if it drifts across a drag or release, the
-      // whole body renders that far off the sim (floating, or clipping through the floor).
+      // hipsOffset (render root below the hips) is a property of the rig: if it drifts, the body renders off the sim
       `  hipsΔ  ${fmt(rd.hipsOffset, 3).padStart(5)} m  (rig constant)`,
       `  rootY  ${fmt(rd.avatar?.root?.position?.y, 3).padStart(5)} m`,
       // steps vs age separates "nobody is calling step()" from "step() called with dt 0"
@@ -721,8 +683,7 @@ export function updateDebug(now = performance.now()) {
   }
   if (lastRun) lines.push('', `ragdoll  ${rd?.p ? 'active' : 'settled (last)'}`, ...lastRun);
 
-  // Per-bone TWIST, live, next to the body it describes: if a limb looks twisted and its row says 0°, the measurement
-  // is what is broken.
+  // per-bone twist, live: if a limb looks twisted and its row says 0°, the measurement is what is broken
   if (rd?.drive && rd.pose) {
     lines.push('', 'twist about each bone (deg)');
     for (const d of rd.drive) {
@@ -744,9 +705,8 @@ export function updateDebug(now = performance.now()) {
   statsEl.textContent = lines.join('\n');
 }
 
-// ---- the debug frame as a VR quad: YOUR numbers, in-headset -----------------
-// The recorder tees these to the operator; this shows them to the person wearing the headset. Same sources as the
-// desk (perf.js, render.js, perfscope); the perfscope modes are the same setMode the desk's rows call.
+// ---- the debug frame as a VR quad -------------------------------------------
+// The same sources as the desk (perf.js, render.js, perfscope.js), shown to the person wearing the headset.
 function debugFields() {
   const r = drawStats().render ?? {};
   const cur = activeMode();
