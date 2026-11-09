@@ -13,6 +13,15 @@ How to change this repo. Building *in* a world is [AGENTS.md](AGENTS.md); the do
   stale module.
 - `hygiene` refuses patterns that broke the gate before; its baseline (`test/gate/hygiene-baseline.json`) only
   goes down, never `--write` it up.
+- Suites run in lanes (`test/gate/suites.ts`): `CORE` runs first and stops the gate on a failure, `BROWSER` lists every
+  suite that launches a Chromium, and everything else is main. A browser suite missing from `BROWSER` fails preflight.
+- Every test-named file is in the gate or in `test/gate/ungated.json` with one line why it isn't yet (hygiene's
+  `ungated` rows). That list only shrinks: gate or delete a file to take it off; don't add one to dodge a red.
+- Names: `-probe` drives a headless Chromium, `-check` is a protocol conformance check (mostly `test/protocol/`), and
+  `-test` is everything else. Older files don't all follow it; the gate decides a suite's lane by what it launches, not its name.
+- A test lives under the subject it exercises: `test/protocol/` for a claim in `spec/` checked through a real
+  sequencer, `test/client/` for the browser client's own code, and likewise `server/`, `shared/`, `mcpl/`. The six
+  `test/protocol/*-probe.ts` are client probes that predate this rule.
 - New vocabulary (a component, an agent tool) climbs a ladder: [COMPONENT-LADDER](docs/contributing/COMPONENT-LADDER.md),
   [TOOL-LADDER](docs/contributing/TOOL-LADDER.md).
 
