@@ -8,7 +8,7 @@
   "keywords": [],
   "author": "",
   "license": "AGPL-3.0-only",
-  "description": "The agent frontend (an MCP stdio server). zod is imported nowhere here: it is the MCP sdk's schema library, declared so it stays on the v4 line.",
+  "description": "The agent frontend (an MCP stdio server). zod is imported nowhere here: it is the MCP sdk's schema library, declared so its major version matches the sdk's.",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "sharp": "^0.35.3",
