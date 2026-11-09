@@ -1,4 +1,4 @@
-// shared/structure_edit.js — the editor's pure half, tested headless.
+// shared/structure-edit.js — the editor's pure half, tested headless.
 //
 //   bun test/shared/structure-edit-test.ts
 //
@@ -9,7 +9,7 @@
 import {
   emptyStructure, pickEdge, pickEdges, pickCell, addWall, removeWall,
   setAperture, setTile, removeTile, drawRoom, eraseRoom, labelCell, pickWalledEdge,
-} from "../../shared/structure_edit.js";
+} from "../../shared/structure-edit.js";
 import { planStructure, normalize, edgeKey } from "../../shared/structure.js";
 import { suite } from "../gate/suite.ts";
 
@@ -18,7 +18,7 @@ const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok,
 const walls = (d: any) => normalize(d).levels[0].walls;
 const tiles = (d: any) => normalize(d).levels[0].tiles;
 
-console.log(`\nstructure_edit — the editor's pure half\n`);
+console.log(`\nstructure-edit — the editor's pure half\n`);
 
 const G = { tile: 1 };
 

@@ -7,6 +7,7 @@ import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { provenanceOf } from "../shared/protocol/provenance.js";
 import { VERSION } from "../shared/protocol/fold.js";
+import { sha256Bytes } from "../shared/protocol/hash.js";
 
 /** sha256 over the working tree at `root`, as git sees it (tracked and untracked-unignored files, sorted paths, each path and
  *  its content hash): the exact source that ran. */
@@ -30,7 +31,7 @@ export function sourceRevisionOf(root) {
 }
 /** The provenance of writer `name`@`version` running from the source tree at `root` (its registry pin, revision and tree). */
 export function provenanceAt(root, name, version) {
-  const registrySha256 = crypto.createHash("sha256").update(fs.readFileSync(path.join(root, "spec/registry-pin.json"))).digest("hex");
+  const registrySha256 = sha256Bytes(fs.readFileSync(path.join(root, "spec/registry-pin.json")));
   return provenanceOf({ registrySha256, name, version, ...sourceRevisionOf(root), sourceTreeSha256: sourceTreeSha256(root) });
 }
 /** This server's provenance, read once from the tree it runs: every genesis it founds records it. Null (said once) when the tree

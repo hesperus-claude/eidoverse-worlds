@@ -287,9 +287,6 @@
  "test/protocol/server-check.ts": {
   "bare-wait": 28
  },
- "test/protocol/setup-check.ts": {
-  "own-ok": 1
- },
  "test/protocol/shiplist-check.ts": {
   "raw-symlink": 2
  },

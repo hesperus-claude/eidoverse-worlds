@@ -8,7 +8,7 @@
 
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { createHash } from "node:crypto";
+import { sha256 } from "../shared/protocol/hash.js";
 
 /** Encoder probe: KTX2_TOKTX env (absolute path) → toktx on PATH → ktx on PATH. Absent is an ENVIRONMENT, not a
  *  failure: the CLI exits 3 so the caller env-skips, never writing a .failed marker. */
@@ -70,7 +70,7 @@ export function toolVersions(encoder: string | null = findKtx2Encoder()): ToolVe
 /** A short digest of the canonical (key-sorted) tool set — what the stamp carries. */
 export function toolsDigest(v: ToolVersions = toolVersions()): string {
   const canon = JSON.stringify(Object.keys(v).sort().map((k) => [k, v[k]]));
-  return createHash("sha256").update(canon).digest("hex").slice(0, 12);
+  return sha256(canon).slice(0, 12);
 }
 let memo: { at: number; d: string } | null = null;
 /** This process's tools digest, re-read at most once a minute. */

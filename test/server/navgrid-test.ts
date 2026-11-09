@@ -1,6 +1,6 @@
 // bun test/server/navgrid-test.ts — walk_to routes through placed models.
 //
-// mcpl/navgrid.ts plans against the same colliders the feet are moved by
+// shared/navgrid.js plans against the same colliders the feet are moved by
 // (agent-mesh-collision-test covers the feet). Here a real WorldAgent, on an
 // isolated sequencer, is given ONE walk_to per destination and has to find
 // its own way: in through the door, up the stair, along the upper floor, down

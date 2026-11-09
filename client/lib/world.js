@@ -31,7 +31,7 @@ import { whenBooted, bootDone } from './boot.js';
 import { warm, P_GATE } from './warmqueue.js';
 // seat correction for mounted occupants (upstream #101) — the me-drive frame calls these for every seated body
 import { occupyCorrectionFor } from './occupants.js';
-import { applySeatCorrection } from './seatcore.js';
+import { applySeatCorrection } from '../../shared/seatcore.js';
 import { isOwner } from '../../shared/protocol/roles.js';
 
 /** id -> Object3D. `null` is a reservation held while the GLB downloads, so a

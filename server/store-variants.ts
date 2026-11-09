@@ -9,9 +9,9 @@
 
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { join, basename } from "node:path";
-import { createHash } from "node:crypto";
 import { currentToolsDigest, toolVersions, toolsStamp } from "./tools-stamp.ts";
 import { R_BASE, DIAG_K, LOD_FRACTION, LOD_HYST } from "../shared/lod-distance.js";
+import { sha256Bytes } from "../shared/protocol/hash.js";
 
 /** The variant suffix. `<hash>.glb` + this = the KTX2 shadow's file name. */
 export const KTX2_SUFFIX = ".ktx2.glb";
@@ -127,7 +127,7 @@ export const diskIdentity: StatFn = (p) => {
     if (hit?.key !== key) {
       const bytes = readFileSync(p);
       identityIo.bytes += bytes.length;
-      hit = { key, sha: createHash("sha256").update(bytes).digest("hex") };
+      hit = { key, sha: sha256Bytes(bytes) };
       digestCache.set(p, hit);
     }
     return { size: s.size, mtimeMs: s.mtimeMs, sha: hit.sha };

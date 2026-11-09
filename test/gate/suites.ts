@@ -87,7 +87,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["supportclass", "client/supportclass-test.ts", 1], // the one support classifier both runtimes consume (#84)
   ["support", "client/support-test.ts", 1], // a settling body rests on what actually holds it up (#17)
   ["structure-field", "shared/structure-field-test.ts", 1], // shared/structure.js: the griddled-building planner
-  ["structure-edit", "shared/structure-edit-test.ts", 1], // shared/structure_edit.js: the structure editor's pure half
+  ["structure-edit", "shared/structure-edit-test.ts", 1], // shared/structure-edit.js: the structure editor's pure half
   ["structure-collider", "client/structure-collider-test.ts", 1], // declared structure colliders (fitStructureBoxes)
   ["collider-off-bodies", "client/collider-off-bodies-test.ts", 1], // review of PR #260: collision off for bodies gives the walker nothing to meet, on a mesh's and a building's every realizing path
   ["lying-support", "mcpl/lying-support-test.ts", 1], // an agent's support for a thing lying down: its true top, no phantom deck at its origin (review of b398d7e3 #1)
@@ -98,6 +98,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["seatcore", "client/seatcore-test.ts", 1], // the seat-profile contract as hand math (#101 B): schema, contact height, the verdict cache
   ["seatlab-measure", "client/seatlab-measure-test.ts", 1], // tools/seatlab measureSeat reports the seat's pose and anchor from its station
   ["msgrate", "server/msgrate-test.ts", 1],
+  ["upload-cap", "server/upload-cap-test.ts", 1], // /upload's whole-body cap bites at UPLOAD_CAP, with a length or chunked (MUTATION-SAMPLE S2)
   ["clientlog", "server/clientlog-test.ts", 1], // the /clientlog tee's door and budget (server/clientlog.ts: rate, size, scrub, disk; no read path) and the client's side of it // server/msgrate.ts: the message cap is a token bucket (a server stall is not the client's flood)
   ["shape-render", "shared/shape-render-test.ts", 1], // #260 I515: the shape audit's render rows and the v1 importer's; ran only as an import before
   ["originof", "client/originof-test.ts", 1], // #260 I98: the ?orrery= guard (generate.js originOf) takes only an http(s) base, never markup or javascript:

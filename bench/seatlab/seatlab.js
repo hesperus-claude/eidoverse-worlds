@@ -3,7 +3,7 @@
 //
 // Browser-loaded: import specifiers are absolute (/lib/...), so serve it as a
 // static module (copy it under client/lib/) and `await import('/lib/seatlab.js')`
-// from the console. Pure math lives in client/lib/seatcore.js, pinned by
+// from the console. Pure math lives in shared/seatcore.js, pinned by
 // test/client/seatcore-test.ts; this file only observes scenes and lab instances.
 // The scratch registers below are single-purpose: aliasing one once corrupted
 // the seat claim at nonzero Y (seatClaim takes plain arguments for that reason).
@@ -15,7 +15,7 @@ import { THREE, scene } from '/lib/core.js';
 import { remotes } from '/lib/remotes.js';
 import { entities, bagOf, avatarMounts, socketWorldPos, mountTransform, seatSocket } from '/lib/world.js';
 import { makeAvatar } from '/lib/avatar.js';
-import { seatClaim, SEAT_METHOD, MIN_PATCH_VERTS, MAX_PATCH_SPREAD_Y, nameFromAvatarPath, SEAT_CLIP_FILE } from '/lib/seatcore.js';
+import { seatClaim, SEAT_METHOD, MIN_PATCH_VERTS, MAX_PATCH_SPREAD_Y, nameFromAvatarPath, SEAT_CLIP_FILE } from '/shared/seatcore.js';
 import { vrmaShaLoaded } from '/lib/assets.js';
 
 const _sock = new THREE.Vector3();   // socket world position — nothing else

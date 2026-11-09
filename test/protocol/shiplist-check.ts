@@ -42,7 +42,7 @@ const MUTANTS: [string, string, string | [string, string, string?][], string, st
   ["openable: slide bounds", "shared/protocol/authority/checks.js", [["if (v.slide !== undefined && !nums(v.slide, 3, 10)) refuse(", "if (false) refuse("], [", slide: { min: -10, max: 10 } },", " },", "shared/protocol/componentspec.js"]], "", ["O2"]],
   ["openable: the catalogue's ranges", "shared/protocol/componentspec.js", "ranges: { angle: { min: -Math.PI, max: Math.PI }, time: { min: 0, max: 10 }, slide: { min: -10, max: 10 } },", "", ["O2"]],
   ["`door` is called openable", "shared/protocol/authority/checks.js", "if (name === \"door\") refuse(", "if (false) refuse(", ["O1"]],
-  ["look shows the openable", "shared/protocol/authority/blueprints.js", "...(e.c.openable && typeof e.c.openable === \"object\" ? { openable: e.c.openable } : {})", "...({})", ["O4"]],
+  ["look shows the openable", "shared/protocol/authority/reads.js", "...(e.c.openable && typeof e.c.openable === \"object\" ? { openable: e.c.openable } : {})", "...({})", ["O4"]],
   ["the importer renames door", "tools/import-v1/translate-v1.js", "c[encName(k === \"door\" && !e.comp.openable ? \"openable\" : k)]", "c[encName(k)]", ["O5"]],
   ["the importer renames a reaction's door", "tools/import-v1/translate-v1.js", "} else if (h && typeof h === \"object\" && h.component === \"door\") out[k] = { ...h, component: \"openable\" };", "}", ["O5"]],
   ["a turn keeps the hinge", "client/lib/motioneval.js", "const shift = qApply(q0, [pv[0] - rp[0], pv[1] - rp[1], pv[2] - rp[2]]);\n  return { pos: base.pos.map((v, i) => v + shift[i]), q: qMul(q0, q) };", "return { pos: [...base.pos], q: qMul(q0, q) };", ["O6"]],

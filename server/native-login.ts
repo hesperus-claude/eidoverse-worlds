@@ -1,7 +1,7 @@
 // Browser-approved native login: the native client never holds an OAuth token. Pending grants are memory-only, bounded and single-use.
 import { randomBytes } from "node:crypto";
 import type { HnSession } from "./auth.ts";
-import { readCapped } from "./reqbody.ts";
+import { readCapped } from "./request-body.ts";
 
 // A session issued to a native client: `native`, or `nativeWorld` on an older pairing (auth.ts). It may not approve another pairing. Kept here, so loading the handler runs nothing of auth.ts.
 export const isNativeSession = (s: HnSession) => s.native === true || s.nativeWorld !== undefined;

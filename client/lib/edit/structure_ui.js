@@ -1,6 +1,6 @@
 // structure_ui — the griddled-building editor's hosted half.
 //
-// Thin on purpose. Every edit is a pure function in shared/structure_edit.js,
+// Thin on purpose. Every edit is a pure function in shared/structure-edit.js,
 // so this file only has to answer three questions: which building, where on its
 // grid, and which tool. The edit itself, the preview, and the undo entry are
 // all the same call — a preview cannot disagree with what commits, because it
@@ -24,7 +24,7 @@ import { setCutaway } from '../realize/structure.js';
 import {
   emptyStructure, pickEdge, pickCell, addWall, removeWall, setAperture,
   drawRoom, eraseRoom, setTile, pickWalledEdge,
-} from '../../../shared/structure_edit.js';
+} from '../../../shared/structure-edit.js';
 
 const TOOLS = [   // [key, label, hint, icon] — icons.js glyphs (no emoji: the old 🚪 🪟 were the only colour in the bar)
   ['room', 'room', 'drag a rectangle: floor and walls right round it', 'square'],

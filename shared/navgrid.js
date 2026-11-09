@@ -11,7 +11,7 @@
 // Pure: the world arrives through NavProbe (physics.ts navProbe). A grid caches columns until a collider changes,
 // so callers keep one per physics.ts collidersGeneration.
 
-import { MOVER } from "../shared/mover.js";
+import { MOVER } from "./mover.js";
 
 /** Lattice spacing. Under the capsule radius (0.32), so a wall cannot fall
  *  between two neighbouring standing columns: both would be within reach of it. */
@@ -19,8 +19,8 @@ export const NAV_CELL = 0.2;
 /** The lattice sits this far off the round-metre grid: a point exactly ON an authored wall face (round
  *  coordinates) can't be pushed (no direction) and would read as standing room inside the wall. */
 export const NAV_OFF = 0.0131;
-const at = (i: number) => i * NAV_CELL + NAV_OFF;
-const cell = (x: number) => Math.round((x - NAV_OFF) / NAV_CELL);
+const at = (i) => i * NAV_CELL + NAV_OFF;
+const cell = (x) => Math.round((x - NAV_OFF) / NAV_CELL);
 /** Most a walk climbs or drops between neighbouring columns: the feet's own step-up (shared/mover.js
  *  MOVER.body.step), one value for walker, feet and planner. Drops too: a route never steps off a balcony. */
 export const NAV_STEP = MOVER.body.step;
@@ -32,18 +32,15 @@ export const NAV_PAD = 8;
 /** Expansions before the search gives up — bounds the time a walk can block
  *  the process (every agent in it shares one event loop). */
 export const NAV_MAX_EXPANSIONS = 40_000;
-
-export type NavProbe = {
-  /** height of the topmost surface at or below maxY at (x, z), terrain if none */
-  surfaceUnder(x: number, z: number, maxY: number): number;
-  /** a standing body's answer at (x, y, z): the ground it finds, and how far it is pushed sideways */
-  stand(x: number, y: number, z: number): { ground: number; push: number };
-};
-export type NavPoint = { x: number; y: number; z: number };
-/** Where a route ends: see route(). */
-export type NavTarget = { x: number; z: number; y?: number; reach?: number; above?: number; below?: number;
-  inside?: (x: number, z: number) => boolean };
-export type NavResult = { points: NavPoint[]; snapped: boolean } | { refusal: string };
+/**
+ * @typedef {object} NavProbe
+ * @property {(x: number, z: number, maxY: number) => number} surfaceUnder height of the topmost surface at or below maxY at (x, z), terrain if none
+ * @property {(x: number, y: number, z: number) => { ground: number, push: number }} stand a standing body's answer at (x, y, z): the ground it finds, and how far it is pushed sideways
+ */
+/** @typedef {{ x: number, y: number, z: number }} NavPoint */
+/** Where a route ends: see route().
+ *  @typedef {{ x: number, z: number, y?: number, reach?: number, above?: number, below?: number, inside?: (x: number, z: number) => boolean }} NavTarget */
+/** @typedef {{ points: NavPoint[], snapped: boolean } | { refusal: string }} NavResult */
 
 /** Longest horizontal move between two collision checks, for the feet (agent.ts) and the planner. Browser scale
  *  (2.6cm/frame walking at 60fps): a coarser step would get past a hip-band edge where a person is held. */
@@ -51,7 +48,7 @@ export const NAV_SUBSTEP = 0.03;
 const SUBSTEP = NAV_SUBSTEP;
 /** Planner step over level ground (see walkable). */
 const COARSE = 0.1;
-const DIRS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
 /** Probes one plan may make (every probe, not just expansions) before it is refused, so no plan holds the event loop. */
 export const NAV_MAX_PROBES = 200_000;
@@ -59,16 +56,17 @@ export const NAV_MAX_PROBES = 200_000;
 const NAV_MAX_COLUMNS = 300_000;
 const OVER_BUDGET = new Error("navgrid: over budget");
 
-export function makeNavGrid(raw: NavProbe) {
+/** @param {NavProbe} raw */
+export function makeNavGrid(raw) {
   let budget = Infinity;
-  const probe: NavProbe = {
+  const probe = {
     surfaceUnder: (x, z, m) => { if (--budget < 0) throw OVER_BUDGET; return raw.surfaceUnder(x, z, m); },
     stand: (x, y, z) => { if (--budget < 0) throw OVER_BUDGET; return raw.stand(x, y, z); },
   };
-  const cols = new Map<string, number[]>();
+  const cols = new Map();
 
   /** Standing heights in lattice column (i, j), highest first. */
-  function layers(i: number, j: number): number[] {
+  function layers(i, j) {
     const key = `${i},${j}`;
     let out = cols.get(key);
     if (out) return out;
@@ -90,22 +88,22 @@ export function makeNavGrid(raw: NavProbe) {
   }
 
   /** The standing height in a column closest to y and within STEP of it. */
-  function match(i: number, j: number, y: number, within = NAV_STEP): number | null {
-    let best: number | null = null;
+  function match(i, j, y, within = NAV_STEP) {
+    let best = null;
     for (const v of layers(i, j)) if (Math.abs(v - y) <= within && (best === null || Math.abs(v - y) < Math.abs(best - y))) best = v;
     return best;
   }
 
   /** Can a body walk the straight line a→b, stepped as the feet step it (agent.ts stepFeet): never pushed, ground
    *  within a step of the last, arriving at b's height. */
-  function clear(a: NavPoint, b: NavPoint): boolean {
+  function clear(a, b) {
     return roughlyClear(a, b) && walkable(a, b);
   }
 
-  const steps = new Map<string, boolean>();
-  const level = new Map<string, boolean>();
+  const steps = new Map();
+  const level = new Map();
   /** A level move still needs floor at the midpoint (two slabs with a gap between are not a path). */
-  function levelOK(i0: number, j0: number, i1: number, j1: number, y: number): boolean {
+  function levelOK(i0, j0, i1, j1, y) {
     const k = `${i0},${j0}>${i1},${j1},${Math.round(y * 100)}`;
     let ok = level.get(k);
     if (ok === undefined) {
@@ -116,7 +114,7 @@ export function makeNavGrid(raw: NavProbe) {
   }
   /** Can the feet get from one column's height to a neighbour's? Cached: the
    *  answer is as durable as the columns. */
-  function stepOK(i0: number, j0: number, y0: number, i1: number, j1: number, y1: number): boolean {
+  function stepOK(i0, j0, y0, i1, j1, y1) {
     const k = `${i0},${j0},${Math.round(y0 * 100)}>${i1},${j1},${Math.round(y1 * 100)}`;
     let ok = steps.get(k);
     if (ok === undefined) steps.set(k, ok = walkable({ x: at(i0), y: y0, z: at(j0) }, { x: at(i1), y: y1, z: at(j1) }));
@@ -125,8 +123,8 @@ export function makeNavGrid(raw: NavProbe) {
 
   /** The moves from column (i0, j0) at height y0: each of eight neighbours with a standing height within a step,
    *  no diagonal corner-cutting. The search and server/buildcheck.ts both move by exactly this. */
-  function moves(i0: number, j0: number, y0: number): { i: number; j: number; y: number }[] {
-    const out: { i: number; j: number; y: number }[] = [];
+  function moves(i0, j0, y0) {
+    const out = [];
     for (const [di, dj] of DIRS) {
       const i = i0 + di, j = j0 + dj;
       const y = match(i, j, y0);
@@ -141,7 +139,7 @@ export function makeNavGrid(raw: NavProbe) {
   }
 
   /** The cheap half of clear(): lattice columns along the line, no physics stepped. */
-  function roughlyClear(a: NavPoint, b: NavPoint): boolean {
+  function roughlyClear(a, b) {
     const d = Math.hypot(b.x - a.x, b.z - a.z);
     const n = Math.max(1, Math.ceil(d / (NAV_CELL / 2)));
     let y = a.y;
@@ -154,7 +152,7 @@ export function makeNavGrid(raw: NavProbe) {
     return true;
   }
 
-  function walkable(a: NavPoint, b: NavPoint): boolean {
+  function walkable(a, b) {
     // coarse steps on level ground (a push zone is a capsule radius wide); the feet's fine SUBSTEP where height changes
     const d = Math.hypot(b.x - a.x, b.z - a.z);
     const n = Math.max(1, Math.ceil(d / COARSE));
@@ -179,9 +177,9 @@ export function makeNavGrid(raw: NavProbe) {
 
   /** Standing nodes near (x, z) within `reach`, at heights chosen by `pick`, best first. A floor within a step of
    *  `ref` beats any nearer one that isn't (the top of a wall is never what was meant). */
-  function standingNear(x: number, z: number, pick: (ls: number[]) => number | null, ref: number, reach = 0.6) {
+  function standingNear(x, z, pick, ref, reach = 0.6) {
     const ci = cell(x), cj = cell(z), R = Math.ceil(reach / NAV_CELL);
-    const found: Spot[] = [];
+    const found = [];
     for (let di = -R; di <= R; di++) for (let dj = -R; dj <= R; dj++) {
       const i = ci + di, j = cj + dj, d = Math.hypot(at(i) - x, at(j) - z);
       if (d > reach) continue;
@@ -194,9 +192,9 @@ export function makeNavGrid(raw: NavProbe) {
 
   /** Every place to stand within reach of (x, z): each standing height of
    *  each column, with its distance from the point. */
-  function spotsNear(x: number, z: number, reach = 0.6, inside?: (x: number, z: number) => boolean): Spot[] {
+  function spotsNear(x, z, reach = 0.6, inside) {
     const ci = cell(x), cj = cell(z), R = Math.ceil(reach / NAV_CELL);
-    const out: Spot[] = [];
+    const out = [];
     for (let di = -R; di <= R; di++) for (let dj = -R; dj <= R; dj++) {
       const i = ci + di, j = cj + dj, d = Math.hypot(at(i) - x, at(j) - z);
       if (d > reach || (inside && !inside(at(i), at(j)))) continue;
@@ -214,7 +212,7 @@ export function makeNavGrid(raw: NavProbe) {
    *     reachable spot at OTHER_FLOOR_COST.
    *  Every such spot is a goal; cost counts distance from the asked point twice, so a point inside a wall is
    *  reached on the body's side, not round by the door. */
-  function route(from: NavPoint, to: NavTarget): NavResult {
+  function route(from, to) {
     budget = NAV_MAX_PROBES;
     try { return routeIn(from, to); }
     catch (err) {
@@ -223,14 +221,14 @@ export function makeNavGrid(raw: NavProbe) {
     } finally { budget = Infinity; }
   }
 
-  function routeIn(from: NavPoint, to: NavTarget): NavResult {
+  function routeIn(from, to) {
     const start = standingNear(from.x, from.z, (ls) => nearestOf(ls, from.y, NAV_STEP), from.y)[0];
     if (!start) return { refusal: `nowhere to stand within 0.6m of where the body is (${from.x.toFixed(2)}, ${from.y.toFixed(2)}, ${from.z.toFixed(2)})` };
     const want = to.y != null && Number.isFinite(to.y) ? to.y : null;
     // the destination itself when its own lattice cell stands (arriving there
     // IS arriving at the point asked for), else the spot
-    const exactAt = new Map<number, boolean>();
-    const exactOf = (g: Spot) => {
+    const exactAt = new Map();
+    const exactOf = (g) => {
       if (Math.abs(to.x - at(g.i)) > NAV_CELL / 2 || Math.abs(to.z - at(g.j)) > NAV_CELL / 2) return false;
       // its cell standing doesn't prove the point does (a point just inside a box)
       let ok = exactAt.get(g.y);
@@ -253,7 +251,7 @@ export function makeNavGrid(raw: NavProbe) {
         || (Math.abs(Math.abs(g.y - want) - Math.abs(floorY - want)) <= 1e-6 && g.y > floorY);
       if (better) floorY = g.y;
     }
-    const preferred = (g: Spot) => want != null ? Math.abs(g.y - floorY) < 0.05
+    const preferred = (g) => want != null ? Math.abs(g.y - floorY) < 0.05
       : sameStorey ? Math.abs(g.y - from.y) <= NAV_STEP : g.lowest;
     const goals = spots
       .filter((g) => want == null || preferred(g))
@@ -266,27 +264,27 @@ export function makeNavGrid(raw: NavProbe) {
       return { refusal: `nowhere to stand ${where}${height}: ${to.inside ? "no floor there, or none with room for a body" : "it is inside something solid, or closer to a wall than a body fits"}` };
     }
     const startP = { x: from.x, y: start.y, z: from.z };
-    const outOf = (g: Spot): NavPoint => exactOf(g) ? { x: to.x, y: g.y, z: to.z } : { x: at(g.i), y: g.y, z: at(g.j) };
+    const outOf = (g) => exactOf(g) ? { x: to.x, y: g.y, z: to.z } : { x: at(g.i), y: g.y, z: at(g.j) };
     if (clear(startP, outOf(goal))) return { points: [outOf(goal)], snapped: !exactOf(goal) };
 
     // A* over (column, height). Bounded to the walk's own box plus NAV_PAD.
     const lo = { i: Math.floor((Math.min(from.x, to.x) - NAV_PAD) / NAV_CELL), j: Math.floor((Math.min(from.z, to.z) - NAV_PAD) / NAV_CELL) };
     const hi = { i: Math.ceil((Math.max(from.x, to.x) + NAV_PAD) / NAV_CELL), j: Math.ceil((Math.max(from.z, to.z) + NAV_PAD) / NAV_CELL) };
-    type Node = { i: number; j: number; y: number; g: number; f: number; parent: Node | null; done?: Spot };
-    const key = (i: number, j: number, y: number) => `${i},${j},${Math.round(y * 100)}`;
+    /** @typedef {{ i: number, j: number, y: number, g: number, f: number, parent: Node | null, done?: Spot }} Node */
+    const key = (i, j, y) => `${i},${j},${Math.round(y * 100)}`;
     const goalAt = new Map(goals.map((g) => [key(g.i, g.j, g.y), g]));
-    const h = (i: number, j: number, y: number) => {
+    const h = (i, j, y) => {
       let m = Infinity;
       for (const g of goals) m = Math.min(m, Math.hypot((g.i - i) * NAV_CELL, (g.j - j) * NAV_CELL, g.y - y));
       return m;
     };
-    const heap: Node[] = [];
-    const push = (n: Node) => {
+    const heap = [];
+    const push = (n) => {
       heap.push(n);
       for (let c = heap.length - 1; c > 0;) { const p = (c - 1) >> 1; if (heap[p].f <= heap[c].f) break; [heap[p], heap[c]] = [heap[c], heap[p]]; c = p; }
     };
-    const pop = (): Node => {
-      const top = heap[0], last = heap.pop()!;
+    const pop = () => {
+      const top = heap[0], last = heap.pop();
       if (heap.length) {
         heap[0] = last;
         for (let p = 0; ;) {
@@ -298,11 +296,11 @@ export function makeNavGrid(raw: NavProbe) {
       }
       return top;
     };
-    const best = new Map<string, number>();
-    const closed = new Set<string>();
+    const best = new Map();
+    const closed = new Set();
     push({ i: start.i, j: start.j, y: start.y, g: 0, f: h(start.i, start.j, start.y), parent: null });
     best.set(key(start.i, start.j, start.y), 0);
-    let reached: Node | null = null, expansions = 0;
+    let reached = null, expansions = 0;
     while (heap.length) {
       const n = pop();
       if (n.done) { reached = n; break; }            // a goal, its distance from the point asked for paid
@@ -328,16 +326,16 @@ export function makeNavGrid(raw: NavProbe) {
       return { refusal: `no walkable way to (${to.x.toFixed(2)}, ${to.z.toFixed(2)}) at ${goal.y.toFixed(2)}m from here ` +
         `within ${w.toFixed(0)}×${d.toFixed(0)}m around the walk — it may be sealed off, or reached only by a climb or drop of more than ${NAV_STEP}m` };
     }
-    const path: NavPoint[] = [];
+    const path = [];
     // from the goal itself (the finished node stands on it), so the last
     // turn the search made survives when the goal is replaced below
-    for (let n: Node | null = reached; n; n = n.parent) path.push({ x: at(n.i), y: n.y, z: at(n.j) });
+    for (let n = reached; n; n = n.parent) path.push({ x: at(n.i), y: n.y, z: at(n.j) });
     path.reverse();
     if (path.length < 2) path.push(path[0]);       // start and goal share a cell
     path[0] = startP;
-    path[path.length - 1] = outOf(reached.done!);
+    path[path.length - 1] = outOf(reached.done);
     // string-pull: keep only the corners the straight walk cannot cut
-    const out: NavPoint[] = [];
+    const out = [];
     let anchor = 0;
     while (anchor < path.length - 1) {
       let k = path.length - 1;
@@ -345,19 +343,18 @@ export function makeNavGrid(raw: NavProbe) {
       out.push(path[k]);
       anchor = k;
     }
-    return { points: out, snapped: !exactOf(reached.done!) };
+    return { points: out, snapped: !exactOf(reached.done) };
   }
 
   return { route, layers, clear, moves, match, stepOK, at, cell };
 }
-
-type Spot = { i: number; j: number; y: number; d: number; score: number; lowest?: boolean };
+/** @typedef {{ i: number, j: number, y: number, d: number, score: number, lowest?: boolean }} Spot */
 /** What arriving on a floor other than the one the walk means costs, in
  *  metres of walking: the right floor wins unless it is out of reach. */
 const OTHER_FLOOR_COST = 10;
 
-function nearestOf(ls: number[], y: number, within: number): number | null {
-  let best: number | null = null;
+function nearestOf(ls, y, within) {
+  let best = null;
   for (const v of ls) if (Math.abs(v - y) <= within && (best === null || Math.abs(v - y) < Math.abs(best - y))) best = v;
   return best;
 }

@@ -24,25 +24,24 @@ import {
   type ChannelsPublishResult,
 } from "@animalabs/mcpl-core";
 import {
-  CHAT, EIDO, CAP, tags, speechTags, capabilityMatches, MCPL_ADVERTISEMENT, FEATURE_SETS,
+  CAP, capabilityMatches, MCPL_ADVERTISEMENT, FEATURE_SETS,
 } from "./declaration.ts";
-import { WorldAgent } from "./agent.ts";
+import { WorldAgent, DEFAULT_WORLD_URL } from "./agent.ts";
 import { shown } from "../shared/shown.js";
 import { toolList, handleTool, type ToolCtx } from "./tools.ts";
 import { pingDelivery, type WirePing } from "./ping-wire.ts";
+import { eventTags, catchupHeaderTags, catchupReplayTags } from "./event-wire.ts";
 import { TypingRelay } from "./typing-relay.ts";
 import { MANIFEST_WITH_REVISION } from "./manifest.ts";
 import { verifyToken, aid1Slug } from "../server/aid1.ts";
+// archipelago-home door (connectome docs/home-node.md §7): a `?token=aid1.…` home-node token verified offline, no
+// tokens.json entry (`hn mint --aud eidoverse --scopes worlds:join`). tokens.json remains the legacy/fleet door.
+import { HN_ISSUER_KEY, HN_ISS, HN_AUD } from "../server/aid1-issuer.ts";
 import { atomicWrite } from "../server/fsutil.ts";
 import { displayNameIndex, lookupToken, readTokenRegistry, wireAuthors, type TokenAuth } from "./token-registry.ts";
 import { WORLD_NAME_RE } from "../server/limits.ts";
 
 const PORT = Number(process.env.MCPL_PORT ?? 8941);
-// archipelago-home door (connectome docs/home-node.md §7): a `?token=aid1.…` home-node token verified offline, no
-// tokens.json entry (`hn mint --aud eidoverse --scopes worlds:join`). tokens.json remains the legacy/fleet door.
-const HN_ISSUER_KEY = process.env.HN_ISSUER_KEY ?? "";
-const HN_ISS = process.env.HN_ISS ?? "id.animalabs.ai";
-const HN_AUD = process.env.HN_AUD ?? "eidoverse";
 const ts = () => new Date().toISOString().slice(11, 19);
 const TOKENS_PATH = process.env.MCPL_TOKENS ?? fileURLToPath(new URL("./tokens.json", import.meta.url));
 const TOKENS_EXAMPLE_PATH = process.env.MCPL_TOKENS_EXAMPLE ?? fileURLToPath(new URL("./tokens.example.json", import.meta.url));
@@ -174,7 +173,7 @@ class Session {
       dropMentionQualifiers: this.auth.dropMentionQualifiers ?? true,
       world,
       avatar: chosenAvatar[this.auth.id] ?? this.auth.avatar,
-      url: process.env.WORLD_URL ?? "ws://127.0.0.1:8940/ws",
+      url: process.env.WORLD_URL ?? DEFAULT_WORLD_URL,
       // the bearer that opened THIS door: the sequencer verifies the name against it (agent names are reserved there)
       agentToken: this.agentToken,
     });
@@ -496,12 +495,12 @@ class Session {
       if (ev.kind === "say") {
         if (!this.channelOpen && !ev.mention) return; // door closed: chatter stops, knocks get through
         this.deliver(ev.text!, authorOf(ev.who), ev.mention
-          ? { tags: speechTags("say", declares, true), mentioned: true, ...md }
-          : { tags: speechTags("say", declares), ...md });
+          ? { tags: eventTags("say", { declares, mention: true }), mentioned: true, ...md }
+          : { tags: eventTags("say", { declares }), ...md });
       } else if (ev.kind === "act") {
         // embodied transitions (a gesture, a pose struck or released, sitting down): ambient, so a closed door mutes them
         if (this.channelOpen) this.deliver(`* ${ev.who} ${ev.text}`, { id: "world", name: this.agent.world },
-          { tags: speechTags("act", declares), ...md });
+          { tags: eventTags("act", { declares }), ...md });
       } else if (ev.kind === "activity") {
         // The ambient-activity pulse: at most one per window, only while something happens within the activity radius.
         // A host opts in by matching `eidoverse:activity-digest` (or `chat:ambient`); a closed door mutes it.
@@ -510,7 +509,7 @@ class Session {
           this.heldActivity.push(`[${new Date(ev.ts).toISOString().slice(11, 16)}Z] ${ev.text}`);
           if (this.heldActivity.length > 8) this.heldActivity.shift();
         } else if (this.channelOpen) this.deliver(`* ${ev.text}`, { id: "world", name: this.agent.world },
-          { tags: tags(CHAT.ambient, EIDO.activityDigest), metadata: { activity: true } });
+          { tags: eventTags("activity"), metadata: { activity: true } });
       } else if (ev.kind === "weather") {
         // the sky changed on its own (forecast boundary, override, day phase): one ambient notice per boundary;
         // pull-only hosts get it from the `activity` tool's held ring
@@ -518,17 +517,17 @@ class Session {
           this.heldActivity.push(`[${new Date(ev.ts).toISOString().slice(11, 16)}Z] ${ev.text}`);
           if (this.heldActivity.length > 8) this.heldActivity.shift();
         } else if (this.channelOpen) this.deliver(`* ${ev.text}`, { id: "world", name: this.agent.world },
-          { tags: tags(CHAT.ambient, EIDO.weather), metadata: { weather: true } });
+          { tags: eventTags("weather"), metadata: { weather: true } });
       } else if (ev.kind === "world-change") {
         // a visible change nearby (an emitter starting/changing/ending): ambient, held for pull-only hosts like weather
         if (!this.granted(CAP.channelsIncoming)) {
           this.heldActivity.push(`[${new Date(ev.ts).toISOString().slice(11, 16)}Z] ${ev.text}`);
           if (this.heldActivity.length > 8) this.heldActivity.shift();
         } else if (this.channelOpen) this.deliver(`* ${ev.text}`, { id: "world", name: this.agent.world },
-          { tags: tags(CHAT.ambient, EIDO.worldChange, EIDO.particles), metadata: { worldChange: true, ...(declares ? { declares } : {}) } });
+          { tags: eventTags("world-change"), metadata: { worldChange: true, ...(declares ? { declares } : {}) } });
       } else if (this.channelOpen) {
         this.deliver(`* ${ev.who} ${ev.kind === "arrive" ? "arrived in the world" : "left the world"}`,
-          { id: "world", name: this.agent.world }, { tags: tags(CHAT.ambient, EIDO.presence), ...md });
+          { id: "world", name: this.agent.world }, { tags: eventTags(ev.kind), ...md });
       }
     };
     this.agent.onPing = (p) => {
@@ -566,11 +565,11 @@ class Session {
       const missedSeq = said.filter((m) => m.who !== this.auth.id && this.agent.mentionsMe(m.text));
       if (missedSeq.length) {
         this.deliver(`While you were away, ${missedSeq.length} message${missedSeq.length === 1 ? "" : "s"} mentioned you:`,
-          { id: "world", name: this.agent.world }, { tags: tags(CHAT.ambient, EIDO.catchup) });
+          { id: "world", name: this.agent.world }, { tags: catchupHeaderTags() });
         for (const m of missedSeq.slice(-10)) {
           // ORIGINAL addressing + the catchup marker; deliver() renders the author itself
           this.deliver(m.text, authorOf(m.who),
-            { tags: tags(CHAT.mention, EIDO.catchup), mentioned: true });
+            { tags: catchupReplayTags(), mentioned: true });
         }
       }
     }
@@ -579,9 +578,9 @@ class Session {
       const missed = this.agent.inbox.filter((m) => m.kind === "say" && m.ts > since && m.who !== this.auth.id && this.agent.mentionsMe(m.text ?? ""));
       if (missed.length) {
         this.deliver(`While you were away, ${missed.length} message${missed.length === 1 ? "" : "s"} mentioned you:`,
-          { id: "world", name: this.agent.world }, { tags: tags(CHAT.ambient, EIDO.catchup) });
+          { id: "world", name: this.agent.world }, { tags: catchupHeaderTags() });
         for (const m of missed.slice(-10)) this.deliver(m.text ?? "", authorOf(m.who),
-          { tags: tags(CHAT.mention, EIDO.catchup), mentioned: true });
+          { tags: catchupReplayTags(), mentioned: true });
       }
     }
     lastSeen[this.auth.id] = Date.now();
@@ -906,7 +905,7 @@ const LIFECYCLE_NOT_GRANTED = "your host hasn't granted this door channels.lifec
 type AccessAnswer = { exists: boolean; you: "enter" | "watch" | "none"; why?: string; found?: { ok: boolean; why?: string } };
 async function accessProbe(name: string, token: string): Promise<AccessAnswer | null> {
   // URL surgery, not string surgery: a WORLD_URL with a query string or mount path defeats a regex replace
-  const u = new URL(process.env.WORLD_URL ?? "ws://127.0.0.1:8940/ws");
+  const u = new URL(process.env.WORLD_URL ?? DEFAULT_WORLD_URL);
   u.protocol = u.protocol === "wss:" ? "https:" : "http:";
   u.pathname = u.pathname.replace(/\/ws$/, "") + "/access";
   u.search = `?world=${encodeURIComponent(name)}`;

@@ -8,10 +8,10 @@ import { socketsIn } from "./sockbody.js";
 import { enc, encName } from "./protocol/names.js";
 import { isPlaceholder } from "./protocol/ids.js";
 import { qNorm, qFromYaw, qWithHeading } from "./rot.js";
+import { isFiniteVec3 } from "./protocol/is.js";
 
 const E = (id) => (id === "@world" || isPlaceholder(id) ? id : enc(String(id ?? "")));   // the world entity is itself, never escaped; a request-local placeholder ('$lamp') is the authority's to mint
-const finite3 = (a) => Array.isArray(a) && a.length === 3 && a.every(Number.isFinite);
-const scale3 = (s) => (Number.isFinite(s) ? [s, s, s] : finite3(s) ? [...s] : null);
+const scale3 = (s) => (Number.isFinite(s) ? [s, s, s] : isFiniteVec3(s) ? [...s] : null);
 
 /** set one component (value replaces it; `merge: true` merges an object value into the current one). */
 export const set = (id, component, value, { merge = false } = {}) =>
@@ -33,7 +33,7 @@ export function create(id, { model = null, transform = {}, components = {}, from
   const comps = {}; let t = transform == null || bad(transform) ? {} : transform, raw = bad(transform) ? transform : undefined;
   for (const [k, v] of Object.entries(components)) { if (encName(k) === "transform") { if (bad(v)) raw = v; else if (v != null) t = { ...t, ...v }; } else comps[encName(k)] = v; }
   const field = (v, ok, dflt) => (v === undefined ? dflt : ok(v) ?? v);
-  const whole = raw !== undefined ? raw : { pos: field(t.pos, (p) => (finite3(p) ? [...p] : undefined), [0, 0, 0]), q: field(t.q, qNorm, [0, 0, 0, 1]), scale: field(t.scale, scale3, [1, 1, 1]) };
+  const whole = raw !== undefined ? raw : { pos: field(t.pos, (p) => (isFiniteVec3(p) ? [...p] : undefined), [0, 0, 0]), q: field(t.q, qNorm, [0, 0, 0, 1]), scale: field(t.scale, scale3, [1, 1, 1]) };
   return { verb: "create", args: { ...(id == null ? {} : { id: E(id) }), ...(model ? { model } : {}), ...(from ? { from } : {}),
     components: { ...comps, transform: whole } } };
 }
@@ -44,7 +44,7 @@ export function transformOf(ent, patch = {}) {
   const q0 = qNorm(ent?.q) ?? qFromYaw(Number.isFinite(ent?.yaw) ? ent.yaw : 0);
   const q = qNorm(patch.q) ?? (Number.isFinite(patch.yaw) ? qWithHeading(q0, patch.yaw) : q0);
   return {
-    pos: finite3(patch.pos) ? [...patch.pos] : finite3(ent?.pos) ? [...ent.pos] : [0, 0, 0],
+    pos: isFiniteVec3(patch.pos) ? [...patch.pos] : isFiniteVec3(ent?.pos) ? [...ent.pos] : [0, 0, 0],
     q,
     scale: scale3(patch.scale) ?? scale3(ent?.scale3) ?? scale3(ent?.scale) ?? [1, 1, 1],
   };
@@ -62,7 +62,7 @@ export function parent(world, id, to, { socket = null, pos = null, q = null, yaw
   if (socket != null && !kid) throw new Error(`${to} has no socket called '${socket}'`);
   if (kid) { to = kid.id; socket = null; }
   const local = {
-    pos: finite3(pos) ? pos : [0, 0, 0],
+    pos: isFiniteVec3(pos) ? pos : [0, 0, 0],
     q: qNorm(q) ?? (Number.isFinite(yaw) ? qFromYaw(yaw) : [0, 0, 0, 1]),
   };
   const t = set(id, "transform", { ...local, scale: scale3(ent?.scale3) ?? scale3(ent?.scale) ?? [1, 1, 1] });

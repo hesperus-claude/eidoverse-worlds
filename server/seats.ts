@@ -7,9 +7,11 @@
 
 import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, appendFileSync, statSync, openSync, closeSync, writeSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
-import { validateProfile, profileStatus } from "../client/lib/seatcore.js";
+import { validateProfile, profileStatus } from "../shared/seatcore.js";
 import { OPT_DIR, LIBRARY_DIR, PATCH_DIR } from "./config.ts";
 import { worlds } from "./world.ts";
+import { sha256Bytes } from "../shared/protocol/hash.js";
+import { atomicWrite } from "./fsutil.ts";
 
 export const SEAT_POSE = "sitchair";
 export const CLIP_REL = "eidoverse/assets/animations/sitting_normal_chair.vrma";
@@ -233,8 +235,7 @@ export class SeatStore {
 
   private persistSnapshotOnly() {
     mkdirSync(this.dir, { recursive: true });
-    this.fs.writeFileSync(`${this.file}.tmp`, JSON.stringify(this.store));
-    this.fs.renameSync(`${this.file}.tmp`, this.file);
+    atomicWrite(this.file, JSON.stringify(this.store), { fs: this.fs });
     try { this.fileMtime = statSync(this.file).mtimeMs; } catch { /* next poll reloads harmlessly */ }
   }
 
@@ -259,8 +260,7 @@ export class SeatStore {
       // the receipt stands; the snapshot must not race a successor (recovery folds it forward, or quarantines)
       return { ok: false, why: "lock ownership lost after provenance append — snapshot withheld; recovery will reconcile the receipt" };
     try {
-      this.fs.writeFileSync(`${this.file}.tmp`, JSON.stringify(next));
-      this.fs.renameSync(`${this.file}.tmp`, this.file);
+      atomicWrite(this.file, JSON.stringify(next), { fs: this.fs });
     } catch (e) {
       // the log holds the receipt; the live store stays unchanged and the next load folds it forward
       return { ok: false, why: `snapshot write failed (receipted in the log; recovery will fold it forward): ${(e as Error).message}` };
@@ -297,7 +297,7 @@ export class SeatStore {
     const hit = this.shaCache.get(path);
     if (hit && hit.mtime === st.mtimeMs && hit.size === st.size) return hit.sha;
     try {
-      const sha = new Bun.CryptoHasher("sha256").update(readFileSync(path)).digest("hex");
+      const sha = sha256Bytes(readFileSync(path));
       this.shaCache.set(path, { mtime: st.mtimeMs, size: st.size, sha });
       return sha;
     } catch { return null; }

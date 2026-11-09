@@ -1,4 +1,4 @@
-// shared/flora_presets.js — the named biome presets a grass write may name: the authority checks a name
+// shared/flora-presets.js — the named biome presets a grass write may name: the authority checks a name
 // against these at write (shared/protocol/assetref.js) and stores the name (expanding later is cheap,
 // un-expanding impossible). The SAME data as defs/flora/_presets.json (the client's hot-reloadable copy):
 // test/shared/shape-render-test.ts GR2 holds the two equal, so editing one without the other turns red.

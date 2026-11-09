@@ -13,7 +13,7 @@ import { MOVER } from '../../shared/mover.js';
 import { bus } from './base.js';
 import { MeshBVH, estimateMemoryInBytes } from 'three-mesh-bvh';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { gridAccumulator, decideSupportClass, validTopGrid, LIE_GRID } from './supportclass.js';
+import { gridAccumulator, decideSupportClass, validTopGrid, LIE_GRID } from '../../shared/supportclass.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 export const colliders = new Map(); // entity id -> { obj, box, pillar, exact?, interior, cell }

@@ -140,7 +140,7 @@ console.log("  (resting out the 4/min upload window…)");
 await new Promise((res) => setTimeout(res, 61_000));
 const big = new Uint8Array(8 * 1_000_000 + 1); big.set(PNG.subarray(0, 8));
 r = await post(big, { as: "image" });
-check("over the image cap: 413, before any sniffing", r.status === 413 && /cap/.test(r.text), `${r.status} ${r.text.slice(0, 80)}`);
+check("over the image cap: 413, before any sniffing", r.status === 413 && /^image too large/.test(r.text), `${r.status} ${r.text.slice(0, 80)}`);
 r = await post(pngSized(1, 8193), { as: "image", name: "tall.png" });
 check("a PNG 8193 px tall: 413", r.status === 413 && /8193/.test(r.text), `${r.status} ${r.text.slice(0, 120)}`);
 r = await post(pngSized(8193, 1), { as: "image", name: "wide.png" });

@@ -7,7 +7,7 @@
 // (walkTo and the move tool), structure-route-support-test (transformed frames), route-preparation-test (the authored-plan
 // cache), walk-support-lifecycle-test (how a walk ends).
 import { strict as assert } from "node:assert";
-import { planStructure, planRouteLocal, prepareRouteLocal, routeLocal } from "../../shared/structure.js";
+import { planStructure, prepareRouteLocal } from "../../shared/structure.js";
 import { NON_FINITE_ENDPOINT, ROUTE_MAX_CELLS } from "../../shared/structure-route.js";
 let checks = 0;
 function check(ok: unknown, name: string) { assert.ok(ok, name); checks++; console.log("✓ " + name); }
@@ -126,7 +126,6 @@ for (const row of ROWS) {
   check(kindOk && ends && valid(row.data, r.points, row.oracleLevel) && (!row.also || row.also(r, ctx)),
     `${row.name} [${r.kind}${r.reason ? ": " + r.reason : ""}]: endpoints kept, no leg through a solid wall`);
 }
-check(routeLocal(planStructure(sealed), .5, -3, 3.5, .5) === null, "the compatibility route returns null for a refusal");
 {
   // upstairs the house's ground-level exterior door is air: the sealed partition can't be bypassed
   const s = structuredClone(stacked); s.levels[1].apertures = [[0, 0, 0, "door"]];
@@ -162,7 +161,7 @@ field.push([0, 63, 63], [0, 63, 64], [1, 63, 63], [1, 64, 63], [1, 125, 125]);
 const fieldPlan = planStructure({ levels: [{ y: 0, tiles: [], walls: field, apertures: [] }] });
 check(paddedCells(fieldPlan) === ROUTE_MAX_CELLS, "the worst-case field is padded to exactly the limit");
 const worstFrom = performance.now();
-const worst = planRouteLocal(fieldPlan, -.5, -.5, 63.5, 63.5);
+const worst = prepareRouteLocal(fieldPlan, flat()).route(-.5, -.5, 63.5, 63.5);
 const worstMs = performance.now() - worstFrom;
 check(worst.kind === "blocked" && NO_PATH.test(worst.reason) && worst.reason.endsWith("pick a destination you can reach through an opening") && worstMs < 2000,
   `a search of every cell at the limit, among ${field.length} walls, finishes in ${worstMs.toFixed(0)} ms (bound 2000)`);

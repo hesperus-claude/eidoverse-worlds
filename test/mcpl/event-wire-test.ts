@@ -59,5 +59,13 @@ check("an arrival is the world's notice, with no sender facet",
   check("a declared word other than \"agent\" is no kind", !has(eventTags("say", { declares: "bot" }), CHAT.fromAgent));
 }
 
+// ---------------------------------------------------------------- the door uses this table, not its own copy
+{
+  const door = await Bun.file(new URL("../../mcpl/net-server.ts", import.meta.url)).text();
+  check("net-server.ts takes every event's tags from event-wire.ts", /from "\.\/event-wire\.ts"/.test(door)
+    && ["eventTags(", "catchupHeaderTags(", "catchupReplayTags("].every((f) => door.includes(f)));
+  check("...and builds none inline", !/\btags\(CHAT\.|speechTags\(/.test(door));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

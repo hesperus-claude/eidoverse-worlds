@@ -46,7 +46,7 @@ row was changed to require that the walk's **plan** refuses it, not the authorit
 ✗ 64 unique models replayed at once download a few at a time, and all decode  at most 64 at once (governor 64)
 ```
 
-**3. Rescale the body-space place tolerance** (#239). A room's floor tolerance (`mcpl/places.ts`
+**3. Rescale the body-space place tolerance** (#239). A room's floor tolerance (`shared/places.js`
 `ROOM_FLOOR_EPS`, 0.1 m) is the walking body's, in metres — not multiplied by the thing's scale. Multiply it by the
 scale (`ROOM_FLOOR_EPS * s`), then run `navgrid-rows` (it absorbed `places-scale`, whose rows went red the same way, 3 passed, 3 failed):
 

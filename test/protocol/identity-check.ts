@@ -709,7 +709,7 @@ const postAuth = (port, token) => fetch(`http://127.0.0.1:${port}/auth`, { metho
     const g = await sock(srv.port); const j = await g.join("garden", good);
     ok(!!j.snapshot, `NM …and an ordinary name with & ' or an emoji still gets in (${JSON.stringify(good)})`, j.errors);
     g.close(); }
-  const { nameAtDoor } = await import("../../server/names.ts");
+  const { nameAtDoor } = await import("../../server/display-names.ts");
   ok(nameAtDoor("Ann<b>", { typed: true }).refused && nameAtDoor("Ann<b>", { typed: false }).name === "Ann\u2039b\u203A", "NM a name the identity service gave (not typed here) gets look-alikes (\u2039 \u203A) instead of its owner being turned away — never deleted, which could empty it or make a reserved name (upstream #224 review)",
     [nameAtDoor("Ann<b>", { typed: true }), nameAtDoor("Ann<b>", { typed: false })]); }
 

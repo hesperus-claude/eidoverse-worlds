@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { OPT_DIR, ROOT } from "./config.ts";
 import { atomicWrite } from "./fsutil.ts";
 import { windowLimiter } from "./ratewindow.ts";
+import { sha256Bytes as sha256 } from "../shared/protocol/hash.js";
 
 /** Bump when what a check finds changes (server/buildcheck.ts, the navgrid, the collider rules): stored reports from before are stale. */
 export const CHECK_VERSION = 4;   // 4: the walking body is MOVER.body (radius 0.2, was 0.32)
@@ -79,7 +80,6 @@ export function checkScale(s: unknown): number {
   return Math.round(Math.min(CHECK_SCALE.max, Math.max(CHECK_SCALE.min, n)) * 100) / 100;
 }
 
-const sha256 = (bytes: Uint8Array) => new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 const statId = (file: string) => { const st = statSync(file); return `${st.size}|${st.mtimeMs}|${st.ctimeMs}|${st.ino}`; };
 
 /** The build check for the model at `file`, at `scale`: cached, else queued and run. Rejects when the model can't be
@@ -182,8 +182,6 @@ async function drain(stream: ReadableStream<Uint8Array>, cap: number, tail = fal
   return { text: Buffer.concat(parts).toString("utf8"), over };
 }
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
 async function runWorker(file: string, scale: number): Promise<unknown> {
   const { runner, timeoutMs, graceMs, maxOut } = checkConfig;
   const proc = Bun.spawn([process.execPath, runner, file, String(scale)], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
@@ -193,7 +191,7 @@ async function runWorker(file: string, scale: number): Promise<unknown> {
   const term = setTimeout(() => { stopped = true; try { proc.kill("SIGTERM"); } catch { /* gone */ } }, timeoutMs);
   const kill = setTimeout(() => { try { proc.kill("SIGKILL"); } catch { /* gone */ } }, timeoutMs + graceMs);
   // the queue is never held past the hard kill plus a grace, whatever the process does
-  const exited = await Promise.race([proc.exited.then(() => true), sleep(timeoutMs + 2 * graceMs).then(() => false)]);
+  const exited = await Promise.race([proc.exited.then(() => true), Bun.sleep(timeoutMs + 2 * graceMs).then(() => false)]);
   clearTimeout(term); clearTimeout(kill);
   if (!exited) {
     console.warn(`[check] worker ${proc.pid} for ${file} did not exit after SIGKILL — abandoned`);
@@ -202,8 +200,8 @@ async function runWorker(file: string, scale: number): Promise<unknown> {
   if (stopped) throw new Error("the check timed out");
   // its pipes close with it; a grandchild holding them open doesn't hold the queue
   const [o, e] = await Promise.all([
-    Promise.race([out, sleep(graceMs).then(() => ({ text: "", over: true }))]),
-    Promise.race([err, sleep(graceMs).then(() => ({ text: "", over: false }))])]);
+    Promise.race([out, Bun.sleep(graceMs).then(() => ({ text: "", over: true }))]),
+    Promise.race([err, Bun.sleep(graceMs).then(() => ({ text: "", over: false }))])]);
   if (o.over) throw new Error("the check's output was not a report");
   let report: any;
   try { report = JSON.parse(o.text.trim().split("\n").pop() ?? ""); }

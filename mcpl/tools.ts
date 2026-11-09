@@ -40,7 +40,7 @@ const foldWorld = (ag: any): Record<string, any> => {
   return out;
 };
 import { type ActResult, type WorldAgent, WALK_ARGS_REASON } from "./agent.ts";
-import type { Destination } from "./places.ts";
+import type { Destination } from "../shared/places.js";
 import { normalizeSnapFrame } from "../shared/snapframe.js";
 import { shown } from "../shared/shown.js";
 import { partHint } from "./effective.ts";

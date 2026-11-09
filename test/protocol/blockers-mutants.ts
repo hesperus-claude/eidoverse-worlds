@@ -30,7 +30,7 @@ const M: Mutant[] = [
     repl: 'entries.push(posAt(parsed, seq)); durably("log", () => io.writeLine(line)); entries.pop();', suite: "authority", rows: ["ST1"], expect: 9 },
   { id: "B2", what: "a batch op's args unchecked before any is built ({verb: delete, args: {id, componnent}} deletes the entity)", file: "shared/protocol/authority/verbs.js",
     find: "        if (bad) { const { code, reason, fix, ...rest } = bad; refuse(code, `batch request ${i}", repl: "        if (false) { const { code, reason, fix, ...rest } = bad; refuse(code, `batch request ${i}", suite: "authority", rows: ["BT1"], expect: 9 },
-  { id: "B4", what: "a request whose connection was superseded while it awaited still writes", file: "server/reqcap.ts",
+  { id: "B4", what: "a request whose connection was superseded while it awaited still writes", file: "server/request-capability.ts",
     find: "  if (!(c.world === w && !c.superseded && w.clients.has(c) && (c.gen ?? null) === cap.gen))", repl: "  if (false)", suite: "reset-race", rows: ["SR1"], expect: 1 },
   { id: "B5", what: "a server operator's repair is not narrow: any verb through the operator door", file: "shared/protocol/authority.js",
     find: '  if (!(door || verb === "unban"))\n    return { ok: false, refused: { code: "rights", reason: `an operator\'s repair covers', repl: '  if (false)\n    return { ok: false, refused: { code: "rights", reason: `an operator\'s repair covers', suite: "authority", rows: ["OP4"], expect: 9 },
@@ -47,7 +47,7 @@ const M: Mutant[] = [
   // ---- M1–M9: the architecture note's items (M10, the gate itself, has no code to mutate: --check-manifest is its row) ----
   { id: "M1", what: "a throw from a durable write reported rolled-back (no ambiguous outcome)", file: "shared/protocol/authority/storage.js",
     find: '  if (newLog || newMod) return { outcome: "ambiguous"', repl: '  if (false) return { outcome: "ambiguous"', suite: "txn", rows: ["T2"], expect: 1 },
-  { id: "M2", what: "the identity is read after the await (the capability not rechecked at the commit seam)", file: "server/reqcap.ts",
+  { id: "M2", what: "the identity is read after the await (the capability not rechecked at the commit seam)", file: "server/request-capability.ts",
     find: "  if (c.actorId !== cap.actorId ||", repl: "  if (false &&", suite: "txn", rows: ["T6"], expect: 1 },
   { id: "M3", what: "the operator's repair is not recorded as the operator's (no operator: true in the act)", file: "shared/protocol/authority/writes.js",
     find: "CTX.operator && CTX.operator === actor && !ctx.cap ? { ...(ctx.actExtra ?? {}), operator: true } : ctx.actExtra", repl: "ctx.actExtra", suite: "authority", rows: ["OP3"], expect: 9 },

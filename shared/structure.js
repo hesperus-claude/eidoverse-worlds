@@ -125,9 +125,8 @@ export function nodeAtPoint(level, g, lx, lz) {
 const SIDE_OF = [['N', 'S'], ['E', 'W'], ['S', 'N'], ['W', 'E']];
 const STEP = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
-/** Node-level adjacency. Rooms and routes share the node set but not the edges: a room is bounded by walls whatever
- *  holes they carry; a route (throughApertures) passes through doors and arches (§8). */
-export function nodeNeighbours(level, x, z, throughApertures = false) {
+/** Node-level adjacency for rooms: a room is bounded by walls whatever holes they carry (§8); routes are structure-route.js's. */
+export function nodeNeighbours(level, x, z) {
   const out = [];
   for (let i = 0; i < 4; i++) {
     const [side, back] = SIDE_OF[i], [dx, dz] = STEP[i];
@@ -135,28 +134,17 @@ export function nodeNeighbours(level, x, z, throughApertures = false) {
     if (!level.tiles.has(cellKey(nx, nz))) continue;
     const e = edgeBetween(x, z, nx, nz);
     const ek = e && edgeKey(e[0], e[1], e[2]);
-    if (ek && level.walls.has(ek)
-      && !(throughApertures && ['door', 'arch'].includes(level.apertures.get(ek)))) continue;
+    if (ek && level.walls.has(ek)) continue;
     const here = nodeOnSide(level, x, z, side), there = nodeOnSide(level, nx, nz, back);
     const ok = (n, cx, cz) => !n.includes(':') || halfFloored(level, cx, cz, n.split(':')[1]);
     if (!ok(here, x, z) || !ok(there, nx, nz)) continue;
     out.push([here, there]);
   }
-  // across the diagonal itself, if it is holed
-  const d = diagOf(level, x, z);
-  if (d && throughApertures) {
-    const dk = edgeKey(d, x, z);
-    if (['door', 'arch'].includes(level.apertures.get(dk))) {
-      if (halfFloored(level, x, z, 'A') && halfFloored(level, x, z, 'B')) {
-        out.push([`${cellKey(x, z)}:A`, `${cellKey(x, z)}:B`]);
-      }
-    }
-  }
   return out;
 }
 
 /** The whole node graph for a level. */
-export function nodeGraph(level, throughApertures = false) {
+export function nodeGraph(level) {
   const adj = new Map();
   const add = (a, b) => {
     if (!adj.has(a)) adj.set(a, new Set());
@@ -166,7 +154,7 @@ export function nodeGraph(level, throughApertures = false) {
   for (const k of level.tiles.keys()) {
     const [x, z] = k.split(',').map(Number);
     for (const n of cellNodes(level, x, z)) if (!adj.has(n)) adj.set(n, new Set());
-    for (const [a, b] of nodeNeighbours(level, x, z, throughApertures)) add(a, b);
+    for (const [a, b] of nodeNeighbours(level, x, z)) add(a, b);
   }
   return adj;
 }
@@ -766,40 +754,6 @@ export function levelAt(plan, lx, lz, ly = 0) {
 // ---- routing ----------------------------------------------------------------
 // The grid IS the navigation graph: an edge between neighbours is passable unless a wall stands on it (§1).
 
-/** Can a body pass from cell a to cell b? A door or an arch is a hole you can
- *  walk through; a window is not, and neither is a wall. */
-export function passable(level, ax, az, bx, bz) {
-  const e = edgeBetween(ax, az, bx, bz);
-  if (!e) return false;
-  const k = edgeKey(e[0], e[1], e[2]);
-  if (!level.walls.has(k)) return true;
-  const ap = level.apertures.get(k);
-  return ap === 'door' || ap === 'arch';
-}
-
-/** Breadth-first route between two cells, as cell keys inclusive of both ends, or null if there is none. BFS, not A*:
- *  a floor plan is tens of cells, and "no route" is then a real answer. Neighbours in a fixed order (deterministic). */
-export function routeCells(level, fromKey, toKey) {
-  const adj = nodeGraph(level, true);      // routes go through doorways
-  if (!adj.has(fromKey) || !adj.has(toKey)) return null;
-  if (fromKey === toKey) return [fromKey];
-  const prev = new Map([[fromKey, null]]);
-  const q = [fromKey];
-  for (let i = 0; i < q.length; i++) {
-    for (const nk of [...(adj.get(q[i]) ?? [])].sort()) {
-      if (prev.has(nk)) continue;
-      prev.set(nk, q[i]);
-      if (nk === toKey) {
-        const path = [];
-        for (let c2 = nk; c2 != null; c2 = prev.get(c2)) path.push(c2);
-        return path.reverse();
-      }
-      q.push(nk);
-    }
-  }
-  return null;
-}
-
 /** Prepare one immutable structure-plan snapshot against a supplied walking basis. The standing
  * resolver, not floor ordering or x/z overlap, owns that basis:
  * terrain {heightAt(localX,localZ), step?, scale?}; floor {height, level?, step?, scale?}.
@@ -849,29 +803,6 @@ export function prepareRouteLocal(plan, basis) {
       return { ...routeLevel(lv.level,plan.grid,from,to,false,clear,{ scale }), confined:true };
     },
   };
-}
-
-/** A route over `plan` on a flat terrain basis, `y` being the terrain's height
- * everywhere (a walking plane, not evidence of floor support; elevated callers
- * use prepareRouteLocal explicitly). Walls of every level are checked against
- * that plane's feet-to-step band, and an outdoor endpoint is routed around the
- * structure rather than refused. The result is prepareRouteLocal's route():
- * kind 'clear' for a straight leg that clears every wall, 'routed' with the
- * waypoints, or 'blocked' with the reason. */
-export function planRouteLocal(plan, fromX, fromZ, toX, toZ, y = 0) {
-  return prepareRouteLocal(plan,{kind:'terrain',heightAt:()=>y,step:ROUTE_STEP_METRES}).route(fromX,fromZ,toX,toZ);
-}
-/** Whether the straight leg clears every wall, on planRouteLocal's flat terrain basis. */
-export function routeSegmentClear(plan, fromX, fromZ, toX, toZ, y = 0) {
-  return prepareRouteLocal(plan,{kind:'terrain',heightAt:()=>y,step:ROUTE_STEP_METRES}).clear(fromX,fromZ,toX,toZ);
-}
-/** planRouteLocal's waypoints in grid-local metres, the true start and the
- * true destination included, or null when it refuses a route. A straight leg
- * that clears every wall is just the two endpoints; otherwise the points are
- * the search's cell centres and edge crossings, with collinear runs merged. */
-export function routeLocal(plan, fromX, fromZ, toX, toZ, y = 0) {
-  const result = planRouteLocal(plan, fromX, fromZ, toX, toZ, y);
-  return result.kind === 'blocked' ? null : result.points;
 }
 
 // ---- swept wall geometry ----------------------------------------------------

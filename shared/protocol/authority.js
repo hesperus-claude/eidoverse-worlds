@@ -54,7 +54,8 @@ import { BODY_VERBS, bodyGate, forgetReaches, inboxPush, shieldOf } from "./auth
 export { reachAdmits, reachLetGo, noteRefused } from "./authority/bodyconsent.js";
 import { MOD_VERBS } from "./authority/moderation.js";
 import { USE_VERBS, actionsOf, offersFor, pivotOf, reactionCap, toggleOf } from "./authority/use.js";
-import { READ_VERBS, buildCreateFrom, buildPublish, buildUpdate, thingSaid } from "./authority/blueprints.js";
+import { buildCreateFrom, buildPublish, buildUpdate, thingSaid } from "./authority/blueprints.js";
+import { READ_VERBS } from "./authority/reads.js";
 import { actIndexOf, buildSky, buildUndo, buildWeather } from "./authority/undo.js";
 export { actIndexFresh, actIndexOf, entityBefore } from "./authority/undo.js";
 import { DRY, DUTY, allScripts, budgetOf, dutyLeft, dutyLog, installCheck, logRt, overCpu, particlesCheck, pauseOnly, pausedBy, presentOf, rtKey, rtOf, sampleOf, scopeIds, scriptCeiling, scriptDefaults, scriptDepth, scriptMemo, scriptRights, scriptsCfg, sponsorOf, uploadEffect } from "./authority/scripts.js";
@@ -304,7 +305,7 @@ function guess(s, opts) {
 // ---------- behaviours, running: authority/scriptrun.js ----------
 
 // ---------- the act index, undo: authority/undo.js ----------
-// ---------- blueprints, reads: authority/blueprints.js ----------
+// ---------- blueprints: authority/blueprints.js; reads: authority/reads.js ----------
 // ---------- physics: authority/physics.js ----------
 // ---------- occupants: authority/occupants.js ----------
 // ---------- the verbs a body performs: authority/bodyverbs.js ----------

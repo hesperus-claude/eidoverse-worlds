@@ -38,7 +38,7 @@ import { COMPONENTS, materialize } from './protocol/componentspec.js';
 import { isRedacted } from './protocol/fold.js';
 import { isNum, isObj } from './protocol/is.js';
 
-// surface: the seat authors its support plane; a body's profiled seat contact lands on it (client/lib/seatcore.js)
+// surface: the seat authors its support plane; a body's profiled seat contact lands on it (shared/seatcore.js)
 export const ANCHORS = COMPONENTS.station.enums.anchor;   // hips, feet, head, root, surface
 const LEAVE_BY = COMPONENTS.station.enums.leaveBy;  // jump, menu, script
 export const MOVES = ['none', 'drive', 'walk'];

@@ -10,6 +10,7 @@ import { CLIP_SLOTS } from "../shared/clipdefs.js";
 import { swimTargets, SWIM_CLIPS } from "../shared/swimpose.js";
 import { planReaches, reachKey } from "../shared/reachorder.js";
 import { clampBodyScale } from "../shared/presencewire.js";
+import { isFiniteVec3 } from "../shared/protocol/is.js";
 import { foldedIn } from "../shared/wingpresence.js";
 import { readBodyMode } from "../shared/bodymode.js";
 import { poseChannels } from "../shared/humanoid.js";
@@ -30,7 +31,6 @@ export type BodyObservation = {
   frame?: any; error?: string;
 };
 export const BODY_STALE_MS = 5000;
-const finite3 = (v: unknown): v is number[] => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite);
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const hasClipPhase = (p: PublicPose) => Number.isFinite(p.clipTime) && p.clipTime! >= 0 && (!p.clipTimeSlot || p.clipTimeSlot === p.clip);
 /** Whose body a sentence is about: "your" when the reader reads itself. */
@@ -79,7 +79,7 @@ function validate(o: BodyObservation) {
   if (!o.pose) return "no presence sample has arrived for this body yet, so nothing of it was read; calling again in a moment can work";
   // Your own pose is this door's state, which anim {stop: true} and the world's
   // restore write; anyone else's is their client's.
-  if (!finite3(o.pose.p) || !Number.isFinite(o.pose.yaw)) return o.self
+  if (!isFiniteVec3(o.pose.p) || !Number.isFinite(o.pose.yaw)) return o.self
     ? "your published position or facing isn't a finite number, so nothing of your body was read"
     : `this body's published position or facing isn't a finite number, so nothing of it was read; ${CLIENT_DATA}`;
   // One bone the reader can't use costs that bone (unreadableBones), never

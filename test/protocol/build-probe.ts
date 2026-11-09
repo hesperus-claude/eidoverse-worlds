@@ -15,7 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { scratchBench, mkCheck, sleep } from "../harness/harness.ts";
 import { readLog, fold } from "../../shared/protocol/fold.js";
-import { emptyStructure, drawRoom } from "../../shared/structure_edit.js";
+import { emptyStructure, drawRoom } from "../../shared/structure-edit.js";
 
 const ENGINE = path.resolve(import.meta.dir, "../..");
 const ME = "editbot", WORLD = "buildp";

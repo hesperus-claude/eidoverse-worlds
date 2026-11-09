@@ -27,6 +27,6 @@ const lab = await import('/lib/seatlab.js');
 ```
 
 The pure math this instrument leans on (seat claim, gates, patch thresholds,
-correction) lives in `client/lib/seatcore.js`, pinned by
+correction) lives in `shared/seatcore.js`, pinned by
 `test/client/seatcore-test.ts` — including the nonzero-Y seat-claim regression from
 the `_v` register-aliasing bug this file's history is a cautionary tale about.

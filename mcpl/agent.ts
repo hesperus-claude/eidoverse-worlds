@@ -25,8 +25,8 @@ import { NoiseGate, SHORT_STINT_MS, APPROACH_REFRACT_MS, APPROACH_RADIUS, REARM_
   APPROACH_DWELL_MS, APPROACH_STILL_MPS, APPROACH_MAX_WAIT_MS,
   ACTIVITY_RADIUS_M, ACTIVITY_PULSE_MS, ACTIVITY_REFRESH_MS, MOVER_MIN_M } from "./denoise.ts";
 import { HeadlessBody, ReachBody, setHeightField, setWaterField, registerSupport, registerSupportGrid, registerMeshSupport, removeSupport, standOn, collidersReady, navProbe, collidersGeneration, inWorld, lineOfSight, withoutColliders } from "./physics.ts";
-import { makeNavGrid, NAV_SUBSTEP, NAV_NUDGE, NAV_STEP, type NavProbe, type NavTarget } from "./navgrid.ts";
-import { placesOf, inRegion, names, destinationOf, toLocal, frameVolume, type Place, type Destination, type PlaceHolder } from "./places.ts";
+import { makeNavGrid, NAV_SUBSTEP, NAV_NUDGE, NAV_STEP, type NavProbe, type NavTarget } from "../shared/navgrid.js";
+import { placesOf, inRegion, names, destinationOf, toLocal, frameVolume, type Place, type Destination, type PlaceHolder } from "../shared/places.js";
 import { collisionTriangles } from "../server/geometry.ts";
 import { colliderOf } from "../shared/components.js";
 // FLIGHT: the same deterministic integrator the browser runs (shared/flight.js), one function in every runtime.
@@ -83,9 +83,9 @@ import { shown } from "../shared/shown.js";
 /** reach and clear_reach refuse a limb in the same words. */
 const unknownLimb = (raw: unknown, done: string) =>
   `there's no limb called ${shown(raw)}, so nothing was ${done}; limb takes leftHand, rightHand, leftFoot or rightFoot`;
-import { decideSupportClass, CERT_MAX_WORLD } from "../client/lib/supportclass.js";
+import { decideSupportClass, CERT_MAX_WORLD } from "../shared/supportclass.js";
 import { lyingFrame } from "../shared/rot.js";
-import { isFiniteVec3 } from "./shape.ts";
+import { isFiniteVec3 } from "../shared/protocol/is.js";
 // the same sky fold + weather derivation the browser and the sequencer run: perception lands on the hour and weather
 // every renderer shows
 import { foldSkyEntry, describeSky, effectiveSky, effectiveClock, dayPhase, hoursAt } from "../shared/forecast.js";
@@ -105,7 +105,7 @@ import { lightOf } from "../shared/components.js";
 import { describeCaptions } from "../shared/captions.js";
 import { cellKey, describeStructure, describeHere, halfFloored, localizePoint, nodeAtPoint, planStructure, prepareRouteLocal, ROUTE_STEP_METRES } from "../shared/structure.js";
 import { effectiveWorldTransform, partHint, type Effective } from "./effective.ts";
-import { makeVerdictCache, seatGateCore, nameFromAvatarPath } from "../client/lib/seatcore.js";
+import { makeVerdictCache, seatGateCore, nameFromAvatarPath } from "../shared/seatcore.js";
 import { redialer, REDIAL } from "../shared/redial.js";
 import { createShover, shoveable, footprint, obbOf, aabbOfObb, contactOf, massOf, budges, SHOVE_FEEL } from "../shared/shove.js";
 import { SHOVE } from "../shared/protocol/physconst.js";
@@ -125,6 +125,8 @@ import { DEFAULT_BODY } from "../shared/avatardefs.js";
 
 /** The body's clock: one stride of shared/mover.js (the one walker: the client's and the authority's too) per tick. */
 const TICK_MS = 100;
+/** The sequencer a body joins when neither its options nor WORLD_URL name one. */
+export const DEFAULT_WORLD_URL = "ws://127.0.0.1:8940/ws";
 /** E1: a walk asks the authority for the next stretch (PERMIT_STEP m; its track takes TRACK.cap m at most at once) when the
  *  body is within PERMIT_AHEAD m of the end of what it has accepted, so a run never waits on a local server. */
 const PERMIT_STEP = TRACK.cap / 2, PERMIT_AHEAD = 1;
@@ -136,7 +138,7 @@ type Blocker = { id: string; ref: any; phase: "approach" | "pushed"; until: numb
 type WalkGate = { mode: "sync" | "tracked" | "open"; permit: number[] | null; busy: boolean; blocker?: Blocker | null; shoves?: number; slow?: number; waitUntil?: number; hold?: number; retrackAt?: number };
 const STATURE_FALLBACK = MOVER.body.height;   // an ordinary adult (the mover's body), while a body's own height is being read (main #242)
 /** Longest horizontal move between two collision checks, so a run's 0.4m tick
- *  can't leap a thin wall (navgrid.ts NAV_SUBSTEP says why this scale). */
+ *  can't leap a thin wall (navgrid.js NAV_SUBSTEP says why this scale). */
 const COLLIDE_SUBSTEP = NAV_SUBSTEP;
 /** A walk that has made less than this fraction of its intended progress for
  *  STALL_TICKS consecutive ticks is held by something solid: it ends, saying
@@ -746,7 +748,7 @@ export class WorldAgent {
 
   constructor(opts: { url?: string; name?: string; displayName?: string; dropMentionQualifiers?: boolean; world?: string; avatar?: string; agentToken?: string; declares?: string | null; tickEveryMs?: number } = {}) {
     this.tickEveryMs = opts.tickEveryMs ?? TICK_MS;
-    this.url = opts.url ?? process.env.WORLD_URL ?? "ws://127.0.0.1:8940/ws";
+    this.url = opts.url ?? process.env.WORLD_URL ?? DEFAULT_WORLD_URL;
     this.name = opts.name ?? process.env.AGENT_NAME ?? "claude";
     // The token's display name ("Artie (kube)"): a second form the body
     // answers to in chat. The id stays the addressing handle everywhere else.
@@ -1949,7 +1951,7 @@ export class WorldAgent {
   }
 
   /** Of floorsAt's floors, the one a destination height means, by the navgrid's
-   *  rule (mcpl/navgrid.ts, route): nearest y, at most `above` (NAV_STEP
+   *  rule (shared/navgrid.js, route): nearest y, at most `above` (NAV_STEP
    *  default) above it and, with `below`, at most that below; null if none.
    *  Ties go to the walk's own floor, then the higher. With `body`, y is a
    *  body's root and the floor is the highest that fits (a body lies up to
@@ -3434,7 +3436,7 @@ export class WorldAgent {
     }
     // Through placed models: a walk the structure planner leaves as one
     // straight leg is routed against the colliders the feet will meet —
-    // round the furniture, through the door, up the stair (mcpl/navgrid.ts).
+    // round the furniture, through the door, up the stair (shared/navgrid.js).
     let legs = plan.legs, snapped = false, routed = false, passIds = new Set<string>();
     // A floor walk's probe stands on that storey (not in the colliders), routes
     // round placed models as on the ground (walkProbeGround), never lower than
@@ -3572,7 +3574,7 @@ export class WorldAgent {
     });
   }
 
-  // ---- named places (mcpl/places.ts) ----------------------------------------
+  // ---- named places (shared/places.js) ----------------------------------------
 
   /** A thing's named places: its model's own (rooms, doors, seats, arrivals),
    *  then its `places` component on top — which anyone with builder rank can
@@ -3587,7 +3589,7 @@ export class WorldAgent {
    *  where a carried or moving thing is. Null when that cannot be resolved. */
   private placeHolder(e: Entity, nowMs = Date.now()): PlaceHolder | null {
     const f = this.eff(e.id, nowMs);
-    // its per-axis scale, so a place on a stretched thing is stretched with it, as the thing is drawn. places.ts frames
+    // its per-axis scale, so a place on a stretched thing is stretched with it, as the thing is drawn. places.js frames
     // any non-zero axis, a mirrored one too
     const s3 = f.ok ? f.scale3 : undefined;
     const scale = Array.isArray(s3) && s3.every((v) => Number.isFinite(v) && v !== 0) ? s3 : f.ok ? f.scale : undefined;

@@ -19,7 +19,7 @@ import {
   validateProfile, profileStatus, socketAnchor, seatGate, seatGateCore,
   applySeatCorrection, occupantScalar, seatClaim, makeGenerationGuard, makeVerdictCache,
   SEAT_METHOD, MIN_PATCH_VERTS, MAX_PATCH_SPREAD_Y,
-} from "../../client/lib/seatcore.js";
+} from "../../shared/seatcore.js";
 import { qAxisAngle } from "../../client/lib/motioneval.js";
 import { pause } from "../gate/wait.ts";
 

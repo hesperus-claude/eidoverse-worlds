@@ -47,5 +47,30 @@ const run = (limiter: (now: number) => string, handledAt: number[]) => { const t
 { const b = newBucket(2 * RATE); for (let i = 0; i < 2 * RATE; i++) admitMessage(b, 10_000, RATE);
   check("B6 a clock stepping back 1.4 s adds no tokens", admitMessage(b, 8600, RATE) !== "run", b); }
 
+// W1: the cap where it ships (server/server.ts websocket.message), not just the bucket: a scratch server at MSG_RATE=10
+{ const { scratchSequencer } = await import("../harness/harness.ts");
+  const { helloOf } = await import("../../shared/protocol/hello.js");
+  const W = "ratewire", WIRE_RATE = 10;
+  const h = await scratchSequencer("msgrate", { worlds: [W], owner: "keeper", serverEnv: { MSG_RATE: String(WIRE_RATE), TRUST_NAMES: "1", SKIP_OPT_SWEEP: "1" } });
+  const WS = h.BASE.replace("http", "ws") + "/ws";
+  const join = (id: string) => new Promise<{ ws: WebSocket; msgs: any[] }>((res, rej) => {
+    const ws = new WebSocket(WS), c = { ws, msgs: [] as any[] }, t = setTimeout(() => rej(new Error(`${id}: no snapshot`)), 8000);
+    ws.onmessage = (e) => { const m = JSON.parse(String(e.data)); c.msgs.push(m); if (m.type === "snapshot") { clearTimeout(t); res(c); } };
+    ws.onopen = () => ws.send(JSON.stringify({ type: "join", hello: helloOf(), world: W, id, replica: true }));
+  });
+  try {
+    const flood = await join("flooder"), calm = await join("calm");
+    for (let i = 0; i < 2 * WIRE_RATE + 25; i++) flood.ws.send(JSON.stringify({ type: "request", id: `f${i}`, verb: "help", args: {} }));
+    await h.sleep(1500);
+    const rate = flood.msgs.filter((m) => m.type === "reply" && m.reply?.refused?.code === "rate");
+    check("W1 a flood past MSG_RATE on one connection is refused with code rate, from this connection", rate.length > 0 && rate.every((m) => /from this connection/.test(m.reply.refused.reason)), rate[0] ?? flood.msgs.length);
+    check("W1 ...at most MSG_RATE refusals answered in that second (a flood can't buy replies)", rate.length <= WIRE_RATE, rate.length);
+    const before = calm.msgs.length; calm.ws.send(JSON.stringify({ type: "request", id: "c1", verb: "help", args: {} })); await h.sleep(500);
+    const mine = calm.msgs.slice(before).find((m) => m.type === "reply" && m.id === "c1");
+    check("W1 another connection's request still runs", mine?.ok === true, mine);
+    flood.ws.close(); calm.ws.close();
+  } finally { await h.cleanup(fail ? 1 : 0); }
+}
+
 console.log(`[msgrate-test] ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

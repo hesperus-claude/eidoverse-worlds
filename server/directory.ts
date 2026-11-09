@@ -10,6 +10,7 @@ import crypto from "node:crypto";
 import { readLog, worldIdOf } from "../shared/protocol/fold.js";
 import { directoryFileIn } from "./keyfiles.ts";
 import { replaceDurable, withFileLock } from "./durable.ts";
+import { sha256 } from "../shared/protocol/hash.js";
 
 // kind is about the ACCOUNT, never what holds it (PROTOCOL §6a rule 3): "account" (one is bound), "anon" (none: a guest),
 // "imported" (a name from an imported log, no account yet). Older files' "human"/"agent" read as "account".
@@ -26,7 +27,7 @@ export const isMinted = (s: string) => /^u-[a-z2-7]{20}(?:[a-z2-7]{4})?$/.test(s
 /** The account prefixes above (only the prefix is checked); a stored account with none of them is refused at boot (named, kept on disk), never worn. */
 export const ACCOUNT_SHAPE = /^(human|agent:token|aid1|local):/;
 /** The tag a display name takes when another account wears it: stable per account, and carries none of it (a hash, not its digits). */
-export const accountTag = (sub: string) => crypto.createHash("sha256").update(`eidoverse-name-tag:${sub}`).digest("hex").slice(0, 4);
+export const accountTag = (sub: string) => sha256(`eidoverse-name-tag:${sub}`).slice(0, 4);
 
 /** `existingWorlds`: the world ids already in this server, read only on the one-time v1 → v2 upgrade (they keep their
  *  server-wide ids). */

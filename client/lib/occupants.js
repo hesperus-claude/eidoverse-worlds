@@ -13,7 +13,7 @@
 
 import { bus } from './base.js';
 import { vrmaShaLoaded } from './assets.js';
-import { makeVerdictCache, seatGate, occupantScalar, nameFromAvatarPath, SEAT_CLIP_FILE } from './seatcore.js';
+import { makeVerdictCache, seatGate, occupantScalar, nameFromAvatarPath, SEAT_CLIP_FILE } from '../../shared/seatcore.js';
 
 // The cache logic (epochs, pending demotion, event-rev floors) lives once in
 // seatcore.makeVerdictCache, shared with the headless agent; this module

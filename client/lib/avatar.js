@@ -35,7 +35,7 @@ import { crownEstimate, plateGap, plateAnchor, plateOffset, plateViewLift, STAND
 import { clampBodyScale, clampPlateY, plateLift, clipRate } from './bodyscale.js';
 import { Fn, userData, positionView, cameraNear, cameraFar, min, viewZToPerspectiveDepth, viewZToReversedPerspectiveDepth,
   viewZToOrthographicDepth } from 'three/tsl';
-import { SEAT_CLIP_FILE } from './seatcore.js';
+import { SEAT_CLIP_FILE } from '../../shared/seatcore.js';
 import { planReaches } from '../../shared/reachorder.js';
 import { poseChannels } from '../../shared/humanoid.js';
 import { swimTargets, SWIM_CLIPS } from '../../shared/swimpose.js';

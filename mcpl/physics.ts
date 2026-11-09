@@ -18,7 +18,7 @@ import { plugin } from "bun";
 import { fileURLToPath } from "node:url";
 import { poseChannels } from "../shared/humanoid.js";
 import { clampBodyScale } from "../shared/presencewire.js";
-import { isFiniteVec3 } from "./shape.ts";
+import { isFiniteVec3 } from "../shared/protocol/is.js";
 // pure shared geometry — no client import cone, safe to load eagerly
 import { CONTACT_POINTS, contactSeed } from "../shared/contact.js";
 // The aerodynamics of a limp fall -- forces, not a scripted path.
@@ -26,7 +26,7 @@ import { leafForceFor, DEFAULT_LEAF_FORCE } from "../shared/leafforce.js";
 import { bodyFrame, fromBody } from "../shared/joints.js";
 // the walking capsule's dimensions — pure module, the browser controller's own numbers
 import { colliderFor } from "../client/lib/bodyscale.js";
-import { NAV_NUDGE, type NavProbe } from "./navgrid.ts";
+import { NAV_NUDGE, type NavProbe } from "../shared/navgrid.js";
 
 const HEADLESS_CORE = fileURLToPath(new URL("./headless-core.mjs", import.meta.url));
 
@@ -110,7 +110,7 @@ export async function setWaterField(f: { level: number; sample: (x: number, z: n
 const holders = new Map<string, Set<string>>();
 
 /** A stretched thing's per-axis scale (shared/scale3.js); absent is uniform. */
-const finite3 = (v: unknown) => v == null || (Array.isArray(v) && v.length === 3 && v.every(Number.isFinite));
+const absentOrFiniteVec3 = (v: unknown) => v == null || isFiniteVec3(v);
 /** A stretched thing's per-axis |scale| (physics reads |scale|), or null when uniform. colliders.js takes one scale,
  *  so a stretched support is fitted at scale 1 with the stretch baked into its box, grid or triangles. */
 const stretchOf = (x: { scale3?: number[] }): [number, number, number] | null => {
@@ -132,7 +132,7 @@ export async function registerSupport(
 ) {
   // runs detached (`void registerSupport`): a throw would take down every agent in the process, so non-finite abstains
   if (![min, max, xform?.position].every(isFiniteVec3)
-      || !Number.isFinite(xform.yaw ?? 0) || !Number.isFinite(xform.scale ?? 1) || !finite3(xform.scale3)) {
+      || !Number.isFinite(xform.yaw ?? 0) || !Number.isFinite(xform.scale ?? 1) || !absentOrFiniteVec3(xform.scale3)) {
     console.error(`[physics] support ${id} abstained — non-finite geometry/transform`);
     return;
   }
@@ -159,7 +159,7 @@ export async function registerSupportGrid(
   xform: { position: number[]; yaw?: number; scale?: number; scale3?: number[] },
 ): Promise<boolean> {
   if (!isFiniteVec3(xform?.position)
-      || !Number.isFinite(xform.yaw ?? 0) || !Number.isFinite(xform.scale ?? 1) || !finite3(xform.scale3)) {
+      || !Number.isFinite(xform.yaw ?? 0) || !Number.isFinite(xform.scale ?? 1) || !absentOrFiniteVec3(xform.scale3)) {
     console.error(`[physics] grid support ${id} abstained — non-finite transform`);
     return false;
   }
@@ -192,7 +192,7 @@ export async function registerMeshSupport(
   xform: { position: number[]; yaw?: number; scale?: number; scale3?: number[]; collide?: string; model?: string },
 ): Promise<boolean> {
   if (!isFiniteVec3(xform?.position)
-      || !Number.isFinite(xform.yaw ?? 0) || !Number.isFinite(xform.scale ?? 1) || !finite3(xform.scale3)) {
+      || !Number.isFinite(xform.yaw ?? 0) || !Number.isFinite(xform.scale ?? 1) || !absentOrFiniteVec3(xform.scale3)) {
     console.error(`[physics] mesh support ${id} abstained — non-finite transform`);
     return false;
   }
@@ -295,7 +295,7 @@ export function withoutColliders<T>(ids: Iterable<string>, fn: () => T): T {
   try { return fn(); } finally { for (const id of out) C.suspendCollider(id, false); }
 }
 
-/** The route planner's view of the world (navgrid.ts): the feet's own surfaceUnder and resolveColliders. Null while
+/** The route planner's view of the world (navgrid.js): the feet's own surfaceUnder and resolveColliders. Null while
  *  unloaded. */
 export function navProbe(heightAt: (x: number, z: number) => number): NavProbe | null {
   if (!simMods) { void loadSim(); return null; }
@@ -518,7 +518,6 @@ export class HeadlessBody {
     const rd: any = this.rd;
     const bodies = rd?._bodies;
     if (!Array.isArray(bodies) || !bodies.length) return 0;
-    const A = this.m.THREE ? null : null;
     let pushed = 0;
     for (const rb of bodies) {
       try {

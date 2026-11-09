@@ -21,7 +21,7 @@ import { noWorldUrl } from "../harness/no-world.ts";
 import { tryUntil } from "../gate/wait.ts";
 import { registerSupport, registerSupportGrid, registerMeshSupport, removeSupport, standOn, inWorld } from "../../mcpl/physics.ts";
 import { boxMesh } from "../fixtures/two-storey-fixture.ts";
-import { LIE_GRID, TOPGRID_VERSION } from "../../client/lib/supportclass.js";
+import { LIE_GRID, TOPGRID_VERSION } from "../../shared/supportclass.js";
 
 let failures = 0;
 const check = (label: string, ok: boolean, detail?: string) => {

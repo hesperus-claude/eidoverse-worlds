@@ -5,7 +5,7 @@
 //  - serves the browser client and the eidoverse-video asset library
 // No world manifest: everything about a world arrives through its log.
 
-import { nameAtDoor } from "./names.ts";
+import { nameAtDoor } from "./display-names.ts";
 import { existsSync, appendFileSync, readdirSync } from "node:fs";
 import { fileIncludes } from "./durable.ts";
 import { join } from "node:path";
@@ -305,7 +305,7 @@ function admitJoin(c: Client, ws: { send(d: string): void; close(code?: number, 
     c.id = c.id.replace(/[\u0000-\u001f\u007f]/g, "").trim();
     // format characters (zero-width, bidi overrides) and compatibility forms are how one name passes for another
     c.id = c.id.normalize("NFKC").replace(/\p{Cf}/gu, "").trim();
-    // no markup characters in a name: a typed one is refused in words, one the identity service gave becomes a look-alike (server/names.ts)
+    // no markup characters in a name: a typed one is refused in words, one the identity service gave becomes a look-alike (server/display-names.ts)
     {
       const n = nameAtDoor(c.id, { typed: !auth });
       if (n.refused) {
