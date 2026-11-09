@@ -214,7 +214,7 @@ console.log("\n━━ the old worst cell: max-y's 21cm float is behaviorally gon
   // old float was worst; assert the agent's ground there is truth-or-
   // terrain — never the old vertex top. On the max-y head this fails by
   // ~0.21m (#94 review B1's behavioral requirement).
-  const { gridAccumulator } = await import("../../client/lib/supportclass.js");
+  const { gridAccumulator } = await import("../../shared/supportclass.js");
   const { MeshBVH }: any = await import("../../client/node_modules/three-mesh-bvh/src/index.js");
   const io = await (async () => {
     const { NodeIO } = await import("@gltf-transform/core");

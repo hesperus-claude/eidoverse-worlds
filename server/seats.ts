@@ -7,7 +7,7 @@
 
 import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, appendFileSync, statSync, openSync, closeSync, writeSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
-import { validateProfile, profileStatus } from "../client/lib/seatcore.js";
+import { validateProfile, profileStatus } from "../shared/seatcore.js";
 import { OPT_DIR, LIBRARY_DIR, PATCH_DIR } from "./config.ts";
 import { worlds } from "./world.ts";
 import { sha256Bytes } from "../shared/protocol/hash.js";

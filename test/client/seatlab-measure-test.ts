@@ -7,7 +7,7 @@ import path from "node:path";
 const ROOT = path.resolve(import.meta.dir, "..", "..");
 const S = (globalThis as any).__seat = { mounts: new Map(), bags: new Map(), entities: new Map() };
 plugin({ name: "seatlab-lib", setup(b) {
-  b.onResolve({ filter: /^\/lib\// }, (a) => ({ path: a.path, namespace: "seatlab-lib" }));
+  b.onResolve({ filter: /^\/(lib|shared)\// }, (a) => ({ path: a.path, namespace: "seatlab-lib" }));
   b.onLoad({ filter: /.*/, namespace: "seatlab-lib" }, (a) => {
     const three = JSON.stringify(path.join(ROOT, "client/node_modules/three/build/three.module.js"));
     const src: Record<string, string> = {
@@ -18,7 +18,7 @@ plugin({ name: "seatlab-lib", setup(b) {
         export const socketWorldPos = (id, out) => out.set(0, 0.5, 0);
         export const seatSocket = (id) => { const c = S.bags.get(id); return c?.socket ? { id, host: c.parent.to, name: c.socket.name, sock: c.socket, station: c.station ?? null } : null; };`,
       "/lib/avatar.js": "export const makeAvatar = () => null;",
-      "/lib/seatcore.js": `export * from ${JSON.stringify(path.join(ROOT, "client/lib/seatcore.js"))};`,
+      "/shared/seatcore.js": `export * from ${JSON.stringify(path.join(ROOT, "shared/seatcore.js"))};`,
       "/lib/assets.js": "export const vrmaShaLoaded = () => null;",
     };
     if (!(a.path in src)) throw new Error(`seatlab-measure: no stub for ${a.path}`);

@@ -44,7 +44,7 @@ const RULES = [
 const UNRELATED = [
   ["server/directory.ts", /directory|v1 → v2|v1 keyed an agent/, "the authority directory's own file format version (v1 → v2), not the protocol"],
   ["shared/blueprint.js", /blueprint|v1 = an original|nested cop/, "the blueprint RECORD format's version (kind eido.blueprint, v: 1)"],
-  ["client/lib/seatcore.js", /SEAT_METHOD/, "a seat-measuring method's name"],
+  ["shared/seatcore.js", /SEAT_METHOD/, "a seat-measuring method's name"],
   ["server/store-variants.ts", /LOD v1|v1 contract/, "the geometry-LOD contract's version"],
   ["server/optimize.ts", /./, "glTF / encoder format versions"],
   ["server/sfu", /./, "SFU / dependency API versions"],

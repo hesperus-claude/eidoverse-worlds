@@ -7,7 +7,7 @@
 
 // namespace import so a pre-revision head FAILS the certification checks by
 // name instead of crashing the file on a missing export — controls stay controls
-import * as SC from "../../client/lib/supportclass.js";
+import * as SC from "../../shared/supportclass.js";
 const { gridAccumulator, decideSupportClass, validTopGrid, UNEVEN_MIN_LIE,
   LIE_GRID, SPARSE_MIN_CELLS, TOPGRID_VERSION, TOPGRID_MAX_JSON } = SC;
 const CERT_SPREAD = (SC as any).CERT_SPREAD ?? 0.03;

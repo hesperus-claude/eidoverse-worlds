@@ -6,7 +6,7 @@ import { statSync } from "node:fs";
 import { solidsFromTriangles } from "./solids.ts";
 // the support classifier both runtimes share; this file only supplies vertices
 import { gridAccumulator, SPARSE_MIN_CELLS, TOPGRID_VERSION, TOPGRID_MAX_JSON, LIE_GRID,
-  CERT_SPREAD, CERT_SUBSAMPLE } from "../client/lib/supportclass.js";
+  CERT_SPREAD, CERT_SUBSAMPLE } from "../shared/supportclass.js";
 
 // Ray certification needs a BVH, loaded lazily and optionally: without it the summary still carries `lie` but no
 // topGrid (the consumer abstains).
@@ -66,7 +66,7 @@ export type GeomSummary = {
   /** true when the mesh was too big to walk exhaustively */
   sampled: boolean;
   /** the box-top lie (m, model frame): bbox top minus the median 24×24 cell top — the same probe as the browser's
-   *  collider decide() (client/lib/supportclass.js). Consumers scale it before judging. */
+   *  collider decide() (shared/supportclass.js). Consumers scale it before judging. */
   lie?: number;
   /** the probe's grid as a heightfield for floor-shaped assets whose box top lies: cells are model-local max-y,
    *  null = unoccupied; row-major, index = z * n + x over the minXZ/sizeXZ footprint. */

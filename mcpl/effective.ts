@@ -8,7 +8,7 @@
 // Pure: state comes in through a caller-supplied view, time as an argument. agent.ts wraps it; tests drive it bare.
 
 import { evalWholeMotion, qMul, qApply, qAxisAngle, yawOfQuat } from "../client/lib/motioneval.js";
-import { seatGateCore, applySeatCorrection } from "../client/lib/seatcore.js";
+import { seatGateCore, applySeatCorrection } from "../shared/seatcore.js";
 
 export type EffectiveView = {
   /** The folded entity, or undefined when `id` is not a thing (a body, or unknown). */

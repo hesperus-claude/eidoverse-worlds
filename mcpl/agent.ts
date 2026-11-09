@@ -83,7 +83,7 @@ import { shown } from "../shared/shown.js";
 /** reach and clear_reach refuse a limb in the same words. */
 const unknownLimb = (raw: unknown, done: string) =>
   `there's no limb called ${shown(raw)}, so nothing was ${done}; limb takes leftHand, rightHand, leftFoot or rightFoot`;
-import { decideSupportClass, CERT_MAX_WORLD } from "../client/lib/supportclass.js";
+import { decideSupportClass, CERT_MAX_WORLD } from "../shared/supportclass.js";
 import { lyingFrame } from "../shared/rot.js";
 import { isFiniteVec3 } from "../shared/protocol/is.js";
 // the same sky fold + weather derivation the browser and the sequencer run: perception lands on the hour and weather
@@ -105,7 +105,7 @@ import { lightOf } from "../shared/components.js";
 import { describeCaptions } from "../shared/captions.js";
 import { cellKey, describeStructure, describeHere, halfFloored, localizePoint, nodeAtPoint, planStructure, prepareRouteLocal, ROUTE_STEP_METRES } from "../shared/structure.js";
 import { effectiveWorldTransform, partHint, type Effective } from "./effective.ts";
-import { makeVerdictCache, seatGateCore, nameFromAvatarPath } from "../client/lib/seatcore.js";
+import { makeVerdictCache, seatGateCore, nameFromAvatarPath } from "../shared/seatcore.js";
 import { redialer, REDIAL } from "../shared/redial.js";
 import { createShover, shoveable, footprint, obbOf, aabbOfObb, contactOf, massOf, budges, SHOVE_FEEL } from "../shared/shove.js";
 import { SHOVE } from "../shared/protocol/physconst.js";

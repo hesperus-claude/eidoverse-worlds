@@ -22,12 +22,12 @@
 //  - a stale hash is never read as fresh, and an old fetch never overwrites a
 //    newer generation.
 
-import { qApply } from "./motioneval.js";
+import { qRotate as qApply } from "./rot.js";
 
 // ---- constants (versioned by derivation.toolVersion — change them, bump it) --
 
 export const SEAT_METHOD = "skinned-pelvis-contact-v1";
-import { SEAT_CLIP_FILE } from "../../shared/clipdefs.js";
+import { SEAT_CLIP_FILE } from "./clipdefs.js";
 export { SEAT_CLIP_FILE };
 export const CONTACT_MIN = 0.02;   // metres root-local; below this the "contact" is the root itself
 export const CONTACT_MAX = 1.0;    // above this no humanoid sit pose is plausible

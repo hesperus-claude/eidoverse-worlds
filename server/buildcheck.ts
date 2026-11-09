@@ -8,7 +8,7 @@
 import { collisionTriangles } from "./geometry.ts";
 import { glbPerfOfFile } from "./glbperf.ts";
 import { rankOf, TIER_NAMES } from "../shared/perfrank.js";
-import { decideSupportClass } from "../client/lib/supportclass.js";
+import { decideSupportClass } from "../shared/supportclass.js";
 import { makeNavGrid, NAV_CELL, NAV_STEP } from "../mcpl/navgrid.ts";
 import { placesFromModel } from "../mcpl/places.ts";
 import { MOVER } from "../shared/mover.js";
