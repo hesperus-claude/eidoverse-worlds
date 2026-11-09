@@ -1,21 +1,14 @@
-// plateanchor — WHERE a nameplate hangs: anchored to the body, following its posture. Pure, so the test drives these
-// very functions (test/client/plateanchor-test.ts); avatar.js measures the body once and calls them every frame.
+// plateanchor — where a nameplate hangs: anchored to the body, following its posture. Pure (tested in
+// test/client/plateanchor-test.ts); avatar.js measures the body once and calls these every frame.
 //
-// WHY this shape: a plate at a fixed height is wrong for a short or a tall body and can't follow sitting or lying
-// down. Nobody tracks the live HEAD — "a plate that bobs with the wearer's neck reads as broken" (BasisVR,
-// BasisNamePlateAnchorMath.cs). So, Basis's way: measure the crown ONCE at rest, then hang the plate over the LIVE
-// HIPS at the rest hips→crown height. Sitting lowers the hips, so the plate comes down with them for free. The head
-// term (head + head span) only wins when the head rises above where the hips say it should be (a stretch, a jump).
-// LYING (Basis doesn't handle it): when the head drops under LIE_START of its rest height above the feet, the anchor
-// blends to over the head, smoothly down to LIE_FULL. A LOW HEAD ALONE IS NOT LYING: sitting on the ground puts the
-// head at ~40% of rest height. The TORSO tells them apart: head-over-hips is ~0.9
-// of rest sitting and ~0.4 lying. So lying = a low head AND a torso that has gone over (TORSO_START → TORSO_FULL);
-// the lower of the two blends wins. A bow or a crouch keeps the head high, so it doesn't count either.
-// Y is smoothed (a critically-damped chase with a small dead zone for breathing and head bob); X/Z are not — a plate
-// that trails its walking body sideways reads as lag.
-// STANDING IS RIGID: a jump clip moves the hips under the root, so an eased plate would chase a swinging target.
-// Upright in ordinary motion (STAND_SLOTS) the plate rides the REST crown over the root and the clip cannot move it;
-// the chase only runs when the target changes, which is a posture change (stand ↔ sit ↔ lie).
+// Shape (BasisVR's BasisNamePlateAnchorMath.cs, plus lying): measure the crown once at rest, then hang the plate over
+// the live hips at the rest hips→crown height, so sitting lowers it for free; the head term only wins when the head
+// rises above where the hips say (a stretch, a jump). Nobody tracks the live head: a plate that bobs reads as broken.
+// Lying: when the head drops under LIE_START of its rest height above the feet AND the torso has gone over
+// (TORSO_START → TORSO_FULL; sitting on the ground also puts the head low), the anchor blends to over the head.
+// Y is smoothed (a damped chase with a dead zone for breathing); X/Z are not (a trailing plate reads as lag).
+// Standing is rigid: in STAND_SLOTS the plate rides the rest crown over the root, so a jump clip cannot swing it; the
+// chase only runs on a posture change.
 
 const EYE_K = 1.35;        // crown = eye + 1.35·(eye − head bone)            (Basis)
 const NO_EYE_K = 0.45;     // no eyes: crown = head + 0.45·(head − hips)       (Basis)
@@ -98,17 +91,12 @@ export function plateOffset(prev, { standing, standY, liveY }, dt, opts = {}) {
 const RIGID = { dead: 0 };
 
 // ---- seen from above: the label offsets away from the avatar ------------------------------------------------------
-// The plate hangs a gap over the crown in WORLD up. Looking down, that gap foreshortens (cos of the pitch) and the
-// head's own top rises on screen toward the plate, until from straight above the plate sits on the face. The plate is
-// a screen-aligned sprite, so the fix is in screen terms: slide it along the camera's up (perpendicular to the view,
-// so its stereo depth and its own-body depth clearance are untouched) by the least amount that keeps its bottom edge
-// standing off the head's top by what it does at eye level (drop − halfH: a few cm for a near plate; negative — an
-// overlap — for a plate grown for range, which keeps exactly the overlap it has there). The head is a ball of `headR`
-// under the crown, projected through the same pinhole the renderer uses, so the answer is exact at any range. The lift
-// is 0 at eye level, grows smoothly as the camera pitches down, and is about headR + drop from straight above. A level
-// or upward-looking camera lifts nothing (the rule alone would ask ~1 cm looking up 25°, the head being nearer the eye
-// than the plate; at a level camera it is exactly 0, so the cut is continuous).
-// A pure function of the camera and the plate's own anchor (not the live head), so it is as steady as the plate.
+// Looking down, the gap over the crown foreshortens until from straight above the plate sits on the face. The plate is
+// a screen-aligned sprite, so slide it along the camera's up (stereo depth and depth clearance untouched) by the least
+// amount that keeps its bottom edge as far off the head's top as it is at eye level. The head is a ball of `headR`
+// under the crown, projected through the renderer's pinhole, so the answer is exact at any range. 0 at a level or
+// upward-looking camera (continuous), about headR + drop from straight above. A function of the plate's own anchor,
+// not the live head, so it is as steady as the plate.
 
 /** eye, up, fwd: the camera's world position and unit up / forward ([x,y,z]); plate: the plate's centre (world);
  *  drop: plate centre → crown (the gap + the wearer's lift, m); headR: the head's radius (m); halfH: half the pill's

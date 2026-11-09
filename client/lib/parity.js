@@ -2,7 +2,7 @@
 // of its own fold (state.js)? Run it in any live world, after any suspect sequence of edits. It compares the fold's
 // OWN outputs (entity ids, what each is, parents) and deliberately not realization (transforms mid-motion, loaded
 // meshes): those diverge by design while an object is in flight or riding a motion.
-// compDiffs is always empty (kept for lightbench.ts); the comps mirror it compared is gone.
+// compDiffs and mountDiffs are always empty (what they compared is gone); kept so the result's shape is stable.
 
 import { state } from './state.js';
 import { entities, childrenOf, ancestorsOf } from './world.js';
@@ -24,9 +24,7 @@ export function foldParity() {
   for (const id of foldIds) {
     if (!sceneIds.has(id)) continue;
     out.checked++;
-    // identity: the fold's word on WHAT this id wears (which model, or none)
-    // vs what the scene realized — where same-id-spawn overwrite semantics
-    // would drift first (a still-loading reservation is tracked as nothing yet: skip)
+    // identity: the fold's model for this id vs what the scene realized (a still-loading reservation is skipped)
     const meta = realizedAs(id);
     if (meta) {
       const ent = fold.entities[id];
@@ -35,11 +33,8 @@ export function foldParity() {
     }
   }
 
-  // entity→entity mounts: the fold's parent record vs the scene's linkage —
-  // AND, when linked, the child's parent-local transform vs the mount's own
-  // offset (the link can be right while the pose is wrong), so both are
-  // buckets. Part-socket mounts skip the pose check: attach bakes the part's
-  // live phase into the offset.
+  // entity→entity mounts: the fold's parent record vs the scene's linkage, and (when linked) the child's parent-local
+  // transform vs the mount's offset. Part-socket mounts skip the pose check: attach bakes the part's live phase in.
   for (const id of foldIds) {
     if (!sceneIds.has(id)) continue;
     const rel = fold.entities[id].parent ?? null;

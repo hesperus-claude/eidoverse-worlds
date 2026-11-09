@@ -1,14 +1,9 @@
-// warmqueue — the warm conductor (TEL0S_NOTES §16.2.A).
+// warmqueue — one serialized queue for pipeline warms: GLB compiles (assets.js), terrain (world.js), sky domes
+// (sky.js) and shadow-depth variants (below, driven by lightrig's casterPass). Concurrency is one: the GPU process
+// compiles one thing at a time while frames keep presenting (a 2-wide lane let compiles fight each other).
 //
-// One serialized queue for pipeline warms: GLB lib compiles (assets.js),
-// terrain (world.js), sky domes (sky.js) and shadow-depth variants (below,
-// driven by lightrig's casterPass). Concurrency is ONE — that is the point: the
-// GPU process compiles one thing at a time while frames keep presenting (a
-// 2-wide lane let compiles fight each other, §16.1d).
-//
-// Between items: one REAL requestAnimationFrame yield — never scheduler.yield,
-// whose same-turn continuation storm starves rAF on Chromium (§16.1a). Errors
-// are swallowed (house warm pattern) but counted in warmStats().
+// Between items, one real requestAnimationFrame yield (scheduler.yield starves rAF on Chromium). Errors are swallowed
+// but counted in warmStats().
 
 import { renderer, scene, sun, camera, THREE, TSL } from './core.js';
 import { beginWork, nextFrame } from './loadwork.js';
@@ -20,9 +15,8 @@ const queue = [];
 let running = false;
 const stats = { queued: 0, done: 0, failed: 0, lastLabel: null };
 
-// Priority classes: under plain FIFO, ambient compiles queued ahead of the
-// terrain compile the curtain waits on and slowed boot ~8×. GATE = what the
-// splash waits for; AMBIENT = background warmth. Stable FIFO within a class.
+// Priority classes (under plain FIFO, ambient compiles queued ahead of the terrain compile the curtain waits on).
+// Stable FIFO within a class.
 export const P_GATE = 0;     // arrival waits on this (terrain)
 export const P_MODEL = 1;    // a thing someone is about to see (default)
 export const P_AMBIENT = 2;  // sky domes, shadow-depth variants
@@ -32,8 +26,7 @@ export const P_AMBIENT = 2;  // sky domes, shadow-depth variants
  *  RUN; never rejects (errors are swallowed and counted). */
 export function warm(label, fn, { p = P_MODEL } = {}) {
   return new Promise((resolve) => {
-    // the record starts at enqueue so the wait is visible as its own phase
-    // (loadwork's doctrine: queue time must not masquerade as work time)
+    // the record starts at enqueue so queue time is its own phase, not work time
     const work = beginWork(label);
     work.phase('queued');
     const item = { label, fn, work, resolve, p };
@@ -57,9 +50,7 @@ async function pump() {
     stats.lastLabel = item.label;
     item.work.phase('warm');
     try {
-      // Charged: the warm's synchronous head only (for compileAsync, projection and render-list building). Its codegen
-      // runs after compileAsync's first yield in three's own yielding slices, and the link on the driver's thread;
-      // neither is measurable per frame from here. For warms the budget gates when an item STARTS.
+      // charged: the warm's synchronous head only; codegen and the link run off this frame. The budget gates when an item starts.
       const t0 = performance.now();
       const p = item.fn();
       spent('warm', performance.now() - t0, t0, grant);
@@ -72,23 +63,19 @@ async function pump() {
       item.resolve();
     }
     reportPending('warm', queue.length + 1);
-    await nextFrame();              // a REAL frame between items (§16.1a)
+    await nextFrame();              // a real frame between items
   }
   running = false;
   reportPending('warm', 0);
 }
 
-// `pending` counts queued items only — the item currently being warmed has
-// been shifted off the queue, so `running` is part of the honest busy answer
-// (the governor's loading grace reads both, §16.2.D).
+// `pending` counts queued items only; the item being warmed is off the queue, so the governor reads `running` too
 export const warmStats = () => ({ ...stats, pending: queue.length, running });
 
 // ---- shadow-depth pre-warm --------------------------------------------------
-// Warms a caster's depth pipelines through compileAsync BEFORE castShadow
-// flips, so the real shadow pass is a pure cache hit (§16.1c). The warm
-// material is pre-configured to the exact state three's renderObject() leaves
-// the real shadow material in, because compileAsync defers codegen past its
-// restore. Mechanism + three.webgpu.js line refs: docs/research/shadow-depth-prewarm.md
+// Warms a caster's depth pipelines through compileAsync before castShadow flips, so the real shadow pass is a cache
+// hit. The warm material is configured to the exact state three's renderObject() leaves the real shadow material in.
+// Mechanism and three line refs: docs/research/shadow-depth-prewarm.md
 
 const SHADOW_SIDE = {
   [THREE.FrontSide]: THREE.BackSide,
@@ -121,10 +108,8 @@ function ensureDepthWarm() {
   return true;
 }
 
-// The warm target: the REAL shadow map RT once it exists (same render context
-// as the real pass). Before the first shadow render, a 4×4 scratch RT with
-// setupRenderTarget's FORMATS (:44272-4285) — only formats enter the pipeline
-// key, and the compile never draws into it.
+// The warm target: the real shadow map RT once it exists; before the first shadow render, a 4×4 scratch RT with the
+// same formats (only formats enter the pipeline key; the compile never draws into it).
 function warmTarget() {
   if (sun.shadow?.map?.isRenderTarget) return sun.shadow.map;
   if (!scratchRT) {
@@ -138,12 +123,10 @@ function warmTarget() {
   return scratchRT;
 }
 
-/** Configure warmMat to the exact state renderObject() leaves the real
- *  per-light shadow material in for this caster material (:61181-61209) —
- *  so the compile path's save/mutate/restore is identity. */
+/** Configure warmMat to the exact state renderObject() leaves the real per-light shadow material in for this caster
+ *  material, so the compile path's save/mutate/restore is identity. */
 function configureFor(m) {
-  const sn = renderer._getShadowNodes(m); // cached per material ON THE RENDERER —
-                                          // the same instances the real pass uses
+  const sn = renderer._getShadowNodes(m); // cached per material on the renderer: the same instances the real pass uses
   warmMat.alphaTest = m.alphaTest;
   warmMat.alphaMap = m.alphaMap;
   warmMat.transparent = m.transparent || m.transmission > 0
@@ -154,32 +137,27 @@ function configureFor(m) {
   warmMat.positionNode = sn.positionNode ?? (m.positionNode?.isNode ? m.positionNode : null);
   warmMat.colorNode = sn.colorNode ?? baseColorNode;
   warmMat.depthNode = sn.depthNode ?? null;
-  // bump the version or a multi-material mesh's second round would reuse the
-  // first round's cached builder state (RenderObjects.get version-checks the
-  // material on chain reuse, :30436 — 'version' itself is in no cache key)
+  // bump the version, or a multi-material mesh's second round reuses the first round's cached builder state
   warmMat.needsUpdate = true;
 }
 
-// One compile round: this mesh, this material's depth config. A multi-material
-// mesh's groups dedupe to one pipeline key per round, so per-unique-material
-// rounds warm everything with zero waste.
+// One compile round: this mesh, this material's depth config (a multi-material mesh dedupes to one pipeline key per round).
 async function compileDepthRound(mesh, material) {
   configureFor(material);
   const saveVisible = mesh.visible;
   const saveCulled = mesh.frustumCulled;
   const prevOverride = scene.overrideMaterial;
   const prevTarget = renderer.getRenderTarget();
-  mesh.visible = true;         // compile's projectObject skips invisible (:60819)
-  mesh.frustumCulled = false;  // …and out-of-frustum (:60869) — restored below
+  mesh.visible = true;         // compile's projectObject skips invisible and out-of-frustum objects; restored below
+  mesh.frustumCulled = false;
   scene.overrideMaterial = warmMat;
   renderer.setRenderTarget(warmTarget());
   let compiled;
   try {
-    // the live scene as targetScene: the builder's env/fog inputs match the
-    // real pass exactly (both inert for an unlit shadow material — :30264)
+    // the live scene as targetScene, so the builder's env/fog inputs match the real pass
     compiled = renderer.compileAsync(mesh, sun.shadow.camera, scene);
   } finally {
-    // same synchronous block — no frame can observe any of these mutated
+    // same synchronous block: no frame can observe the mutation
     renderer.setRenderTarget(prevTarget);
     scene.overrideMaterial = prevOverride;
     mesh.visible = saveVisible;
@@ -188,11 +166,9 @@ async function compileDepthRound(mesh, material) {
   await (compiled?.catch(() => {}) ?? Promise.resolve());
 }
 
-/** Warm the LIT pipelines a body needs once it RECEIVES shadows: receiveShadow IS in the render-object cache key
- *  (three 0.186 RenderObject.js:856/:945; AnalyticLightNode only generates the shadow taps when the object
- *  receives), so the first lit frame after the flip would build a new program per material in-frame. Same
- *  save/mutate/restore shape as compileDepthRound: compileAsync captures the render object synchronously, the
- *  pipeline is cached by its shader code, and the later flip finds it. */
+/** Warm the lit pipelines a body needs once it receives shadows: receiveShadow is in the render-object cache key, so
+ *  the first lit frame after the flip would otherwise build a new program per material in-frame. Same
+ *  save/mutate/restore shape as compileDepthRound. */
 export function warmLit(label, getMeshes) {
   if (typeof renderer?.compileAsync !== 'function') return Promise.resolve();
   return warm(label, async () => {
@@ -212,10 +188,8 @@ export function warmLit(label, getMeshes) {
   }, { p: P_AMBIENT });
 }
 
-/** Warm every shadow-depth pipeline a caster will need, through the
- *  conductor. `getMeshes` is re-read when the item RUNS, so a caster
- *  released while queued warms nothing. Resolves when done (or when the
- *  warm is unsupported — the caller's flip then behaves exactly as today). */
+/** Warm every shadow-depth pipeline a caster will need. `getMeshes` is re-read when the item runs, so a caster
+ *  released while queued warms nothing. Resolves when done (or at once when the warm is unsupported). */
 export function warmDepth(label, getMeshes) {
   if (!ensureDepthWarm()) return Promise.resolve();
   return warm(label, async () => {

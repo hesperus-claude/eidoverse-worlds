@@ -1,7 +1,5 @@
-// profile — the PERSON noun's home (four-noun taxonomy): who you are,
-// where you are, what you're wearing, what you carry, who you know.
-// Identity up top (portrait = presence control, header), and four tabs.
-// satchel / worlds / friends have no server surface yet: their panes are fully clickable but aspirational.
+// profile — the person panel: identity up top (portrait = presence control, header) and four tabs (avatars, satchel,
+// worlds, friends). satchel / worlds / friends have no server surface yet; their panes say so.
 
 import { CONFIG, bus, colorFor, setName } from './base.js';
 import { registerXRPanel } from './xrpanels.js';
@@ -44,13 +42,8 @@ export function initProfile() {
   return frame;
 }
 
-// ---- the body: portrait (= presence control) · header · tabs · one pane
-//   • the portrait circle carries the profile glyph as its placeholder and IS
-//     the presence control: click → a Discord-style pop with present/away/busy
-//   • tabs across the top under the header (side tabs fight 420 px; bottom
-//     tabs read as a dock): avatars · satchel · worlds · friends
-//   • the last tab is remembered per browser (ew-profile-tab)
-//   • the bodies list is the avatars tab's content
+// ---- the body: portrait (= presence control: click → present/away/busy) · header · tabs · one pane
+// the last tab is remembered per browser (ew-profile-tab); the bodies list is the avatars tab's content
 const TABS = [
   ['avatars', 'person-arms-spread', 'bodies you have worn'],
   ['satchel', 'backpack', 'personal inventory'],
@@ -64,9 +57,7 @@ const PRESENCE_WORD = { present: 'present · here and active', away: 'away · id
 function paint() {
   if (!frame?.visible && frame?.body.dataset.painted) return;
   frame.body.dataset.painted = '1';
-  // getMyAvatarName() is INTENT, not fact (it never clears when a body fails
-  // to load); getMe() is the real signal (set only after makeAvatar resolves).
-  // Name it when there IS a body; say None when there isn't. Both panels
+  // getMyAvatarName() is intent (it never clears when a body fails to load); getMe() is the real signal. Both panels
   // repaint on `avatar-worn`, so a late body is not left stale.
   const avatar = getMe() ? (getMyAvatarName() || 'default') : 'None';
   const st = presence();
@@ -134,9 +125,7 @@ function paintPane(pane) {
     return;
   }
 
-  // SAY SO WHEN IT IS EMPTY BY DESIGN: an empty box is indistinguishable from
-  // a broken one. satchel/worlds/friends have no server surface yet, so the
-  // panes say which.
+  // say so when a pane is empty by design: an empty box is indistinguishable from a broken one
   const STUB = {
     satchel: 'a stub — what you carry, once there is somewhere to carry it from.',
     worlds: 'a stub — places you know, once the server keeps a list.',

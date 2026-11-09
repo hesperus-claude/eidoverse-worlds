@@ -16,8 +16,7 @@ import { escapeHtml as esc } from './markup.js';
 // the fill icon set is optional: without it the loupe button is its word
 const fsvg = (name, size) => (typeof icons.fsvg === 'function' ? icons.fsvg(name, size) : '');
 
-// HTML-attribute escaper for the tooltip strings below (was used un-imported —
-// a real hover threw ReferenceError; mocked-innerHTML shots never caught it).
+// HTML-attribute escaper for the tooltip strings below
 
 // data colors, not chrome: a CVD-safe cheap→dear ramp that means the same everywhere, so it does NOT follow the accent
 export const TIERS = TIER_COLORS;   // shared/perfrank.js: the server ranks library cards by the same rule

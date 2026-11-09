@@ -10,12 +10,11 @@
 //   aimYaw, aimPitch         rad    where the occupant looks, relative to the socket's forward (riding presence)
 //   param.<name>             the thing's `params` component (scripts write it)
 //
-// Every value here is a closed form of data every client already has — the motion component, the server clock, the
-// occupant's presence — so two clients looking at one swing put the occupant's clip at the same frame. (A thing moved by
-// physics, not by a motion component, reads speed/turn 0 here: physics is a later port.)
+// Every value is a closed form of data every client already has (the motion component, the server clock, the
+// occupant's presence), so two clients put the occupant's clip at the same frame. A thing moved by physics rather than
+// a motion component reads speed/turn 0.
 //
-// Pure: imports only the motion closed forms (motioneval.js, itself pure and shared with the agent) and the node reader (names.js motionNode). It lives beside
-// them in client/lib because the browser is served client/ at its root: shared/ code can't reach back into it.
+// Pure: imports only motioneval.js and names.js motionNode.
 
 import { evalWholeMotion, since, ampOf, rateOf } from './motioneval.js';
 import { motionNode } from '../../shared/protocol/names.js';
@@ -30,7 +29,7 @@ function carrierMotion(comp, sock) {
   if (!comp) return null;
   const part = typeof sock?.part === 'string' ? sock.part : null;
   if (part) {
-    // the motion on that node: a keyed motion whose node it is (motioneval.js motionNode: the value's `node`, never the key)
+    // the motion on that node: a keyed motion whose node it is (names.js motionNode: the value's `node`, never the key)
     const k = Object.keys(comp).find((x) => x.startsWith('motion:') && comp[x]?.type && motionNode(x, comp[x]) === part);
     const m = (k ? comp[k] : null) ?? (comp.motion?.part === part ? comp.motion : null);
     if (m?.type) return { m, part: true };
