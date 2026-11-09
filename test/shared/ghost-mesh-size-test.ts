@@ -3,7 +3,7 @@
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/shared/ghost-mesh-size-test.ts
 process.env.WORLD_TOKEN = "";
-import { ghostMeshSize } from "../../client/lib/meshghost.js";
+import { ghostMeshSize } from "../../client/lib/meshdefaults.js";
 import { COMPONENTS } from "../../shared/protocol/componentspec.js";
 import * as OP from "../../shared/requests.js";
 import { scratchWorld } from "../protocol/scratchworld.ts";

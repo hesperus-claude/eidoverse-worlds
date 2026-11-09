@@ -1,3 +1,4 @@
+// meshdefaults — a Create ▸ mesh's default size per shape, and the placement ghost's size at a scale (build.js).
 // Pure (no three, no DOM) so test/shared/ghost-mesh-size-test.ts can run every shape × scale through the real authority.
 import { COMPONENTS } from '../../shared/protocol/componentspec.js';
 export const MESH_DEFAULT = { box: [1, 1, 1], sphere: [1, 1, 1], cylinder: [1, 1, 1], plane: [2, 0.05, 2], capsule: [0.5, 1.5, 0.5] };

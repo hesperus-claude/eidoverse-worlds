@@ -23,7 +23,7 @@ import { reindexCollider } from './colliders.js';
 import { heightAt } from './terrain.js';
 import { net, sendDrag } from './net.js';
 import { scaleOf } from '../../shared/scale3.js';
-import { MESH_DEFAULT, ghostMeshSize } from './meshghost.js';
+import { MESH_DEFAULT, ghostMeshSize } from './meshdefaults.js';
 import { engage, release } from './keyhints.js';
 import { placeRefusal } from '../../shared/blueprint.js';
 import { myState, mouse, setPointerClaim, setBuildingProbe } from './controller.js';
