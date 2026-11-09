@@ -42,6 +42,8 @@ export const OPT_MEM_BUDGET_MB = envNumber("OPT_MEM_BUDGET_MB", Math.floor(usabl
 // estimate above: measured 259MB for a 5.4MB store GLB (x48). The KTX2/LOD
 // arms were not measured separately and are assumed the same order.
 export const OPT_COST_FACTOR = envNumber("OPT_COST_FACTOR", 48, (n) => n > 0);
+/** How long the pump waits on one optimize child before killing it (0 = never); read per child. */
+export const optChildTimeoutMs = () => envNumber("OPT_CHILD_TIMEOUT_MS", 1_800_000);
 // How long the screenshot broker (screenshots.ts) waits for a renderer's frame before GET /snap answers 504, in s.
 // 12 suits a GPU renderer; a software one (SwiftShader) can need 10-20. At most 225: Bun.serve's idleTimeout cap (255)
 // less a roamer's 25 s journey and 5 s slack; a larger value is refused and 12 used. The per-request deadline

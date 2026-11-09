@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, readdir
 import { addressOf } from "./peer.ts";
 import { bearerOf } from "./access.ts";
 import { join, basename, dirname, relative } from "node:path";
-import { JOIN_TOKEN, UPLOAD_CAP, IMAGE_CAP, ROOT, OPT_DIR, STORE_MIN, LIBRARY_DIR, SKIP_OPT_SWEEP, OPT_MEM_BUDGET_MB, OPT_COST_FACTOR } from "./config.ts";
+import { JOIN_TOKEN, UPLOAD_CAP, IMAGE_CAP, ROOT, OPT_DIR, STORE_MIN, LIBRARY_DIR, SKIP_OPT_SWEEP, OPT_MEM_BUDGET_MB, OPT_COST_FACTOR, optChildTimeoutMs } from "./config.ts";
 import { isStoreOriginal, ktx2VariantPath, lodVariantPath, storeShadowsMissing, verdictStands, freshOver, diskIdentity, sourceSidecar, recordedSource, sameIdentity, verdictMarker, readVerdict, KTX2_RECIPE, LOD_RECIPE } from "./store-variants.ts";
 import { agentTokens, aid1JoinIdentity, sessionOfRequest } from "./auth.ts";
 import { worlds } from "./world.ts";
@@ -184,7 +184,7 @@ async function pumpOptimize() {
         optQueue.length = 0; break;
       }
       // never wait forever on a child: one that never answers is killed and deferred (test/server/optimize-pump-test.ts 6b)
-      const stderr = drain(proc.stderr as ReadableStream<Uint8Array>), limitMs = Number(process.env.OPT_CHILD_TIMEOUT_MS ?? 1_800_000);
+      const stderr = drain(proc.stderr as ReadableStream<Uint8Array>), limitMs = optChildTimeoutMs();
       let timedOut = false;
       const killer = limitMs > 0 ? setTimeout(() => { timedOut = true; proc.kill("SIGKILL"); }, limitMs) : null;
       const code = await proc.exited; if (killer) clearTimeout(killer);

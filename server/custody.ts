@@ -6,12 +6,13 @@ import { appendDurable, readLogBytes, replaceDurable, mkdirDurable, withFileLock
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { envNumber } from "./limits.ts";
 
 type Key = { pub: string; priv: string };
 type File = { sequencer?: Key; operator?: Key; holders: Record<string, Key> };
 
 /** How long a mint waits for another process's mint to finish before it gives up. */
-const LOCK_WAIT_MS = Number(process.env.EIDO_CUSTODY_LOCK_WAIT_MS) || 10_000;   // how long a mint waits on a held lock (a slow host may raise it)
+const LOCK_WAIT_MS = envNumber("EIDO_CUSTODY_LOCK_WAIT_MS", 10_000, (n) => n > 0);   // how long a mint waits on a held lock (a slow host may raise it)
 const mk = (): Key => {
   const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
   return { pub: "ed25519:" + (publicKey.export({ format: "jwk" }) as { x: string }).x, priv: privateKey.export({ format: "der", type: "pkcs8" }).toString("base64") };
