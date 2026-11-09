@@ -1,15 +1,9 @@
-// server/worldlog.ts — a world's log as this server holds it: the authority over the world's directory.
-//
-// Every world this server serves speaks the current protocol (its directory holds world.jsonl, line 0 a genesis saying
-// {dialect, v: 4}: isWorldDir); World
-// (server/world.ts) holds one WorldLog. Writes: every write is a REQUEST through the authority (shared/protocol/authority.js: one
-// `admit`, act + change entries, the ts from this server's clock); request() is the one door for a person's write; the
-// authority's own clocks (tick, settle, expire-roles) enter through their methods below (authorityTick…).
-//
-// What clients see: every client folds the log itself. A joiner adopts the authority's snapshot (clientSnapshot) and folds the raw entries
-// it is sent as {type: "log"}. `state` is the VIEW of the fold (shared/protocol/view.js viewState) plus the chat window,
-// for this server's own readers (/geom, model warm-up, the chat window); it is rebuilt by its next reader after a
-// write. Chat lines (say entries) are numbered seq × 1000 in the window and in readHistory.
+// server/worldlog.ts — a world's log as this server holds it: the authority over the world's directory. World (server/world.ts)
+// holds one WorldLog. Every write is a request through the authority (shared/protocol/authority.js); request() is the one
+// door for a person's write, and the authority's own clocks (tick, settle, expire-roles) enter through their methods below.
+// Every client folds the log itself: a joiner adopts the authority's snapshot (clientSnapshot) and folds the raw entries it is
+// sent as {type: "log"}. `state` is the view of the fold (shared/protocol/view.js) plus the chat window, for this server's own
+// readers. Chat lines (say entries) are numbered seq × 1000.
 import fs from "node:fs";
 import crypto from "node:crypto";
 import path from "node:path";
@@ -34,9 +28,8 @@ export type ChatLine = { seq: number; ts: number; actor: string; verb: "say"; ar
 /** The view of the fold (shared/protocol/view.js viewState) plus the chat window. */
 export type WorldView = { entities: Record<string, Any>; terrain: Any; grass: Any; sky: Any; assets: Any[]; recentChat: Any[]; chatTotal: number; roles: Record<string, Any>; bans: Record<string, Any> };
 
-/** An entry as clients are sent it: without the chain fields (world, head, sig) and an act/say body's salt. Clients
- *  adopt a cut at join and fold ops; nothing reads those fields, and on a two-character say they were 380 of its 488
- *  bytes (Commons audit #8). The log on disk keeps them, and the authority's history serves them whole. */
+/** An entry as clients are sent it: without the chain fields (world, head, sig) and an act/say body's salt, which nothing
+ *  client-side reads and which dominated a short say's bytes. The log on disk keeps them. */
 function wireEntry(e: Any) {
   if (!e || typeof e !== "object") return e;
   const { world: _w, head: _h, sig: _s, ...rest } = e;
@@ -52,7 +45,7 @@ export type LogHost = {
   rightsChanged(): void;                   // tell every client its rights again
   debug(kind: string, detail: Record<string, unknown>): void;
   /** who is here (embodied, not spectating): their identity and last known position. Scripts' timers sleep when this
-   *  is empty, and world.near(r) reads it (research 41 §3.5, §3.8) */
+   *  is empty, and world.near(r) reads it */
   present?(): { id: string; at: number[] | null }[];
   /** send to one identity's embodied leg(s); false when they aren't here */
   toActor?(actor: string, msg: unknown): boolean;
@@ -286,8 +279,8 @@ export class WorldLog {
     try { this.requestSync(actor, "leave", {}); } catch (err) { console.error(`[world:${this.name}] leave for ${actor}`, err); }
   }
 
-  /** Scripts (research 41): the authority's timers on this server's clock (server.ts calls World.scripts.tick once a second). What
-   *  they write goes out like any write. */
+  /** Scripts: the authority's timers on this server's clock (server.ts calls World.scripts.tick once a second). What they
+   *  write goes out like any write. */
   tickScripts() {
     if (this.retired) return;
     if (this.live.state().status !== "ok") return;
@@ -302,8 +295,7 @@ export class WorldLog {
     try { ended = authorityExpireRoles(this.live); } finally { if (this.live.entries.length > from) this.afterWrite(from); }
     return ended;
   }
-  /** The engine's heartbeat (server.ts `physics`): rests log at tick cadence with nobody asking, and requests no longer
-   *  carry the settling (DESIGN-physics-responsiveness §1; STRIKES PH-S1-2: 150–500 ms per request during a cascade). */
+  /** The engine's heartbeat (server.ts `physics`): rests log at tick cadence with nobody asking, so requests no longer carry the settling. */
   settle() {
     if (this.retired) return;
     if (this.live.state().status !== "ok") return;
@@ -394,14 +386,14 @@ export class WorldLog {
   mutedHere(actor: string, channel?: "voice" | "chat"): Any { return muteOf(this.live, actor, channel); }
   /** Everything in force now, per identity (the sweep that re-applies voice mutes reads it). */
   sanctions(): Record<string, Any> { return sanctionsNow(this.live); }
-  /** The most senior owner (reset is theirs alone: research §owner-only). */
+  /** The most senior owner (reset is theirs alone). */
   seniorOwner(): string | null { return seniorOwnerOf(this.live); }
   /** @world.access ({join, max?, soft?}) or null. */
   access(): Any { const a = this.live.state().entities?.["@world"]?.c?.access; return a && typeof a === "object" ? a : null; }
   /** Has this identity a roles:<id> here (access.join 'listed')? */
   listedHere(actor: string): boolean { return !!this.live.state().entities?.["@world"]?.c?.[`roles:${actor}`]; }
-  /** Slice 3b: what a client that folds the log adopts at join: the fold itself (shared/protocol/replica.js wireState), its head,
-   *  and the asker's own acts that undo could still take back (newest last), so Ctrl+Z survives a reload. */
+  /** What a client that folds the log adopts at join: the fold itself (shared/protocol/replica.js wireState), its head, and
+   *  the asker's own acts that undo could still take back (newest last), so Ctrl+Z survives a reload. */
   clientSnapshot(actor: string) {
     const X = actIndexOf(this.live); const E = this.live.entries;
     const acts: number[] = X.actsOf.get(actor) ?? [], mine: number[] = [];   // newest first, so only the last 40 are read
@@ -414,8 +406,7 @@ export class WorldLog {
     this.poses[id] = settle(pose);
     try { replaceDurable(this.posesPath, JSON.stringify(this.poses)); } catch (err) { console.error(`[world:${this.name}] poses`, err); }
   }
-  /** What the snapshot says about this world's protocol (agents read it to route their tools). */
-  /** What the snapshot says about this world's protocol (D5: {dialect, v} gate a joiner; `world` is the id, `name` the directory). */
+  /** What the snapshot says about this world's protocol ({dialect, v} gate a joiner; `world` is the id, `name` the directory). */
   info() { return { name: this.name, verbs: "send {type: 'request', id, verb, args}; reply {type: 'reply', id, …}" }; }
 }
 
@@ -452,7 +443,7 @@ export function foundersLedger(): Record<string, { account: string; actor: strin
 /** Why `name` can't be founded (a sentence for the person), or null when it can. */
 export function foundRefusal(name: string, exists: (n: string) => boolean): string | null {
   if (!FOUND_NAME.test(name)) return `"${name.slice(0, 40)}" can't be a world's name: 3 to 32 lowercase letters, digits and '-', starting with a letter or digit`;
-  if (exists(name)) return `"${name}" isn't available — pick another name`;   // generic: creating may learn a name is taken, never whose or what kind (§F F-3)
+  if (exists(name)) return `"${name}" isn't available — pick another name`;   // generic: creating may learn a name is taken, never whose or what kind
   return null;
 }
 /** Found `name` for `actor` (its owner), recording it in the ledger. Built aside, renamed into place: nothing half-made. */
@@ -473,8 +464,8 @@ export function foundOwnedWorld(name: string, actor: string, account: string, ti
     const r = authorityRequest(w, actor, "create-world", { title: String(title || name).slice(0, 80) });
     if (!r.ok) throw new Error(`the authority refused the founding: ${r.refused?.reason}`);
     if (fs.existsSync(dest)) throw new Error(`"${name}" isn't available — pick another name`);   // taken while this one was built
-    // answered only once durable (house 6344940039). The ledger row first: a crash between leaves a row for no world, which a
-    // retry overwrites, never a world with no row
+    // answered only once durable. The ledger row first: a crash between leaves a row for no world, which a retry overwrites,
+    // never a world with no row
     replaceDurable(foundersPath(), JSON.stringify({ ...L, [name]: { account, actor, ts: now } }, null, 1)); rowWritten = true;
     fs.renameSync(tmp, dest); renamed = true;
     // the world is there; its name not yet synced is said, not a failed founding
@@ -543,7 +534,7 @@ export function forkWorld(src: WorldLog, to: string, forker: string): { ok: true
     const acts = copyInto(w, forker, st, skip);
     const back = w.state();
     if (canonOf(back, skip) !== canonOf(st, skip)) throw new Error("the copy doesn't match the source (nothing was kept)");
-    fs.renameSync(tmp, dest); syncDir(WORLDS_DIR);   // the fork's name, durable before it is answered (house 6344940039)
+    fs.renameSync(tmp, dest); syncDir(WORLDS_DIR);   // the fork's name, durable before it is answered
     // roles held by names with no account yet travel too: a later bind (operator-bind) reaches this copy as well, so it is counted and said
     const dir = directoryFor(WORLDS_DIR);
     const importedRoles = Object.keys(st.entities["@world"]?.c ?? {}).filter((k) => k.startsWith("roles:") && !skip(k) && dir.entry(k.slice(6))?.kind === "imported").length;
@@ -565,7 +556,7 @@ export function resetWorld(log: WorldLog): string {
   const st = log.live.state();
   const held = Object.entries<Any>(st.entities["@world"]?.c ?? {}).filter(([k, v]) => k.startsWith("roles:") && isOwner(v)).map(([k]) => k.slice(6));
   if (!held.length) throw new Error("this world has no owner to found it again");
-  // the senior owner founds it again, so seniority survives the reset (bot review of #260, #13: key order made another the founder)
+  // the senior owner founds it again, so seniority survives the reset
   const senior = seniorOwnerOf(log.live), owners = senior && held.includes(senior) ? [senior, ...held.filter((o) => o !== senior)] : held;
   const prev = { world: log.live.worldId, name: log.name, head: headOf(log.live) };
   const dir = path.join(WORLDS_DIR, log.name);
@@ -593,13 +584,13 @@ export function resetWorld(log: WorldLog): string {
   mkdirDurable(arch);
   // from the first rename on, a failure has changed something: it says where the old log went
   dropCache(dir);   // derived from the log that leaves (server/statecache.ts): the fresh world derives its own
-  // the old files are linked into the archive, then the fresh log renamed OVER world.jsonl: no moment, crash or failure, leaves the
-  // world without a log (bot review of #260, #10: moved out first, a crash between the renames lost the world from the listing)
+  // the old files are linked into the archive, then the fresh log renamed over world.jsonl: no moment, crash or failure leaves the
+  // world without a log
   const logFile = path.join(dir, "world.jsonl"), poses = path.join(dir, "poses.json"); let linked = false, posesMoved = false;
   try {
     if (fs.existsSync(logFile)) { keepCopy(logFile, path.join(arch, "world.jsonl")); linked = true; }
     if (fs.existsSync(poses)) { fs.renameSync(poses, path.join(arch, "poses.json")); posesMoved = true; }   // the old world's poses: the archive's now
-    syncDir(arch);   // the archive's names first, then the world's: a crash never loses the old log (house 6344940039)
+    syncDir(arch);   // the archive's names first, then the world's: a crash never loses the old log
     fs.renameSync(path.join(fresh, "world.jsonl"), logFile);
   } catch (e: Any) { const err: Any = new Error(String(e?.message ?? e)); err.movedTo = arch; err.freshAt = fresh;
     // not swapped: the old log and poses are put back where they were, and the archive goes (the world stays live); logMoved

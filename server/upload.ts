@@ -1,6 +1,6 @@
-// Live asset ingestion (TEL0S_NOTES §15): POST /upload (models, avatars, pictures, heightmaps, sound), with the
-// machinery only it feeds: the per-IP upload rate windows, the store-optimization queue (a subprocess builds each
-// variant off the request path), and the deferred boot sweeps. routes.ts delegates the endpoint here.
+// Live asset ingestion: POST /upload (models, avatars, pictures, heightmaps, sound), with the machinery only it feeds: the
+// per-IP upload rate windows, the store-optimization queue (a subprocess builds each variant off the request path), and the
+// deferred boot sweeps. routes.ts delegates the endpoint here.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, readdirSync, statSync, rmSync } from "node:fs";
 import { addressOf } from "./peer.ts";
@@ -16,8 +16,7 @@ import { readCappedBytes } from "./reqbody.ts";
 import { checkFile } from "./buildcheck-queue.ts";
 import { envNumber } from "./limits.ts";
 
-/** What the handler needs from Bun's server object, structurally: the
- *  socket address behind the nginx front. */
+/** What the handler needs from Bun's server object, structurally: the socket address behind the proxy. */
 type UploadSrv = { requestIP(req: Request): { address: string } | null };
 
 const uploadWin = new Map<string, { t: number; n: number }>(); // per-IP upload rate windows
@@ -25,8 +24,8 @@ let tripoImportBusy = false;   // one Tripo import at a time — they cost CPU-s
 
 // ---- store optimization -----------------------------------------------------
 // Every uploaded GLB gets a draco+webp shadow in store-min/, a KTX2 variant and a geometry LOD beside the original
-// (store-variants.ts; §20a), each built by a SUBPROCESS: draco encoding is CPU-seconds of synchronous wasm that would
-// freeze pose relay for every world. One file at a time; the server never waits on it.
+// (store-variants.ts), each built by a subprocess: draco encoding is CPU-seconds of synchronous wasm that would freeze pose
+// relay for every world. One file at a time; the server never waits on it.
 type OptItem = { src: string; dest: string; mode?: "--ktx2" | "--ktx2-vrm" | "--ktx2-img" | "--lod"; force?: boolean };
 const optQueue: OptItem[] = [];
 let optRunning = false;
@@ -164,10 +163,9 @@ async function pumpOptimize() {
       const estMB = Math.ceil(Bun.file(src).size * OPT_COST_FACTOR / 1_000_000);
       if (OPT_MEM_BUDGET_MB && estMB > OPT_MEM_BUDGET_MB) { defer(dest, `estimated ${estMB}MB > budget ${OPT_MEM_BUDGET_MB}MB`); continue; }
       mkdirSync(dirname(dest), { recursive: true });
-      // process.execPath = the running bun binary (PATH under systemd has no bun). Under a budget (Linux enforces
-      // RLIMIT_DATA) the child runs beneath sh's `ulimit -d` (KB): an encode that outgrows it dies AS THE CHILD (a
-      // signal, exit ≥128). Not RLIMIT_AS: bun reserves far more address space than it touches. The wrapper's own
-      // failures (126: limit not set; 127: exec failed) never read as a content verdict.
+      // process.execPath = the running bun binary (PATH under systemd has no bun). Under a budget the child runs beneath sh's
+      // `ulimit -d` (KB; RLIMIT_DATA, not RLIMIT_AS: bun reserves far more address space than it touches), so an encode that
+      // outgrows it dies as the child. The wrapper's own failures (126, 127) never read as a content verdict.
       const capped = OPT_MEM_BUDGET_MB > 0 && process.platform === "linux";
       // OPT_CMD: a harness may own the child (test/server/optimize-pump-test.ts) — the real optimizer otherwise (logged at boot)
       // a .js/.ts OPT_CMD runs under this bun: a shebang script is no executable on Windows (EFTYPE)
@@ -267,8 +265,7 @@ export function sweepStore() {
   if (SKIP_OPT_SWEEP) return;
   const dir = join(OPT_DIR, "store");
   if (!existsSync(dir)) return;
-  // isStoreOriginal, not endsWith(".glb"): variants live here and end in .glb too, and must never queue as uploads
-  // (§20c). The pump skips a shadow that already exists.
+  // isStoreOriginal, not endsWith(".glb"): variants live here and end in .glb too. The pump skips a shadow that already exists.
   const pending = readdirSync(dir).filter((f) => {
     if (!isStoreOriginal(f)) return false;
     const m = storeShadowsMissing(join(dir, f), STORE_MIN);
@@ -279,10 +276,9 @@ export function sweepStore() {
   for (const f of pending) queueOptimize(join(dir, f));
 }
 setTimeout(sweepStore, 5000).unref?.();   // a harness that imports this must not be held open by the timer
-/** The library sweep (§20a, VRMs §20c, loose images §20d): variants at OPT_DIR/<rel>.ktx2.glb / .ktx2.vrm / .ktx2 and
- *  LODs, served only on ?ktx2=<key> (routes.ts, shared/ktx2.js). PATH-PRESERVING (basename() collides across library
- *  rels), through the same serial pump. VRMs get --ktx2-vrm only (textures swapped, the rest byte-preserved: optimize.ts).
- *  Avatars come from the overlay first, then the library: the base serving prefers. */
+/** The library sweep: variants at OPT_DIR/<rel>.ktx2.glb / .ktx2.vrm / .ktx2 and LODs, served only on ?ktx2=<key> (routes.ts,
+ *  shared/ktx2.js). Path-preserving (basenames collide across library rels), through the same serial pump. VRMs get --ktx2-vrm
+ *  only (textures swapped, the rest byte-preserved). Avatars come from the overlay first, then the library, as serving does. */
 export function sweepLibrary() {
   if (SKIP_OPT_SWEEP) return;
   if (ktx2Skip) return;
@@ -319,8 +315,8 @@ export function sweepLibrary() {
   // overlay first (it wins in routes.ts serving and the /avatars roster)
   walk(OPT_DIR, join(OPT_DIR, "eidoverse", "assets", "vrms"), [".vrm"], "--ktx2-vrm");
   walk(LIBRARY_DIR, join(LIBRARY_DIR, "eidoverse", "assets", "vrms"), [".vrm"], "--ktx2-vrm");
-  // §20d loose toolkit images: CURATED dirs ONLY. --ktx2-img pre-bakes the vertical flip their loader applies; anywhere
-  // else (thumbnails, uploads) a pre-flipped variant would be mirrored
+  // loose toolkit images: curated dirs only. --ktx2-img pre-bakes the vertical flip their loader applies; anywhere else
+  // (thumbnails, uploads) a pre-flipped variant would be mirrored
   walk(LIBRARY_DIR, join(LIBRARY_DIR, "eidoverse", "assets", "grass"), [".png"], "--ktx2-img");
   walk(LIBRARY_DIR, join(LIBRARY_DIR, "eidoverse", "assets", "sky"), [".png", ".jpg", ".jpeg"], "--ktx2-img");
   walk(LIBRARY_DIR, join(LIBRARY_DIR, "eidoverse", "assets", "particle_textures"), [".png"], "--ktx2-img");
@@ -395,7 +391,7 @@ export function sniffAudio(b: Uint8Array): "mp3" | "ogg" | "wav" | "webm" | "m4a
 /** The 415 for main's `/upload?as=script`: a script is the world authority's `upload {text}` request now. */
 export const SCRIPT_MOVED = "not stored: /upload?as=script went with the old protocol. Send the source as the world's upload {text} request (an agent: act {verb: \"upload\", args: {text}}); its reply's src goes in set {id, component: \"script:<name>\", value: {src, …}} (docs/guide/SCRIPTS.md)";
 
-// ?token= is deprecated (tokens in URLs land in access logs; RFC 9745 Deprecation header). Removal waits on Orrery moving to the header (Mica, #22)
+// ?token= is deprecated (tokens in URLs land in access logs; RFC 9745 Deprecation header). Removal waits on Orrery moving to the header
 const warnedQuery = new Set<string>();
 export async function handleUpload(req: Request, url: URL, srv: UploadSrv): Promise<Response> {
   const r = await uploadBy(req, url, srv);
@@ -430,7 +426,7 @@ async function uploadBy(req: Request, url: URL, srv: UploadSrv): Promise<Respons
   if (u.n > 4) return new Response("upload rate limit (4/min)", { status: 429 });
   const body = await readCappedBytes(req, UPLOAD_CAP);
   if (body === null) return new Response(`too large (${UPLOAD_CAP / 1e6}MB cap)`, { status: 413 });
-  // main's script store left with the old protocol: say where a script goes now (decision table row 12)
+  // main's script store left with the old protocol: say where a script goes now
   if (url.searchParams.get("as") === "script") return new Response(SCRIPT_MOVED, { status: 415 });
   if (url.searchParams.get("as") === "image") {
     // Pictures: PNG, JPEG or WebP, content-addressed into store/images/<hash>.<ext>, no optimize pass. The kind is

@@ -1,24 +1,9 @@
-// buildcheck — what a model will be like to walk into, measured before anyone
-// spawns it. Advisory: nothing here refuses an upload.
-//
-// The model is fitted exactly as a spawn of it would be (client/lib/colliders.js)
-// and explored with the walking body's own rules (mcpl/navgrid.ts: where a
-// capsule — the mover's body, shared/mover.js MOVER.body — can stand, and every move it can make), on a lattice
-// over its footprint and a margin of ground around it. From that:
-//
-//   - whether it is walk-in at all (a small model is one solid box);
-//   - its floors, and how much of each can be reached from the ground outside;
-//   - for every covered area that can't be, the likely reason: a passage
-//     narrower than a body (it IS reachable for a slimmer one), a rise higher
-//     than a step, a climb something at hip height stops (an overhanging
-//     landing), or simply no way in;
-//   - suggested rooms (covered floor, split where it narrows), doors (where
-//     rooms meet the outside or each other) and stairs (what joins floors),
-//     ready to name as places;
-//   - the draw-call / triangle budget.
-//
-// Runs in its own process (server/buildcheck-run.ts): it loads the collider
-// module, and a check can take seconds — neither belongs in the sequencer.
+// buildcheck — what a model will be like to walk into, measured before anyone spawns it. Advisory: nothing here refuses an upload.
+// The model is fitted as a spawn of it would be (client/lib/colliders.js) and explored with the walking body's own rules
+// (mcpl/navgrid.ts, shared/mover.js MOVER.body) on a lattice over its footprint. From that: whether it is walk-in at all; its
+// floors and how much of each is reachable from outside; for each unreachable area the likely reason (too narrow, a rise too
+// high, a failed climb, no way in); suggested rooms, doors and stairs; the draw-call / triangle budget.
+// Runs in its own process (server/buildcheck-run.ts): it loads the collider module and can take seconds.
 
 import { collisionTriangles } from "./geometry.ts";
 import { glbPerfOfFile } from "./glbperf.ts";
@@ -166,10 +151,8 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
   const reach = bfs(body, rim, () => true);
 
   // ---- floors: the covered heights with room to stand
-  // a tabletop has open air and then a floor a metre or so beneath it; a body
-  // can't step onto it, and it is no floor to reach. Looked for with front
-  // faces only: from inside a solid plinth the first face down is its own
-  // underside, seen from behind, and doesn't count.
+  // a tabletop has open air and then a floor beneath it; a body can't step onto it. Looked for with front faces only: from
+  // inside a solid plinth the first face down is its own underside, seen from behind.
   const bvh = [...C.nearColliders((mn[0] + mx[0]) / 2, (mn[2] + mx[2]) / 2, Math.max(w, d))].find(([id]: any) => id === "model")?.[1]?.exact?.bvh;
   const down = new THREE.Ray(new THREE.Vector3(), new THREE.Vector3(0, -1, 0)), up_ = new THREE.Ray(new THREE.Vector3(), new THREE.Vector3(0, 1, 0));
   const furniture = (n: N) => {
@@ -216,12 +199,8 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
     for (const n of comp) notFurniture.add(key(n.i, n.j, n.y));
   }
   const covered = roomyCovered.filter((n) => notFurniture.has(key(n.i, n.j, n.y)));
-  // A floor is a height a lot of standing room shares; a stair's treads
-  // each hold a little. So heights are binned (5cm), the bins holding a
-  // square metre or more are floors (with neighbouring dense bins — a
-  // floor that isn't quite level), and the sparse heights near a floor (a
-  // threshold sill) join it. Chaining height to nearest height instead runs
-  // a shallow stair's treads from one floor into the next.
+  // A floor is a height a lot of standing room shares; a stair's treads each hold a little. Heights are binned (5 cm), the
+  // bins holding a square metre or more are floors (with neighbouring dense bins), and sparse heights near a floor (a sill) join it.
   const BIN = 0.05, binOf = (y: number) => Math.round(y / BIN);
   const bins = new Map<number, N[]>();
   for (const n of covered) (bins.get(binOf(n.y)) ?? bins.set(binOf(n.y), []).get(binOf(n.y))!).push(n);
@@ -314,14 +293,9 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
   }
 
   // ---- suggested rooms: the space walls enclose on each floor
-  // Furniture splits a floor's standing room (a table across the middle of a
-  // room narrows it like a doorway) but not its walls, so rooms are read from
-  // ROOM SPACE: columns under cover, with floor at this level (a stairwell
-  // is a hole in it), and no WALL — something solid at 1.4–2.0m above the
-  // floor, within a body's radius: above chair backs, tables and benches,
-  // below hanging lamps and ceiling beams; walls, tall shelves and a door
-  // standing open all cross it. (The probe: the collider code's own wall
-  // band, for a 0.4m-tall body whose feet are 1.5m up.)
+  // Rooms are read from room space: columns under cover, with floor at this level, and no wall (something solid at 1.4–2.0 m
+  // above the floor within a body's radius: above chair backs and tables, below lamps and beams). Furniture narrows a
+  // floor's standing room but not its walls.
   const rooms: CheckReport["suggested"]["rooms"] = [];
   let roomSeq = 0;                                        // ids never reused, though rooms are dropped
   const roomOf = new Map<string, string>();               // standing node -> room
