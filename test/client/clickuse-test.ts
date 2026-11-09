@@ -13,9 +13,9 @@ const STUBS: Record<string, string> = {
     export const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 100); camera.position.set(0, 1.6, 0); camera.lookAt(0, 0.4, -3); camera.updateMatrixWorld(true);
     const L = {}; export const canvas = { style: {}, addEventListener: (k, f) => { (L[k] ??= []).push(f); }, getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }), _fire: (k, e) => { for (const f of L[k] ?? []) f(e); } };
     globalThis.__cu.core = { THREE, camera, canvas };`,
-  myview: `export const outOfMyView = () => false;`,
+  'edit/myview': `export const outOfMyView = () => false;`,
   world: `export const entities = new Map(); export const bags = {}; export const bagOf = (id) => bags[id]; export const socketsOn = () => []; globalThis.__cu.world = { entities, bags };`,
-  panels: `export const menus = []; export function contextMenu(x, y, items) { menus.push(items); } export function closeContextMenu() {} globalThis.__cu.panels = { menus };`,
+  'edit/fieldpanels': `export const menus = []; export function contextMenu(x, y, items) { menus.push(items); } export function closeContextMenu() {} globalThis.__cu.panels = { menus };`,
   ui: `export const flashHint = () => {};`,
   xrask: `export const xrActive = () => false;`,
   plainwords: `export const nameOf = (id) => id;`,
