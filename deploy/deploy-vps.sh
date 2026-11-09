@@ -36,11 +36,24 @@ if ! git diff --quiet "$before" "$after" -- package.json bun.lock 2>/dev/null; t
   "$BUN" install
 fi
 # chat bridge (services/chatbridge) — optional service; deps on manifest change,
-# restart only where the unit is actually installed
+# restarted below only where its unit is installed
 if ! git diff --quiet "$before" "$after" -- services/chatbridge/package.json services/chatbridge/bun.lock 2>/dev/null; then
   (cd services/chatbridge && "$BUN" install)
 fi
-sudo systemctl try-restart eido-chatbridge 2>/dev/null || true
+
+# Each deploy/*.service the box has installed is re-installed when it differs (docs/operator/RUNNING-A-SERVER.md)
+units=(eidoverse eidoverse-mcpl); reload=0
+for unit in deploy/*.service; do
+  name=$(basename "$unit" .service); dest=/etc/systemd/system/$name.service
+  [ -f "$dest" ] || continue
+  [[ " ${units[*]} " == *" $name "* ]] || units+=("$name")
+  cmp -s "$unit" "$dest" && continue
+  for env in $(sed -n 's/^EnvironmentFile=//p' "$unit"); do
+    sudo test -f "$env" || { echo "unit: $name.service needs $env (its header says what goes in it); not installed" >&2; exit 1; }
+  done
+  sudo install -m 644 "$unit" "$dest"; reload=1; echo "unit: re-installed $name.service"
+done
+[ "$reload" = 0 ] || sudo systemctl daemon-reload
 
 # An in-place install keeps ndarray-pixels' own copy of sharp after the
 # lockfile stops listing it, and optimize.ts loads that copy whenever it
@@ -53,7 +66,8 @@ if [ -d node_modules/ndarray-pixels/node_modules/sharp ] \
   sudo systemctl stop eidoverse
   rm -rf node_modules/ndarray-pixels/node_modules/sharp
 fi
-sudo systemctl restart eidoverse eidoverse-mcpl
+sudo systemctl restart "${units[@]}"
 sleep 2
-systemctl is-active eidoverse eidoverse-mcpl
+# one unit at a time: `is-active a b` exits 0 when any one of them is up
+for name in "${units[@]}"; do systemctl is-active --quiet "$name" || { echo "deploy: $name is not running after the restart (journalctl -u $name)" >&2; exit 1; }; done
 echo "deployed $after"
