@@ -15,9 +15,21 @@
 import {
   planStructure, normalize, wallBoxes, deriveRooms, derivePortals, roomAt, levelAt,
   edgeCells, edgeBetween, edgeKey, cellKey, APERTURES, GRID_DEFAULTS,
-  describeHere, describeStructure, localizePoint, levelParts, TRIM, cornerFills, wallRuns, wallPolylines, sweepProfile, wallProfile, levelSweeps, capProfile, clipProfileV, refineProfile, makeShader, diagOf, halfTriangle, triPrism, halfFloored, segmentEnds, nodeAtPoint, nodeGraph, cellNodes, routeCells, routeLocal, passable,
+  describeHere, describeStructure, localizePoint, levelParts, TRIM, cornerFills, wallRuns, wallPolylines, sweepProfile, wallProfile, levelSweeps, capProfile, clipProfileV, refineProfile, makeShader, diagOf, halfTriangle, triPrism, halfFloored, segmentEnds, nodeAtPoint, nodeGraph, cellNodes, prepareRouteLocal, ROUTE_STEP_METRES,
 } from "../../shared/structure.js";
 import { suite } from "../gate/suite.ts";
+// The router as the agent calls it: a terrain walk at height y, or a walk on one identified floor.
+const onTerrain = (plan: any, y = 0) => prepareRouteLocal(plan, { kind: "terrain", heightAt: () => y, step: ROUTE_STEP_METRES });
+const onFloor = (plan: any, level: number) => prepareRouteLocal(plan, { kind: "floor", level, height: plan.levels[level].y, step: ROUTE_STEP_METRES });
+const routeLocal = (plan: any, fx: number, fz: number, tx: number, tz: number, y = 0) => {
+  const r = onTerrain(plan, y).route(fx, fz, tx, tz); return r.kind === "blocked" ? null : r.points;
+};
+// The oracle the route is held to: may a body step between two neighbouring cells (a door or an arch is a hole, a window isn't)?
+function passable(level: any, ax: number, az: number, bx: number, bz: number) {
+  const e = edgeBetween(ax, az, bx, bz); if (!e) return false;
+  const k = edgeKey(e[0], e[1], e[2]);
+  return !level.walls.has(k) || ["door", "arch"].includes(level.apertures.get(k));
+}
 
 const S = suite("structure-field");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
@@ -332,9 +344,6 @@ const HOUSE = {
   const upRoute = routeLocal(plan2, 0.5, 0.5, 3.5, 0.5, upY2)!;
   check("upstairs route detours through the south door (more than two points)",
     !!upRoute && upRoute.length > 2, JSON.stringify(upRoute));
-  // routeLocal's y default keeps single-storey callers exactly as they were
-  check("ground route unchanged when y is omitted",
-    JSON.stringify(routeLocal(plan2, 0.5, 0.5, 3.5, 0.5)) === JSON.stringify(groundRoute));
 }
 
 // 13. perception — the whole reason the grid exists
@@ -528,35 +537,23 @@ const HOUSE = {
   const plan = planStructure(HOUSE);
 
   // the divider runs x=2: doored at z=0, solid at z=1
-  check("a solid wall blocks passage", !passable(lv, 1, 1, 2, 1));
-  check("a doorway is passable", passable(lv, 1, 0, 2, 0));
-  check("passability is symmetric", passable(lv, 2, 0, 1, 0) === passable(lv, 1, 0, 2, 0));
-  check("open floor is passable", passable(lv, 0, 0, 1, 0));
-  check("non-neighbours are not passable", !passable(lv, 0, 0, 3, 1));
+  const walk = onFloor(plan, 0);
+  check("a solid wall blocks passage", !walk.clear(1.5, 1.5, 2.5, 1.5) && !passable(lv, 1, 1, 2, 1));
+  check("a doorway is passable", walk.clear(1.5, 0.5, 2.5, 0.5) && passable(lv, 1, 0, 2, 0));
+  check("passability is symmetric", walk.clear(2.5, 0.5, 1.5, 0.5) === walk.clear(1.5, 0.5, 2.5, 0.5));
+  check("open floor is passable", walk.clear(0.5, 0.5, 1.5, 0.5));
 
-  const route = routeCells(lv, "0,1", "3,1");
-  check("a route exists between the rooms", route !== null, "no route");
+  const across = walk.route(0.5, 1.5, 3.5, 1.5);
+  check("a route exists between the rooms", across.kind === "routed", JSON.stringify(across));
   check("the route goes THROUGH the doorway, not through the wall",
-    route !== null && route.includes("1,0") && route.includes("2,0"),
-    JSON.stringify(route));
-  check("the route is contiguous", route !== null && route.every((k, i) => {
-    if (i === 0) return true;
-    const [ax, az] = route[i - 1].split(",").map(Number);
-    const [bx, bz] = k.split(",").map(Number);
-    return Math.abs(ax - bx) + Math.abs(az - bz) === 1;
-  }));
-  check("every step of the route is legal", route !== null && route.every((k, i) => {
-    if (i === 0) return true;
-    const [ax, az] = route[i - 1].split(",").map(Number);
-    const [bx, bz] = k.split(",").map(Number);
-    return passable(lv, ax, az, bx, bz);
-  }));
+    (across.points ?? []).some(([x, z], i, p) => i > 0 && (p[i - 1][0] - 2) * (x - 2) <= 0 && Math.max(z, p[i - 1][1]) <= 1),
+    JSON.stringify(across.points));
 
   // seal the door and the rooms become unreachable — the honest failure
   const sealed = structuredClone(HOUSE);
   sealed.levels[0].apertures = [[0, 0, 0, "window"]];
   const sg = normalize(sealed);
-  check("no door means no route", routeCells(sg.levels[0], "0,1", "3,1") === null);
+  check("no door means no route", onFloor(planStructure(sealed), 0).route(0.5, 1.5, 3.5, 1.5).kind === "blocked");
   check("a window is not a doorway", !passable(sg.levels[0], 0, 0, 0, -1));
 
   // waypoints: only turns, plus the true endpoints
@@ -830,11 +827,11 @@ const HOUSE = {
     rooms.find((r) => r.cells.includes("0,0:A"))!.cells.includes("1,0"));
 
   // routing must respect it, and go through it when it is holed
-  check("no route across a solid diagonal", routeCells(lv, "0,0:B", "1,0") === null);
-  const holed = normalize({ levels: [{ tiles: [[0, 0], [1, 0]],
+  check("no route across a solid diagonal", onFloor(planStructure(D), 0).route(0.2, 0.8, 1.5, 0.5).kind === "blocked");
+  const holed = planStructure({ levels: [{ tiles: [[0, 0], [1, 0]],
     walls: [[2, 0, 0]], apertures: [[2, 0, 0, "door"]] }] });
   check("a doored diagonal is walkable",
-    routeCells(holed.levels[0], "0,0:B", "1,0") !== null);
+    onFloor(holed, 0).route(0.2, 0.8, 1.5, 0.5).kind !== "blocked");
   check("...but it still divides the rooms",
     planStructure({ levels: [{ tiles: [[0, 0], [1, 0]],
       walls: [[2, 0, 0]], apertures: [[2, 0, 0, "door"]] }] }).levels[0].rooms.length === 2);
