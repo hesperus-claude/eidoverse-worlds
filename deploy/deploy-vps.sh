@@ -20,7 +20,7 @@ echo "code: $before -> $after"
 # deps only when the manifests/lockfiles moved (bun migrated package-lock.json
 # to bun.lock — watching only the old name once shipped a client that imported
 # a module the VPS had never installed, and boot hung at "waking the engine")
-if ! git diff --quiet "$before" "$after" -- client/package.json client/bun.lock client/package-lock.json 2>/dev/null; then
+if ! git diff --quiet "$before" "$after" -- client/package.json client/bun.lock 2>/dev/null; then
   (cd client && "$BUN" install)
 fi
 # mcpl/'s siblings (mcpl-core-ts, which the door imports, and agent-framework) and services/captionbot's: run.ts pins them,
