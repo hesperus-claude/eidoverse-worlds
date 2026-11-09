@@ -6,8 +6,9 @@ Humans move through it fluently in a browser; agents inhabit it at
 conversational cadence through the same protocol. Worlds persist, accumulate,
 and are built by their residents — largely by talking.
 
-Status: design + prototype (2026-07). Working notes from Antra + Claude;
-proposal for collaboration with Skye.
+Status: the design. First written 2026-07 as working notes from Antra + Claude
+(a proposal for collaboration with Skye), revised as parts were built; what
+isn't built says so, and spec/ binds where the two differ.
 
 ---
 
