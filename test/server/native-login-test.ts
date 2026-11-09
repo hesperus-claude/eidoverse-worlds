@@ -93,7 +93,7 @@ console.log("NATIVE LOGIN — over a real server's HTTP + WS");
     HOST: "127.0.0.1", PORT: String(port), JOIN_TOKEN: "native-test-door", WORLDS_DIR: join(scratch, "worlds"),
     OPT_DIR: join(scratch, "opt"), RELAY_STATE_DIR: join(scratch, "opt"), SKIP_OPT_SWEEP: "1", RECORD_FRAMES: "0",
     HN_SESSIONS_FILE: join(scratch, "sessions.json"), AGENT_TOKENS_PATH: join(scratch, "tokens.json"),
-    HN_ISSUER_KEY: issuer, HN_ISS: "id.test", HN_AUD: "eidoverse", HN_NATIVE_ORIGIN: origin, HN_REQUIRE_LOGIN: "0",
+    HN_ISSUER_KEY: issuer, HN_ISS: "id.test", HN_AUD: "eidoverse", HN_NATIVE_ORIGIN: "", HN_REQUIRE_LOGIN: "0",   // unset, as a self-hoster runs it: the pairing page is the request's own origin
   }, stdout: "ignore", stderr: "pipe" });
   const sockets: WebSocket[] = [];
   const post = (path: string, body: object, headers: Record<string, string> = {}) =>

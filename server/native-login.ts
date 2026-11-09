@@ -5,12 +5,11 @@ import type { HnSession } from "./auth.ts";
 import { readCapped } from "./reqbody.ts";
 
 // A session issued to a native client: `native`, or `nativeWorld` on an older pairing (auth.ts). It may not approve another pairing. Kept here, so loading the handler runs nothing of auth.ts.
-/** HN_NATIVE_ORIGIN as auth.ts reads it: empty is unset, so the pairing page falls back to the public origin. */
-export const nativeOriginOf = (v: string | undefined = process.env.HN_NATIVE_ORIGIN) => v || "https://eidoverse.animalabs.ai";
 export const isNativeSession = (s: HnSession) => s.native === true || s.nativeWorld !== undefined;
 
 type Options = {
-  origin: string; login: string; enabled: boolean;
+  /** This server's public origin for a request (routes pass auth.ts ownOrigin, so both doors agree). */
+  origin: string | ((req: Request) => string); login: string; enabled: boolean;
   session(cookie: string | null): HnSession | null;
   issue(session: HnSession): string;
   now?: () => number;
@@ -36,8 +35,8 @@ export function createNativeLogin(o: Options) {
     if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
     // Browser mutations must be same-origin. Non-browser native start/poll have
     // no Origin and no browser authority. Never accept credentialed CORS.
-    const origin = req.headers.get("origin");
-    if (origin && origin !== o.origin) return json(403, { error: "wrong_origin" });
+    const origin = req.headers.get("origin"), own = typeof o.origin === "string" ? o.origin : o.origin(req);
+    if (origin && origin !== own) return json(403, { error: "wrong_origin" });
     if (!req.headers.get("content-type")?.startsWith("application/json")) return json(415, { error: "json_required" });
     let body: any;
     try {
@@ -58,7 +57,7 @@ export function createNativeLogin(o: Options) {
       return json(200, { device_code: secret, user_code: code, expires_in: 300, interval: 2 });
     }
     if (path === "/native/approve" || path === "/native/deny") {
-      if (origin !== o.origin) return json(403, { error: "origin_required" });
+      if (origin !== own) return json(403, { error: "origin_required" });
       const cookie = req.headers.get("cookie");
       const s = o.session(cookie);
       if (!s || s.exp <= t) return json(401, { error: "sign_in_required" });
@@ -89,7 +88,7 @@ export function createNativeLogin(o: Options) {
       const seconds = Math.max(1, Math.floor((exp - t) / 1000));
       // world_scope "*" for native clients from before native sessions became ordinary ones, which read a missing scope as one world
       return json(200, { name: s.name, expires_in: seconds, world_scope: "*" }, {
-        "set-cookie": `ew_sess=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${seconds}${o.origin.startsWith("https:") ? "; Secure" : ""}`,
+        "set-cookie": `ew_sess=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${seconds}${own.startsWith("https:") ? "; Secure" : ""}`,
       });
     }
     return json(404, { error: "not_found" });
