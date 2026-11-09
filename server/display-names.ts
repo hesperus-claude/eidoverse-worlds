@@ -1,4 +1,4 @@
-// names — what a display name may hold at the door.
+// display-names — what a display name may hold at the door.
 // Names reach every nameplate, chat line and agent transcript, so < > and " are kept out of them (the client treats names as
 // text too: client/lib/markup.js). & and ' stay allowed: they're in real names and escape cleanly.
 // A typed name with those characters is refused so the person picks another; a name the identity service gave isn't their
