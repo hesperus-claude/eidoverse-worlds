@@ -1,18 +1,7 @@
-// rigmeasure — what the body engines MEASURE and how they SPEAK, extracted.
-//
-// Two engines simulate a body going limp (bodysim.js's seam): the Verlet
-// particle skeleton (ragdoll.js) and the Bullet rig (ammodoll.js). This file
-// does NOT merge them; it holds only the truths they must AGREE on:
-//
-//   * the BODY CUT — which 12 segments a humanoid is, for either solver;
-//   * the segment-vs-segment closest-point solve, spelled once;
-//   * the rig frame measured from rest positions (up/lateral/forward);
-//   * the HANDOVER FORMAT — the {j,p,v} snapshot a drag-release hands the
-//     next sim, across engines and across machines (a wire surface: the pack
-//     and the parse must be one truth or the seam drops motion).
-//
-// The lifecycle spine the engines share (settle clocks, impulse law,
-// root-follow) is a class, not a measurement — see bodyengine.js.
+// rigmeasure — what the two limp-body engines (ragdoll.js Verlet, ammodoll.js Bullet; bodysim.js is the seam)
+// must agree on: the 12-segment body cut, the segment closest-point solve, the rig frame from rest positions,
+// and the {j,p,v} handover snapshot (a wire format: pack and parse live here together).
+// Their shared lifecycle (settle clocks, impulse law, root-follow) is bodyengine.js.
 
 import { THREE } from './core.js';
 
@@ -20,12 +9,8 @@ import { THREE } from './core.js';
 // the body cut
 // ---------------------------------------------------------------------------
 
-// Which bones a body engine drives, each as (bone -> the child joint it points
-// at): enough to read as a body, few enough to stay stable and keep the
-// streamed pose small. Order matters: parents before children (the verlet's
-// drive walk and limit sweep and the bullet rig's build order lean on it).
-// Driving the PELVIS is what lets a body actually lie down rather than crumple
-// around an upright anchor. The one place a segment is added or renamed.
+// The bones a body engine drives, as (bone -> the child joint it points at). Parents before children: both
+// engines' build order leans on it. Driving the hips is what lets a body lie down rather than crumple.
 export const SEGMENTS = [
   ['hips', 'spine'],
   ['spine', 'chest'], ['chest', 'neck'], ['neck', 'head'],
@@ -38,9 +23,7 @@ export const SEGMENTS = [
 // Every joint tracked as a particle / segment endpoint (bones + leaf children).
 export const JOINTS = [...new Set(SEGMENTS.flat())];
 
-// The bones an engine actually writes a rotation for. Everything else is the
-// locomotion mixer's and must be parked before a tumble (avatar.setLimp does
-// the parking around this list).
+// The bones an engine writes a rotation for; the rest stay the mixer's (avatar.setLimp parks them around this list).
 export const DRIVEN_BONES = SEGMENTS.map(([bone]) => bone);
 
 // ---------------------------------------------------------------------------
@@ -54,9 +37,8 @@ const _p1 = new THREE.Vector3();
 const _p2 = new THREE.Vector3();
 const _sd = { s: 0, t: 0 };
 
-/** Closest points between two segments, as parameters along each: the classic
- *  clamped-parametric solve; degenerate (zero-length) segments fall back to an
- *  endpoint. Both engines' self-collision builds run this. */
+/** Closest points between two segments, as parameters along each (clamped-parametric solve; a zero-length
+ *  segment falls back to an endpoint). */
 export function closestParams(p1, q1, p2, q2, out) {
   _a.copy(q1).sub(p1); _b.copy(q2).sub(p2); _c.copy(p1).sub(p2);
   const A = _a.dot(_a), E = _b.dot(_b), F = _b.dot(_c);
@@ -89,10 +71,8 @@ export function segDistance(p1, q1, p2, q2) {
 // the rig frame
 // ---------------------------------------------------------------------------
 
-/** The rig's anatomical frame, measured from a map of rest WORLD positions:
- *  up along the trunk, lateral across the shoulders (hips as fallback),
- *  forward as their cross product, which is correct for VRM 0.x and 1.0 alike
- *  (the lateral vector flips with the facing). Every value is a fresh vector. */
+/** The rig's frame from a map of rest WORLD positions: up along the trunk, lateral across the shoulders (hips as
+ *  fallback), forward their cross product (right for VRM 0.x and 1.0 alike, since lateral flips with the facing). */
 export function rigFrameOf(restP) {
   const up = (restP.neck ?? restP.chest ?? restP.spine ?? restP.head)
     ?.clone().sub(restP.hips ?? new THREE.Vector3()).normalize() ?? new THREE.Vector3(0, 1, 0);
@@ -112,17 +92,13 @@ export function rigFrameOf(restP) {
 // the handover format
 // ---------------------------------------------------------------------------
 
-/** Builder for the {j,p,v} handover snapshot — joint names, world positions,
- *  world velocities, flat-packed. Both engines' snapshot() speaks through this
- *  so the format cannot fork. */
+/** Builder for the {j,p,v} handover snapshot: joint names, world positions, world velocities, flat-packed. */
 export function snapshotPacker() {
   const j = [], p = [], v = [];
   return {
     add(name, pos, vel) {
       j.push(name);
-      // FULL PRECISION: a handover is the SAME body continuing on another
-      // machine, and a tumbling body is chaotic, so rounding diverges visibly
-      // within a second (§24t-8). A snapshot is rare and ~1KB.
+      // full precision: a tumbling body is chaotic, rounding diverges visibly within a second (snapshots are rare, ~1KB)
       p.push(pos.x, pos.y, pos.z);
       v.push(vel.x, vel.y, vel.z);
     },
@@ -130,8 +106,7 @@ export function snapshotPacker() {
   };
 }
 
-/** Iterate a handover snapshot ({j,p,v}, optional dy height shift): yields
- *  { name, px,py,pz, vx,vy,vz } per joint, dy applied. The parse half of snapshotPacker. */
+/** The parse half of snapshotPacker: yields { name, px,py,pz, vx,vy,vz } per joint, with seed.dy added to y. */
 export function* seedJoints(seed) {
   const { j: names, p: pos, v: vel, dy = 0 } = seed;
   for (let i = 0; i < names.length; i++) {

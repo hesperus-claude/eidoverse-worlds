@@ -1,23 +1,11 @@
-// scheduler — the one loader (TEL0S_NOTES §11.3).
+// scheduler — the realizers' job queue (realize/models.js, models_field.js; net.js reads `pending` for world
+// progress). A job has a key (dedupe identity), an owner (cancellation scope), a lane (concurrency cap) and a
+// priority band re-read at dequeue.
 //
-// Every piece of deferred work the client does — byte fetches, parses,
-// pipeline compiles, realizer catch-up — goes through here, with a key
-// (dedupe identity), an owner (cancellation scope), a lane (measured
-// concurrency cap), and a priority band re-evaluated at dequeue. The
-// curtain and the loading UI read queue state (`pending`, `onIdle`);
-// nothing anywhere waits on a timeout.
-//
-// DOM-free and THREE-free on purpose (headless-tested in
-// test/client/scheduler-test.ts): pumping rides queueMicrotask, which Bun and
-// the browser both have, so correctness never depends on a renderer.
-// Budget slicing inside a job stays loadwork's business (work records,
-// tick/yield); this module replaces only the LANES.
-//
-// Lane caps carry the measured history (loadwork.js:126-137, the
-// "queued 19311ms · compile 5ms" trace): cpu and gpu at 2 — enough that
-// one stuck decode can't serialize a body behind crates, few enough that
-// compiles don't trample the frame — and net at 6 (assets.js's byte-fetch
-// pool). The numbers move only with a new measurement.
+// DOM-free and THREE-free (headless-tested in test/client/scheduler-test.ts): pumping rides queueMicrotask.
+// Budget slicing inside a job is loadwork.js's business.
+// Lane caps are measured: cpu and gpu at 2 (one stuck decode can't serialize a body behind crates; compiles don't
+// trample the frame), net at 6 (assets.js's byte-fetch pool). Move them only with a new measurement.
 
 /** Priority bands. FIFO within a band; a function priority is re-read at
  *  dequeue so "near" can follow the camera without rescheduling. */
@@ -55,14 +43,11 @@ export function schedule({ key, owner = null, lane = 'cpu', priority = P.VISIBLE
     resolve: null, reject: null,
   };
   job.done = new Promise((res, rej) => { job.resolve = res; job.reject = rej; });
-  // Swallowed-by-default: cancellation is a normal outcome, not an unhandled
-  // rejection storm. Callers who care await handle.done themselves.
+  // cancellation is a normal outcome, not an unhandled rejection; callers who care await handle.done
   job.done.catch(() => {});
 
   if (prev) {
-    // keep one: the newer run, at the higher of the two priorities — and the
-    // replaced job's `done` follows the newcomer's outcome, so no caller's
-    // await is orphaned by a re-schedule
+    // keep one: the newer run at the higher priority; the replaced job's `done` follows the newcomer's outcome
     job.priority = Math.max(prioOf(prev), prioOf(job));
     job.done.then(prev.resolve, prev.reject);
   }
@@ -98,9 +83,7 @@ export function pending(minPriority = -Infinity) {
   return n;
 }
 
-/** Resolves (once) when everything at or above the band has drained.
- *  Fires immediately if already idle. Replaces every whenBooted()-style
- *  timeout with an observation. */
+/** Resolves (once) when everything at or above the band has drained; immediately if already idle. */
 export function onIdle(fn, minPriority = -Infinity) {
   if (pending(minPriority) === 0) { queueMicrotask(fn); return; }
   idleWaiters.push({ fn, minPriority });

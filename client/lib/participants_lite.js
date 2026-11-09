@@ -1,27 +1,16 @@
-// The participant registry for a client with no renderer — the DOM-only twin of
-// remotes.js, wired into net.js by lite.js exactly where main.js wires the real one.
-//
-// Same interface, deliberately: net.js calls these under the names it always used, so
-// the wire protocol has one implementation and this file never has to track changes to
-// it. What differs is what a "participant" IS. There, a record owns a three.js body, a
-// pose buffer and an interpolator. Here it is a row: who, what they're wearing (as a
-// NAME, never loaded), the word they declared for themselves (if any), whether they just spoke or are typing.
-//
-// The pose plane is dropped on the floor, and that is the single biggest reason a
-// phone can hold this: presence arrives ~15Hz PER PERSON, and every sample would
-// otherwise buy interpolation nobody can see. We keep the server clock anyway — it
-// is what makes timestamps in chat honest — and it is the full client's clock, not a copy.
+// The participant registry for a client with no renderer — the DOM-only twin of remotes.js, wired into
+// net.js by lite.js where main.js wires the real one. Same interface, so the wire protocol has one
+// implementation; a participant here is a row (who, avatar NAME, declared word, speaking/typing), not a
+// body. Poses are dropped (~15 Hz per person a phone need not interpolate); the server clock is kept so
+// chat timestamps stay honest.
 import { bus } from './base.js';
 
 export const remotes = new Map(); // id -> LiteRow
 
-// The server clock is serverclock.js's, re-exported as remotes.js does: it imports only
-// shared/clockoffset.js, and net.js already loads it here, so the one-way samples net.js
-// hands this registry reach the same estimate its round trips and floors do.
+// the same clock as remotes.js, so net.js's one-way samples feed the one estimate
 export { noteServerTime, serverNow } from './serverclock.js';
 
-/** Async to match remotes.js, whose caller does `.then(...)` on the arrival path —
- *  the signature is part of the interface even though nothing here awaits. */
+/** Async to match remotes.js: net.js does `.then(...)` on the arrival path. */
 export async function ensureRemote(id, avatarPath, meta = {}) {
   const existing = remotes.get(id);
   if (existing) {
@@ -36,17 +25,14 @@ export async function ensureRemote(id, avatarPath, meta = {}) {
     declares: meta.declares ?? null,
     speakingUntil: 0,
     typing: false,
-    // No `avatar` key, and that is load-bearing: net.js reaches through this record
-    // with `remotes.get(id)?.avatar?.setTyping(...)`, so its absence makes every
-    // body-facing call a no-op through optional chaining rather than a guard here.
+    // no `avatar` key, deliberately: net.js's `remotes.get(id)?.avatar?.setTyping(...)` then no-ops
   };
   remotes.set(id, row);
   bus.emit('roster');
   return row;
 }
 
-/** Generation-conditional like remotes.js: a predecessor's late cleanup must
- *  not delete the successor that now owns the id. */
+/** Like remotes.js: a predecessor's late cleanup must not delete the successor that now owns the id. */
 export function dropRemote(id, expected) {
   const r = remotes.get(id);
   if (!r) return null;
@@ -56,9 +42,7 @@ export function dropRemote(id, expected) {
   return r;
 }
 
-/** The pose plane, deliberately discarded. ~15Hz per person of position data that
- *  would drive bodies this client does not have. Kept as a named no-op rather than
- *  an omission so the interface stays honest and the cost stays visible. */
+/** Poses are discarded (no bodies to drive); a named no-op keeps the interface whole. */
 export function pushPose() { /* no bodies to move */ }
 
 export function noteSpeaking(id, ms = 4000) {

@@ -1,12 +1,7 @@
-// piperphon — build the phonemizer ONCE, not once per word.
-//
-// @mintplex-labs/piper-tts-web's predict() rebuilds an emscripten module wrapping
-// a 17 MB espeak-ng data file on EVERY call (~30 s per utterance in a browser);
-// inference itself is nearly free. The factory lives in a WeakMap private field
-// and predict() hardcodes the build, so we make the same call ourselves and keep
-// the module (callMain is re-entrant).
-//
-// The build runs in a worker, which is what makes it fast: see phon.worker.js.
+// piperphon — build the phonemizer once, in a worker (phon.worker.js), and keep it.
+// @mintplex-labs/piper-tts-web's predict() rebuilds the 17 MB espeak-ng emscripten module on
+// every call (~30 s per utterance); inference itself is nearly free, so we make the same
+// build call ourselves and reuse the module (callMain is re-entrant).
 let _worker = null, _seq = 0;
 const _pending = new Map();
 let _ready = false;
@@ -21,9 +16,7 @@ function worker() {
     _pending.delete(id);
     ok ? p.resolve(ids) : p.reject(new Error(error || 'phonemizer failed'));
   };
-  // A worker that dies takes every in-flight call with it — fail them loudly
-  // rather than leaving promises that never settle (silent hang > visible error
-  // is exactly backwards for a voice path).
+  // a dead worker rejects every in-flight call rather than leaving promises unsettled
   _worker.onerror = (e) => {
     const err = new Error(`phonemizer worker died: ${e.message || 'unknown'}`);
     for (const p of _pending.values()) p.reject(err);
@@ -32,9 +25,7 @@ function worker() {
   return _worker;
 }
 
-/** The chunk URL must be resolved HERE, not in the worker: import.meta.url
- *  differs inside a worker, and a path that resolves on the main thread would
- *  silently 404 there. */
+/** Resolve the chunk URL here, not in the worker, where import.meta.url differs. */
 function wasmBundle(wasmPaths) {
   return {
     // piper-tts-web 1.0.4's hashed chunk: client/package.json pins that version exactly
@@ -61,17 +52,14 @@ function ask(op, payload, timeoutMs = 120_000) {
 }
 
 
-/** Text → phoneme ids. Same signature as before; the work now happens in the
- *  worker, where the library's synchronous loader is legal and fast. */
+/** Text → phoneme ids, computed in the worker. */
 export async function phonemize(text, voice, wasmPaths) {
   const ids = await ask('phonemize', { text, voice, wasmPaths: wasmBundle(wasmPaths) });
   _ready = true;
   return ids;
 }
 
-/** Build the module NOW, before anyone speaks: the build is the expensive part
- *  and depends only on the wasm paths, so it belongs inside the load the user
- *  is already watching rather than in front of their first utterance. */
+/** Build the module ahead of the first utterance, inside the load the user is already watching. */
 export async function warmPhonemizer(wasmPaths, onProgress = () => {}) {
   if (_ready) return true;
   const t0 = performance.now();

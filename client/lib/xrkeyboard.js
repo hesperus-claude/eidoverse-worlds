@@ -1,10 +1,7 @@
-// VR keyboard (gap list C16) — a FRAME, so it rides the
-// same HTMLMesh quad + click-through every other panel does (domquad.js): a trigger on a
-// key is a DOM click on a real <button>. Keys type into the last-focused text input
-// (HTMLMesh focuses an <input> when its quad is clicked; default: the chat line), and ⏎
-// is a synthetic Enter keydown on that input, so chat's own handler sends — one send
-// path, one keyboard, no VR-only text plumbing. Desktop never sees it (real keyboards);
-// in VR the quad shows while a text input has focus and hides when the line is sent.
+// VR keyboard — a frame, so it rides the same HTMLMesh quad + click-through as every other panel (domquad.js):
+// a trigger on a key is a DOM click on a real <button>. Keys type into the last-focused text input (default: the
+// chat line) and ⏎ is a synthetic Enter keydown on it, so chat's own handler sends. Hidden on the desktop; in VR
+// the quad shows while a text input has focus and hides when the line is sent.
 import { bus } from './base.js';
 import { makeFrame } from './windows.js';
 import { isPresenting } from './xr.js';
@@ -53,7 +50,7 @@ function paint() {
     for (const k of row) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'kb-key' + (k.length > 1 ? ' kb-wide' : '') + ((k === '⇧' && shift) ? ' kb-on' : '');
       b.textContent = k === '␣' ? '' : (shift && k.length === 1 ? k.toUpperCase() : k); b.dataset.k = k; b.title = k === '␣' ? 'space' : k;
-      // mousedown would steal focus from the text input on desktop; the quad path never focuses buttons, but keep the two paths identical
+      // mousedown would steal focus from the text input
       b.addEventListener('mousedown', (e) => e.preventDefault());
       b.addEventListener('click', () => press(k));
       r.appendChild(b);
@@ -75,8 +72,7 @@ export function initXRKeyboard() {
   document.head.appendChild(css);
   keysEl = document.createElement('div'); keysEl.className = 'kb-keys'; api.body.appendChild(keysEl);
   paint();
-  // the last text input the user touched is what the keys type into (HTMLMesh focuses an
-  // <input> when its quad is clicked, so a VR click on the chat line lands here)
+  // the last text input focused is what the keys type into (HTMLMesh focuses an <input> when its quad is clicked)
   document.addEventListener('focusin', (e) => { if (isText(e.target)) { target = e.target; if (isPresenting()) domQuadShow('keyboard', true); } });
   // enter VR: the quad exists in the arc but stays hidden until a text input asks for it
   bus.on('xr:domquads', () => domQuadShow('keyboard', false));

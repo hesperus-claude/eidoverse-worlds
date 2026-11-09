@@ -1,13 +1,8 @@
-// xrtip — a panel control's TOOLTIP, in the headset. The desktop shows a control's title= in the house
-// chip (#tipchip, ui.js) after the mouse rests on it; a laser has no hover, so in VR the same text shows when the laser
-// DWELLS on that control (dwell.js, per hand, through the pointer's stickiness) and goes when the laser leaves it.
-// No strings of its own: the text is the control's own title (or its nearest titled ancestor's — a settings row
-// carries the title for the select inside it), the very text the desktop chip borrows. First users: greyed controls
-// that say why (unavailable in VR), and the settings rows' explanations.
-//
-// It is DOM, like the nameplate card: one #xr-tip element laid out offscreen in the house chip's look, rasterised by
-// the vendored HTMLMesh, and hung IN the panel (a child of that panel's quad, a hair in front of it) under the control
-// — or above it at the panel's foot — at the panel's own pixel size, so it reads exactly as legibly as the panel.
+// xrtip — a panel control's tooltip in the headset. The desktop shows a control's title= in the tip chip (ui.js) on
+// hover; a laser has no hover, so in VR the same text shows while the laser dwells on the control (dwell.js) and goes
+// when it leaves. No strings of its own: the text is the control's title or its nearest titled ancestor's.
+// One #xr-tip element laid out offscreen, rasterised by the vendored HTMLMesh and hung in the panel's quad, a hair in
+// front of it, under (or above) the control at the panel's own pixel size.
 import { HTMLMesh } from '../vendor/three-addons/htmlmesh.js';
 import { prepareQuadMaterial } from './domquad.js';
 
@@ -17,8 +12,8 @@ const LIFT = 0.004;     // in the quad's local units (CSS px × 1 mm): ≈ 7 mm 
 
 let el = null, mesh = null, built = null, shownFor = null, shownText = '';
 
-/** The text the desktop tooltip would show for `ctl` inside the frame element `root`: its own title, or the nearest
- *  titled ancestor's (ui.js borrows titles into `_tip` while the mouse is on them, so that counts too). '' for none. */
+/** The text the desktop tooltip would show for `ctl` inside the frame `root`: its own title or the nearest titled
+ *  ancestor's (ui.js parks a hovered title in `_tip`, so that counts too). '' for none. */
 export function tipTextFor(ctl, root) {
   for (let n = ctl; n && n !== root?.parentElement; n = n.parentElement) {
     const t = n.getAttribute?.('title') || n._tip;

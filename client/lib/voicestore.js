@@ -1,12 +1,8 @@
-// voicestore — remember a voice you picked from your own disk.
-//
-// A file path is useless (a page can never re-open a path by name), so we store
-// the FileSystemFileHandle itself, which is structured-cloneable → IndexedDB.
-//
-// 🔴 THE HANDLE IS NOT A PERMISSION. It survives a reload; the grant usually
-// does not. On restore call queryPermission() and expect 'prompt'; re-requesting
-// needs a user gesture, so the UI shows the voice greyed with a re-pick
-// affordance — a remembered-but-unreadable voice is a real state.
+// voicestore — remember a voice picked from disk: the FileSystemFileHandle itself, in IndexedDB
+// (a page cannot re-open a path by name).
+// The handle is not a permission: it survives a reload, the grant usually does not. On restore
+// expect queryPermission() === 'prompt'; re-requesting needs a user gesture, so the UI shows the
+// voice greyed with a re-pick affordance.
 
 const DB = 'eido.voices';
 const STORE = 'handles';
@@ -32,8 +28,7 @@ async function tx(mode, fn) {
       const store = t.objectStore(STORE);
       let out;
       try { out = fn(store); } catch (e) { return reject(e); }
-      // Resolve on COMPLETE, not on request success: a readwrite transaction can
-      // still abort afterwards (quota, concurrent close).
+      // resolve on complete, not request success: a readwrite transaction can still abort
       t.oncomplete = () => resolve(out?.result !== undefined ? out.result : out);
       t.onerror = () => reject(t.error);
       t.onabort = () => reject(t.error || new Error('idb aborted'));
@@ -41,10 +36,7 @@ async function tx(mode, fn) {
   } finally { db.close(); }
 }
 
-/** Voice identity from the actual bytes, not the file name (sha256 of a 60 MB
- *  model is ~0.5s, once at selection). Identifies a session's INPUTS exactly;
- *  VITS inference is stochastic with no exposed seed, so a waveform is not
- *  regenerable. */
+/** Voice identity from the bytes, not the file name (sha256 of a 60 MB model is ~0.5s, once at selection). */
 export async function voiceIdentity(onnxFile, cfgFile) {
   const sha = async (f) => Array.from(new Uint8Array(
     await crypto.subtle.digest('SHA-256', await f.arrayBuffer())))
@@ -57,16 +49,14 @@ export async function voiceIdentity(onnxFile, cfgFile) {
     params = cfg?.inference ?? null;   // noise_scale / length_scale / noise_w
   } catch { /* config unreadable: identity still stands on the digests */ }
   return {
-    // JOINT identity: same model + different config (phoneme map, language,
-    // inference params) is a DIFFERENT voice, so both digests carry.
+    // same model + different config is a different voice, so both digests carry
     id: `sha256:${modelSha256.slice(0, 16)}+${configSha256.slice(0, 16)}`,
     modelSha256, configSha256, sampleRate, params,
     engine: 'piper-tts-web', engineVersion: PIPER_WEB_VERSION,
     modelBytes: onnxFile.size, configBytes: cfgFile.size,
   };
 }
-// The dep version we pin in client/package.json — surfaced here so identity
-// records name the runtime that performed, not just the model.
+// pinned in client/package.json; identity records name the runtime, not just the model
 const PIPER_WEB_VERSION = '1.0.4';
 
 /** Everything remembered, newest first: [{id, name, handles, identity}]. */
@@ -75,16 +65,14 @@ export async function listVoices() {
   return (rows || []).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
 }
 
-/** Remember one pick. `files` are the FileSystemFileHandles, not File objects —
- *  a File is a snapshot of bytes and is NOT persistable; the handle is. */
+/** Remember one pick. `handles` are FileSystemFileHandles (a File is not persistable). */
 export async function rememberVoice(id, name, handles, identity = null) {
   if (!id || !handles?.length) return false;
   try {
     await tx('readwrite', (s) => s.put({ id, name, handles, identity, savedAt: Date.now() }, id));
     return true;
   } catch (e) {
-    // Private-browsing and locked-down profiles refuse IndexedDB outright.
-    // Forgetting a voice is a small loss; a thrown error mid-load is not.
+    // private-browsing profiles refuse IndexedDB; forgetting a voice beats throwing mid-load
     console.warn('[voice] could not remember voice:', e);
     return false;
   }
@@ -112,9 +100,8 @@ export async function voiceReadable(entry) {
   return 'granted';
 }
 
-/** Turn a remembered entry into Files. MUST be called from a user gesture when
- *  readable() said 'prompt' — requestPermission() throws otherwise, and that
- *  throw is the browser enforcing consent, not a bug to catch and ignore. */
+/** Turn a remembered entry into Files. With allowPrompt, call from a user gesture
+ *  (requestPermission() throws otherwise). */
 export async function openVoice(entry, { allowPrompt = false } = {}) {
   const out = [];
   for (const h of entry.handles || []) {
@@ -129,9 +116,7 @@ export async function openVoice(entry, { allowPrompt = false } = {}) {
   return out;
 }
 
-/** Whether remembering is possible at all here. The file-picker path exists
- *  without it (Firefox/Safari use <input type=file>, whose File objects cannot
- *  be persisted), so the UI must not promise memory it cannot deliver. */
+/** Whether remembering is possible here (Firefox/Safari fall back to <input type=file>, not persistable). */
 export const canRemember = () =>
   typeof indexedDB !== 'undefined' && typeof window !== 'undefined'
   && typeof window.showOpenFilePicker === 'function';

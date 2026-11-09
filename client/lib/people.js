@@ -1,9 +1,8 @@
-// people.js — who someone is here and what you may do to them.
+// people — who someone is here and what you may do to them.
 //
-// ONE function decides the menu: personActions(me, them) in shared/protocol/roles.js (pure, tested in test/protocol/roles-check.ts
-// P1–P3). It shows only what you may do to that one person, so a member sees "Mention" plus the consent rows (always/never allow, default: consentItems), and when rank
-// is the only reason nothing more shows, one dim line says so. This file draws it on three surfaces, and the authority
-// decides every act again (the menu is a courtesy, never the gate):
+// One function decides the menu: personActions(me, them) in shared/protocol/roles.js. A member sees "Mention" plus
+// the consent rows (consentItems); when rank alone hides the rest, one dim line says so. This file draws the menu
+// on three surfaces; the authority decides every act again (the menu is a courtesy, never the gate):
 //   desktop  right-click a row in Chat › People, or the ⋯ on a nameplate card: the house context menu; an act with
 //            choices (how long, which channels, why) opens one small centred card
 //   phone    long-press a row (500 ms, a haptic pulse where the device has one), or the card's ⋯: a bottom sheet at full
@@ -16,7 +15,7 @@ import { CONFIG, bus, report } from './base.js';
 import { net, identities, guests, sendRequest, replica } from './net.js';
 import { contextMenu, closeContextMenu } from './edit/fieldpanels.js';
 import * as R from '../../shared/protocol/roles.js';
-import { plainRefusal } from '../../shared/protocol/refusal.js';   // the door's words, its fix and names (PARITY)
+import { plainRefusal } from '../../shared/protocol/refusal.js';   // the door's words, its fix and names
 import { listOf, setListed, BLOCK_FOLLOW_WORDS } from './consent.js';
 import { moderatorHeader } from './chat.js';
 
@@ -97,8 +96,7 @@ export function sheetFor(display) {
     b.onclick = () => { if (!sh.armed) return; if (!VERB[it.id] && it.id !== 'role') closeSheet(); act(it.id, display, 'sheet'); };
     sh.body.append(b);
   }
-  // the press that opened the sheet is still down: lifting it must not "click" the row that slid under the finger.
-  // Rows act only after a fresh press that starts inside the sheet.
+  // the press that opened the sheet is still down; rows act only after a fresh press that starts inside the sheet
   sh.armed = false;
   sh.root.hidden = false; requestAnimationFrame(() => sh.root.classList.add('open'));
   try { navigator.vibrate?.(15); } catch { /* no haptics */ }
@@ -155,7 +153,7 @@ function listPerson(item, display) {
   const them = personOf(display); if (!them.id || them.me) return false;
   const list = LIST_ITEMS.find(([k]) => k === item)?.[1] ?? null;
   const changed = setListed(them.id, list, display, { guest: them.anon });
-  const visit = them.anon && list ? ' — for this visit: a guest has no account to remember them by, so it ends when they leave (your gates cover everyone)' : '';   // review full-260 #2
+  const visit = them.anon && list ? ' — for this visit: a guest has no account to remember them by, so it ends when they leave (your gates cover everyone)' : '';
   if (changed) deps.toast((list === 'allow' ? `${display} may always do things with your body, whatever your switches say` : list === 'block' ? `${display} may never do anything with your body${them.anon ? '' : `: ${BLOCK_FOLLOW_WORDS}`}` : `your switches answer ${display} again`) + visit, 'info', visit ? 8000 : undefined);
   bus.emit('roster');
   return changed;
@@ -226,8 +224,7 @@ function openCanForm(display, surface) {
     r.append(l, sel); host.append(r);
   }
   const b = document.createElement('button'); b.type = 'button'; b.className = 'pm-go'; b.textContent = 'Save';
-  // an existing entry is patched (its note and legacy fields stay); someone on the default role gets an entry naming the
-  // role they have now (an exception needs an entry to live on)
+  // an existing entry is patched (its note stays); someone on the default role gets an entry naming their role
   const has = !!wc()[`roles:${them.id}`];
   // a merge keeps keys it isn't sent (RFC 7396): an exception set back to "as the role" goes as null, which removes it
   b.onclick = async () => { const cleared = Object.fromEntries(Object.keys(cur).filter((k) => !(k in st)).map((k) => [k, null]));
@@ -239,8 +236,7 @@ function openCanForm(display, surface) {
   else { surface.strip.innerHTML = ''; surface.strip.append(host); }
 }
 
-// a warning is a notice you dismiss; the house centred card, kept until pressed. A DOM card isn't drawn in a
-// headset: in VR the same notice rides the XR quad (xrask.js), until pressed
+// a warning is a notice you dismiss: the house centred card, or in a headset the XR quad (xrask.js)
 bus.on('warned', (m) => { import('./xrask.js').then(({ xrActive, chooseXR }) => (xrActive()
   ? chooseXR({ title: moderatorHeader(CONFIG.world), body: `${m.by} warned you: ${String(m.reason ?? '')}`, choices: [{ v: 'ok', label: 'I understand' }], cancel: 'ok' })
   : import('./edit/confirmcenter.js').then(({ confirmCenter }) => confirmCenter({ title: moderatorHeader(CONFIG.world), body: `${m.by} warned you: ${String(m.reason ?? '')}`, ok: 'I understand', cancel: 'Close' })))).catch((e) => report('warned', e)); });

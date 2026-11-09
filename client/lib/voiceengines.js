@@ -1,15 +1,7 @@
-/** voiceengines — a SLOT for speech engines, the way the world has a slot for
- *  components.
- *
- *  Modelled on the server's comp fold, which stores components without knowing
- *  a single component type: this module knows no engine names. An engine
- *  REGISTERS itself, declares what files it recognises, and returns the one
- *  thing the rest of the system wants, what setTtsSource() takes:
- *
- *      (text) => { pcm: Int16Array, sampleRate: number }
- *
- *  Adding an engine = one registerEngine() call in its own file. Nothing here,
- *  in the panel, or in the accept list changes.
+/** voiceengines — a registry of speech engines; this module knows no engine names.
+ *  An engine registers itself, declares what files it recognises, and returns what
+ *  setTtsSource() takes: (text) => { pcm: Int16Array, sampleRate: number }.
+ *  Adding an engine = one registerEngine() call in its own file.
  */
 
 const engines = [];
@@ -40,9 +32,7 @@ function availableEngines() {
   return engines.filter((e) => e.supported?.() !== false).map(({ id, label, accept }) => ({ id, label, accept }));
 }
 
-/** Pick the engine that best recognises these files. Returns null if none does,
- *  which the caller must render as "we do not know this format" — never as a
- *  silent failure, and never by guessing at the highest-scoring zero. */
+/** Pick the engine that best recognises these files; null if none scores above 0. */
 export function matchEngine(files) {
   let best = null, bestScore = 0;
   for (const e of engines) {
@@ -54,10 +44,7 @@ export function matchEngine(files) {
   return best;
 }
 
-/** The whole public flow: hand it the files a human picked, get back a speak fn.
- *  Deliberately does NOT ask which engine — sniffing is the point, because a
- *  person with a voice model should not have to know which runtime consumes it.
- */
+/** Files a human picked → { engine, speak, label }. The engine is sniffed, never asked for. */
 
 export async function loadFromFiles(files, onProgress = () => {}) {
   const e = matchEngine(files);

@@ -1,17 +1,9 @@
-// A NULL EYE FRAMEBUFFER IS THE DEFAULT FRAMEBUFFER (test/client/xr-render-errors-probe.mjs).
-//
-// three r186, WebGL backend: XRManager hands the session layer's framebuffer to backend.setXRTarget, and
-// _setFramebuffer then calls WebGLState.drawBuffers(renderContext, fb), which caches per framebuffer in a WeakMap —
-// `currentDrawbuffers.set(fb, …)`. A WebGL emulator (IWER, and the Immersive Web Emulator extension built on it)
-// answers XRWebGLLayer.framebuffer with null by design (iwer lib/layers/XRWebGLLayer.js:44: it draws to the canvas and
-// splits it per eye), so the set throws `Invalid value used as weak map key` — inside renderer._renderOutput before
-// `xr.enabled` is restored (no finally), leaving the renderer with XR OFF: later frames drew the desktop camera.
-//
-// A real immersive runtime returns an opaque WebGLFramebuffer, never null (WebXR § XRWebGLLayer: only an INLINE
-// session's layer has a null framebuffer). So the wrapper installs at sessionstart, and only when that session's base
-// layer really has a null framebuffer — the condition itself, not a guess at which emulator is present. For null, the
-// draw-buffer state the default framebuffer needs is [BACK] (what three issues for a context with no textures).
-// Revisit at every three bump: if drawBuffers stops keying a WeakMap on the framebuffer, delete this file.
+// Treat a null eye framebuffer as the default framebuffer. A WebGL emulator (IWER) answers
+// XRWebGLLayer.framebuffer with null; three r186's WebGLState.drawBuffers keys a WeakMap on it and throws
+// (`Invalid value used as weak map key`), leaving the renderer with xr.enabled off. A real runtime never
+// returns null, so the wrapper installs at sessionstart only when the base layer's framebuffer really is null,
+// and answers with the default framebuffer's draw-buffer state ([BACK]). Tests: test/client/xr-nullfb-test.mjs,
+// xr-render-errors-probe.mjs. Revisit at every three bump: if drawBuffers stops keying on the framebuffer, delete this.
 export function tolerateNullXRFramebuffer(renderer) {
   const state = renderer?.backend?.isWebGLBackend ? renderer.backend.state : null;
   const xr = renderer?.xr;

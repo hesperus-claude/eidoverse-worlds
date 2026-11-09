@@ -13,12 +13,9 @@
 //   clearStatusChip(id)
 //   paintHud(status)   the ∃ mark itself (#hud): lit while net.status is 'live', pulsing while it connects (main.js, 1 Hz)
 //
-// PLACEMENT: the strip continues the ∃'s status line past whatever glyphs sit on it. On a vertical rail (left/right)
-// that line is the ∃'s ROW, so the chips run along it, away from the edge. On a horizontal rail (top/bottom) the row
-// is the rail itself, so the line is the ∃'s COLUMN (the glyphs fold down/up from it) and the chips stack along that.
-// It depends only on the ∃ and its glyphs — never on frames or the action bar — so no placement cycle can form; the
-// action bar and default frames count it as chrome (actionbar.js roomFor, windows.js CHROME_ANCHOR '#hudstatus'), and
-// the ∃ menu (z 50) opens OVER it and the glyphs, as a dropdown hanging from the ∃ (ui.js anchorBeside).
+// Placement: the strip continues the ∃'s status line past its glyphs: along the ∃'s row on a vertical rail, down its
+// column on a horizontal one. It depends only on the ∃ and its glyphs, never on frames or the action bar, so no
+// placement cycle can form; those count it as chrome (actionbar.js roomFor, windows.js CHROME_ANCHOR '#hudstatus').
 //
 // No imports beyond icons: the governor and capnotice post here, and this must not pull the engine in with it.
 import { rsvg } from './icons.js';
@@ -151,9 +148,7 @@ function place() {
     for (const b of document.querySelectorAll('.edit-top:not([hidden]) > :not(.build-mode-label)')) {
       const r = visible(b); if (r && r.top <= cy && r.bottom >= cy) hi = Math.max(hi, r.right);
     }
-    // the room left on the row; chips that don't fit WRAP to a second line under the first (a phone with three
-    // notices), rather than sliding back over the glyphs
-    // (the lantern's resting line is a round button top-right on a phone: the row ends before it)
+    // the room left on the row (the row ends before the lantern pill); chips that don't fit wrap to a second line
     let end = edge === 'right' ? 0 : innerWidth;
     const pill = visible(document.getElementById('lantern-pill'));
     if (pill && pill.top <= cy && pill.bottom >= cy) end = edge === 'right' ? Math.max(end, pill.right + GAP) : Math.min(end, pill.left - GAP);

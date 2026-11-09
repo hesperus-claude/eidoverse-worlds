@@ -17,20 +17,14 @@
 //                                             other animation, replace ends them first
 //
 // A value per bone is [x,y,z,w] or {q, t, s} (shared/humanoid.js poseChannels).
-//
-// Each verb throws a TypeError naming what it wants rather than guess at a
-// call it can't read, above all one meant for someone else that would land on
-// the caller: a target given but empty or not a name, an option it doesn't
-// know, options passed as undefined or null or followed by more, a name where
-// the bones or the animation go, or a target among them.
+// Each verb throws a TypeError naming what it wants rather than guess at a call it can't read — above all one
+// meant for someone else that would otherwise land on the caller.
 import { mergePose, puppetPose } from '../../shared/humanoid.js';
 
 const name = (t) => typeof t === 'string' && t.length > 0;
 
-/** The options of a verb that can act on someone else: { replace, target },
- *  or a name alone as the target. Called with the verb's arguments after its
- *  first, so options passed as undefined or null throw instead of reading as
- *  none, and so does anything after them. */
+/** The options of a verb that can act on someone else: { replace, target }, or a name alone as the target.
+ *  Takes the arguments after the verb's first, so an explicit undefined/null or an extra argument throws. */
 function consoleOptions(verb, rest) {
   const keys = ['replace', 'target'];
   const want = `the second argument is { replace, target }, or a target's name; leave it out to act on yourself`;
@@ -49,10 +43,8 @@ function consoleOptions(verb, rest) {
   return opts;
 }
 
-/** The verbs, acting through `state` (the caller's own held pose, as
- *  state.pose), `sendPuppet(target, request)` (a request to pose someone
- *  else, client/lib/net.js) and `play(anim)` (an animation on the caller's
- *  own body, played and sent). */
+/** The verbs, acting through `state.pose` (the caller's held pose), `sendPuppet(target, request)` (net.js) and
+ *  `play(anim)` (an animation on the caller's own body, played and sent). */
 export function poseCommands({ state, sendPuppet, play }) {
   return {
     pose: (bones, ...rest) => {
@@ -61,8 +53,7 @@ export function poseCommands({ state, sendPuppet, play }) {
         throw new TypeError("EW.pose: the first argument is a map of bone name to value, or null to release; a target's name goes second");
       }
       if (bones && ('target' in bones || 'replace' in bones)) throw new TypeError("EW.pose: target and replace go in the second argument, not among the bones");
-      // Nothing named changes nothing, unless it replaces: a whole pose of no
-      // bones sends every bone back, which is a release.
+      // nothing named changes nothing, unless it replaces (a whole pose of no bones is a release)
       if (bones === undefined && !replace) return target ? undefined : state.pose;
       if (target) {
         // No bones merged over theirs is no request: the pose tool sends none either.

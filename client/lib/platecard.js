@@ -1,25 +1,14 @@
-// platecard — the card beside a person's nameplate (nothing goes ON the plate itself).
+// platecard — the card beside a person's nameplate (nothing goes on the plate itself).
 //
-// VOICE STATE IS HOVER-ONLY: mic and hearing live in the card below, in words, never as a mark beside every plate
-// (the headphone toggle gates voice only, so a mark was noise to everyone typing). A client too old to say leaves
-// them undefined and the card reads "not shared" — unknown is not "headphones off".
-//
-// THE CARD: rest the pointer on a nameplate (or the head under it) for HOVER_MS (dwell.js: one dwell for every
-// "rest on it for a beat" in the client) and a small card opens beside the
-// plate — name, presence, mic and hearing in words, distance / VR / a declared word, and the one per-person action the people
-// column already offers (mention → `@name ` in the chat box, chat.js mentionPerson). It is DOM, projected to the plate each frame:
-// crisp text at any distance, the house tokens and buttons for free, focusable, and it follows the plate while open.
-// (A sprite would need its own text rendering, its own hit-testing for the button and a repaint per state change.)
-// On a touch screen a TAP on a plate opens the same card; a tap elsewhere closes it. Esc closes it and goes no
-// further (windows.js's panel toggle yields to the claim). Leaving plate and card closes a hover-opened card.
-// VR has no hover, so a hand's laser RESTING on a
-// plate (or the head under it) is the hover. xr.js asks platePick once no panel has claimed the laser and reports what it
-// found with aimPlate; the same timer opens the same card. The card is the SAME DOM, moved offscreen and rasterised onto
-// a quad by the vendored HTMLMesh, the way domquad.js puts the real frames in the headset (one set of panels to
-// maintain), with the panels' colour handling (prepareQuadMaterial). It floats beside the plate at the plate's own
-// depth, upright, facing you, sized to a constant angle — at any distance it reads as a panel does at arm's length.
-// The "mention" button is left out in VR: it types into the desktop chat box (index.html #platecard[data-xr]).
-// The trigger on a plate does nothing new; on the card it clicks where it points (platePress).
+// Rest the pointer on a nameplate (or the head under it) for HOVER_MS (dwell.js) and a small card opens beside the
+// plate: name, presence, mic and hearing in words, distance / VR / a declared word, and the person menu (mention →
+// `@name ` in the chat box, chat.js mentionPerson). Mic and hearing live here in words, never as a mark beside every
+// plate; a client too old to say them reads "not shared". The card is DOM, projected to the plate each frame.
+// Touch: a tap on a plate opens it, a tap elsewhere closes it. Esc closes it and goes no further (claimEscape).
+// VR: a hand's laser resting on a plate is the hover. xr.js asks platePick once no panel has claimed the laser and
+// reports with aimPlate; the same DOM is rasterised onto a quad by the vendored HTMLMesh (as domquad.js does the
+// panels) and floats beside the plate at its depth, sized to a constant angle. The "mention" button is left out in VR
+// (index.html #platecard[data-xr]). The trigger on the card clicks where it points (platePress).
 import * as THREE from 'three';
 import { claimEscape } from './windows.js';
 import { svg, fsvg } from './icons.js';
@@ -32,13 +21,11 @@ import { escapeHtml as esc } from './markup.js';
 export const HOVER_MS = DWELL_MS;  // rest this long on a plate before the card opens: the shared dwell (300 ms)
 const LEAVE_MS = 250;              // grace to travel from plate to card
 const HEAD_R = 0.14;               // metres: the head under the plate counts as the plate
-// VR: a CSS px of the card subtends this many radians, whatever the plate's distance — the narrowest VR panel's (342 px
-// across 0.58 m at arm's length, 0.85 m: domquad.js); wider panels draw their px up to ~1.6× smaller, and the card's text
-// is 12 px. Rasterised at XR_RASTER device px per CSS px.
+// VR: a CSS px of the card subtends this many radians whatever the plate's distance (the narrowest VR panel's,
+// domquad.js); rasterised at XR_RASTER device px per CSS px.
 const XR_RAD_PER_PX = 0.002, XR_RASTER = 2.5, XR_GAP_PX = 10;
-// VR: the laser's slack around the pill for getting ON a plate (the desktop gives the cursor 3–4 px): a hand trembles.
-// An ANGLE about the hand (xrpointer.js's table), since tremor is angular: 0.01 rad is 3 cm at 3 m. Staying ON a
-// plate once there is the pointer's stickiness, measured from the last point the laser had on it, not stacked on top.
+// VR: the laser's slack around the pill for getting on a plate, an angle since tremor is angular (xrpointer.js).
+// Staying on a plate once there is the pointer's stickiness.
 
 let d = null;                      // injected: { camera, canvas, scene, remotes, myPos, presenting, mentionPerson, colorFor }
 let card = null, cardFor = null, openedBy = null, sig = '';
@@ -108,14 +95,12 @@ export function updatePlates(now = performance.now()) {
 }
 const onDomCard = () => card.matches(':hover'), onNoCard = () => false;
 
-// hover: the same plate for HOVER_MS opens it; leaving plate AND card closes a hover-opened card. `over` is the plate
-// under the pointer (desktop) or under a laser (VR), `since` when the pointer came to rest on it (its dwell's clock —
-// the mouse's here, the hand's in VR, where the laser's stickiness keeps it counting through a small drift); onCard()
-// says whether the pointer is on the card itself.
+// hover: the same plate for HOVER_MS opens it; leaving plate and card closes a hover-opened card. `over` is the plate
+// under the pointer or laser, `since` when it came to rest there (its dwell's clock), onCard() whether the pointer is
+// on the card itself.
 function hoverStep(over, since, onCard, now) {
   hoverId = over; hoverSince = over != null ? since : now;
-  // a dismissal ends only once the pointer has been OFF that plate for a moment: a plate is a thin target, and a
-  // one-frame miss (the camera breathing a few px) must not re-arm the card under a resting pointer
+  // a dismissal ends only once the pointer has been off that plate for a moment: a one-frame miss must not re-arm the card
   if (dismissed && over === dismissed) dismissOff = 0;
   else if (dismissed && !dismissOff) dismissOff = now;
   else if (dismissed && now - dismissOff >= LEAVE_MS) { dismissed = null; dismissOff = 0; }
@@ -265,8 +250,7 @@ function plateRect(av, box) {
   o.l = cx - hw; o.r = cx + hw; o.t = cy - hh; o.b = cy + hh; o.cx = cx; o.cy = cy; o.depth = depth; o.head = head;
   return o;
 }
-// plateRect's answer, reused: it runs per remote on every pointer move and every frame the card follows, and every
-// caller reads it before the next call
+// plateRect's answer, reused (it runs per remote per pointer move); every caller reads it before the next call
 const _rect = { l: 0, r: 0, t: 0, b: 0, cx: 0, cy: 0, depth: 0, head: null }, _rectHead = { x: 0, y: 0, r: 0 };
 
 function hitAt(x, y) {
@@ -322,8 +306,8 @@ function paint() {
   }
   // the visor — the HUD's own VR glyph
   rows.push(`<div class="pc-row" data-k="xr" data-on="${!!r.xrOn}">${fsvg('virtual-reality', 14)}<span>${r.xrOn ? 'in VR' : 'not in VR'}</span></div>`);
-  // the header's right end: the word they declared for themselves (§6a; any word, shown as said, nothing when they declared
-  // none) and how far — 'present' is the default and says nothing, so only away / busy are named, in their presence colour
+  // the header's right end: the word they declared for themselves (shown as said) and how far; 'present' is the
+  // default and says nothing, so only away / busy are named, in their presence colour
   const where = [typeof r.declares === 'string' && r.declares ? r.declares : null,
     dist == null ? null : `${dist < 10 ? dist.toFixed(1) : Math.round(dist)} m`].filter(Boolean).join(' · ');
   card.innerHTML = `<div class="pc-head"><span class="pc-dot" style="background:${esc(d.colorFor?.(r.id) ?? 'var(--brand)')}"></span>`

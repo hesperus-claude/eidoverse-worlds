@@ -1,27 +1,23 @@
-// vrmic — ask for the microphone BEFORE the headset goes on, so voice just works inside it.
+// vrmic — ask for the microphone BEFORE the headset goes on, since a browser's permission prompt cannot be relied
+// on to show during an immersive session. Two halves:
 //
-// A browser's permission prompt cannot be relied on to show during an immersive WebXR session — whether a given
-// headset's own browser can is unknown, so this is built for the case where it can't. Two halves:
-//
-//   1. PRE-VR. The visor press reads the permission WITHOUT prompting (navigator.permissions.query). Only when the
-//      answer is genuinely open ('prompt') and this browser has never chosen does a small 2D step ask "Voice in VR?" —
-//      Allow runs getUserMedia on the flat page (the browser's own prompt shows normally) and stops those tracks at
-//      once: permission is not consent to speak, the mic stays OFF until the person turns it on (voiceconsent.js).
-//      Then an "Enter VR" button, because requestSession needs a FRESH user gesture and the prompt spent the first.
-//   2. IN VR. The ring's mic press with the permission still open makes ONE bounded attempt through the one real
-//      entry point (micstate.toggleMic → voicesfu's single acquisition). If no mic is live once it settles or TRY_MS
-//      passes, the intent is RETRACTED (sfuMic(false): voicesfu re-reads intent after its await and drops whatever arrives late), a
-//      head-locked note says why, and a flag makes the next flat-page moment ask. Nothing here is awaited by the exit.
+//   1. PRE-VR. The visor press reads the permission without prompting. Only when it is open ('prompt') and this
+//      browser has never chosen does a 2D step ask "Voice in VR?" — Allow runs getUserMedia on the flat page and
+//      stops the tracks at once (permission is not consent to speak; the mic stays off), then an "Enter VR" button,
+//      because requestSession needs a fresh user gesture.
+//   2. IN VR. The ring's mic press with the permission still open makes one bounded attempt (micstate.toggleMic).
+//      If no mic is live by TRY_MS the intent is retracted, a head-locked note says why, and a flag makes the next
+//      flat-page moment ask. Nothing here is awaited by the exit.
 //
 // The decisions are vrmic_policy.js (pure, tested); this file is the effects.
 import { bus, CONFIG } from './base.js';
 import { flashHint, toast } from './ui.js';
-import { THREE, camera, renderer } from './core.js';   // static: xr.js (our importer) already holds core, and the plate must land in the same breath as its words
-import { quadMaterial } from './quadcolour.js';   // the plate's colours as authored, not ACES-washed (the VR panels' path)
+import { THREE, camera, renderer } from './core.js';
+import { quadMaterial } from './quadcolour.js';   // the plate's colours as authored, not ACES-washed
 import { preVrStep, inVrMicPlan, inVrAfterTry, afterExitStep, MIC_CHOICE_KEY, MIC_PENDING_KEY } from './vrmic_policy.js';
 
-export const TRY_MS = 6000;          // long enough to answer a prompt the headset DOES show; short enough not to strand
-const EXIT_ASK_DELAY_MS = 1500;      // after the session ends: lets a browser prompt left over from VR show first
+export const TRY_MS = 6000;          // long enough to answer a prompt the headset does show
+const EXIT_ASK_DELAY_MS = 1500;      // lets a browser prompt left over from VR show first
 
 const ls = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -46,7 +42,7 @@ bus.on('xr:state', (on) => {
   presenting = !!on;
   if (presenting) return;
   clearNote();
-  // NEVER awaited by the exit: a timer, and everything after it is its own business.
+  // never awaited by the exit
   if (pending()) setTimeout(() => { void askAfterExit(); }, EXIT_ASK_DELAY_MS);
 });
 
@@ -55,11 +51,11 @@ let deniedHinted = false;
 
 // ── 1. the visor press ──────────────────────────────────────────────────────────────────────────────────────────────
 let cardOpen = false, preflighting = false;
-/** Called by xr.js's visor click with the rest of its entry flow. `proceed` runs at once (straight in) or from a later,
- *  fresh click on the step. Resolves to what happened: 'straight' | 'asked' | 'busy' (a press while one is in hand). */
+/** xr.js's visor click. `proceed` runs at once (straight in) or from a later, fresh click on the step.
+ *  Resolves to 'straight' | 'asked' | 'busy' (a press while one is in hand). */
 export async function vrMicPreflight(proceed) {
   if (cardOpen) return 'asked';
-  if (preflighting) return 'busy';   // a second press inside the (≤400 ms) permission read would open a second step
+  if (preflighting) return 'busy';   // a second press inside the permission read would open a second step
   preflighting = true;
   let state;
   try { state = await micPermissionState(); } finally { preflighting = false; }
@@ -95,12 +91,11 @@ export async function xrMicPress() {
     const v = inVrAfterTry({ micOn: M.micOn(), state: await micPermissionState() });
     rec = { how, verdict: v };
     if (v === 'ok') return true;
-    // Retract whether the try timed out OR settled without a mic: an early press is only an INTENT (voicesfu wantMic),
-    // and the bridge would replay it when the credential arrives — the same unanswerable request, later, in the headset.
+    // retract: an early press is only an intent (voicesfu wantMic), and the bridge would replay it later in the headset
     await retract();
     if (v === 'blocked') { vrNote(`Microphone is blocked for this site — allow it in the browser's site settings${presenting ? ' after you leave VR' : ''}`); return false; }
     setPending(true);
-    // the session may have ended during the try: its exit read pending() before this set it, so the ask is ours to schedule
+    // the session may have ended during the try, before pending was set: the ask is ours to schedule
     if (presenting) vrNote('Microphone needs permission — you\'ll be asked when you leave VR');
     else setTimeout(() => { void askAfterExit(); }, EXIT_ASK_DELAY_MS);
     watchForGrant();
@@ -112,8 +107,8 @@ export async function xrMicPress() {
   }
 }
 
-/** Take back a mic intent whose acquisition is still hanging. voicesfu re-reads intent after its getUserMedia await,
- *  so a device that arrives later is stopped there, not published (the ONE-ACQUISITION / re-read-intent rules). */
+/** Take back a mic intent whose acquisition is still hanging; voicesfu re-reads intent after its await, so a
+ *  late device is stopped there, not published. */
 async function retract() {
   try {
     const S = await import('./voicesfu.js');
@@ -121,8 +116,8 @@ async function retract() {
   } catch { /* no transport in this context */ }
 }
 
-/** The permission can still change while in VR (a prompt the headset showed late, answered after the timeout).
- *  One watcher however many tries failed: each query is a fresh PermissionStatus, so N listeners meant N announcements. */
+/** The permission can still change while in VR (a late prompt, answered after the timeout). One watcher, however
+ *  many tries failed. */
 let watchingGrant = false;
 function watchForGrant() {
   if (watchingGrant) return;
@@ -183,10 +178,9 @@ function openCard({ mode, proceed = null }) {
   scrim.querySelector('[data-act=allow]').onclick = async (e) => {
     setPending(false);
     const btn = e.currentTarget; btn.disabled = true; btn.textContent = 'waiting for the browser…';
-    // Remembered only once the browser answers: while its prompt is open the permission still reads 'prompt', and a
-    // stored 'allow' would send every later press straight in with nothing ever asking again.
+    // remembered only once the browser answers, or a stored 'allow' would send every later press straight in
     const asked = askDevice().then((r) => { ls.set(MIC_CHOICE_KEY, 'allow'); return r; });
-    // bounded: a browser prompt left unanswered must not hold the way into VR (a late answer's tracks are still stopped)
+    // bounded: an unanswered prompt must not hold the way into VR (a late answer's tracks are still stopped)
     const got = await Promise.race([asked, new Promise((r) => setTimeout(() => r({ ok: false, name: 'unanswered' }), TRY_MS))]);
     globalThis.__vrmic = { ...(globalThis.__vrmic ?? {}), lastAsk: got };
     if (!scrim.isConnected) return;
@@ -214,8 +208,7 @@ function openCard({ mode, proceed = null }) {
   scrim.querySelector('[data-act=allow]').focus();
 }
 
-/** One flat-page getUserMedia, for the PERMISSION only: every track is stopped before this returns, so the device
- *  light goes out and nothing is published. The voice lane acquires its own stream when the person turns the mic on. */
+/** One flat-page getUserMedia for the permission only: every track is stopped before this returns. */
 async function askDevice() {
   let s = null;
   try {
@@ -230,8 +223,7 @@ async function askDevice() {
 }
 
 // ── the in-headset note ─────────────────────────────────────────────────────────────────────────────────────────────
-// No toast reaches the eyes (toasts and the hint bar are DOM; only registered frames ride quads), so a short message
-// gets its own head-locked plate: a child of the camera, 0.9 m out and a little low, drawn over the world.
+// toasts are DOM and never reach the headset, so a short message gets its own head-locked plate on the camera
 let note = null;
 function vrNote(text, ms = 7000) {
   globalThis.__vrmic = { ...(globalThis.__vrmic ?? {}), note: text };

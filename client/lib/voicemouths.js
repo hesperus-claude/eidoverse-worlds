@@ -1,8 +1,5 @@
-// ---- live voice as presence --------------------------------------
-// The same two-plane split as the agent voice, pointed at humans: the SOUND is
-// already live (zero latency, no waiting on transcription), so the visible half
-// is live too — mouth driven by real amplitude, 🎙 glyph while you speak. STT
-// stays on the LOG plane, landing afterward as an ordinary say.
+// voicemouths — live voice as presence: mouths driven by real amplitude, 🎙 glyph while you
+// speak. STT stays on the log plane and lands afterward as an ordinary say.
 
 import { CONFIG, bus } from './base.js';
 import { micOn as meshMicOn, isMuted, micAnalyserLevel as meshMicLevel } from './micstate.js';
@@ -11,11 +8,7 @@ import { remotes, noteSpeaking } from './remotes.js';
 import { sendTyping } from './net.js';
 import { getMe } from './mybody.js';
 
-// READ WHICHEVER TRANSPORT IS LIVE: voice.js's own micStream and peers are
-// null/empty forever on an SFU client (they live in voicesfu.js), so every
-// function below asks the SFU bridge first, then falls back (as mictoggle.js and
-// stt.js do). The SFU exposes the SAME shapes (sfuPeerLevels matches
-// relayPeerLevels), so mouth-flap code is shared.
+// ask the SFU bridge's globals first (voicesfubridge.js installs them), then micstate — as mictoggle.js and stt.js do
 const micIsOn = () => {
   try {
     if (typeof window.__sfuMicOn === 'function') return !!window.__sfuMicOn();
@@ -30,8 +23,7 @@ const myLevel = () => {
 };
 const allPeerLevels = () => {
   try {
-    // ONE TRANSPORT, ONE ANSWER: the SFU global is the only source; an empty Map
-    // is the honest answer before the bridge installs it.
+    // an empty Map before the bridge installs the global
     if (typeof window.relayPeerLevels === 'function') return window.relayPeerLevels();
     return new Map();
   } catch { return new Map(); }
@@ -46,9 +38,7 @@ export function updateVoiceMouths(now) {
   if (me) {
     const live = micIsOn() && !isMuted();
     me.voiceLevel = live ? myLevel() : null;
-    // 🎙 means SOUND IS COMING OUT OF ME, not "my mic is on": an always-on badge
-    // carries no information. It tracks actual speech, with a short tail so
-    // ordinary pauses between words don't strobe it.
+    // 🎙 tracks actual speech, not "mic on", with a short tail so pauses don't strobe it
     const speaking = live && me.voiceLevel > VOICE_GATE;
     if (speaking) _micTail = now + 900;
     const show = now < _micTail;
@@ -68,17 +58,13 @@ export function updateVoiceMouths(now) {
   }
 }
 
-// Two-plane speech, timer-free: captions are the live performance (bubble +
-// mouth, paced to the voice); the logged say carries spoken:true and world.js
-// never re-performs it. No dedup windows, no content matching: the message
-// itself says which plane it belongs to. caption and speech are one routine on
-// two bus names (§14 6c).
+// captions are the live performance (bubble + mouth); the logged say carries spoken:true and
+// world.js never re-performs it. caption and speech are one routine on two bus names.
 function performSpeech({ actor, text }) {
   const av = actor === CONFIG.name ? getMe() : remotes.get(actor)?.avatar;
   av?.say(text);
   if (actor !== CONFIG.name) noteSpeaking(actor, Math.min(12000, 3000 + text.length * 30));
 }
-// side-effecting on import (the emitters.js pattern): these are pure
-// subscriptions, and nothing can emit either event before connect()
+// subscribes on import; nothing emits either event before connect()
 bus.on('caption', performSpeech);
 bus.on('speech', performSpeech);

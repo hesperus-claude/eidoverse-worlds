@@ -1,15 +1,10 @@
-// STEREO RENDERS GET THEIR OWN PASS, so entering and leaving VR doesn't rebuild the world.
+// Stereo renders get their own pass, so entering and leaving VR doesn't rebuild the world.
 //
-// three r186 keeps one render object per (object, material, render context, lights) in a chain map chosen by
-// passId. The XR stereo ArrayCamera changes a render object's dynamic cache key (`cameras.length`), so while desktop
-// and XR shared the default map every switch disposed each object and rebuilt it in the same slot: the first exit
-// recompiled every material in the world (bench/xr-switch-compile-measure.mjs), and a desktop-side pre-warm of the XR
-// variant was undone by the very next desktop frame.
-//
-// Routing stereo cameras to their own chain map ('xr', 'xr:backSide') lets both variants live side by side:
-// after each variant's first build, a switch is a presentation change, not a rebuild (Basis's soft swap).
-// passId is only ever a map key in three (never compared), and compileAsync resolves through the same get(),
-// so a warm with a stereo camera lands in the map the headset will read.
+// three r186 keeps render objects in a chain map chosen by passId, and the stereo ArrayCamera changes their cache
+// key, so while desktop and XR shared the default map every switch rebuilt every object (the first exit recompiled
+// every material: bench/xr-switch-compile-measure.mjs). Routing stereo cameras to their own map ('xr', 'xr:backSide')
+// lets both variants live side by side; compileAsync resolves through the same get(), so a stereo warm lands where
+// the headset reads. Test: test/client/xrpass-test.mjs.
 const isStereo = (camera) => camera?.isArrayCamera === true && camera.cameras.length > 0;
 
 export function separateXRPass(renderer) {
@@ -25,16 +20,11 @@ export function separateXRPass(renderer) {
   return true;
 }
 
-/** Run a stereo warm through THREE'S OWN XR camera and its persistent eye cameras (renderer.xr._cameras, updated in
- *  place every XR frame). Not a look-alike: r186 binds the stereo camera uniforms to ONE module-global array
- *  (`_cameraProjectionMatrixArray.array = matrices`, inside a .once() Fn, no per-frame refresh), pointed at whichever
- *  ArrayCamera's matrix objects built a shader last, so a stand-in froze head tracking (test/client/xr-eye-binding-probe.mjs).
- *  Before a session xr.getCamera() has ZERO eyes (three fills them on the first XR frame), which compiles the MONO
- *  variant, so the two eyes are put in for the warm's whole duration (node builds happen after compileAsync yields)
- *  and taken out again if no session started meanwhile. */
-// Overlapping warms SHARE the pushed eyes: a count of warms in flight, and only the LAST one out takes them back (a
-// flora warm runs outside the conductor, so overlap is real). A session that starts meanwhile owns the eyes from then
-// on: nobody clears them while presenting.
+/** Run a stereo warm through three's OWN XR camera and its persistent eye cameras (renderer.xr._cameras): r186 binds
+ *  the stereo uniforms to whichever ArrayCamera built a shader last, so a stand-in camera froze head tracking
+ *  (test/client/xr-eye-binding-probe.mjs). Before a session the XR camera has no eyes, so the two are pushed for the
+ *  warm's duration and taken out if no session started meanwhile. Overlapping warms share them: only the last one
+ *  out takes them back, and never while presenting. */
 const eyeHolds = new WeakMap();   // xr camera → number of warms currently relying on eyes WE pushed
 export async function withXREyes(renderer, fn) {
   const xr = renderer.xr, cam = xr.getCamera();

@@ -19,9 +19,9 @@ export function gradeSRGB([r, g, b], { saturation = 1, contrast = 1 } = {}) {
   return [r, g, b].map((v) => Math.min(1, Math.max(0, (y + (v - y) * saturation - 0.5) * contrast + 0.5)));
 }
 
-// The inverse of three r186's acesFilmicToneMapping (ToneMappingFunctions.js), as data the shader in quadcolour.js
-// reads and as gradeSRGB's sibling twin below — one copy, so test/client/quadcolour-test.mjs round-trips the constants the GPU
-// uses through three's own forward. The matrices are listed in the row order three lists its forward ones.
+// The inverse of three's acesFilmicToneMapping (ToneMappingFunctions.js), one copy shared by the quadcolour.js shader
+// and acesFilmicInverseJS below; test/client/quadcolour-test.mjs round-trips them through three's forward.
+// Matrices are in the row order three lists its forward ones.
 export const ACES_IN_INV = Object.freeze([1.76474097, -0.67577768, -0.08896329, -0.14702785, 1.16025151, -0.01322366, -0.03633683, -0.16243644, 1.19877327]);
 export const ACES_OUT_INV = Object.freeze([0.64303825, 0.31118675, 0.04577546, 0.05926869, 0.93143649, 0.00929492, 0.0059619, 0.06392902, 0.93011838]);
 export const ACES_FIT = Object.freeze({ A: 0.0245786, B: 0.000090537, C: 0.983729, D: 0.4329510 * 0.983729, E: 0.238081 });   // RRTAndODTFit's

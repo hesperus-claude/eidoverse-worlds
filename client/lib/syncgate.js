@@ -1,24 +1,20 @@
-// syncgate — no pipeline is ever LINKED on the render path (WebGL backend).
+// syncgate — no pipeline is ever linked blocking on the render path (WebGL backend).
 //
-// three r186's WebGL backend builds a pipeline the first time a frame meets a render object it has no program for, and
-// on that path (promises === null) it goes straight to _completeCompile, whose gl.getProgramParameter(LINK_STATUS)
-// blocks until the driver has finished linking (three.webgpu.js ~75523/75697). KHR_parallel_shader_compile lets the
-// link run off-thread and be POLLED, but three only takes that branch inside compileAsync; one such blocking link has
-// been measured holding the main thread for nearly a minute. Every warm in the client (assets.js, avatar.js, sky.js, warmqueue.js …) exists to keep builds off that path; this is
-// the backstop for whatever they miss (a variant change after the warm, a pass nobody pre-compiled).
+// three's WebGL backend builds a pipeline the first time a frame meets a render object it has no program for, and on
+// that path (promises === null) the LINK_STATUS read blocks until the driver has linked (measured: up to a minute).
+// KHR_parallel_shader_compile lets the link be polled, but three only polls inside compileAsync. The warms
+// (assets.js, avatar.js, sky.js, warmqueue.js) keep builds off that path; this is the backstop for what they miss.
 //
-// With the extension present, a render-path build is handed to three's own polling branch. The object is then simply
-// not drawn until its program links, by three itself: _renderObjectDirect draws only when Pipelines.isReady(), which
-// stays false until _completeCompile sets the pipeline (~65557/33289). It pops in late instead of stopping the world. Without the extension nothing
-// changes (there is no way to link without blocking). ?syncgate=0 turns the gate off; the census stays.
+// With the extension present, a render-path build is handed three's polling branch; three itself skips drawing the
+// object until its program links (Pipelines.isReady), so it pops in late instead of stopping the world. Without the
+// extension nothing changes. ?syncgate=0 turns the gate off; the census stays.
 //
-// The census tees every render-path build that took ≥ SLOW_MS to request (with the gate off, that is the link itself),
-// naming object, material and the generated shader sizes — the question the trace could not answer: WHICH material.
+// The census tees every render-path build that took ≥ SLOW_MS, naming object, material and shader sizes.
 
 const SLOW_MS = 250;
 const GIANT_FS = 400000;   // chars of fragment source: only the sky's cloud programs are this big
-// the world's own pass: no user target bound — or the target three's _renderScene binds for it (its tone-mapping
-// framebuffer, isPostProcessingRenderTarget ~63249; the XR eye target in a session). Anything else is someone's target.
+// the world's own pass: no user target bound, or the target three binds for it (its tone-mapping framebuffer, the XR
+// eye target). Anything else is someone's target.
 const isWorldPass = (rt) => rt === null || !!rt?.isPostProcessingRenderTarget || !!rt?.isXRRenderTarget;
 // the nearest named ancestor, with the path length — most three children are anonymous under a named root
 const named = (o) => { for (let n = o, d = 0; n && d < 6; n = n.parent, d++) if (n.name) return d ? `${n.name}›${d}` : n.name; return '(unnamed)'; };
@@ -48,11 +44,9 @@ export function installSyncGate(renderer, { tee = () => {}, gate = true } = {}) 
     stats.renderPath++;
     if (!isWorldPass(renderer.getRenderTarget())) stats.intoTarget++;
     const t0 = performance.now();
-    // Only the WORLD drawn to the screen may wait a frame: a render into a target is usually ONE-SHOT (a bake, a PMREM,
-    // a capture) and a skipped draw there is a permanently wrong texture, so those keep upstream behaviour and their
-    // owners warm them. Exception: a GIANT program (> GIANT_FS) into a target defers too, since a blocking build of one
-    // can outlast the driver's watchdog and reset it; its draw is skipped until it links and its owner redraws.
-    // Measured sizes: world materials ~66 k, the sky programs 0.9–1.8 M.
+    // Only the world drawn to the screen may wait a frame: a render into a target is usually one-shot (a bake, a
+    // capture), where a skipped draw is a permanently wrong texture. Exception: a giant program (> GIANT_FS) into a
+    // target defers too, since a blocking build of one can reset the driver; its owner redraws once it links.
     const fsLen = renderObject.pipeline?.fragmentProgram?.code?.length ?? 0;
     const giantAside = fsLen > GIANT_FS && !isWorldPass(renderer.getRenderTarget());
     const deferring = gate && !!be.parallel && (isWorldPass(renderer.getRenderTarget()) || giantAside);

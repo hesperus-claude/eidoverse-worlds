@@ -1,8 +1,5 @@
-// The interim sky: a plain gradient dome shown while the real sky's programs compile (on a cold GPU cache the cloud
-// march takes minutes to link on WebGL). Its colours are the sky system's OWN time-of-day horizon/zenith, which it
-// recomputes in JavaScript every frame independently of its shaders, so the stand-in matches the hour from the start.
-// Tiny program, no textures: it links in milliseconds. One gradient that resembles the time of day, never the
-// half-made states.
+// sky_interim — a plain gradient dome shown while the real sky's programs compile (minutes on a cold GPU cache). Its
+// colours are the sky system's own time-of-day horizon/zenith uniforms, so the stand-in matches the hour from the start.
 import { THREE, scene, camera } from './core.js';
 import { bus } from './base.js';
 
@@ -26,9 +23,9 @@ function paint() {
   col.needsUpdate = true;
 }
 
-/** Show the stand-in, fed by the sky system's uniforms ({zenith, horizon} vec3 uniforms). */
-/** The interim gradient mesh, when built (unfogged too — hidden under the world's water). */
+/** The interim gradient mesh, when built (unfogged — hidden under the world's water). */
 export const interimSkyObject = () => mesh;
+/** Show the stand-in, fed by the sky system's {zenith, horizon} vec3 uniforms. */
 export function showInterimSky(uniforms) {
   uni = uniforms ?? null;
   if (!mesh) {

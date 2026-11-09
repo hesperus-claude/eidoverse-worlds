@@ -1,26 +1,13 @@
-// thingphysics — physics in a world, on the client (design 20: the physics design note, research 20).
-//
-// TODAY nothing here simulates for anyone else and nothing is streamed: every act is a REQUEST, and every client draws
-// the same truth. That is this client's current state, not the protocol's limit: spec/PHYSICS.md §4.1 lets whoever
-// holds or touches a thing simulate it locally and stream its state on a presence lane (§4.3, reserved), crossing into
-// the engine only through log entries (a lift; a launch or a checked settlement). Continuous contact gives no unlogged
-// impulse TO THE ENGINE; it was never a ban on live hands.
-//
-//   carrying   grab / put / throw / drop / punt are requests (shared/protocol/authority.js). Who holds what is the authority's
-//              presence plane (`holds`, never logged); every client draws a held thing in its holder's hand, so it
-//              follows the hand for everyone (a remote's hand is their avatar's hand bone, driven by their own pose
-//              stream: desktop or VR alike), and the holder's own hand is where its release pose is sent from.
-//   flights    a launch (throw, drop, punt, a grab that let what rested on it fall) is a `sim` entry in the log. This
-//              client folds it with the SAME engine the authority runs (shared/protocol/replica.js: simFolder + eidosim, no
-//              catalogue of its own: shapes are the log's physics.shape), so a flight on screen is the engine's
-//              flight, and it rests bit for bit where the authority logs the rest (test/protocol/physlive-check.ts F4/F6).
-//              The screen shows a COPY of the canonical sim advanced to the server's clock (serverNow), interpolated
-//              between ticks: the canonical fold advances only by the entries' own ts.
-//   the body   the authority measures reach from its own track of your body (L6). A person's client keeps that
-//              track current with `move` requests (presence: unlogged), arriving once when the world has physics.
-//
-// The engine (eidosim) carries each body's whole rotation: a flying crate's tumble and a ball's roll are drawn as the
-// engine has them, slerped between ticks; the rotation the log records at rest is the realizer's once the rest arrives.
+// thingphysics — physics in a world, on the client. Nothing here simulates for anyone else: every act is a request,
+// and every client draws the same truth (spec/PHYSICS.md; live simulation authority, §4.1, is reserved).
+//   carrying   grab / put / throw / drop / punt are requests. Who holds what is the authority's presence plane
+//              (`holds`, never logged); every client draws a held thing in its holder's hand bone.
+//   flights    a launch is a `sim` entry in the log, folded here with the same engine the authority runs
+//              (shared/protocol/replica.js: simFolder + eidosim), so it rests bit for bit where the authority logs the
+//              rest (test/protocol/physlive-check.ts F4/F6). The screen shows a copy of the canonical sim advanced to
+//              serverNow and interpolated between ticks.
+//   the body   the authority measures reach from its own track of your body, kept current with `move` requests.
+// The engine carries each body's whole rotation; it is drawn as the engine has it, slerped between ticks.
 
 import { THREE } from './core.js';
 import { bus } from './base.js';
@@ -56,12 +43,10 @@ const THROW = { speed: 8, arc: 0.45, lob: 0.6 };   // a desktop throw with no ai
 const PUNT_POWER = 4;                             // physobj's default: a barrel hops a couple of metres
 
 let hooks = null;   // { myPos(): {x,y,z}, me(): Avatar|null, camera, editing(): bool }
-// The frame loop hands every hook its own clock (SECONDS since boot); frame() takes a SERVER time in ms (a probe's
-// seam), so it is wrapped: never pass frame itself as the hook.
+// the frame loop's clock is seconds since boot; frame() takes a server time in ms (a probe's seam), so it is wrapped
 export function initThingPhysics(h) { hooks = h; pushHostHook(() => frame()); }
 export const myAvatar = () => hooks?.me() ?? null;
-// Am I in a headset? xr.js binds this (it imports this module, never the other way round): a tracked body holds with
-// its own hands, so the hold pose's arms are only for a body without them.
+// am I in a headset? xr.js binds this: a tracked body holds with its own hands, so the hold pose's arms are for the rest
 let presenting = () => false;
 export const bindPresenting = (fn) => { presenting = fn; };
 
@@ -418,11 +403,11 @@ const presOwns = (id) => !!pres?.bodies?.[id];
 const _dq = new THREE.Quaternion(), _p = new THREE.Vector3();
 /** Console/probe surface: the displayed sim (a copy), and the canonical fold's view. */
 export const simShown = () => pres;
-// ---- my own release, predicted (DESIGN-physics-responsiveness §3; STRIKES PH-S1-3). On send, the launch is folded into
-// the PRESENTATION copy only, at the tick the entry will most likely take (now + rtt/2 + one tick), with the inputs the
-// authority will stamp. When the real entry arrives the fresh canonical copy is the truth: same tick and inputs give the
-// same bits (Covenant IV); otherwise a per-body draw offset decays the difference (never a blend of states). A refusal,
-// or no entry within PENDING_MS, removes it. Nothing here is read back into a request (Covenant III).
+// ---- my own release, predicted. On send, the launch is folded into the presentation copy only, at the tick the entry
+// will most likely take (now + rtt/2 + one tick), with the inputs the authority will stamp. When the real entry arrives
+// the canonical copy is the truth (same tick and inputs give the same bits, spec/PHYSICS.md Covenant IV); any
+// difference decays as a per-body draw offset. A refusal, or no entry within PENDING_MS, removes it. Nothing here is
+// read back into a request (Covenant III).
 const pending = new Map();   // id -> { ts, args, sentAt }
 export const PENDING_MS = 1500;   // a reply normally lands within 300 ms; while a guess is pending, others' news waits (second review S3); predict-pending-test reads it
 const OFFSET_SNAP = 3, OFFSET_DEAD = 0.02;
@@ -458,9 +443,8 @@ function drawFlights(wall, now) {
   replica.settleInputs();   // a late input (a heightmap's grid) landed: the canonical fold refolds before this frame copies it
   const canon = replica.sim;
   if (!canon?.sim || canon.foreign) { if (pres) { for (const id of Object.keys(pres.bodies)) suspendCollider(id, false); } pres = null; prev.clear(); return; }
-  // while one of my releases is still a guess (no entry yet), keep this copy: a fresh copy of the canonical fold stands at
-  // the latest entry's tick, which may be past the guess's, and re-folding the guess there would restart it from the hand
-  // (full probe 10-11: a 0.6 m forward jump when the truth then landed). Other bodies' news waits one round trip, no more.
+  // while one of my releases is still a guess, keep this copy: a fresh canonical copy stands at the latest entry's tick,
+  // which may be past the guess's, and re-folding the guess there would restart it from the hand
   for (const [id, pd] of pending) if (wall - pd.sentAt > PENDING_MS) unpredict(id);   // a guess nothing confirmed in time ends here, sim update or not (bot #575)
   const guessing = pres && presV !== -1 && pending.size > 0 && ![...pending].some(([id, pd]) => canon.launched[id] || wall - pd.sentAt > PENDING_MS);
   if (presV !== replica.simVersion && !guessing) {
@@ -471,9 +455,8 @@ function drawFlights(wall, now) {
     for (const [id, pd] of pending) { if (canon.launched[id] || wall - pd.sentAt > PENDING_MS) pending.delete(id); else applyPending(id); }
     for (const id of was) if (!pres.bodies[id] && !holds[id]) suspendCollider(id, false);   // its rest is the fold's now
   }
-  // Until every input the sim reads outside the log is here (siminputs.js: a heightmap's grid), a step would stand on a
-  // fallback the authority never used. Hold the drawing (bodies stand at their last word) and catch up to the clock once
-  // they land; the replica refolds its canonical sim then too. (upstream #237's hold, carried from the old simworld.js.)
+  // until every input the sim reads outside the log is here (siminputs.js: a heightmap's grid), hold the drawing and
+  // catch up to the clock once they land; the replica refolds its canonical sim then too
   const miss = simInputsMissing(replica.st);
   if (miss.length) { requestSimInputs(miss); return; }
   const target = tickOf(pres, wall);
@@ -545,8 +528,7 @@ const REPEAT_MS = 5000, saidAt = new Map();
 const refused = (what, r, id = '') => { const x = r?.refused, now = performance.now();
   // a let-go out of reach is the server's body track a step behind mine, not something the person did
   const text = x?.code === 'out-of-reach' && (what === 'throw' || what === 'drop') ? `Couldn't ${what} it from there: the server still has you a step back from where you see yourself. Try again — standing still a moment helps` : plain(what, r);
-  // at a desk: the status bar, in the attention colour, EVERY time you ask. The event below (a headset's card, the
-  // probes) keeps its once-per-5-s rule: a squeeze repeated is not news.
+  // at a desk: the status bar every time you ask; the event below (a headset's card, the probes) keeps the once-per-5-s rule
   if (!xrActive()) flashHint(text, 3800, 'attn');
   const key = `${what}|${id}|${x?.code ?? ''}|${text.replace(/-?\d+(?:\.\d+)?/g, '#')}`;   // + the thing: 'crate 2' and 'crate 3' stay two
   if (now - (saidAt.get(key) ?? -Infinity) < REPEAT_MS) return r;
@@ -602,9 +584,8 @@ export async function put(name, spot = null) {
   await track(true);
   // a spot [x, z] (where the cursor is): set it down there, on whatever is below; the authority checks my reach
   if (Array.isArray(spot)) { const r = await sendRequest('put', { id, at: [r3(spot[0]), r3(spot[1])] }); return r?.ok ? r : refused('put', r, id); }
-  // in front of my feet, clear of my body (the authority's default is under the hand, which is inside my own footprint
-  // and shoves me aside). The authority works out
-  // the height and what it lands on.
+  // in front of my feet, clear of my body (the authority's default, under the hand, is inside my footprint and shoves
+  // me aside); the authority works out the height and what it lands on
   const f = feet(), yaw = hooks?.myState?.()?.yaw, obj = entities.get(id), sz = obj ? sizeOf(id, obj) : null;
   // my walking capsule + its half-width + a gap, and no farther than the hand reaches down to the floor: the authority
   // measures hand to where it lands in 3D (bodyverbs put: within REACH of the grip), and a thing whose origin is its base
@@ -866,7 +847,7 @@ async function vrLetGo(side, id) {
 }
 
 // ---------------------------------------------------------------- keys: T take/put · Q throw/punt
-// Q, not C: C / Ctrl are down and G folds wings; Q is Minecraft's drop (notes LEGACY-PINS item 1)
+// Q, not C: C / Ctrl are down and G folds wings; Q is Minecraft's drop
 const KEYS = [
   { code: 'KeyT', key: 'T', id: 'body:take', title: 'pick up / put down', keywords: ['grab', 'carry', 'hold', 'take', 'put'], icon: 'hand',
     run: () => (myHolds().length ? put() : grab()) },

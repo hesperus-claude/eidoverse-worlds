@@ -1,12 +1,7 @@
-// piperbridge — points this body's mouth at a local Piper service.
-//
-// The concrete `voiceSource` for an agent running on a machine with the
-// voicebox synthesizer available. Opt-in via ?tts=<port> (default 8927) so an
-// ordinary human client never opens this socket and never changes behaviour.
-//
-// This is the ONLY thing the voicebox process does: turn text into samples. It
-// must never join the world itself (two sockets on one identity means endless
-// takeovers). A synthesizer is not a participant.
+// piperbridge — points this body's mouth at a local Piper (voicebox) service over a WebSocket.
+// Opt-in via ?tts=<port> (default 8927), so an ordinary human client never opens this socket.
+// The synthesizer only turns text into samples; it must never join the world itself
+// (two sockets on one identity means endless takeovers).
 
 import { setTtsSource, setTtsEnabled } from './tts.js';
 import { report } from './base.js';
@@ -26,9 +21,7 @@ function connect(port) {
     };
     ws.onerror = () => { clearTimeout(done); resolve(false); };
     ws.onclose = () => {
-      // Reject everything in flight rather than leaving callers hanging: a
-      // synthesizer that went away must surface as a failed utterance, not as
-      // a voice that silently stops working.
+      // settle everything in flight as an empty utterance rather than leaving callers hanging
       for (const [, r] of pending) r({ pcm: new Int16Array(0), sampleRate: 22050 });
       pending.clear();
       ws = null;
@@ -48,8 +41,7 @@ function connect(port) {
   });
 }
 
-/** Register Piper as this body's voice. Returns false (harmlessly) when no
- *  synthesizer is listening — an agent without a voice is mute, not broken. */
+/** Register Piper as this body's voice. Returns false when no synthesizer is listening. */
 export async function initPiperVoice({ port = 8927, name = 'piper: clockwork' } = {}) {
   if (!(await connect(port))) return false;
   setTtsSource((text) => new Promise((resolve) => {
@@ -57,7 +49,7 @@ export async function initPiperVoice({ port = 8927, name = 'piper: clockwork' } 
     const id = nextId++;
     pending.set(id, resolve);
     ws.send(JSON.stringify({ type: 'synth', id, text }));
-    // Never hang the speech path on a wedged synthesizer.
+    // bounded: a wedged synthesizer yields an empty utterance
     setTimeout(() => {
       if (pending.delete(id)) resolve({ pcm: new Int16Array(0), sampleRate: 22050 });
     }, 15000);

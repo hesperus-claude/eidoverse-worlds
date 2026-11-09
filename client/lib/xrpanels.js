@@ -1,12 +1,7 @@
-// xrpanels — frames as PHYSICAL SURFACES. A frame that declares its body as
-// FIELDS (edit/fieldpanels.js schema) rides a canvas-textured quad in the headset; the
-// right-hand laser is the cursor; a UV-hit resolves to a hit REGION and fires
-// the SAME dispatcher the desktop frame calls. No DOM crosses the threshold.
-//
-// Any module opts a frame in with registerXRPanel — the dock has no body in
-// VR, so this registry IS the dock's build-mode: what you can reach, floating
-// at desk height. Frames that never register (chat's free text, the debug
-// log) simply have no VR body yet, and say nothing rather than pretend.
+// xrpanels — frames as surfaces in the headset. The default path mirrors the real DOM frames onto quads (domquad.js);
+// every call here forwards to it. The fallback (?canvasquads=1) is this file's own: a frame that declares its body as
+// FIELDS (edit/fieldpanels.js) rides a canvas-textured quad, the laser is the cursor, and a UV hit resolves to a
+// region that fires the same dispatcher the desktop frame calls. Modules opt in with registerXRPanel.
 
 import { THREE, renderer } from './core.js';
 import { quadMaterial } from './quadcolour.js';
@@ -38,11 +33,11 @@ export function makePanel(def, i, n) {
   const canvas = document.createElement('canvas');
   const tex = new THREE.CanvasTexture(canvas);
   tex.anisotropy = 4;
-  tex.colorSpace = THREE.SRGBColorSpace;   // canvas pixels ARE sRGB; unmarked, they read as linear and the output encode lifted them
+  tex.colorSpace = THREE.SRGBColorSpace;   // canvas pixels are sRGB; unmarked they'd be read as linear
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(1, 1),
     new THREE.MeshBasicMaterial({ map: tex, transparent: false }));
-  quadMaterial(mesh, renderer);   // the authored colour after the ACES output pass, graded like the DOM quads (quadcolour.js)
+  quadMaterial(mesh, renderer);   // the authored colour survives the output pass, as on the DOM quads (quadcolour.js)
   // fan the quads across an arc in front of the body, desk height
   const a = (i - (n - 1) / 2) * 0.55;
   mesh.position.set(Math.sin(a) * 0.85, 1.15, -Math.cos(a) * 0.85);
@@ -69,17 +64,15 @@ function repaintAll() {
 }
 const showPanel = (p, on) => { if (on && p.stale) { p.stale = false; repaint(p); } p.mesh.visible = on; };
 
-// SOFT SWAP (Basis): the quads are built once and kept across sessions — only re-added to the rig and repainted on
-// show; a registry that changed since they were built rebuilds. Listeners are subscribed once and unsubscribe through
-// what on() returns (the bus has no off()).
+// The quads are built once and kept across sessions (re-added to the rig and repainted on show); a changed registry
+// rebuilds them. Listeners unsubscribe through what bus.on() returns.
 let kept = null;                   // panels while not presenting
 let unsubs = [];
 const PANEL_EVENTS = [['entity', repaintAll], ['comp', repaintAll], ['presence', repaintAll], ['xr:panels', () => togglePanels()], ['xr:repaint', repaintAll]];
 const disposePanel = (p) => { p.mesh.removeFromParent(); p.tex.dispose(); p.mesh.geometry.dispose(); p.mesh.material.dispose(); };
 
 export function xrPanelsEnter(rig) {
-  // BOTH paths subscribe: the ring's 'panels' slot emits xr:panels, and the default (domquad) path needs the toggle
-  // too — its quads repaint themselves, so it needs nothing else.
+  // the domquad path only needs the xr:panels toggle (its quads repaint themselves)
   unsubs.forEach((u) => u());
   unsubs = (domQuadsEnabled() ? PANEL_EVENTS.filter(([ev]) => ev === 'xr:panels') : PANEL_EVENTS).map(([ev, fn]) => bus.on(ev, fn));
   if (domQuadsEnabled()) return domQuadsEnter(rig);
@@ -98,14 +91,13 @@ export function xrPanelsExit(rig) {
 }
 
 function togglePanels() {
-  // derive from what is actually on screen: a flag of our own drifted from the quads' real state
+  // derived from what is actually visible, not a flag of our own
   if (domQuadsEnabled()) { shown = !domQuadsShown(); return domQuadsSetShown(shown); }
   shown = !(panels ?? []).some((p) => p.mesh.visible);
   for (const p of panels ?? []) showPanel(p, shown);
 }
 
-/** One quad by id — what a ring slot does (live: each slot opens that frame's
- *  quad). `on` null toggles. */
+/** One quad by id (what a ring slot does). `on` null toggles. */
 export function showXRPanel(id, on = null) {
   if (domQuadsEnabled()) return domQuadShow(id, on);
   const p = panels?.find((q) => q.def.id === id);
@@ -125,11 +117,10 @@ export function xrPanelsHideToggle() {
 }
 export const xrPanelsHidden = () => (domQuadsEnabled() ? domQuadsHidden() : !!canvasStash);
 export const xrPanelsShown = () => (domQuadsEnabled() ? domQuadsShown() : (panels ?? []).some((p) => p.mesh.visible));
-export const xrPanelOpen = (id) => (domQuadsEnabled() ? domQuadOpen(id) : !!panels?.find((q) => q.def.id === id)?.mesh.visible);   // the ring's lit state; read only the canvas quads before, so on the default path every slot read closed
+export const xrPanelOpen = (id) => (domQuadsEnabled() ? domQuadOpen(id) : !!panels?.find((q) => q.def.id === id)?.mesh.visible);   // the ring's lit state
 
-/** Laser test against the panels. Returns hit distance (for laser length) or
- *  null. When `click`, resolves the region and fires the panel's dispatcher —
- *  the same function the desktop frame calls. */
+/** Laser test against the panels: hit distance (for laser length) or null. When `click`, resolves the region and
+ *  fires the panel's dispatcher. */
 export function xrPanelsPick(handRay, click = false) {
   if (domQuadsEnabled()) return domQuadsPick(handRay, click);
   if (!panels || !shown) return null;
@@ -177,8 +168,8 @@ export function xrPanelsPress(handRay) {
 export const xrPanelsDrag = (handRay, press) => domQuadsDrag(handRay, press);
 export const xrPanelsReleasePress = (press, cancel = false) => domQuadsRelease(press, cancel);
 
-/** C17: the panel under the laser, as a grabbable — {id, mesh} or null; null over a control (a hit region on the
- *  canvas quads): only a panel's background or title grabs. Canvas quads grab too. */
+/** The panel under the laser as a grabbable, {id, mesh} or null; null over a control: only a panel's background or
+ *  title grabs. */
 export function xrPanelsGrab(handRay) {
   if (domQuadsEnabled()) return domQuadsGrab(handRay);
   const at = xrPanelsAt(handRay);

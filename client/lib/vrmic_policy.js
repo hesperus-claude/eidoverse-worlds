@@ -15,9 +15,7 @@ export const MIC_CHOICE_KEY = 'ew-vr-mic-choice';     // 'allow' | 'later' — t
 export const MIC_PENDING_KEY = 'ew-vr-mic-pending';   // '1' — VR owes the person a flat-page ask
 
 /** The Enter VR press. → { step: 'ask' | 'straight', hint: null | 'denied' }
- *  A browser-level answer (granted / denied) always wins: there is nothing to ask, and a denial is fixed in the
- *  browser's site settings, not by us. 'unknown' is treated like 'prompt' — asking is a no-op prompt-wise when the
- *  permission is in fact granted, and it is asked at most once per browser. */
+ *  A browser-level answer (granted / denied) always wins; 'unknown' is treated like 'prompt'. */
 export function preVrStep({ state, remembered = null, pending = false }) {
   if (state === 'granted') return { step: 'straight', hint: null };
   if (state === 'denied') return { step: 'straight', hint: 'denied' };
@@ -36,9 +34,8 @@ export function inVrMicPlan({ turningOn, presenting, state }) {
   return 'try';   // prompt / unknown: ONE attempt, bounded by a timeout, never awaited by the exit
 }
 
-/** After the one bounded attempt in VR (it settled, or the timeout fired first). → 'ok' | 'blocked' | 'later'
- *  'ok' covers a granted permission whose mic still is not live (no relay yet, a gate refusal): those say their own
- *  words elsewhere and are not a permission problem. */
+/** After the one bounded attempt in VR. → 'ok' | 'blocked' | 'later'
+ *  'ok' also covers a granted permission whose mic is not live yet (no relay, gate refusal): not a permission problem. */
 export function inVrAfterTry({ micOn, state }) {
   if (micOn) return 'ok';
   if (state === 'granted') return 'ok';

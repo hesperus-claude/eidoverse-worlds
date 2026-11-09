@@ -1,10 +1,5 @@
-// videopanel — the resident's graphics dials, in Settings where a visitor can
-// find them. Every row here is LOCAL: a preference about this machine, never
-// shared with the world (the build panel is for what the world looks like;
-// this is for what your GPU can afford).
-//
-// Two rows apply on RELOAD, and say so: renderer backend and antialiasing are
-// construction-time choices in three's WebGPURenderer (core.js), not live.
+// videopanel — the graphics dials in Settings. Every row is local: a preference about this machine, never shared
+// with the world. Renderer backend and antialiasing apply on reload (construction-time choices in core.js) and say so.
 import { makeSection, flashHint } from './ui.js';
 import { RENDER_SCALES, getRenderScale, setRenderScale,
   PARTICLE_TIERS, getParticleTier, setParticleTier,
@@ -61,11 +56,8 @@ function needsReload(row) {
 }
 const pct = (v) => v === 'auto' ? 'auto (adaptive)' : `${Math.round(v * 100)}%`;
 
-// The same dials as a VR quad, under the rail's 'settings' id: the SAME
-// getters and setters the desk's rows call (the who pattern — one source, one
-// action set, two renderers); the desk's own rows are untouched. Discrete
-// choices are list rows with a 'use' action because 'auto' appears in all
-// three lists and a bare row click could not say which one it meant.
+// The same dials as a VR quad (rail id 'settings'), through the same getters and setters the desk's rows call.
+// Discrete choices are list rows with a 'use' action: 'auto' appears in all three lists, so a bare row click is ambiguous.
 function videoFields() {
   const pick = (k, values, cur, label) => ({ t: 'list', label,
     rows: values.map((v) => ({ id: String(v), label: String(v), active: String(v) === String(cur),
@@ -107,10 +99,8 @@ export function initVideoPanel() {
     if (body.dataset.init) return;
     body.dataset.init = '1';
 
-    // renderer: ONE control. auto matches the backend to what VR will use so entry never reloads;
-    // force WebGPU / force WebGL are the overrides. A headset present + WebGPU-XR flags absent is the case that
-    // makes force-WebGPU cost a reload-into-VR, so that combination is warned; force-WebGPU is disabled outright
-    // when the machine has no WebGPU at all.
+    // renderer: one control. auto matches the backend to what VR will use so entry never reloads; force WebGPU /
+    // force WebGL override. Force-WebGPU is warned when a headset was used here without WebGPU-XR, disabled without WebGPU.
     const backend = backendName();
     const forced = CONFIG.params.has('webgl') || CONFIG.params.has('webgpu');
     const rpref = lsGet(PREF_BACKEND) || 'auto';

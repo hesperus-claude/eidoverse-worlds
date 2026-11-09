@@ -1,9 +1,8 @@
-// voicesfubridge — joins voicesfu.js (pure WebRTC) to the world websocket: the
-// part that knows about `net`, the bus and the verb names, so voicesfu.js stays
-// transport-only and testable without a socket.
+// voicesfubridge — joins voicesfu.js (pure WebRTC) to the world websocket: the part that knows
+// about `net`, the bus and the verb names, so voicesfu.js stays transport-only.
 //
-// 🔴 It exposes window.relayDiag / window.relayMic — the shape every browser
-// smoke asserts against (the names are historical; the instruments use them).
+// It exposes window.relayDiag / window.relayMic, which the browser smokes assert against
+// (historical names; test/server/sfu-browser-smoke.mjs and the mic probes use them).
 import { bus, CONFIG } from './base.js';
 import { net, sendRelayCredRequest, sendVoiceConsent, sendJoined } from './net.js';
 import { sfuConnect, sfuOnOffer, sfuOnIce, sfuMic, sfuPeerLevels, sfuMyLevel,
@@ -16,24 +15,17 @@ import { setGeneratorRebuildHook, synthProvider } from './voicesource.js';
 
 const send = (o) => { sendJoined(o); };
 
-// A synth track arriving while no mic is published must BECOME the lane, as on
-// the mesh (voice.js): rebindSenders only repairs senders that exist, so with
-// the mic off a TTS track had nothing to attach to. sfuPublish() already handles
-// a synthetic stream; this only triggers it.
+// A synth track arriving while no mic is published becomes the lane, via sfuMic(false) → sfuPublish
+// (a replaceTrack alone only repairs senders that exist). A live mic wins outright, as in voicesource.js.
 setGeneratorRebuildHook(() => {
-  // Only when the user is not already publishing a microphone: a live mic wins
-  // outright (voicesource.js's own doctrine), and re-publishing under one would
-  // swap a device the user deliberately turned on for a synthesizer.
   if (sfuMicOn()) return;
   if (!synthProvider()?.available?.()) return;
   void sfuMic(false);   // re-enters the swap path, which now finds the provider
 });
 
 export function initVoiceSfu(name) {
-  // Ask for the media credential once joined. Check the live state NOW and also
-  // listen, because a fast join can fire before we subscribed. Re-arm on every
-  // disconnect: sends here are fire-and-forget (no queue), so after a reconnect
-  // the credential, consent and position must all be re-established.
+  // Ask for the media credential once joined: check now AND listen (a fast join can beat the
+  // subscription). Sends are fire-and-forget, so re-arm on every disconnect.
   let asked = false;
   const askOnce = (n) => {
     if (asked || !n?.joined) return;
@@ -41,28 +33,23 @@ export function initVoiceSfu(name) {
     sendRelayCredRequest();          // the same ask the relay path uses
   };
   bus.on('net', (n) => {
-    // joined→false means the socket died: disarm so the NEXT join re-asks.
+    // joined→false: the socket died; disarm so the next join re-asks
     if (!n?.joined) { asked = false; return; }
     if (!asked) {
       askOnce(n);
-      // consent is listener-authored state the server holds per-connection; a
-      // new connection has none, so restate it rather than assume it survived
+      // the server holds consent per-connection, so restate it on a new one
       sendVoiceConsent(receivingVoice());
     }
   });
   askOnce(net);
 
-  // A speaker's voice leg can be replaced while we listen (e.g. an agent's voice
-  // sidecar restarts and mints a new gen). The server broadcasts
-  // `surface-transition`; without this we stay on the dead gen and go silently
-  // deaf to that speaker. We don't offer (the server owns every offer — see
-  // voicesfu.js's header); we ASK for a renegotiation. Skip our own leg.
+  // A speaker's voice leg can be replaced while we listen (a new gen): ask the server to
+  // renegotiate, or we stay on the dead gen. The server owns every offer (voicesfu.js header).
   bus.on('surface-transition', ({ actor, surface, gen }) => {
     if (surface !== 'voice' && surface !== 'voice-relay') return;
     if (actor === CONFIG.name) return;                    // our own leg
     if (gen == null) {
-      // The leg DIED (disconnect, revoke): drop its playback now, or the
-      // <audio> + analyser leak and a returning visitor gets a second element.
+      // the leg died: drop its playback now, or the <audio> + analyser leak
       sfuDropSpeaker(actor);
       return;
     }
@@ -71,11 +58,8 @@ export function initVoiceSfu(name) {
     send({ type: 'sfu-want-negotiate' });
   });
 
-  // Media-path recovery: a media leg that dies while the world socket is healthy
-  // (network switch, sleep/wake, NAT rebind) re-joins voice with the same ask a
-  // fresh join makes (sendRelayCredRequest → the server's takeover path). Capped
-  // at 3 attempts with growing delay, reset when ICE connects, so a permanent
-  // stall ends in one honest message instead of an infinite loop.
+  // Media-path recovery: a media leg that dies while the world socket is healthy re-joins
+  // voice with the same ask a fresh join makes; 3 attempts, growing delay, reset when ICE connects.
   let recoveryAttempts = 0, recoveryTimer = null;
   bus.on('sfu-media-live', () => { recoveryAttempts = 0; if (recoveryTimer) { clearTimeout(recoveryTimer); recoveryTimer = null; } });
   bus.on('sfu-media-dead', ({ reason }) => {
@@ -97,17 +81,13 @@ export function initVoiceSfu(name) {
 
   bus.on('relay-cred', async (cred) => {
     await sfuConnect(cred, send);
-    // Honour a mic pressed before the credential arrived: that press hit
-    // sfuMic's `if (!pc) return` and only set wantMic, so re-read it now.
+    // honour a mic pressed before the credential arrived (sfuMic only recorded wantMic then)
     if (sfuMicWanted()) { await sfuMic(true); bus.emit('audio:mic', sfuMicOn()); }
-    // We do NOT offer. Tell the server we are ready and let it drive every
-    // negotiation — see the header of voicesfu.js for why an answer cannot add
-    // a receive direction the offer never proposed.
+    // we never offer; the server drives every negotiation (voicesfu.js header)
     send({ type: 'sfu-want-negotiate' });
   });
 
-  // Consent: send the current state NOW (a session that joined already
-  // consenting must not wait for a toggle), and every change after.
+  // consent: send the current state now, and every change after
   sendVoiceConsent(receivingVoice());
   bus.on('audio:receive', (on) => sendVoiceConsent(on));
 
@@ -115,9 +95,8 @@ export function initVoiceSfu(name) {
   bus.on('sfu-ice', (m) => sfuOnIce(m.candidate));
   bus.on('sfu-want-negotiate', () => send({ type: 'sfu-want-negotiate' }));
 
-  // Distance rolloff + hush: slow target, fast approach (same shape as the mesh
-  // and relay). This is the client half of the server's proximity gate; the
-  // server gate only ever subtracts, this is what makes distance audible.
+  // Distance rolloff + hush: slow target, fast approach. The client half of the server's
+  // proximity gate; the server only ever subtracts, this is what makes distance audible.
   const FULL_M = VOICE_FULL_M, SILENT_M = VOICE_SILENT_M;   // one number (voiceconsent.js)
   setInterval(() => {
     for (const [id, s] of sfuSpeakers()) {
@@ -137,9 +116,7 @@ export function initVoiceSfu(name) {
     }
   }, 60);
 
-  // Position feed for the SERVER's proximity gate. Cheap (a few floats every
-  // 500ms) and OPTIONAL by design — the gate fails open on unknown or stale
-  // positions, so a client that never sends these is simply never gated.
+  // position feed for the server's proximity gate; optional (the gate fails open on unknown positions)
   setInterval(() => {
     if (!sfuActive()) return;
     const p = myState.pos;
@@ -147,21 +124,16 @@ export function initVoiceSfu(name) {
   }, 500);
 
   window.relayDiag = sfuDiagClient;
-  // The <audio> elements for /audio's playback probe. They are never appended
-  // to the DOM, so querySelectorAll cannot find them.
+  // the <audio> elements for /audio's playback probe (never in the DOM, so not queryable)
   window.__voiceSpeakerEls = () =>
     sfuSpeakerEntries().map(([id, s]) => ({ id, audio: s.audio }));
   window.relayMic = () => sfuMic(true);
   window.relayPeerLevels = sfuPeerLevels;
-  // Cheap mic-state read for the 8Hz HUD poll (sfuDiagClient() allocates).
-  window.__sfuMicOn = sfuMicOn;
-  // My own mic level, for my own mouth flap + the 🎙 glyph (voicemouths.js).
-  window.__sfuMyLevel = sfuMyLevel;
+  window.__sfuMicOn = sfuMicOn;             // cheap read for the HUD poll (sfuDiagClient() allocates)
+  window.__sfuMyLevel = sfuMyLevel;         // my mouth flap + 🎙 glyph (voicemouths.js)
   window.sfuStats = sfuInboundStats;      // NetEq evidence for the spike report
-  // The mic badge (mictoggle.js → micstate.js toggleMic) hands over to this
-  // when the SFU owns playback. Set LAST, so it is never visible before the
-  // bridge can honour it. Returns the state read AFTER the await, so a failed
-  // publish reports honestly.
+  // the mic badge (mictoggle.js → micstate.js toggleMic) hands over to this. Set last, so it is
+  // never visible before the bridge can honour it; returns the state read after the await.
   window.__sfuMic = async () => {
     await sfuMic(!sfuMicOn());
     const on = sfuMicOn();
@@ -171,6 +143,5 @@ export function initVoiceSfu(name) {
   addEventListener('beforeunload', sfuClose);
 }
 
-// voicesfu owns the map; sfuSpeakerEntries() hands back the live records so the
-// rolloff loops can mutate volume in place without exposing the Map itself.
+// live records, so the rolloff loops can mutate volume in place
 const sfuSpeakers = sfuSpeakerEntries;

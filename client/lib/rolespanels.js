@@ -77,7 +77,7 @@ async function paintScripts(body) {
   const r = await sendRequest('scripts', {});
   if (!r?.ok) { body.innerHTML = `<p class="rp-note">${esc(r?.refused?.reason ?? "couldn't read the scripts")}</p>`; return; }
   const rows = (r.scripts ?? []).map((x) => {
-    // paused by someone or by the world itself (an auto-pause has no pausedBy): either way it is offered Resume (I71)
+    // paused by someone or by the world itself (an auto-pause has no pausedBy): either way it is offered Resume
     const paused = x.status === 'paused'; const mine = x.sponsor === me().id;
     const may = isOwner() || mine || (has('pauseScripts') && x.sponsor && rankOfId(x.sponsor) < me().rank);
     const blocked = paused && !!x.pausedBy && x.pausedBy !== me().id && rankOfId(x.pausedBy) > me().rank;
@@ -89,7 +89,7 @@ async function paintScripts(body) {
   body.querySelectorAll('button[data-s]').forEach((b) => { b.onclick = () => act('set', { id: b.dataset.id, component: b.dataset.s, value: { paused: b.dataset.p === '1' }, merge: true }, `${b.dataset.p === '1' ? 'pause' : 'resume'} ${b.dataset.id}`, () => paintScripts(body)); });
 }
 // which Moderation tabs you see: Bans (ban), Log (any moderation power), Scripts (pauseScripts) — a tab whose power you
-// lack isn't shown, and the whole panel and its dock entry go when the last power does (research roles S7)
+// lack isn't shown, and the whole panel and its dock entry go when the last power does
 function syncModeration() {
   const want = { bans: has('ban'), log: R.MOD_POWERS.some(has), scripts: has('pauseScripts') };
   const any = Object.values(want).some(Boolean);
@@ -130,7 +130,7 @@ function paintRoles(body) {
   if (narrow(body)) {   // one role at a time (phone, VR, a squeezed panel)
     if (!roles.some((r) => r.id === gridRole)) gridRole = roles[0]?.id;
     const r = roles.find((x) => x.id === gridRole);
-    // the role's own header (holders, reorder, delete) above its one column, as the wide grid shows it (I68)
+    // the role's own header (holders, reorder, delete) above its one column, as the wide grid shows it
     html = `<label class="rp-field">role <select class="rp-pick">${roles.map((x) => `<option value="${esc(x.id)}" ${x.id === gridRole ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>`
       + `<table class="rp-grid rp-one"><thead><tr><th></th>${head(r)}</tr></thead><tbody>${R.PERMISSION_NAMES.map((k) => `<tr><th scope="row"><b>${k}</b><div class="rp-dim">${esc(R.PERMISSIONS[k].text)}</div></th>${cell(r, k)}</tr>`).join('')}</tbody></table>${holders(r)}`;
   } else {
@@ -182,7 +182,7 @@ function addRole(body) {
 function deleteRole(rid, body) {
   const ids = holdersOf(rid); const d = defsValue(); delete d[rid];
   if (!ids.length && wc()['default-role']?.role !== rid) return writeDefs(d, `delete ${rid}`).then(() => paintRoles(body));
-  // a held role: move its people to another role, and delete it, as ONE act (research S8)
+  // a held role: move its people to another role, and delete it, as one act
   const box = document.createElement('div'); box.className = 'pm-form';
   const others = R.rolesOf(wc()).filter((r) => r.id !== rid && r.id !== 'owner');
   box.innerHTML = `<p>${ids.length} ${ids.length === 1 ? 'person holds' : 'people hold'} ${esc(rid)}. Move them to <select>${others.map((r) => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('')}</select> and delete it?</p><div class="pm-btns"><button type="button" class="pm-cancel">Cancel</button><button type="button" class="pm-go danger">Move and delete</button></div>`;
@@ -200,8 +200,8 @@ function paintAccess(body) {
   const def = R.roleDef(wc(), dr.role ?? 'member');
   const warn = def && (R.MOD_POWERS.some((k) => def.can[k]) || def.can.generate || dr.can?.generate) ? `<p class="rp-warn">Everyone who arrives is ${esc(def.name)}: they ${R.MOD_POWERS.some((k) => def.can[k]) ? 'may moderate people ranked below them (guests and visitors)' : ''}${R.MOD_POWERS.some((k) => def.can[k]) && (def.can.generate || dr.can?.generate) ? ' and ' : ''}${def.can.generate || dr.gen ? "spend the world's generation credit" : ''}.</p>` : '';
   const sel = (k, opts, v) => `<select data-k="${k}" ${edit ? '' : 'disabled'}>${opts.map(([x, l]) => `<option value="${esc(x)}" ${x === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
-  // the four doors (upstream #258's World › access buttons; shared/protocol/access.js DOORS), the current one marked; closing
-  // while people with no role are here asks first and says how many will have to leave
+  // the four doors (shared/protocol/access.js DOORS), the current one marked; closing while people with no role are
+  // here asks first and says how many will have to leave
   const door = doorOf(wc());
   body.innerHTML = `<div class="rp-actions rp-doors">${Object.keys(DOORS).map((d) => `<button type="button" class="rp-btn${d === door ? ' rp-on' : ''}" data-door="${d}" title="${esc(DOORS[d])}" ${edit ? '' : 'disabled'}>${d === 'watch' ? 'watch only' : d}</button>`).join('')}</div>`
     + `<p class="rp-dim">${esc(door === 'signed-in' ? 'anyone signed in may come in' : DOORS[door])}</p>`
@@ -228,10 +228,9 @@ function paintAccess(body) {
       act('set', { id: '@world', component: 'access', value: v }, 'access').then(() => paintAccess(body)); } }; });
   const listed = document.createElement('div'); listed.className = 'ap-listed'; body.append(listed); paintListed(listed);   // who is listed, and adding someone (accesspanel.js)
 }
-// World: the owner's dials over @world components that already exist (capacity, physics-engine).
-// The ONE hard rule: write only on an explicit edit, never on open, and only the field that changed: capacity is a policy
-// number (PROTOCOL §9.2), so an absent field is this server's current default (schema reports it, and it may change) and a
-// panel that wrote the others too would freeze today's defaults into the log. Everyone reads; owners edit.
+// World: the owner's dials over @world components (capacity, physics-engine). Write only on an explicit edit, never
+// on open, and only the field that changed: an absent capacity field is this server's current default (PROTOCOL
+// §9.2), and writing the others too would freeze today's defaults into the log.
 const CAP = 'capacity', CAP_FIELDS = ['entities', 'guestEntities', 'avatar'];
 const CAP_WORDS = { entities: 'Entities in this world', guestEntities: "Guests' entities, together", avatar: 'Largest avatar (entities)' };
 const CAP_DOCS = COMPONENTS[CAP].docs ?? {};   // each says per what first: the whole world's, all account-less people's together, one worn avatar's
@@ -291,8 +290,8 @@ function paintPlaces(body) {
     + `<h4 class="rp-h">Bounds</h4><label class="rp-field">min ${v3('min', bd?.min)}</label><label class="rp-field">max ${v3('max', bd?.max)}</label>`
     + (edit ? '<button type="button" class="rp-btn" data-save>Save</button>' : ro('the owner (or someone with editWorld)'));
   body.querySelectorAll('input').forEach((x) => x.addEventListener('keydown', (e) => e.stopPropagation()));
-  // A section is written only when it's filled in: blank fields used to read as 0, so a world with no bounds saved a
-  // zero-size box that refused every move. A half-filled one is said, not guessed.
+  // A section is written only when it's filled in (a blank read as 0 would save a zero-size box that refuses every
+  // move). A half-filled one is said, not guessed.
   const raw = (k) => [0, 1, 2].map((i) => body.querySelector(`[data-k=${k}][data-i="${i}"]`).value.trim());
   const read = (k) => { const v = raw(k); if (v.every((x) => x === '')) return null; if (v.some((x) => x === '')) return 'partial'; return v.map(Number); };
   body.querySelector('[data-save]')?.addEventListener('click', () => {
@@ -302,7 +301,7 @@ function paintPlaces(body) {
     if (pos === null && radius !== '') return toast('Spawn: a radius needs a place (x, y, z)', 'warn');
     const ops = [];
     if (pos) ops.push({ verb: 'set', args: { id: '@world', component: 'spawn', value: { pos, radius: radius !== '' ? Number(radius) : null }, merge: true } });
-    else if (sp) ops.push({ verb: 'delete', args: { id: '@world', component: 'spawn' } });   // emptied: no spawn (house review I25)
+    else if (sp) ops.push({ verb: 'delete', args: { id: '@world', component: 'spawn' } });   // emptied: no spawn
     if (min) ops.push({ verb: 'set', args: { id: '@world', component: 'bounds', value: { min, max } } });
     else if (bd) ops.push({ verb: 'delete', args: { id: '@world', component: 'bounds' } });   // emptied: no bounds, as the toast says
     if (!ops.length) return toast('Places: nothing to save', 'info');
