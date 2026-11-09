@@ -38,7 +38,7 @@ const out: Record<string, unknown>[] = [];
 for (const dir of dirs) {
   const f = path.join(dir, "world.jsonl"), mf = path.join(dir, "world.mod.jsonl");
   const backups = [f, mf].map((x) => x + ".before-identities");
-  // a backup beside a world.jsonl still byte-equal to it: a run killed between the backup and the renames (#260 133); it
+  // a backup beside a world.jsonl still byte-equal to it: a run killed between the backup and the renames; it
   // finishes from the backups (fresh ids for a name the directory can't look up; a mod log already renamed is read from its backup)
   const interrupted = fs.existsSync(backups[0]) && fs.readFileSync(f).equals(fs.readFileSync(backups[0]));
   if (backups.some((b) => fs.existsSync(b)) && !interrupted) { out.push({ dir, skipped: `a migration's backup is already here (${backups.filter((b) => fs.existsSync(b)).map((b) => path.basename(b)).join(", ")}): this world was migrated. A second run would overwrite the only way back; to run it again, move the backup aside by hand first (a run killed while copying leaves a short one: compare it with world.jsonl before you trust either)` }); continue; }

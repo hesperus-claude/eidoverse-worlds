@@ -76,7 +76,7 @@ const TEMP_ONLY = new Set([SOURCE, IDENTITIES]);
 const MANIFEST = "translation.json";
 const APPROVAL_TEXT = "approval";
 const hostContent = (p: string) => { const h = contentAddressOf(p); return h ? `sha256:${h}` : null; };
-// --claim: an ownerless world's upgrader becomes its owner, and one recognised as its owner is bound to them (R 10-28); who, from the environment (server/upgrade.ts), never argv
+// --claim: an ownerless world's upgrader becomes its owner, and one recognised as its owner is bound to them; who, from the environment (server/upgrade.ts), never argv
 const CLAIM = rest.includes("--claim") ? { account: process.env.EIDO_UPGRADER_ACCOUNT ?? "", name: process.env.EIDO_UPGRADER_NAME ?? "" } : undefined;
 if (CLAIM && !CLAIM.account) die("--claim needs EIDO_UPGRADER_ACCOUNT (the account that becomes the owner of a world that has none). Nothing was changed.");
 /** The dry-run report of an old world as it stands now, hashed (import-v1/world.ts reportV1World). */
@@ -165,7 +165,7 @@ function report(src: string, dest: string, r: ReturnType<typeof translateV1World
 function translateInPlace(name: string, approval: Approval, approvedSource: { size: number; sha256: string }) {
   const D = path.join(WORLDS_DIR, name), log = path.join(D, "log.jsonl");
   if (!fs.existsSync(log)) die(`"${name}" holds no old log (${log}): there's nothing to translate here. Nothing was changed.`);
-  let kept = "";   // the verified backup, once made: a failure after it keeps it (review L5; docs/operator/TRANSLATING-OLD-WORLDS.md "Backups")
+  let kept = "";   // the verified backup, once made: a failure after it keeps it (docs/operator/TRANSLATING-OLD-WORLDS.md "Backups")
   const fail = (why: string, T?: string): never => {
     if (T) fs.rmSync(T, { recursive: true, force: true });
     die(`${why}\nNothing was moved: "${name}" is exactly as it was (its log.jsonl untouched)${kept ? `. The verified backup made first is kept at ${kept} (each try makes another: delete the ones you don't need).` : ", and nothing was left behind."}`);
@@ -222,7 +222,7 @@ function translateInPlace(name: string, approval: Approval, approvedSource: { si
     note: "written by tools/world.ts translate (in place); read by `rollback <world>`, which puts the renamed files back, removes the made ones and forgets the identities. The content-address index (OPT_DIR/eido-index.json) is a cache of library bytes, not world state: a rollback leaves it." }, null, 1));
   for (const f of fs.readdirSync(T)) if (f !== "world.jsonl" && !TEMP_ONLY.has(f)) steps.push([path.join(T, f), path.join(D, f)]);
   // the in-progress marker, before the first rename and gone only once the identities are in: the server never serves a
-  // directory holding it (server/livehost.ts SWAP_MARKER; R 10-27), and a recovery clears it
+  // directory holding it (server/livehost.ts SWAP_MARKER), and a recovery clears it
   syncTree(T);   // the translated files on disk before any of them is renamed in
   { const fd = fs.openSync(path.join(D, SWAP_MARKER), "wx"); fs.writeSync(fd, JSON.stringify({ temp: T, at: Date.now() })); fs.fsyncSync(fd); fs.closeSync(fd); }
   syncDir(D);   // the marker's name, before the first rename
@@ -287,7 +287,7 @@ function rollback(name: string) {
   const origNow = restored.has(ORIGINAL.log) ? sourceChanged(path.join(D, "log.jsonl"), m.source) : sourceChanged(path.join(D, ORIGINAL.log), m.source);
   if (origNow) die(`can't roll back "${name}": ${ORIGINAL.log} no longer holds the bytes that were translated (${m.source.size} bytes then, ${origNow.size} now): it was written to, and the original is lost. Nothing was changed.`);
   const changed = Object.entries<string | null>(m.made).filter(([f, h]) => h && !isBack(f) && fs.existsSync(path.join(D, f)) && sha(path.join(D, f)) !== h).map(([f]) => f);
-  // files the server made since the translation (r14 M3): not made by it, not renamed by it, not there before it. The moderator
+  // files the server made since the translation: not made by it, not renamed by it, not there before it. The moderator
   // log (bans, mutes, kicks: PROTOCOL §2.1) is the usual one. It is history too.
   const known = new Set([...Object.keys(m.made), ...m.renamed.flat(), ...(m.present ?? []), MANIFEST]);
   const since = fs.readdirSync(D).filter((f) => !known.has(f) && !isCacheFile(f));   // the fold cache is derived, not history (server/statecache.ts)
@@ -378,7 +378,7 @@ if (cmd === "found") {
   // the case check first: on a case-folding file system the other spelling also "holds a world", and the case is the real reason
   if (fs.existsSync(dest) && !fs.readdirSync(WORLDS_DIR).includes(name)) die(`${dest} exists under another spelling of its case: a world is one name. Nothing was changed.`);
   if (fs.existsSync(path.join(dest, "world.jsonl")) || fs.existsSync(path.join(dest, "log.jsonl"))) die(`${dest} already holds a world`);
-  // built aside and renamed into place, as the server founds (worldlog foundOwnedWorld): a stop mid-way leaves no genesis-only world (bot review 56)
+  // built aside and renamed into place, as the server founds (worldlog foundOwnedWorld): a stop mid-way leaves no genesis-only world
   const tmp = path.join(WORLDS_DIR, `.founding-${name}-${crypto.randomBytes(4).toString("hex")}`);
   if (process.env.WORLD_TS_DIE_WHILE_FOUNDING) { const open = fs.openSync;   // tests only: the process dies at the append after genesis (inplace-check IP31b)
     (fs as any).openSync = (p: any, f: any, ...m: any[]) => { if (f === "a" && String(p).endsWith("world.jsonl") && (fs.statSync(p, { throwIfNoEntry: false })?.size ?? 0) > 0) process.exit(9); return open(p, f, ...m); }; }
@@ -402,7 +402,7 @@ if (cmd === "found") {
   if (!good) die(`the signature doesn't verify for ${key} over "${msg}": nothing is wrong with the world, but this key can't be used until it does`);
   console.log(`ok: ${key} signed "${msg}". Use it to found a new world: create-world {ownerKey: "${key}"} puts it in tier 0. (A translation takes no founder key: ${NO_FOUNDER}.)`);
 } else if (cmd === "translate") {
-  // #260 rereview, blocker 1: refused before anything else runs (even the recovery of an interrupted swap) or is written
+  // refused before anything else runs (even the recovery of an interrupted swap) or is written
   if (rest.includes("--founder-key") || rest.includes("--approve-sig")) die(`translate takes no founder key and no owner's signature: ${NO_FOUNDER}. `
     + `Translate with --no-founder-key --operator-only-no-owner: the new world's tier 0 stays empty, and the record says no owner was attested. `
     + `(Founding a brand-new world is different: create-world takes its founder's own key.) Nothing was changed.`);
@@ -442,7 +442,7 @@ if (cmd === "found") {
     const destDir = path.join(WORLDS_DIR, dest);
     if (fs.existsSync(path.join(destDir, "world.jsonl")) || fs.existsSync(path.join(destDir, "log.jsonl"))) die(`${destDir} already holds a world. Nothing was changed.`);
     // translated into a temporary sibling with its planned identities beside it, then moved in (world.jsonl last), then the
-    // identities written and their file removed: a stop in between is finished by the next run (above; bot review 21)
+    // identities written and their file removed: a stop in between is finished by the next run (above)
     const T = path.join(WORLDS_DIR, `.translating-${dest}-${crypto.randomBytes(4).toString("hex")}`);
     // the importer refuses a log whose report isn't the approved one, and puts back what it wrote (house importer I25, I35):
     // say so in this tool's own words, never as a stack trace

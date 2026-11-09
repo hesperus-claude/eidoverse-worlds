@@ -12,7 +12,7 @@
 // exist, owned by the names this suite joins as (alice, groundskeeper, lampsmith; TRUST_NAMES=1). Checks that read
 // world.jsonl off this disk are skipped there.
 
-import "../../test/protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../../test/protocol/fixture-ids.ts";   // fixtures seed the ids they read (writers never choose ids)
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -73,7 +73,7 @@ class Client {
   req(verb: string, args: unknown = {}): Promise<any> {
     const id = `${this.id}-${++this.n}`;
     return new Promise((res) => {
-      this.waiters.set(id, (m: any) => { IDS.back(m?.reply); res(m); });   // R 10-17: names ride as placeholders and minted ids
+      this.waiters.set(id, (m: any) => { IDS.back(m?.reply); res(m); });   // names ride as placeholders and minted ids
       this.send({ type: "request", id, verb, args: IDS.out(verb, args) });
       setTimeout(() => { if (this.waiters.delete(id)) res({ ok: false, reply: { refused: { code: "timeout" } } }); }, 6000);
     });
@@ -196,7 +196,7 @@ try {
   check("frames carry a server timestamp", frames.every((f) => typeof f.t === "number"));
   local("poses are never written to the log", () => quiet() === n0);
 
-  // --- whisper was removed (R 10-18): refused as `removed`, delivered to nobody, held for nobody, never logged
+  // --- whisper was removed: refused as `removed`, delivered to nobody, held for nobody, never logged
   bob.send({ type: "whisper", to: "alice", text: "a private thing" });
   await sleep(300);
   check("a whisper is refused as removed, in words", bob.of("error").some((m) => m.refused?.code === "removed" && /removed/.test(String(m.error))), JSON.stringify(bob.of("error")));
@@ -271,7 +271,7 @@ try {
     await sleep(300);
     const late = await joined("latecomer", fw);
     const st = late.snapshot.state ?? {};
-    // ids are minted (R 10-17): the suite's names f0..f59 read as theirs through IDS
+    // ids are minted: the suite's names f0..f59 read as theirs through IDS
     const mine = new Set(Array.from({ length: 60 }, (_, i) => IDS.of(`f${i}`)));
     const things = Object.keys(st).filter((k) => mine.has(k));
     check("the cut survives removals", things.length === 30, `${things.length} things`);
@@ -408,7 +408,7 @@ try {
     check("a one-off animation relays to others", watcher.of("anim").some((m) => m.id === "poser" && m.dur === 1.5));
 
     // a puppet is ROUTED to the target only. The relay acts on a body only when it knows where both bodies stand, within
-    // reach (server/messages.ts bodyRefusal), so the watcher publishes where it is first (#260 house I127)
+    // reach (server/messages.ts bodyRefusal), so the watcher publishes where it is first
     watcher.send({ type: "pose", pose: { p: [1, 0, 0], yaw: 0, speed: 0, clip: "idle" } });
     await sleep(200);
     poser.send({ type: "puppet", target: "watcher", pose: { spine: [0, 0, 0.2, 0.98] } });
