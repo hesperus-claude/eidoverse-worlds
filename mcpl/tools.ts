@@ -74,7 +74,7 @@ export type ToolCtx = {
   worldPolicy?: { canJoin: (world: string) => boolean; canFound: boolean };
 };
 
-// ---- tools (shared schema with the stdio server, minus retina by default) --
+// ---- tools (one schema for both servers) --
 
 // THE SURFACE: a tool's name must be intuitive to anyone who'd use the action AND the action generally useful, else it
 // is an alias. So the table holds GENERAL SHAPES (act, create, edit, inspect, move, anim, reach, library…) whose modes
@@ -102,13 +102,7 @@ const TOOL_ROWS = [
   { name: "create", description: "Make a new thing: the authority's create, with its exact args. model is a library path (library {query} finds one); components sets any component values in the same act; place {on|beside|hang|against|near|at, …} puts it somewhere in the same step (the authority solves where; see place); at is a point, [x, z] on the ground or [x, y, z] exactly (or the authority's {pos, yaw|q}). With no place, at or transform, it goes on the ground 2 m in front of you. A light is a thing with a light component and no model: create {components: {light: {color: 0xffd9a0, intensity?, range?, important?: true}}} (left out, each takes the registry's default: intensity 25.93, range 10) — with nowhere said it hangs just in front of you at about eye height; color is a hex integer (0xffd9a0 warm, 0x88bbff cool, 0xff5533 red), important: true means it ALWAYS casts (outside the per-client point-light budget; every casting light has real GPU cost — save it for lights that matter); a small glowing sphere marks it; edit {id, set: {\"light.intensity\": 24, \"pos.y\": \"+=1\"}} dims or moves it later and act {verb: \"delete\", args: {id}} removes it. from copies: a blueprint hash (sha256:… — a unique prefix will do; blueprints lists them) places a copy of one of this world's blueprints (2 m in front of you, facing the way you face, or at; the whole tree in one act), and a thing's id duplicates it with everything attached to it, beside it or at a point: create {from: \"crate-1\", at: [4, 2]} ([x, z] keeps its height; or [x, y, z], or {pos: [x, y, z], yaw}). A duplicate stays a sibling of its source, so when the source has a parent the point is in that parent's frame. Leave id out: the authority mints every id (opaque, never renamed; the reply gives its short handle, which every tool takes, as it takes a thing's label or any unique id prefix of 4+ characters). An id you choose is refused; a placeholder '$name' is accepted (refs to it in the same request resolve; act {op: 'batch'} makes several things that refer to each other). dry: true asks without writing.", inputSchema: { type: "object", properties: { id: { type: "string" }, model: { type: "string" }, components: { type: "object" }, from: { type: "string", description: "a blueprint hash (sha256:…, a unique prefix will do) or a thing's id to duplicate" }, at: { anyOf: [{ type: "array", items: { type: "number" }, minItems: 2, maxItems: 3 }, { type: "object" }], description: "where it goes: [x, z], [x, y, z] or {pos, yaw|q}" }, place: { type: "object" }, dry: { type: "boolean" } } } },
   { name: "place", description: "Put a thing somewhere by saying where it goes: the authority's place, with its exact args. One of on (a thing's surface), beside (next to a thing on the same support), hang (below a frame or beam; height), against (back to a wall; height, along, side), near (on the floor near a thing), at ([x, z]); then facing (a thing or [x, z]; away: true turns its back), level (which surface of an `on` target), offset ([dx, dz] on the surface), side, gap, height, along, lying (rest it on its largest face), attach (ride what it's placed on). The authority solves the numbers and says where it went. dry: true asks without writing.", inputSchema: { type: "object", properties: { id: { type: "string" }, on: { type: "string" }, beside: { type: "string" }, hang: { type: "string" }, against: { type: "string" }, near: { type: "string" }, at: { type: "array", items: { type: "number" } }, facing: {}, away: { type: "boolean" }, level: { type: "integer" }, offset: { type: "array", items: { type: "number" } }, side: {}, gap: { type: "number" }, height: { type: "number" }, along: { type: "number" }, lying: { type: "boolean" }, attach: { type: "boolean" }, dry: { type: "boolean" } }, required: ["id"] } },
   { name: "act", description: `One request, by verb — the escape hatch for verbs that have no tool of their own; answered by the world's authority itself: {ok: true, …what changed, notes, warnings} or {ok: false, refused: {code, reason, fix}}. A few verbs are answered by YOUR BODY (same reply shape, {ok, text}) before anything reaches the authority: land {to: [x, z]} descends, flares and lands there — landing is an EVENT the world sees, and afterwards your body is walking again (a fly-mode move gets you up); shove {target, strength?} knocks another body over — a physics ragdoll, directed from where YOU stand through them (walk to the right side of someone before pushing; strength 0.5–4 m/s, default 2.2), simulated by THEM on their own body and settled into a held pose everyone sees; whether a body can be knocked over is ITS owner's call (their move gate, or their allow/block list naming you), the same for every body, and the server forwards it ${bodyRangeWords()} — a refusal comes back as an error saying why. MODERATION rides here too, by NAME: kick {who, reason?} removes someone now (who is their name or identity u-…; they may come straight back — a kick interrupts, a ban {days} excludes; needs the kick permission and a rank above theirs; an owner can't be kicked); ban {who, days?, reason?, global?} disconnects them and refuses their joins (including spectating) until unban or for days — someone absent is found among the people this world has seen (whois); global: true bans them from every world on this server (server operators only); give a reason, it is shown to them and kept in the moderator's record; unban {who, global?} lifts a ban; bans {global?} lists what is in force now — bans and mutes (people who hold a moderation power may ask; the whole server's with global: true, operator only). The authority's own verbs: create {id?, model?, components?, place?} | create {from: <blueprint hash, or a thing's id to duplicate it>, at?} | set {id, component, value, merge?, base?} (a timed grant: {id: "@world", component: "roles:<id>", value: {role, for: "2h"}}; for is "30m", "2h", "1d" or "1w", up to a year) | delete {id, component?} | place {id, on|beside|hang|against|near|at, facing?, …} (the authority solves where it goes) | turn {id, axis, deg, space?, about?} | batch {ops: [{verb, args}…]} | use {id, action?} | say {text} | caption {id, session, n, t0, t1, text, speaker?, title?} (one line of a screen's captions, if its captioners {ids} name you) | undo {act?|label?} (your own acts; refuses what others changed since) | publish {from, name} | update {copy, to} | move {to} | grab {id, hand?, grip?} (a thing with a grabbable component, or physics {kind: 'dynamic'}; look says who may and how it's held) | put {id, pos?} | throw {id, v, pos?} | drop {id, hand?} (its grabbable may send it home, into a socket that accepts it, or leave it where you let go) | use {id} while holding it fires its grabbable.use (args {phase: 'up'}: the release) | punt {id, power?|v?} (send a loose thing beside your body into flight) | force {at: [x, y, z], radius?, power?} (a blast, builders and up, cast from anywhere: each body in radius 0.5–30 m, default 4, is knocked over by its own consent, each loose thing punted outward; power 0.2–12 m/s, default 3, falling off to the rim) | wait (your tracked body; physics: things with physics {kind: 'dynamic'} fly when @world.physics-engine runs; grabbable makes a thing carryable, physics makes it fall) | look | inspect {id} (who made it, versions) | measure {id} | find {kind: 'model'|'blueprint', query?} | lint {id?} | history {id?, limit?, before?, after?, verbs?} | schema {component?} | help {verb?} | consent (your body's consent: bare reads it; move: true|false is your Allow being moved gate — being shoved, dragged, carried, seated; touch: true|false is your Allow being posed and touched gate — being touched or posed; allow|block|unlist: <who> puts one person on your always-yes or never list, or takes them off; a list beats the gates, block beats allow) | body {to, kind: pose|anim|shove|drag|occupy|carry, spec?} (act on another body: their consent decides) | reach {who, point} (touch, if their consent allows) | inbox. A write whose verb takes dry (help {verb} lists each verb's arguments) may add dry: true to preview it; every write may add expect: [{id, component, value?}] (refused 'changed' if any isn't what you started from) and throughLock: true. undo {act: <your undo>} is redo. create/place/edit are tools of their own, and wait for the authority's answer too; delete {id} removes a thing (with its children). whois {name} finds a person's identity (u-…) here, present or not.`, inputSchema: { type: "object", properties: { verb: { type: "string" }, args: { type: "object" } }, required: ["verb"] } },
-  // Description narrowed to what the implementation actually does (antra
-  // review, #3). It previously promised "held pose and posture survive", which
-  // joinWorld does NOT transfer — and which contradicts the existing pose
-  // contract ("vanishes when you leave"). Carrying a world-local pose across
-  // worlds is a product decision nobody has made, so the honest move is to
-  // stop promising it rather than to implement it by inference. Identity,
-  // avatar and the activity dial ARE carried, and are named because they are.
+  // travel carries identity, avatar and the activity dial only; a held pose is world-local (joinWorld doesn't move it)
   { name: "worlds", description: "Which worlds this server fronts that you may see, and who is embodied in each — the map for `travel`. Marks the world you are in now, each world's door (open: anyone comes in and builds; public: anyone comes in, newcomers don't build; signed-in: people with an account; watch: anyone may watch, only people listed come in; invite-only: only people listed, and invisible to everyone else), and whether you may enter or only watch: each world's owners decide who comes in (@world.access, and roles:<you>). Joining never founds a world here. Everyone embodied is in one list, by the ids you see in `look`, each with the word they declared for themselves at join, if any (nothing is inferred); spectators appear as nothing, as in-world.", inputSchema: { type: "object", properties: {} } },
   { name: "travel", description: "Walk to another world this server fronts, keeping your identity, avatar and attention settings — no reconnect. The world you name decides whether you may come in (its owners' access and roles), and a credential limited to certain worlds keeps you to them; you are asked about before anything moves, so a refusal leaves you where you are. Joining never founds a world: a name that doesn't exist is refused. The anims you hold do NOT survive the move (they are world-local, like a disconnect), and your chat cursor resets to the new world.", inputSchema: { type: "object", properties: { world: { type: "string", description: "world name, e.g. \"commons\"" } }, required: ["world"] } },
   { name: "measure", description: "Geometry as data: bounding box, up-facing flat zones (candidates for a station, a table, a deck), and named parts of a placed thing (id) or a library model (lib). Flat-zone coords are the MODEL's local frame — the same frame sockets use, so a zone's center IS a socket's pos (the body's root goes there; anchor: 'hips' puts the hips joint there instead): a socket is a child entity, made with create {components: {parent: {to: id}, transform: {pos: [cx, y, cz]}, socket: {name: 'seat'}, station: {anim: 'sitchair'}}} (station makes it a place a body occupies: sit, ride, stand…; without one it is an attach point for things). Use this to find where a body can go before declaring the station; verify by attaching to it yourself (attach {to: <the socket's id>}) and taking a selfie screenshot. Raw GLB bytes are at GET <sequencer>/library/<lib> if you want to process the mesh locally. check: true asks the build check instead (#241): what the model is like to walk into, measured with the walking body's own rules before or after it is placed — whether it is walk-in at all, its floors and how much of each can be reached from outside, why any part can't (a passage narrower than a body, a rise too high to step, a climb an overhanging floor blocks, no way in), the render budget — and suggested rooms, doors and stairs, ready to name as places. Advisory: nothing is refused. With id it is checked as placed (its scale, its collider); with lib at its own size, or at scale (0.05–20). The first check of a model at a scale takes a few seconds.", inputSchema: { type: "object", properties: { check: { type: "boolean", description: "the build check: walk-in, reachable floors, why not, suggested places" }, scale: { type: "number", description: "with lib and check: as if placed at this scale (0.05–20)" },  id: { type: "string" }, lib: { type: "string" } } } },
@@ -382,7 +376,7 @@ export function historyLine(e: any): string {
  *  Wait briefly for one sent after t0 and return its words, or null. */
 async function presenceRefusal(ag: ToolAgent, t0: number, target: string, ms = 700): Promise<string | null> {
   const end = Date.now() + ms;
-  // only a refusal that names the target: every bodyRefusal does, and an unrelated error meanwhile isn't this one's (bot #462)
+  // only a refusal that names the target: every bodyRefusal does, and an unrelated error meanwhile isn't this one's
   const names = (t: string) => t.startsWith(`${target} `) || t.startsWith(`${target}'s `) || t.includes(` ${target} `);
   while (Date.now() < end) { const r = ag.lastRefusal; if (r && r.ts >= t0 && names(r.text)) return r.text; await new Promise((res) => setTimeout(res, 25)); }
   return null;
@@ -465,9 +459,8 @@ const BODY_VERBS: Record<string, ToolHandler> = {
   },
   shove: async (ag, a, ctx, name) => {
       if (!a.target) return { content: [{ type: "text", text: "shove needs a `target` — the body that falls simulates it" }], isError: true };
-      // the shove is directed: from where THIS body stands, through the
-      // target — the same line a browser /push uses. No known position for
-      // them = an undirected knock-over, the old wire.
+      // directed from where THIS body stands through the target (the browser's /push line); no known position for
+      // them = an undirected knock-over
       const to = String(a.target).trim();   // main's absent(): spaces name nobody; someone not here is refused before anything is sent
       if (!to) return fail("the target is only spaces, so nobody was shoved");
       if (ag.joined && to !== ag.name && !ag.people.has(to)) return fail(`${to} isn't here, so nobody was shoved; look lists who is around you`);
@@ -481,16 +474,15 @@ const BODY_VERBS: Record<string, ToolHandler> = {
       }
       const t0 = Date.now();
       ag.puppet(to, { ragdoll: lean ? { lean } : true });
-      // the server checks the target's consent (class shove) and range before it forwards a shove, and answers a refusal
-      // with an error (server/messages.ts bodyRefusal); silence is the only yes it gives (parity audit 10-07 F2)
+      // the server checks the target's consent (class shove) and range, and answers a refusal with an error
+      // (server/messages.ts bodyRefusal); silence is the only yes it gives
       const no = await presenceRefusal(ag, t0, to);
       if (no) return { content: [{ type: "text", text: `shove refused (consent class: shove): ${no}` }], isError: true };
       return text(`you shove ${to}${lean ? " — they go down the way you pushed" : " — asked them to go limp"} (the server passed it on; their body has the last word)`);
 
   },
   kick: async (ag, a, ctx, name) => {
-      // Moderation deserves a real answer, not fire-and-forget: wait for
-      // the world's echo (success) or refusal and hand THAT back.
+      // wait for the world's echo or refusal and hand that back, not fire-and-forget
       const id = String(a.who ?? "").trim();
       if (!id) return fail(`${name} needs who — their name or identity (u-…)`);
       const reason = a.reason != null ? String(a.reason) : undefined;
@@ -515,8 +507,7 @@ const BODY_VERBS: Record<string, ToolHandler> = {
         if (answer == null || answer.startsWith("refused: ")) return fail(answer ?? "no reply from the world (timeout)");
         return text(answer);
       }
-      // this world: the authority's `bans` (what the Moderation panel reads): bans and mutes in force.
-      // The legacy world-bans message listed bans only, so a mute in force read "nobody is banned"
+      // this world: the authority's `bans` (what the Moderation panel reads): bans and mutes in force
       const r: any = await ag.request("bans", {});
       if (!r?.ok) return { content: [{ type: "text", text: r?.refused?.reason ?? "couldn't read what's in force here" }], isError: true };
       const until = (t: any) => (Number.isFinite(t) ? `until ${new Date(t).toISOString()}` : "until lifted");
@@ -665,7 +656,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
 
   },
   move: async (ag, a, ctx, name) => {
-      // to: "?" is a listing, no move: it answers from a seat that holds you too (bot #454)
+      // to: "?" is a listing, no move: it answers from a seat that holds you too
       if (typeof a.to === "string" && a.to.trim().startsWith("?")) return text(ag.placeList(a.to.trim().slice(1)));
       if (ag.myOccupancy && !ag.mayVacate("menu")) return { content: [{ type: "text", text: `you're held on ${ag.socketName(ag.myOccupancy.to)}: it lets you go when the world does (detach {escape: true} gets you up anyway)` }], isError: true };
       const mode = a.mode == null ? "walk" : String(a.mode);
@@ -750,7 +741,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
       const no = ag.lastWalkRefusal;
       if (!arrived && no) return { content: [{ type: "text", text: `${refusalText("move", { refused: no })}\nyou stopped at (${ag.pos.x.toFixed(3)}, ${ag.pos.z.toFixed(3)}), ${Math.hypot(ag.pos.x - x, ag.pos.z - z).toFixed(3)}m short${note}${what}` }], isError: true };
       if (!arrived) return fail(ag.walkStopReason ?? ag.walkStall ?? "walk interrupted or timed out");   // main #241: the stride's own stop reason first
-      // which floor it chose, when the y asked for wasn't one (#236 y, owner 22:40)
+      // which floor it chose, when the y asked for wasn't one (#236)
       const floorNote = y != null && Math.abs(ag.pos.y - y) > 0.1 ? `; no floor at ${y.toFixed(2)} m there — you're on the floor at ${ag.pos.y.toFixed(2)} m` : "";
       // which named room you're in now (#239)
       const here = ag.placesAt([ag.pos.x, ag.pos.y, ag.pos.z])[0];
@@ -1029,7 +1020,6 @@ export const HANDLERS: Record<string, ToolHandler> = {
         const y = pt && pt.length === 3 ? pt[1] : ag.heightAt(x, z) + 1.6;
         args.components = { ...comps, light: { ...comps.light }, transform: { pos: [x, y, z] } };
         // at's object form ({pos, yaw}) goes on to the authority, which lays it over this transform and checks its shape
-        // (it was read only as an array, then deleted, and the light went ahead of you at eye height)
         if (pt) delete args.at;
       } else if (a.from == null && Array.isArray(a.at)) {
         // at without from: a point. On the ground ([x, z]) it is place {at} — the authority seats a model's bottom; a
@@ -1237,7 +1227,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
       L.push(`${a.dry ? "would send" : "sent"} ${req.verb} ${JSON.stringify(req.args)}`);
       if (r && !r.ok) L.push(refusalText("edit", r));   // the words a person sees (shared/protocol/refusal.js)
       else if (r) {
-        // the authority's own words on what it did (agent lab round 2, Hazel): its notes, warnings, and an undo's account
+        // the authority's own words on what it did: its notes, warnings, and an undo's account
         for (const w of (r.warnings ?? []) as any[]) L.push(`  warning: ${warningText(w)}`);
         for (const nt of (r.notes ?? []) as any[]) if (!nt.placed) L.push(`  note: ${nt.why ?? JSON.stringify(nt)}`);
         if (!a.dry) L.push(`the authority accepted it${r.act != null ? ` (act ${r.act}; undo {act: ${r.act}} takes it back)` : ""}`);
@@ -1299,7 +1289,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
 
   world_history: async (ag, a, ctx, name) => {
       // the world's log is read through the authority (its history request: verbs, before and after reach it)
-      // SWEEP-3 G2 (main's shape): kinds (default act + say), a window with before AND after (read forward from after, cut at before), 50 a page
+      // kinds (default act + say), a window with before AND after (read forward from after, cut at before), 50 a page
       const kinds = Array.isArray(a.kinds) && a.kinds.length ? new Set(a.kinds.map(String)) : new Set(["request", "say"]);
       const both = typeof a.before === "number" && typeof a.after === "number";
       const h = await ag.request("history", { limit: Math.min(200, Math.max(1, Number(a.limit ?? 50))),
@@ -1317,7 +1307,7 @@ export const HANDLERS: Record<string, ToolHandler> = {
         + `\n(the world log: ${said}${kinds.size === 2 && kinds.has("request") && kinds.has("say") ? "; kinds: ['change', 'physics'] shows what requests wrote and the physics" : ""}; act {verb: 'history', args: {id}} reads one thing's own acts)`);
   },
   world_debug: async (ag, a, ctx, name) => {
-      // main's names teach, and nothing unknown is silently dropped (Mica 10-31, matrix #10)
+      // old names teach, and nothing unknown is silently dropped
       const WAS: Record<string, string> = { behavior: "script", behaviors: "scripts" }, TAKES = ["limit", "kinds", "script", "scripts"];
       for (const k of Object.keys(a ?? {})) if (!TAKES.includes(k))
         return fail(`world_debug has no argument '${k}'${WAS[k] ? `: ${k} is now ${WAS[k]}` : ""} (it takes ${TAKES.join(", ")}) — nothing ran`);
@@ -1349,11 +1339,10 @@ export const HANDLERS: Record<string, ToolHandler> = {
 
 
 // ---------------- anim: ONE tool for a pose or a clip, by name or live ----------------
-// The old pose / animate handlers are its live and by-name halves now (LEGACY below): they keep their words; the old
-// tool names are unknown tools (Mica 11-05).
+// The old pose / animate handlers are its live and by-name halves (LEGACY below); the old tool names are unknown tools.
 const LEGACY: Record<string, ToolHandler> = { pose: HANDLERS.pose, animate: HANDLERS.animate };
 delete HANDLERS.pose; delete HANDLERS.animate;
-/** Each built-in anim's own mode (R 15:32): what plays when the call says none. A one-frame pose holds. A name not
+/** Each built-in anim's own mode: what plays when the call says none. A one-frame pose holds. A name not
  *  here plays once (the body plays its default for a name it doesn't know). When anim-clip has a shape, its mode is a
  *  field of it. */
 export const ANIM_MODES: Record<string, "once" | "loop" | "hold"> = {
@@ -1368,9 +1357,9 @@ async function clipLength(base: string, clip: string): Promise<number | null> {
     const d = Number(a?.duration ?? a?.clip?.duration); return Number.isFinite(d) && d > 0 ? d : null; } catch { return null; }
 }
 const ANIM_CLIP: Record<string, string> = { stand: "idle" };   // the presence clip a built-in name holds as
-/** The body-mode a built-in anim asks for while it plays (R 15:34; an anim-clip's data may carry bodyMode once it has a shape). */
+/** The body-mode a built-in anim asks for while it plays (an anim-clip's data may carry bodyMode once it has a shape). */
 const ANIM_BODY: Record<string, "stand" | "sit" | "lie"> = { sit: "sit", sitchair: "sit", lie: "lie", stand: "stand" };
-/** Where a name resolves (R 15:34): the avatar's own anim, then the world's, then the built-in ones. Neither of the first two
+/** Where a name resolves: the avatar's own anim, then the world's, then the built-in ones. Neither of the first two
  *  exists yet (anim-pose / anim-clip are reserved; avatars carry no anim list): every name is built in today. */
 function animFrom(_ag: any, _name: string): "avatar" | "world" | "builtin" { return "builtin"; }
 const MODES = ["once", "loop", "hold"];
@@ -1386,7 +1375,7 @@ HANDLERS.anim = async (ag, a, ctx, name) => {
   if (mode0 != null && !MODES.includes(mode0)) return { content: [{ type: "text", text: `anim: mode is once, loop or hold (got ${JSON.stringify(a.mode)})` }], isError: true };
   const at = a.at == null ? null : Number(a.at);
   if (at != null && !(Number.isFinite(at) && at >= 0)) return { content: [{ type: "text", text: "anim: at is seconds into the anim (0 or more)" }], isError: true };
-  // the call's shape first: a bad shape declares no body-mode (bot #459)
+  // the call's shape first: a bad shape declares no body-mode
   const forms = ["name", "joints", "tracks", "stop", "ragdoll"].filter((k) => a[k] != null && a[k] !== false);
   if (a.name != null && (a.joints != null || a.tracks != null)) return { content: [{ type: "text", text: "anim: a name OR live keys (joints, or tracks), not both — a named anim plays as it is; nothing was guessed and nothing played" }], isError: true };
   if (forms.length > 1) return { content: [{ type: "text", text: `anim: one of name, joints, tracks, stop or ragdoll at a time (got ${forms.join(", ")})` }], isError: true };
@@ -1397,19 +1386,19 @@ HANDLERS.anim = async (ag, a, ctx, name) => {
     if (isReservedAnimName(n)) return { content: [{ type: "text", text: `anim: "${n}" is reserved — it names every ad-libbed anim (joints, tracks), so no anim can be called it; stop: "${n}" stops those` }], isError: true };
     if (a.target) return { content: [{ type: "text", text: "anim {name} plays on your own body; to animate someone else, send joints or tracks (they decide)" }], isError: true };
   }
-  // a body-mode declaration (R 15:45): any of the six, for looks; it holds until the mover's next real transition or the
+  // a body-mode declaration: any of the six, for looks; it holds until the mover's next real transition or the
   // next declaration, and grants nothing. Alone, or beside a name (the anim then plays in that mode)
   if (a.bodyMode != null) { if (!isBodyMode(a.bodyMode)) return { content: [{ type: "text", text: `anim: bodyMode is ${BODY_MODES.join(" | ")} (got ${JSON.stringify(a.bodyMode)})` }], isError: true };
     if (a.target) return { content: [{ type: "text", text: "anim {bodyMode} declares your own body's mode" }], isError: true };
     ag.bodyMode = String(a.bodyMode);
-    // alone, it rests the body in the new mode's own anim (declaring stand stands you up, R 16:26), unless a clip anim plays
+    // alone, it rests the body in the new mode's own anim (declaring stand stands you up), unless a clip anim plays
     // or a walk is under way (the walk's clip is the mover's)
     if (a.name == null && a.joints == null && a.tracks == null && (a.stop == null || a.stop === false) && a.ragdoll !== true && !ag.target && ag.clip !== "ragdoll" && !ag.anims.some((x: any) => x.kind === "clip")) { const rest = ag.restClip(ag.bodyModeNow()); if (rest) ag.clip = rest; }
     // on a seat: body-mode grants nothing, so a declaration never moves you off it; the reply says how
     const seated = ag.myOccupancy ? `; you're still attached to ${ag.socketName?.(ag.myOccupancy.to) ?? "your seat"}, and rest in its anim — detach to get off` : "";
     // with stop or ragdoll beside it, that runs too, in the mode just declared (the declaration returned first)
     if (a.name == null && a.joints == null && a.tracks == null && (a.stop == null || a.stop === false) && a.ragdoll !== true) return text(`${JSON.stringify({ bodyMode: String(a.bodyMode) })} — declared, for looks: it holds until a real transition (water, a take-off, a fall, a landing) or your next declaration, and grants nothing${seated}`); }
-  // stop (R 10-17 16:26/16:27): true stops every anim this body plays or holds, each layer, and rests in the CURRENT
+  // stop: true stops every anim this body plays or holds, each layer, and rests in the CURRENT
   // body-mode's own anim (never the bind pose; the body-mode is unchanged); a name stops only that layer ("live": every
   // ad-libbed one). With target: their held pose
   if (a.stop != null && a.stop !== false) {
@@ -1458,7 +1447,7 @@ HANDLERS.anim = async (ag, a, ctx, name) => {
     const from = animFrom(ag, n);
     if (ANIM_POSES.has(n)) { const t = await ag.foldWings(true); if (!t.ok) return fail(t.text); if (ag.wingsFolded) ag.animBegan({ name: n, mode: "hold", kind: "pose" }); return playing(n, "hold", t.text, from); }
     const mode = (mode0 ?? ANIM_MODES[n] ?? "once") as "once" | "loop" | "hold";
-    // once overlays what is held and returns to it (R 15:34: sit + wave is still sitting): the held anim goes on, unstopped
+    // once overlays what is held and returns to it (sit + wave is still sitting): the held anim goes on, unstopped
     if (mode === "once") { ag.playOnce(n); return playing(n, "once", `everyone sees it${ag.anim ? `, over ${ag.anim.name}, which goes on` : ""}`, from); }
     const clip = ANIM_CLIP[n] ?? n;
     // hold: at, else its last frame (a hair before its end: receivers take clipTime modulo the clip's length), when this
@@ -1507,10 +1496,9 @@ function describeCheck(what: string, r: any, named: number, id?: string, collide
   return L.join("\n");
 }
 
-// Old names (for one release): an old name runs nothing; it
-// is refused naming the tool that does it now, until `until`, then its entry goes. Names only (alias-test holds it so).
-/** Tools that FOLDED into a general tool's mode (10-14): the old name is refused with the call that does it now. Not an
- *  alias — the arguments changed shape, so running the new tool on the old args would do the wrong thing quietly. */
+/** Old tool names that FOLDED into a general tool's mode: an old name runs nothing and is refused naming the call that
+ *  does it now (for one release; test/mcpl/alias-test.ts holds the list). Not an alias: the arguments changed shape, so
+ *  running the new tool on the old args would do the wrong thing quietly. */
 export const TOOL_FOLDS: Record<string, string> = {
   take_off: 'move {mode: "fly"}', climb_to: 'move {mode: "fly", altitude}', glide_to: 'move {mode: "fly", to: [x, z]}', land_at: 'act {verb: "land", args: {to: [x, z]}}',
   rehearse_down: "no tool: a bench calls the agent's flightBodyDown directly", rehearse_recover: "no tool: a bench calls the agent's flightBodyRecovered directly",
@@ -1523,15 +1511,14 @@ export const TOOL_FOLDS: Record<string, string> = {
   // main's world_access left without a pointer
   world_access: 'the world\'s own components on @world: worlds shows each door; owners change it with act {verb: "set", args: {id: "@world", component: "access" | "roles:<id>", value}} (a timed grant: value {role, for: "2h"})',
 };
-/** Main's tools that left with what they did, and why: refused with a pointer, never "no such tool" (#260 r3 I3; whisper
- *  fell through to a did-you-mean of whois). */
+/** Tools that left with what they did, and why: refused with a pointer, never "no such tool". */
 export const TOOL_REMOVED: Record<string, string> = {
   // its verb set was main's: act {verb, args} takes this authority's, and refuses an old one by name
   world_verb: "act {verb, args} sends a verb to the world's authority (help lists them); an old verb is refused with the call that does it now",
   whisper: "world chat has no private channel (the maintainers' speech ruling: speech is logged, whisper stays disabled); say speaks aloud to everyone here",
 };
-/** A timed grant's duration, main's world_access `for: "2h"`: each set of @world roles:<id> carrying `for` gets until = the
- *  server's now + it, in place (decision table row 14). A refusal's words, or null. */
+/** A timed grant's duration (the old world_access `for: "2h"`): each set of @world roles:<id> carrying `for` gets
+ *  until = the server's now + it, in place. A refusal's words, or null. */
 export function grantsFor(ag: { serverNow(): number }, verb: string, args: Record<string, any>): string | null {
   const sets = verb === "set" ? [args] : verb === "batch" && Array.isArray(args.requests) ? args.requests.filter((o: any) => o?.verb === "set").map((o: any) => o.args ?? {}) : [];
   for (const s of sets) {
