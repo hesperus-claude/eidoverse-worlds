@@ -11,6 +11,7 @@
 //              `clear: true` also removes the chip. Default: one 'got it'.
 //     open     true: open the popover now (a notice that is the only explanation for a dead canvas)
 //   clearStatusChip(id)
+//   paintHud(status)   the ∃ mark itself (#hud): lit while net.status is 'live', pulsing while it connects (main.js, 1 Hz)
 //
 // PLACEMENT: the strip continues the ∃'s status line past whatever glyphs sit on it. On a vertical rail (left/right)
 // that line is the ∃'s ROW, so the chips run along it, away from the edge. On a horizontal rail (top/bottom) the row
@@ -190,4 +191,12 @@ function placePop() {
   pop.style.left = `${Math.round(x)}px`;
   pop.style.top = `${Math.round(below ? c.bottom + 6 : c.top - 6 - h)}px`;
   pop.dataset.side = below ? 'below' : 'above';
+}
+
+export function paintHud(status) {
+  const hud = document.getElementById('hud');
+  if (!hud) return;
+  hud.classList.toggle('net-live', status === 'live');
+  hud.classList.toggle('net-wait', status === 'connecting' || status === 'retrying');
+  hud.title = status === 'live' ? 'eidoverse — menu' : `eidoverse — ${status}…`;
 }

@@ -107,12 +107,11 @@ import { budgetStats } from './lib/framebudget.js';
 import { pending, P, onIdle, laneStats as schedLaneStats } from './lib/scheduler.js';
 import { laneStats as loadLaneStats } from './lib/loadwork.js';
 import { colliderCacheStats } from './lib/colliders.js';
-import { statusChip } from './lib/statuschips.js';
+import { statusChip, paintHud } from './lib/statuschips.js';
 import { governPerformance, governorDebug, whenCalm, applyPendingPixelRatio } from './lib/governor.js';
 import { registerSystem, startFrame, frameDebug } from './lib/frameloop.js';
 import { perf } from './lib/perf.js';
 import { renderWorld, drawStats, setDrawBatching } from './lib/render.js';
-import { paintHud } from './lib/hud.js';
 import { updateMaterials, materialsDebug } from './lib/materials.js';
 import { updateRig, rigDebug, setLampShadow, lampShadowState } from './lib/lightrig.js';
 import { startPrefetch } from './lib/prefetch.js';
@@ -632,7 +631,7 @@ registerSystem('pulse', (dt, t, now) => {
   if (now - _pulseAt < 1000) return;
   _pulseAt = now;
   governPerformance(perf.fps);
-  paintHud();
+  paintHud(net.status);
 });
 
 startFrame();   // explicit — the loop starts only after identity resolved
