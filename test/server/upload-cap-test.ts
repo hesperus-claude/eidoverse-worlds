@@ -5,9 +5,9 @@
 import { mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { scratchSequencer } from "../harness/harness.ts";
+import { suite } from "../gate/suite.ts";
 
-let passed = 0, failed = 0;
-const check = (name: string, ok: boolean, detail = "") => { if (ok) passed++; else failed++; console.log(`  ${ok ? "ok  " : "FAIL"} ${name}${ok || !detail ? "" : ` — ${detail}`}`); };
+const S = suite("upload-cap-test"), { check } = S;
 
 const KEY = "test-door";
 const env: Record<string, string> = { JOIN_TOKEN: KEY, UPLOAD_CAP_MB: "1", SKIP_OPT_SWEEP: "1" };   // OPT_DIR: the scratch's own store
@@ -28,6 +28,5 @@ try {
   check("...and nothing refused was stored", stored === 0, `${stored} entries under store/`);
   u = await up(new Uint8Array(1_000_000));
   check("exactly UPLOAD_CAP is read (refused for what it is, not its size)", u.status !== 413, `${u.status} ${u.text.slice(0, 80)}`);
-} finally { await door.cleanup(failed ? 1 : 0); }
-console.log(`\n[upload-cap-test] ${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);
+} finally { await door.cleanup(S.fail ? 1 : 0); }
+S.done();
