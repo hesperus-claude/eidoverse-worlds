@@ -7,7 +7,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "AGPL-3.0-only",
   "description": "",
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",
