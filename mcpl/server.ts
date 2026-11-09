@@ -1,6 +1,5 @@
-// eidoverse-worlds agent MCPL — MCP stdio server giving an agent embodied
-// presence: a body (WorldAgent), verbs, text-tier perception, and a retina
-// (first-person snapshots via a spectator browser session on a GPU host).
+// eidoverse-worlds agent MCPL — MCP stdio server giving an agent embodied presence: a body (WorldAgent), verbs,
+// text-tier perception, and screenshots through the world's /snap (tools.ts).
 //
 // Env: WORLD_URL (ws://127.0.0.1:8940/ws), AGENT_NAME (claude),
 //      WORLD_NAME (commons), AGENT_AVATAR (vrm library path).

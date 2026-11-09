@@ -31,8 +31,7 @@ export type Place = {
   min?: Vec3; max?: Vec3;    // region
   source: "model" | "component";
 };
-// its transform: pos, and q (a full rotation, [x, y, z, w]) or yaw, and scale (a number or [x, y, z]): the full
-// "own frame" transform the registry means everywhere.
+// The thing a place belongs to: pos, q ([x, y, z, w]) or yaw, and scale (a number or [x, y, z]).
 export type PlaceHolder = { id: string; pos: number[]; yaw?: number; q?: number[]; scale?: number | number[]; name?: string };   // name: how a reader calls it (its unique label, else its handle)
 
 const finite3 = (v: unknown): v is Vec3 => Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n));
@@ -68,8 +67,7 @@ export function placesFromModel(meta: any): Map<string, Place> {
   return out;
 }
 
-/** Normalize a `places` component; malformed entries are dropped (they still
- *  fold and persist — the bag is blind — they just name nothing). */
+/** Normalize a `places` component; malformed entries name nothing (they still fold and persist). */
 export function placesFromComponent(data: unknown): Map<string, Place | null> {
   const out = new Map<string, Place | null>();
   if (!data || typeof data !== "object" || Array.isArray(data)) return out;

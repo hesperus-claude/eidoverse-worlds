@@ -1,30 +1,16 @@
 // What the eidoverse door DECLARES about itself: capabilities (MCPL SPEC §5.1),
 // feature sets (§6.1–§6.2), and the tag vocabulary + producer ontology (§16).
 //
-// Three rules govern everything in this file, and they are the reason it is a
-// file rather than three object literals inlined at the handshake:
-//
-//  1. **Declaration is not authorization.** Everything here is an *input* to the
-//     host's decision (§5.4: "Advertisement is an input, never an authorization").
-//     The door may say what it can do; it may never assert what it is entitled
-//     to. Nothing in this module is ever consulted to decide whether something
-//     is allowed — that is `Session.granted()` in net-server.ts, and its only
-//     source is the host's `effectiveCapabilities`.
-//
-//  2. **Tags are never authority (§16.6).** The tag sets below describe what an
-//     event IS. They never gate delivery, never open a channel, never widen a
-//     grant. The door's own "is this channel open" decision is made from world
-//     state, never by reading a tag array back.
-//
-//  3. **A suggestion must not be able to purchase a wake (§16.5).** The
-//     ontology's `suggestedTreatment` deliberately contains no `immediate` rule
-//     — see SUGGESTED_TREATMENT below.
+// Three rules govern everything in this file:
+//  1. Declaration is not authorization (§5.4). Nothing here decides what is allowed; that is Session.granted() in
+//     net-server.ts, fed only by the host's `effectiveCapabilities`.
+//  2. Tags are never authority (§16.6). They describe what an event IS; they never gate delivery or widen a grant.
+//  3. A suggestion must not purchase a wake (§16.5): SUGGESTED_TREATMENT has no `immediate` rule.
 
 // ---- tag vocabulary --------------------------------------------------------
 
-/** Reserved cross-platform core (§16.2). Spelled out rather than imported so
- *  this file is readable as the whole contract, and so a core-lib version skew
- *  cannot silently change what goes on the wire. */
+/** Reserved cross-platform core (§16.2). Spelled out rather than imported, so a core-lib version skew can't change
+ *  what goes on the wire. */
 export const CHAT = {
   addressed: "chat:addressed",
   mention: "chat:mention",
@@ -180,8 +166,7 @@ const TAG_ONTOLOGY = {
     },
     [EIDO.depart]: {
       desc: "Someone who had walked up to you is no longer in your immediate surroundings. The closing bracket of eidoverse:approach — you only ever receive one for a person you were told had arrived. The wire text names who moved when there is evidence ('walked away' only when their own movement carried them out); otherwise it states the relation neutrally ('is no longer nearby' — you may be the one who left). Arrives as a chat:system notice (with chat:ambient): nobody said it.",
-      // Ambient, not addressing: worth knowing, not worth waking for. Consumers
-      // can opt into waking in their own rules; they couldn't unpick a declared wake.
+      // ambient, not addressing: a host can opt into waking on it, but couldn't unpick a declared wake
       facet: "lifecycle",
     },
     [EIDO.reach]: {
@@ -275,9 +260,7 @@ export const FEATURE_SETS: Record<string, FeatureSetDecl> = {
   },
 };
 
-/** Fail at boot, not on the wire: a `uses` value outside §6.2 makes the feature
- *  set invalid and gets it disabled with reason `invalid_uses` (§6.4.1). A typo
- *  here would silently cost a resident their world, so it is a startup error. */
+/** Fail at boot, not on the wire: a `uses` value outside §6.2 gets the whole set disabled (§6.4.1 `invalid_uses`). */
 for (const [name, fs] of Object.entries(FEATURE_SETS)) {
   if (!fs.uses.length) throw new Error(`[mcpl] feature set "${name}" has empty uses — invalid per SPEC §6.2`);
   for (const u of fs.uses) {
@@ -288,10 +271,9 @@ for (const [name, fs] of Object.entries(FEATURE_SETS)) {
 // ---- the advertisement (§5.1) ----------------------------------------------
 
 /**
- * The manifest this door advertises under `capabilities.experimental.mcpl`.
- * `channels` is spelled out leaf by leaf (§5.1) because `true` would claim
- * `acknowledge` and `streaming`, which this door doesn't implement. No
- * `revision`: no §17 manifest changes, so the manifest is fixed per connection.
+ * The manifest this door advertises under `capabilities.experimental.mcpl`. `channels` is spelled out leaf by leaf
+ * (§5.1): `true` would claim `acknowledge` and `streaming`, which this door doesn't implement. The `revision`
+ * (§17.2) is added by manifest.ts; the surface is static, so it never changes mid-connection.
  */
 export const MCPL_ADVERTISEMENT = {
   version: "0.5",

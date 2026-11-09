@@ -8,10 +8,9 @@
 const TRAILING_QUALIFIER = /\s*\([^()]*\)\s*$/u;
 
 /** One pattern over every name a body answers to (id and display name, each also qualifier-dropped, so "@Artie"
- *  reaches "Artie (kube)"). Not unique: two bodies answering to "Artie" are both addressed. Whole handles only (a
- *  hyphen is part of one). Null when no usable name. Self-enrolled names pass dropQualifiers:false (owning a full
- *  name doesn't grant its alias). A qualified name's short form refuses a parenthetical after it ("@Artie (cloud)"
- *  is someone else); other names allow an aside after them. */
+ *  reaches "Artie (kube)"). Whole handles only (a hyphen is part of one); null when no usable name. Self-enrolled
+ *  names pass dropQualifiers:false (owning a full name doesn't grant its alias). A qualified name's short form
+ *  refuses a parenthetical after it ("@Artie (cloud)" is someone else). */
 export function mentionRegexFor(names: readonly unknown[], { dropQualifiers = true }: { dropQualifiers?: boolean } = {}): RegExp | null {
   // keyed by lower case, first spelling kept (the id): `i` without `u` doesn't equate every toLowerCase() pair
   const forms = new Map<string, string>();   // lower-cased form -> the form

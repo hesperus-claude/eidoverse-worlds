@@ -26,7 +26,6 @@ export class PoseClips {
   }
 
   // Evaluate the same retargeted Three tracks the browser mixer consumes.
-  // No raw rest-pose knee is substituted for an unavailable posture clip.
   apply(animation: any, body: any, time: number, rigKey: object = body.av.vrm) {
     let bound = this.retargeted.get(rigKey);
     if (!bound) { bound = new Map(); this.retargeted.set(rigKey, bound); }

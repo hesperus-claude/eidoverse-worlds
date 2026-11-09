@@ -136,7 +136,7 @@ export class NoiseGate {
         s.charge += 0.1;
         return;
       }
-      // duplicate same-direction event (shouldn't happen) — keep the first
+      // duplicate same-direction event: keep the first
       return;
     }
     const hold = kind === "arrive" ? this.opts.arriveHoldMs : this.opts.leaveHoldMs;
