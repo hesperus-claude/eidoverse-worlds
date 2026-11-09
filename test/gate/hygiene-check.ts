@@ -45,7 +45,7 @@
 //   prod-imports-test  server/, shared/, mcpl/ or client/ importing from test/: a deploy without test/ loses the feature
 //                 silently (server/geometry.ts's topGrid, review 11-08). Zero, no baseline.
 //   whole-body    `await req.text()/json()/arrayBuffer()/formData()` in server/: the whole body is buffered before any size
-//                 check (Bun's only bound is 128 MB). Read through server/reqbody.ts readCapped / readCappedBytes. Zero.
+//                 check (Bun's only bound is 128 MB). Read through server/request-body.ts readCapped / readCappedBytes. Zero.
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -118,7 +118,7 @@ export function prodImportsTestHits(root = ENGINE): string[] {
 /** A request body read whole, before any cap. */
 export const wholeBody = (text: string) => [...text.matchAll(/\bawait\s+req\.(?:text|json|arrayBuffer|formData|blob)\(\s*\)/g)].length;
 export function wholeBodyHits(root = ENGINE): string[] {
-  return walk(path.join(root, "server"), []).filter((p) => !p.endsWith("reqbody.ts"))
+  return walk(path.join(root, "server"), []).filter((p) => !p.endsWith("request-body.ts"))
     .flatMap((p) => fs.readFileSync(p, "utf8").split("\n").flatMap((l, n) => (wholeBody(l) ? [`${relTo(root, p)}:${n + 1}`] : [])));
 }
 /** A spawn of the mcpl server with no MCPL_STATE writes mcpl/state.json in the checkout (CI 40956937323: client-tools imports
@@ -251,7 +251,7 @@ if (import.meta.main) {
   // whole-body (review 11-08): every request body in server/ is read under a cap
   check(`H${i++} whole-body: caught in its known-bad form (3), and not in a capped read`, wholeBody("await req.json(); await req.text(); await req.arrayBuffer();") === 3 && wholeBody("await readCapped(req, 1024); req.json") === 0, "pattern");
   const bodyHits = wholeBodyHits();
-  check(`H${i++} whole-body: server/ reads no request body whole (${bodyHits.length ? "found" : "none"})`, bodyHits.length === 0 && fs.existsSync(path.join(ENGINE, "server/reqbody.ts")), bodyHits.join("\n      "));
+  check(`H${i++} whole-body: server/ reads no request body whole (${bodyHits.length ? "found" : "none"})`, bodyHits.length === 0 && fs.existsSync(path.join(ENGINE, "server/request-body.ts")), bodyHits.join("\n      "));
 
   // then the gate's code against the baseline (may only go down)
   const now = measure();

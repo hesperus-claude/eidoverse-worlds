@@ -1,6 +1,6 @@
 # DESIGN: transaction outcomes + one immutable request capability (2026-10-18)
 
-Written against commit a732d74e, answering the reviewer's two pre-re-review requirements (transaction outcomes, one request capability). Line references are to that commit; the shipped code moved some (see `server/reqcap.ts`, `shared/protocol/authority/storage.js` txnOutcome, `server/worldlog.ts` request).
+Written against commit a732d74e, answering the reviewer's two pre-re-review requirements (transaction outcomes, one request capability). Line references are to that commit; the shipped code moved some (see `server/request-capability.ts`, `shared/protocol/authority/storage.js` txnOutcome, `server/worldlog.ts` request).
 
 ## 1. How a request flows now
 
@@ -32,7 +32,7 @@ Rights *inside* the authority are therefore never stale: they are read in the sa
 
 ## 3. Design (smallest honest change)
 
-### 3a. Request capability — `server/reqcap.ts` (new, ~40 lines)
+### 3a. Request capability — `server/request-capability.ts` (new, ~40 lines)
 
 ```ts
 export type ReqCap = Readonly<{ c: Client; w: World; gen: number; actorId: string; account: string|null;
@@ -82,7 +82,7 @@ Changes:
 | T10 | `recheck` with an unchanged connection passes (no false refusals: 100 serial requests all `committed`) | compare `role` by object identity instead of value |
 
 ## 5. Files to change
-`server/requestwire.ts`, `server/worldlog.ts`, `shared/protocol/authority/storage.js`, `server/durable.ts`, new `server/reqcap.ts`, `shared/protocol/refusalcodes.js` (+`ambiguous`), `spec/PROTOCOL.md` §7.
+`server/requestwire.ts`, `server/worldlog.ts`, `shared/protocol/authority/storage.js`, `server/durable.ts`, new `server/request-capability.ts`, `shared/protocol/refusalcodes.js` (+`ambiguous`), `spec/PROTOCOL.md` §7.
 
 ## 6. Scope — what the transaction does NOT cover yet (2026-10-18)
 
@@ -103,7 +103,7 @@ Outside it, today:
   `Who`, not a `ReqCap`. They write nothing, so they have no commit seam to recheck at; `Who` is recomputed per request.
   (A native session's `nativeWorld` narrowed both once; since main #255 a native sign-in is an ordinary one and narrows nothing.)
 - **Capability expiry**: `ReqCap` carries no `expiry` field. A timed grant (`roles:<id>.until`) is rechecked *through the
-  role* at both seams (`reqcap.ts recheck`: `w.log.roleOf(cap.actorId) !== cap.role`), and the role ends when the
+  role* at both seams (`request-capability.ts recheck`: `w.log.roleOf(cap.actorId) !== cap.role`), and the role ends when the
   authority writes `expire-roles` — the server's one-second sweep (`server/access.ts sweepAccess`,
   `scriptrun.js expireRoles`), not the request itself. The door's listed check takes an ended grant as absent at `now` (security review
   10-18 M6, `shared/protocol/access.js listedIn`), so in the window between `until` and that sweep a listed-only world's

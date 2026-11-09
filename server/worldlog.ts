@@ -169,7 +169,7 @@ export class WorldLog {
 
   /** One request, as `actor` (an identity the caller has already encoded). Warms any model it names first, so
    *  the authority can measure it; the authority call itself is synchronous. */
-  /** `still` (optional): the asker's capability (server/reqcap.ts recheck), re-validated after the await and immediately
+  /** `still` (optional): the asker's capability (server/request-capability.ts recheck), re-validated after the await and immediately
    *  before the synchronous authority call: null while the asker may still act, else the refusal's words (nothing written).
    *  Never throws: every request ends in a reply carrying its transaction outcome (requestSync). */
   async request(actor: string, verb: string, args: Record<string, unknown> = {}, still?: () => string | null) {

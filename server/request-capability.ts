@@ -1,4 +1,4 @@
-// server/reqcap.ts — one immutable capability per request (docs/decisions/TXN-CAPABILITY.md).
+// server/request-capability.ts — one immutable capability per request (docs/decisions/TXN-CAPABILITY.md).
 // capture() freezes who the connection was when the request arrived; recheck() asks at each await→commit seam whether the live
 // connection, door and role still agree, and any difference refuses (nothing written). The authority gets cap.actorId, never
 // the connection's actorId re-read after an await (a re-join on the same socket reassigns it).

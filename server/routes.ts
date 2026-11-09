@@ -72,7 +72,7 @@ import { interruptedVisitorText } from "./oldworlds.ts";
 import { setupPage, setupClaim } from "./setup.ts";
 import { setupOpen } from "./operators.ts";
 import { ClientLogRate, ClientLogStore, LIMITS as CLIENTLOG_LIMITS, scrub, holdsPrivateKey, boundLines } from "./clientlog.ts";
-import { readCapped, readCappedBytes } from "./reqbody.ts";
+import { readCapped, readCappedBytes } from "./request-body.ts";
 
 import { recordComponents } from "../shared/protocol/view.js";
 import { WORLD_NAME_RE } from "./limits.ts";

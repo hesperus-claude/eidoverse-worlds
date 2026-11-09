@@ -12,7 +12,7 @@ import { agentTokens, aid1JoinIdentity, sessionOfRequest } from "./auth.ts";
 import { worlds } from "./world.ts";
 import { atomicWrite } from "./fsutil.ts";
 import { ingestHeightmap } from "./heightmap.ts";
-import { readCappedBytes } from "./reqbody.ts";
+import { readCappedBytes } from "./request-body.ts";
 import { checkFile } from "./buildcheck-queue.ts";
 import { envNumber } from "./limits.ts";
 import { sha256Bytes } from "../shared/protocol/hash.js";

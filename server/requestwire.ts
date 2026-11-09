@@ -15,7 +15,7 @@ import { txnRefusal } from "../shared/protocol/authority/storage.js";
 import { WIRE_READS, PERSON_ACTS } from "../shared/protocol/verbclasses.js";
 import { METER_SCALE, readMeter, authorityTime } from "./readmeter.ts";
 import { isOperator } from "./operators.ts";
-import { capture, recheck, type ReqCap } from "./reqcap.ts";
+import { capture, recheck, type ReqCap } from "./request-capability.ts";
 import { isOwner } from "../shared/protocol/roles.js";
 import { UPGRADE_MESSAGES } from "./upgrade.ts";
 
@@ -148,7 +148,7 @@ export const REQUEST_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
     if (verb === "consent") { const gone = goneListing(w, args); if (gone) { reply({ ok: false, refused: gone }); return; } }
     // a caption carries the connection's leg generation, stamped here, so a taken-over leg can't overwrite its successor
     if (verb === "caption") args.gen = c.legGen ?? 0;
-    // the request's ONE capability (server/reqcap.ts), frozen at arrival; rechecked when the queue reaches it (seam 1) and
+    // the request's ONE capability (server/request-capability.ts), frozen at arrival; rechecked when the queue reaches it (seam 1) and
     // before the authority writes (seam 2). The authority gets cap.actorId, never c.actorId read after an await
     let cap: ReqCap;
     try { cap = capture(c, w); } catch (err) { console.error(`[ws] request from ${c.id}:`, err); reply({ ok: false, txn: "rolled-back", refused: { code: "identity", reason: "this connection has no identity here", fix: "join the world first" } }); return; }
@@ -221,7 +221,7 @@ export const REQUEST_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
     const reply = (r: Any) => { answered = true; ws.send(JSON.stringify({ type: "reply", id: rid, verb, ok: r.ok === true, operator: true, ...(typeof r?.txn === "string" ? { txn: r.txn } : {}), reply: r })); };
     if (!isOperator(c.account)) { reply({ ok: false, refused: { code: "rights", reason: "operator-repair needs a server operator's account (SERVER_OPERATORS)", fix: "ask whoever runs this server" } }); return; }   // an owner can't repair what only an operator may (an operator's ban, a shape repair)
     if (!c.actorId) { reply({ ok: false, refused: { code: "identity", reason: "this connection has no identity here", fix: "join the world first" } }); return; }
-    // the same one capability as request (server/reqcap.ts), and it must still be an operator's when the queue reaches it:
+    // the same one capability as request (server/request-capability.ts), and it must still be an operator's when the queue reaches it:
     // recheck covers isOperator(account) as captured; the only await before the synchronous repair is the queue itself
     const cap = capture(c, w);
     inOrder(c, ws, async () => {

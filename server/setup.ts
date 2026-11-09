@@ -1,7 +1,7 @@
 // server/setup.ts — the first-run setup link: with no operator, GET /setup is a page that posts the link's token back;
 // POST /setup from a proven account (an agent's Bearer if sent, else a person's session) makes it the operator (server/operators.ts claimSetup).
 import { httpCaller, bearerCaller } from "./access.ts";
-import { readCapped } from "./reqbody.ts";
+import { readCapped } from "./request-body.ts";
 import { claimSetup, setupOpen } from "./operators.ts";
 import { addressOf } from "./peer.ts";
 import { windowLimiter } from "./ratewindow.ts";
