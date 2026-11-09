@@ -10,7 +10,7 @@
   "license": "AGPL-3.0-only",
   "description": "",
   "dependencies": {
-    "@mintplex-labs/piper-tts-web": "^1.0.4",
+    "@mintplex-labs/piper-tts-web": "1.0.4",
     "@pixiv/three-vrm": "^3.5.2",
     "@pixiv/three-vrm-animation": "^3.5.2",
     "@pixiv/three-vrm-materials-mtoon": "^3.5.2",
