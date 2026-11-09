@@ -6,7 +6,7 @@ export const RECENT_CHAT = 40;
  *  everyone else: the loudest voice loses its oldest line first, and nobody's
  *  LAST line is dropped while someone else still has several. Recency wins
  *  within a speaker; fairness decides between them.
- *  @param {WorldState["recentChat"]} rc */
+ *  @param {{ actor: string, text: string, ts: number, seq: number }[]} rc */
 export function trimRecentChat(rc) {
   while (rc.length > RECENT_CHAT) {
     const counts = new Map();
