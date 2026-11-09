@@ -132,11 +132,11 @@ export function speak(text, speaker) {
 }
 
 // LENGTH IS LATENCY: piper's RTF is ~1.1, so one long ort.run() freezes the
-// main thread for as long as the audio lasts. tts-chunk.js splits like the
+// main thread for as long as the audio lasts. tts_chunk.js splits like the
 // sidecar, with an aggressive opening clause (time-to-first-word = synth of
 // chunk 1). Chunks still run on the main thread; a Worker is the real cure.
 async function speakChunked(text) {
-  const { ttsChunks } = await import('./tts-chunk.js');
+  const { ttsChunks } = await import('./tts_chunk.js');
   const chunks = ttsChunks(text);
   if (!chunks.length) return false;          // emoji-only: in the log, not the air
   if (chunks.length === 1) return speakOne(chunks[0]);

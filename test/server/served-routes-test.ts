@@ -57,8 +57,8 @@ const ROUTES: [string, number, number][] = [
   // the worker itself, and the modules it imports at runtime
   ["/lib/phon.worker.js", 200, 500],
   ["/lib/tts.js", 200, 1_000],
-  ["/lib/engine-piper.js", 200, 1_000],
-  // a missing optional TTS chunk 404s honestly (not index.html), so engine-piper's guarded import gets a catchable failure
+  ["/lib/engine_piper.js", 200, 1_000],
+  // a missing optional TTS chunk 404s honestly (not index.html), so engine_piper's guarded import gets a catchable failure
   ["/node_modules/@mintplex-labs/piper-tts-web/dist/no-such-chunk.js", 404, 0],
 ];
 

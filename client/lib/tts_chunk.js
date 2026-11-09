@@ -1,5 +1,5 @@
 /**
- * tts-chunk — the spoken form of an utterance, in synthesis-sized pieces.
+ * tts_chunk — the spoken form of an utterance, in synthesis-sized pieces.
  *
  * Ported from the porch token-router aggregation (aggregate.py → LiveSay in
  * eido-cc-extras.ts). Constants are MEASURED, not guessed: a 152-char opening
