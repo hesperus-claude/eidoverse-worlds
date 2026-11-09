@@ -1,13 +1,9 @@
 // seats — the server side of seat profiles (docs/reference/SEATS.md): storage, judgment, push.
-//
-// One judge, three readers. This module owns the profile store (assets/opt/seats/profiles.json + an append-only
-// provenance log), computes the serve-time verdict against the CURRENT bytes on disk (via seatcore, the file every
-// consumer evaluates), and tells the server when to broadcast `avatar-profile-updated`. Consumers never rehash a VRM and
-// never read a stale value as fresh: the verdict ships pre-judged.
-//
-// Writes: HTTP proposals need a NAMED actor (never the anonymous door token); the countersign has no HTTP path
-// (tools/operator/seat-accept.ts, noticed here by an mtime watch). Every write is provenance-first and runs whole under one
-// on-disk lock shared by every process. Rationale: docs/research/seat-store-integrity.md.
+// This module owns the profile store (assets/opt/seats/profiles.json + an append-only provenance log), computes the
+// serve-time verdict against the current bytes on disk (via seatcore), and tells the server when to broadcast
+// `avatar-profile-updated`, so consumers never rehash a VRM. HTTP proposals need a named actor; the countersign has no
+// HTTP path (tools/operator/seat-accept.ts, noticed by an mtime watch). Every write is provenance-first under one on-disk
+// lock shared by every process. Rationale: docs/research/seat-store-integrity.md.
 
 import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, appendFileSync, statSync, openSync, closeSync, writeSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -85,10 +81,8 @@ export class SeatStore {
 
   // ---- the write lock (one per store directory, shared by every process) ---
 
-  /** Exclusive create (openSync "wx") is the atom; ownership is the nonce in {pid, nonce, ts}, never the path.
-   *  Liveness is PID-verified (ESRCH = orphaned), never inferred from age; a dead lock is broken by rename-steal;
-   *  acquisition is a bounded spin; the lock rides the real fs even under fault injection.
-   *  Why each: docs/research/seat-store-integrity.md#the-write-lock */
+  /** Exclusive create (openSync "wx") is the atom; ownership is the nonce in {pid, nonce, ts}. Liveness is PID-verified
+   *  (ESRCH = orphaned), never inferred from age; a dead lock is broken by rename-steal. docs/research/seat-store-integrity.md#the-write-lock */
   private lockNonce: string | null = null;
 
   private static pidAlive(pid: number): boolean {

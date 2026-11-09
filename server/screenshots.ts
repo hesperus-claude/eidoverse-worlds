@@ -46,13 +46,10 @@ export function pngFromDataURL(value: unknown): Buffer | null {
   return null;
 }
 
-// ROAMING RENDERERS: a renderer that joined with `roam` serves no world in particular. A screenshot asked of a world no
-// renderer serves sends an idle roamer there (`renderer-travel`), waits for it, and dispatches to it; it stays until
-// another world needs it. `allClients` lists every connected client (the server's registry, or a test's).
-//
-// A first screenshot should come back with a picture: every request has ONE deadline (`budgetMs`, under a Connectome
-// host's 60 s per-call deadline) that the journey, a wait for a busy renderer and the frame all come out of; the
-// renderer is told how long it may load (`wait`); and worlds an agent is in are kept served (sweep).
+// Roaming renderers: a renderer that joined with `roam` serves no world in particular. A screenshot asked of a world no
+// renderer serves sends an idle roamer there (`renderer-travel`), waits for it, and dispatches to it. Every request has one
+// deadline (`budgetMs`) that the journey, a wait for a busy renderer and the frame all come out of; worlds an agent is in
+// are kept served (sweep). `allClients` lists every connected client.
 export function createScreenshotBroker({ timeoutMs = 12_000, cooldownMs = 2000, maxPending = 16, now = () => performance.now(),   // intervals only: monotonic
   travelMs = 25_000, arrivalTimeoutMs = 40_000, pollMs = 200, recentMs = 5 * 60_000,
   queueMs = 20_000, maxQueued = 16, maxQueuedTotal = 64, budgetMs = 55_000, settleMarginMs = 2_000, pinnedGraceMs = 120_000, sweepAfterMs = 30_000,
@@ -157,9 +154,9 @@ export function createScreenshotBroker({ timeoutMs = 12_000, cooldownMs = 2000, 
   const candidatesIn = (world: World, engine: string) => [...world.clients].filter(c => active(c, world) && (c.renderer || c.capture)
     && eligible(c, engine))
     .sort((a, b) => Number(!!b.capture) - Number(!!a.capture));
-  /** How much a roamer's current world still needs it: 0 — no agent there (parked, free); 1 — agents there, but none
-   *  has asked for a screenshot recently; 2 — in use. Rotation takes the least needed, then the longest idle. An agent
-   *  here is a body that joined with an agent's enrolment (tokenVerified: its credential, never a declaration, §6a). */
+  /** How much a roamer's current world still needs it: 0 — no agent there (parked, free); 1 — agents there, none asking for
+   *  screenshots recently; 2 — in use. Rotation takes the least needed, then the longest idle. An agent is a body that joined
+   *  with an agent's enrolment (tokenVerified), never a declaration. */
   const need = (c: Client) => {
     const w = c.world!;
     if (![...w.clients].some(o => o.tokenVerified && !o.spectator && active(o, w))) return 0;
@@ -327,7 +324,7 @@ export function createScreenshotBroker({ timeoutMs = 12_000, cooldownMs = 2000, 
     const worlds = new Set<World>();
     for (const c of allClients()) {
       if (!c.world || !active(c, c.world)) continue;
-      if (c.tokenVerified && !c.spectator) worlds.add(c.world);   // an agent: its enrolment, never a declaration (§6a)
+      if (c.tokenVerified && !c.spectator) worlds.add(c.world);   // an agent: its enrolment, never a declaration
       if (pinned(c)) pinnedSeen.set(c.world.name, now());
     }
     // Just after a start, renderers are still reconnecting (a roamer rejoins the world it was in): give them that.

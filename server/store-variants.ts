@@ -1,30 +1,11 @@
-// store-variants — the store's serving shadows, named in one place.
-//
-// A store upload (content-addressed: assets/opt/store/<hash>.glb, immutable)
-// gets shadows, all built off the request path by upload.ts's serial
-// optimize pump and served by routes.ts on the ORIGINAL's address:
-//
-//   store-min/<hash>.glb        draco + webp@1024 — the unflagged answer, what
-//                               every client without a KTX2 decoder gets
-//   store/<hash>.glb.ktx2.glb   draco + KTX2 (the §20a diet) — the ?ktx2=<key>
-//                               answer, beside the original exactly like every
-//                               library variant (OPT_DIR/<rel>.ktx2.glb), which
-//                               is the path the /library route already resolves
-//
-//   …and a geometry LOD (below). Why each, and the rest of the design: docs/research/store-variants-design.md.
-//
-// Beside-the-original carries the ghost-listing obligation (§20c): the variant
-// ends in .glb too, so every place that enumerates store/*.glb — the catalog,
-// the boot sweep — asks isStoreOriginal, never endsWith(".glb"); and every
-// place that LISTS the opt tree (/library-list, which the prefetcher warms
-// from) skips isKtx2Variant, or each variant is downloaded a second time under
-// its own name.
-//
-// And one serving rule, in routes.ts: a flagged fetch (?ktx2=<key>, shared/ktx2.js's generation key) that falls
-// through to the webp shadow is PROVISIONAL for that URL (no-cache, never immutable): the variant may still be
-// encoding. Content-addressed makes the ADDRESS immutable, not the flagged answer.
-//
-// DOM-free and side-effect-free: unit-tested in test/server/store-variants-test.ts.
+// store-variants — the store's serving shadows, named in one place. A store upload (content-addressed: assets/opt/store/<hash>.glb,
+// immutable) gets shadows built off the request path by upload.ts's optimize pump and served by routes.ts on the original's address:
+//   store-min/<hash>.glb        draco + webp@1024: the unflagged answer
+//   store/<hash>.glb.ktx2.glb   draco + KTX2: the ?ktx2=<key> answer, beside the original like every library variant
+//   …and a geometry LOD (below). Design: docs/research/store-variants-design.md.
+// A variant beside the original ends in .glb too, so every store/*.glb enumeration asks isStoreOriginal, and every listing of
+// the opt tree skips isKtx2Variant. A flagged fetch that falls through to the webp shadow is provisional (no-cache): the
+// variant may still be encoding. Side-effect-free: test/server/store-variants-test.ts.
 
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { join, basename } from "node:path";
@@ -63,14 +44,11 @@ export const hasStamp = (content: string, recipe: string) => {
   return new RegExp(`(^|\\s)${recipeStamp(recipe).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|$)`).test(content);
 };
 
-// ---- the geometry LOD (objects only — v1 contract) -------------------------
-// A far or VRAM-pressed client can ask for a decimated variant of a PLACEABLE OBJECT, beside the original: weld +
-// meshopt-simplify at LOD_RATIO, textures at the texel budget, draco. BODIES FAIL CLOSED, by positive structural
-// detection (skins, VRM metadata, morph targets, morph-weight channels): no variant, a typed verdict. The variant binds
-// its identity in asset.extras (source sha256 + recipe + tool versions); named nodes, materials and bounds are asserted
-// unchanged after the reduce (a failed assert is a typed verdict too).
-// the REDUCER's generation: bump when weld/simplify semantics, the gates, the tool, or the texel-density MEASURE
-// (optimize.ts lodTexelCaps) change. 3 = attribute-aware simplification and the SCREEN-SPACE budget below.
+// ---- the geometry LOD (objects only) -------------------------
+// A far or VRAM-pressed client can ask for a decimated variant of a placeable object: weld + meshopt-simplify at LOD_RATIO,
+// textures at the texel budget, draco. Bodies fail closed by positive structural detection (skins, VRM metadata, morphs).
+// The variant binds its identity in asset.extras; named nodes, materials and bounds are asserted unchanged after the reduce.
+// LOD_GEN: the reducer's generation. Bump when weld/simplify semantics, the gates, the tool or the texel-density measure change.
 export const LOD_GEN = 3;
 export const LOD_RATIO = 0.25;      // meshopt-simplify target ratio: the floor it may reach, not a quota
 // THE SCREEN-SPACE BUDGET, at the closest distance the 'auto' dial shows a LOD (shared/lod-distance.js lodNearest):
@@ -132,11 +110,9 @@ export function lodVerdictFinal(content: string, recipe = LOD_RECIPE): boolean {
   return (kind === "structural" || kind === "light") && hasStamp(content, recipe);
 }
 
-// ---- source identity: freshness by EQUALITY, never by mtime order ------------------------------------------------------
-// A variant or verdict records its source file's identity (size + mtimeMs + sha256) as it stood when the pass STARTED;
-// it is fresh iff that EQUALS the source's identity now. The digest is cached per path under (size, mtimeMs, ino,
-// ctimeMs), so any change to the bytes re-hashes; the record holds only (size, mtimeMs, sha). No sha: the stat pair
-// alone; no record at all: the legacy strictly-newer rule. `source` null = a content-addressed original (always fresh).
+// ---- source identity: freshness by equality, never by mtime order ------------------------------------------------------
+// A variant or verdict records its source's identity (size + mtimeMs + sha256) as it stood when the pass started, and is
+// fresh iff that equals the source's identity now. No record: the legacy strictly-newer rule. `source` null = content-addressed.
 // Why: docs/research/store-variants-design.md#source-identity-freshness-by-equality-never-mtime-order
 export type SourceIdentity = { size: number; mtimeMs: number; sha?: string };
 export type StatFn = (p: string) => SourceIdentity | null;
@@ -300,10 +276,8 @@ export function lodVariantPath(original: string, recipe = LOD_RECIPE): string {
   return `${original}.lod.${recipe}.glb`;
 }
 
-/** Is this verdict a REFUSAL a different tool could overturn? The size gate (the encoder's output), an ineffective or
- *  unpreservable reduce (meshoptimizer, gltf-transform's weld/simplify), the GPU gate (the encoder, and sharp's presence
- *  on a `ktx create` host). A content fact — a skinned body, under the floor, no raster images — is not: it is about
- *  the file, whatever reads it (tools-stamp.ts). */
+/** Is this verdict a refusal a different tool could overturn (the size gate, an ineffective or unpreservable reduce, the GPU
+ *  gate)? A content fact (a skinned body, under the floor, no raster images) is not: it is about the file (tools-stamp.ts). */
 export function toolDependent(content: string): boolean {
   return TOOL_KINDS.has(readVerdict(content).kind);
 }
@@ -316,10 +290,8 @@ export function verdictStands(content: string, recipe = KTX2_RECIPE, tools = cur
   return true;
 }
 
-/** Any KTX2 serving artifact, of any asset class: `<rel>.ktx2.glb` (models,
- *  library and store), `<rel>.ktx2.vrm` (bodies, §20c), `<img>.ktx2` (loose
- *  toolkit images, §20d). Reached only through the ORIGINAL's path + the
- *  ?ktx2=<key> negotiation; never a listing entry of its own. */
+/** Any KTX2 serving artifact: `<rel>.ktx2.glb`, `<rel>.ktx2.vrm`, `<img>.ktx2`. Reached only through the original's path +
+ *  the ?ktx2=<key> negotiation; never a listing entry of its own. */
 export function isKtx2Variant(name: string): boolean {
   return /\.ktx2(\.glb|\.vrm)?$/i.test(name);
 }
@@ -331,17 +303,12 @@ export function isServingArtifact(name: string): boolean {
   return isKtx2Variant(name) || isLodVariant(name) || /\.(failed|tmp|deferred|srcid)$/i.test(name);
 }
 
-/** Is this store/ entry an upload, as opposed to a variant of one? The
- *  predicate every store/*.glb enumeration must use (catalog, boot sweep):
- *  a variant is the SAME model, not a second catalog entry and not a
- *  candidate for its own shadows. */
+/** Is this store/ entry an upload, as opposed to a variant of one? The predicate every store/*.glb enumeration must use. */
 export function isStoreOriginal(name: string): boolean {
   return name.endsWith(".glb") && !isKtx2Variant(name) && !isLodVariant(name);
 }
 
-/** Where the KTX2 shadow of a store original lives: beside it, `<path>.ktx2.glb`
- *  — routes.ts's own resolution for a flagged fetch (`${rel}.ktx2.glb` under
- *  OPT_DIR), so serving needs no change to find it. */
+/** Where the KTX2 shadow of a store original lives: beside it, `<path>.ktx2.glb`, as routes.ts resolves a flagged fetch. */
 export function ktx2VariantPath(original: string): string {
   return `${original}${KTX2_SUFFIX}`;
 }
