@@ -280,6 +280,7 @@ function wrap(text, n) {
 }
 // Speech cap is 4000 chars: the bubble shows an opening and says the rest is in the chat log.
 const BUBBLE_LINES = 8;
+// The overhead bubble for a message; its chat-log twin is chat.js buildLine.
 function makeBubble(text) {
   const all = wrap(text, 38);
   const clipped = all.length > BUBBLE_LINES;
