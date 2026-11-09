@@ -36,13 +36,6 @@ export function registerEngine(spec) {
   if (i >= 0) engines[i] = spec; else engines.push(spec);   // re-register = replace
 }
 
-/** Every extension any registered engine accepts — the file dialog's filter,
- *  derived rather than hardcoded. This is why adding an engine does not mean
- *  editing an accept string somewhere else. */
-export function acceptedExtensions() {
-  return [...new Set(engines.flatMap((e) => (e.supported?.() === false ? [] : e.accept)))];
-}
-
 export function availableEngines() {
   return engines.filter((e) => e.supported?.() !== false).map(({ id, label, accept }) => ({ id, label, accept }));
 }

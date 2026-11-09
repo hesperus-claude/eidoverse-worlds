@@ -155,7 +155,6 @@ async function mirrorGrip() {
   gs[name] = { ...g, pos: [-g.pos[0], g.pos[1], g.pos[2]], q: mirrorQ(g.q ?? [0, 0, 0, 1]), hand: other };
   st.name = name; await writeGrips(gs, 'mirror a grip');
 }
-export { mirrorQ as _mirrorQ };
 
 async function tryGrip() {
   const g = gripsOf(st.id)[st.name]; if (!g) return;

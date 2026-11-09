@@ -381,7 +381,6 @@ addEventListener('mouseup', () => { dragging = false; });
 // back. Drag-orbit stays as the fallback and the edit-mode behavior. While locked `mouse` pins to (0,0): hover and
 // picking read the screen centre (crosshair semantics).
 let locked = false, lockHinted = false;
-export const isMouselook = () => locked;
 
 // MOUSELOOK: M toggles (bare M only — modified presses belong to the browser and OS), Esc always frees. Esc can never
 // be the way back IN: browsers hardcode Esc to release a pointer lock and refuse to grant one from it. M, not C:

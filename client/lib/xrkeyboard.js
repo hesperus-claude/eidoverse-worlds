@@ -82,4 +82,3 @@ export function initXRKeyboard() {
   bus.on('xr:domquads', () => domQuadShow('keyboard', false));
   return api;
 }
-export const xrKeyboardPress = (k) => press(k);   // harness / agents: the same path a trigger takes

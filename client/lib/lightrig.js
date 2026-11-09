@@ -680,11 +680,6 @@ export function shedALight() {
   setSlotCap(slotCap - 1);
   return true;
 }
-export function restoreALight() {
-  if (slotCap >= N_SLOTS) return false;
-  setSlotCap(slotCap + 1);
-  return true;
-}
 
 export const rigDebug = () => ({
   spots: spotSlots.map((sl) => ({ intensity: +sl.intensity.toFixed(3), angle: +sl.angle.toFixed(4), penumbra: +sl.penumbra.toFixed(4),

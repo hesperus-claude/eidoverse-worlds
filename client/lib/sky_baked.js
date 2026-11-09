@@ -189,8 +189,6 @@ function atSkySnapshot(snap, draw) {
  *  api's opts copy. */
 export const BAKE_INTERCEPT = Symbol.for('ew.bakeIntercept');
 let bootBakeSkyT = null;   // the time the last banded boot/swap bake was pinned to (attach adopts it for target A)
-/** Drift state (probes, the debug panel): null when off, else the seconds each texture has drifted. */
-export const bakedDrift = () => (driftDt ? [driftDt[0].value, driftDt[1].value] : null);
 // The re-bake interval, never shorter than a bake takes plus room to dissolve (a 4096x2048 8-pass bake in a headset takes
 // ~6 s at the pump's band spacing).
 const cadenceMs = () => Math.max(cfg.intervalMs, lastCycleMs > 0 ? lastCycleMs + 2500 : 0);

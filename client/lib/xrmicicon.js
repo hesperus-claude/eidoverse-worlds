@@ -40,6 +40,3 @@ function show() {
 }
 function hide() { clearInterval(timer); timer = null; mesh?.removeFromParent(); state = null; }
 bus.on('xr:state', (on) => (on ? show() : hide()));
-/** probe window */
-export const xrMicIconState = () => ({ shown: !!mesh?.parent, onCamera: mesh?.parent === camera, state, opacity: mesh?.material.opacity ?? null,
-  scale: mesh?.scale.x ?? null, pos: mesh ? mesh.position.toArray() : null, size: MIC_ICON.size });

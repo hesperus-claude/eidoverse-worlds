@@ -170,7 +170,6 @@ let sessionEnded = false;
 let frameClock = null;   // the owned clock takeover for the live session
 let exitVeil = null;
 let floorSpace = null;              // 'local-floor' | 'bounded-floor' | null (fell back to 'local')
-export const xrFloorSpace = () => floorSpace;
 
 // ---- DeviceScale (Basis BasisHeightDriver: the AVATAR is scaled to the player)
 // k = avatarEyeY / median of the first 120 HMD heights (> 0.5 m), clamped .6–1.6, saved per avatar. Scale the
@@ -366,7 +365,6 @@ const sticky = { left: null, right: null };   // {kind: 'panel'|'plate', key, ob
 const pickState = { left: { bent: false, kind: null }, right: { bent: false, kind: null } };   // probe window
 // THE DWELL, per hand (dwell.js), keyed on what the laser HOLDS, so stickiness carries it through a small drift
 const dwells = { left: makeDwell(), right: makeDwell() };
-export const xrDwell = (side) => dwells[side];
 const entSeen = { left: null, right: null };   // probe window: the entity under each laser, {id, interactable}
 const bentRay = { left: { matrixWorld: new THREE.Matrix4() }, right: { matrixWorld: new THREE.Matrix4() } };
 const _sp = new THREE.Vector3(), _so = new THREE.Vector3(), _sd = new THREE.Vector3();
@@ -433,7 +431,6 @@ function pushPull(hand, aim, stickY, dt) {
   mesh.getWorldPosition(_pp).addScaledVector(_pd, want - along);           // slide along the laser only
   mesh.parent.updateMatrixWorld(true); mesh.position.copy(mesh.parent.worldToLocal(_pp));
 }
-export const heldHand = () => held?.hand ?? null;
 function endResize() {
   if (!resizing) return;
   const r = domQuadResizeEnd(resizing.drag, rig);
@@ -915,7 +912,6 @@ export function recentreXR(why = 'verb') {
   bus.emit('xr:recentre', { ...r, why });
   return true;
 }
-export const xrRecentre = () => ({ ...recentre });
 /** The one exit. Every path (visor glyph, ring, controller hold) ends here and says so. */
 let lastLeaveAt = -1e9;
 export function leaveVR(why = 'verb') {

@@ -79,11 +79,3 @@ function synthStream() {
   ms.synthetic = true;
   return ms;
 }
-
-/** True when the current source's track has died and needs re-making. The
- *  liveness check nothing was doing — an `audio:ended` sender transmits
- *  silence forever while ICE and direction both look perfectly healthy. */
-export function sourceIsDead(stream) {
-  const t = stream?.getAudioTracks?.()[0];
-  return !!t && t.readyState === 'ended';
-}

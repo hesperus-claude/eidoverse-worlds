@@ -17,17 +17,3 @@ export function __resetForTest() { ctx = null; }
 
 /** Has one been made yet? (Probes: do not CREATE one just to look at it.) */
 export const audioContextState = () => ctx?.state ?? 'none';
-
-/** Resume on a real user gesture — the only thing that reliably works. */
-export function resumeOnGesture(after) {
-  const kick = () => {
-    if (!ctx) return;
-    ctx.resume().then(() => {
-      if (ctx.state === 'running') {
-        try { after?.(); } catch { /* caller's problem, not ours */ }
-        for (const e of ['pointerdown', 'keydown', 'touchstart']) removeEventListener(e, kick);
-      }
-    }).catch(() => {});
-  };
-  for (const e of ['pointerdown', 'keydown', 'touchstart']) addEventListener(e, kick);
-}

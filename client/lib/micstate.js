@@ -12,7 +12,7 @@ const flashHint = (msg) => import('./ui.js').then((u) => u.flashHint(msg, 4000, 
 import { sendTyping } from './net.js';
 import { gateThreshold, pttMode } from './voiceconsent.js';
 import { gateStream, attachSource, detachSource, driveGate, driveRawTracks, setMonitor, monitoring,
-         gateUnavailable, ungatedConsent, isGated,
+         gateUnavailable, ungatedConsent,
          makeOnsetGate, makeLevelMeter } from './micgate.js';
 // The analyser hangs off the shared context; without this import the meter
 // silently reads 0 inside its own catch.
@@ -127,7 +127,6 @@ export function gateFor(rawStream) {
  *  decide whether to publish ungated — never do it silently. */
 export const gateIsUnavailable = () => gateUnavailable();
 export const ungatedAllowed = () => ungatedConsent();
-export const gateActive = () => isGated();
 export const rawMicStream = () => _raw;
 
 /** Stop the onset watcher and forget the lane (device release is the caller's). */
@@ -191,14 +190,6 @@ export function releaseMicrophone() {
   _released = true;
   stopOnsetWatch();
   bus.emit('audio:mic', false);
-}
-
-/** Is there a microphone at all? Transport-agnostic and cheap. */
-export async function hasMicDevice() {
-  try {
-    const devs = await navigator.mediaDevices?.enumerateDevices?.();
-    return !!devs?.some((d) => d.kind === 'audioinput');
-  } catch { return false; }
 }
 
 /** Hear your own lane, exactly as the room hears it (tapped after the gate). */

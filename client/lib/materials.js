@@ -477,9 +477,6 @@ export function updateMaterials(nowMs) {
 }
 
 /** Debug surface (EW.materials). */
-/** Test seam: the shared material uniforms (probes pin wet/cloud for a deterministic render). */
-export const materialUniforms = () => U;
-
 export const materialsDebug = () => ({
   ...stats,
   wet: +U.wet.value.toFixed(3),

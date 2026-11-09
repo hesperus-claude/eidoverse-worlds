@@ -200,7 +200,6 @@ export async function ensureAmmo() {
   })();
   return ammoLoading;
 }
-export const ammoReady = () => !!AMMO;
 
 // ---------------------------------------------------------------- constants
 

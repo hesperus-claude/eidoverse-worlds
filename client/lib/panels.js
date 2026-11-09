@@ -173,7 +173,6 @@ function guardActions(root) {
 }
 
 let fieldClip = null;   // { value } — a copied field value, pasted by type (the OS clipboard gets a copy too)
-export const _fieldClip = () => fieldClip;   // probes
 
 export function renderDOM(body, fields, edit, ro = {}) {
   body.innerHTML = '';

@@ -21,7 +21,6 @@ const PLACE_LS = 'ew-xr-quads';
 const loadPlaces = () => { try { return JSON.parse(localStorage.getItem(PLACE_LS) || '{}'); } catch { return {}; } };
 // MERGED into what is saved: a move (pos/yaw/pitch) must not wipe a VR resize (w, bh, mpp)
 const savePlace = (id, p) => { try { const all = loadPlaces(); all[id] = { ...(all[id] ?? {}), ...p }; localStorage.setItem(PLACE_LS, JSON.stringify(all)); } catch {} };
-export const resetQuadPlaces = () => { try { localStorage.removeItem(PLACE_LS); } catch {} };
 const _rc = new THREE.Raycaster(); const _m = new THREE.Matrix4();
 
 function ensureStage() {
@@ -340,7 +339,6 @@ function makeHandle(q) {
   m.name = 'xr-handle'; m.userData.handleOf = q; m.userData.noCamCollide = true; m.renderOrder = 1300;
   q.mesh.add(m); q.handle = m;
 }
-export const domQuadHandle = (id) => quads?.find((q) => q.id === id)?.handle ?? null;   // probe window
 /** Is the point inside an area that scrolls (a trigger-drag there scrolls it)? */
 export function scrollableAt(map, x, y) {
   for (let n = map?.elementAt?.(x, y); n && n !== map.dom.parentElement; n = n.parentElement) {
@@ -391,8 +389,6 @@ export function domQuadsRevealOnly(keep) {
     domQuadReveal(q.mesh, k?.zone ?? null);   // resize handles are built the first time one is revealed; the bar always exists
   }
 }
-export const domQuadAids = (id) => { const q = all.find((x) => x.id === id);   // probe window: what is revealed ('move' = the bar at full)
-  return [...(q?.handle?.material.opacity === HANDLE_ON ? ['move'] : []), ...(q?.aids?.children ?? []).filter((c) => c.visible).map((c) => c.userData.zone)]; };
 
 // ---- RESIZE in VR: the gripped corner/edge follows the laser. The size is VR's OWN (windows.js _setVrSize, saved in
 // ew-xr-quads); the desktop layout is untouched. Rebuilt at the same pixel density; floor minW/minH, ceiling RESIZE_MAX_M.

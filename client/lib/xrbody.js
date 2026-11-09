@@ -469,7 +469,6 @@ function feetTick(vrm, av, dt) {
   }
   dbg.feet = { L: gp.L.pos.toArray().map((v) => +v.toFixed(3)), R: gp.R.pos.toArray().map((v) => +v.toFixed(3)), stepping: !!(ud._gait.L.step || ud._gait.R.step) };
 }
-export const xrGaitDebug = () => dbg.feet ?? null;
 
 export function tickXRBody(dt) {
   dbg.ticks++;

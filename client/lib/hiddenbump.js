@@ -68,5 +68,3 @@ export function bumpTick(touched, dt) {
     for (const p of m.parts) p.material.opacity = a * p.userData.peak;
   }
 }
-/** Probe window: each mark's thing and opacity. */
-export const bumpMarks = () => [...marks].map(([e, m]) => ({ id: e.obj?.userData?.entityId ?? null, a: m.a, eye: m.eye.material.opacity }));

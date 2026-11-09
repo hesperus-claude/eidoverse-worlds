@@ -196,11 +196,8 @@ export function clearPictures() {
   for (const id of [...hung.keys()]) takeDown(id);
 }
 
-/** For probes: what is hung where, and the intent revision per id. */
+/** For probes: what is hung where. */
 export const _hung = hung;
-export const _revision = revision;
-export const pictureCount = () => hung.size;
-export { THREE as _THREE };
 
 // ---- the editor block: how a HUMAN hangs a picture -------------------------
 //

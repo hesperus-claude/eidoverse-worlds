@@ -170,11 +170,3 @@ export const gateThresholdDb = () => -60 + Math.min(1, Math.max(0, prefs.micFloo
 
 /** Same threshold as a linear amplitude, for comparing against an RMS reading. */
 export const gateThreshold = () => Math.pow(10, gateThresholdDb() / 20);
-
-/** dBFS of a linear amplitude, floored so silence does not become -Infinity. */
-export const toDb = (amp) => 20 * Math.log10(Math.max(amp, 1e-6));
-
-/** Where a level sits on the meter, 0..1 across the same -60..0 dB span the
- *  threshold uses. ONE function for both, so the bar and the marker cannot
- *  land in different places. */
-export const meterPos = (amp) => Math.max(0, Math.min(1, (toDb(amp) + 60) / 60));

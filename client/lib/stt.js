@@ -33,7 +33,6 @@ function micIsLive() {
 let rec = null;
 let wanted = false;
 let uttSeq = 0;                 // one id per transcribed utterance (log plane)
-export const sttOn = () => wanted;
 // Readable from /audio on a device with no console.
 try { window.__sttOn = () => wanted; } catch { /* no window */ }
 

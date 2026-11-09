@@ -86,7 +86,6 @@ export function clearStatusChip(id) {
   place();
 }
 
-export const statusChipIds = () => [...chips.keys()];
 /** Re-seat the strip now (editlayout.js calls it once the builder's menu bar is laid out). */
 export const placeStatusChips = () => place();
 

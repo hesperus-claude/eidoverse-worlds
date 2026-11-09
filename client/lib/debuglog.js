@@ -28,11 +28,6 @@ export function lastWhy(topic) {
   return ring?.length ? ring[ring.length - 1].msg : '(nothing logged)';
 }
 
-/** Full recent history for a topic (newest last). */
-export function whyHistory(topic) {
-  return (topics.get(topic) ?? []).map((e) => ({ ...e }));
-}
-
 // Console affordance: __why() lists topics, __why('tts-list') prints its ring with ages. Installed unconditionally:
 // it IS the discoverability.
 if (typeof window !== 'undefined') {

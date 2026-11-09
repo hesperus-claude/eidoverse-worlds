@@ -156,7 +156,6 @@ export function setCutaway(on) {
   }
   return cutaway;
 }
-export const isCutaway = () => cutaway;
 
 /** The structure component, or null for entities that aren't buildings. */
 const structOf = (ent) => (ent && typeof ent === 'object' ? ent.structure ?? null : null);
@@ -318,9 +317,6 @@ function realize(id, ent) {
   bus.emit('entity', { id, kind: 'collider' });
 }
 
-/** The plan a building is currently realized from — the describer's door, and
- *  the reason look() can answer "which room" without touching the scene. */
-export const structurePlan = (id) => tracked.get(id)?.plan ?? null;
 export const structureIds = () => [...tracked.keys()];
 
 /** Full idempotent pass: hydration, world switch, late enable. */
@@ -376,9 +372,4 @@ export function initStructureRealizer() {
     else if (ev.type === 'change') onChange(ev);
   });
   return true;
-}
-
-/** Test/teardown door. */
-export function disposeStructures() {
-  for (const id of [...tracked.keys()]) retire(id);
 }

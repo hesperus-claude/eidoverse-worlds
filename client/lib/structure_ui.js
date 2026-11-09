@@ -304,10 +304,3 @@ export function initStructureUI() {
   // armed-tool strip (editlayout.js): both read structureTools(), arm with setTool, undo with undo().
   return true;
 }
-
-export function disposeStructureUI() {
-  canvas.removeEventListener('mousedown', onDown, true);
-  window.removeEventListener('mousemove', onMove);
-  window.removeEventListener('mouseup', onUp);
-  clearGhost();
-}

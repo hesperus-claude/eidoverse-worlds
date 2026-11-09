@@ -618,8 +618,6 @@ function pickHit(nx, ny) {
   const W = state.st?.entities ?? {};   // the editor's world view (lib, comp, parent), as editpanels reads it
   return raycaster.intersectObjects(targets, true).find((h) => { let r = h.object; while (r && !r.userData.entityId) r = r.parent; return r && clickable(W, r.userData.entityId) && !outOfMyView(h.object); }) ?? null;
 }
-/** What a viewport click at NDC (nx, ny) would select: its id, or null. */
-export function pickAt(nx, ny) { let r = pickHit(nx, ny)?.object; while (r && !r.userData.entityId) r = r.parent; return r?.userData.entityId ?? null; }
 
 canvas.addEventListener('mousedown', (e) => {
   if (e.button !== 0 || !buildMode) return;  // outside build mode the canvas is for looking

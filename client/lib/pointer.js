@@ -75,8 +75,6 @@ export function setSurfaceDotKind(dot, kind = 'dot') {
   icon.visible = k !== 'dot';
   if (icon.visible) { icon.material.map = iconTexture(k); icon.material.needsUpdate = true; }
 }
-/** every icon texture drawn now (the hands' warm compiles the icon with one on) */
-export const warmDotIcons = () => Object.keys(DOT_KINDS).forEach(iconTexture);
 const _dn = new THREE.Vector3(), _de = new THREE.Vector3(), _dz = new THREE.Vector3(0, 0, 1);
 /** Put the dot at world `point` on a surface with world `normal`, sized for an eye at world `eye`. The normal is turned
  *  to face the eye's side, and the dot is lifted off the surface by a hair (scaled with distance) so it never z-fights. */

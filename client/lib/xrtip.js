@@ -72,5 +72,3 @@ export function hideXRTip() {
 }
 /** Leaving VR: the quad goes away with its panels. */
 export function dropXRTip() { hideXRTip(); drop(); }
-/** probe window */
-export const xrTipState = () => ({ shown: !!mesh?.visible, text: shownText, for: shownFor, mesh, el });

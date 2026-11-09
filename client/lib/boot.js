@@ -216,7 +216,6 @@ export function refuseBoot(text) {
   const sub = root.querySelector('.sp-sub');
   if (sub) sub.textContent = "couldn't step in";
 }
-export const bootRefused = () => !!el?.classList.contains('refused');
 
 /** Nothing is pinned: the next successful join finishes it as usual. */
 export function waitBoot(text) {

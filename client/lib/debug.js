@@ -640,7 +640,6 @@ function dbgTabs(parent, names, shown) {
 }
 
 export function toggleDebug() { frame?.toggle(); }
-export const debugVisible = () => !!frame?.visible;
 
 function clearColliders() {
   for (const [, v] of collViews) collGroup?.remove(v.node);

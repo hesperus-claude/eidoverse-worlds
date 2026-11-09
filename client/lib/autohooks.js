@@ -48,6 +48,3 @@ export function claimUnowned(before, autos = autoHooks()) {
   const seen = before instanceof Set ? before : new Set(before ?? []);
   return (autos ?? []).filter((h) => !seen.has(h) && !hostOwned.has(h));
 }
-
-/** Test seam: how many hooks are currently marked host-owned. */
-export const hostOwnedCount = () => hostOwned.size;

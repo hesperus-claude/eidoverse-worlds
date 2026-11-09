@@ -169,7 +169,6 @@ export const monitoring = () => !!_mon;
 // flickers through an envelope.
 export const gateOpenness = () => (_gain ? _wanted : (_gateUnavailable && _rawStream ? _rawWanted : 0));
 export const gateGainNow = () => (_gain ? _gain.gain.value : 0);
-export const isGated = () => !!_gain;
 
 
 /** Detach the DEVICE from the lane, keeping the lane itself alive.
@@ -228,7 +227,6 @@ export function setMonitorDelay(sec) {
   }
   return MONITOR_DELAY;
 }
-export const monitorDelay = () => MONITOR_DELAY;
 
 // ── the onset machine + level meter, one copy ───────────────────────────────
 // Shared by voice.js (the mesh) and micstate.js (the transport seam); each
