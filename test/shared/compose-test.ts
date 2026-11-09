@@ -73,7 +73,7 @@ check("the realizer reported nothing", spy.reports.length === 0, spy.reports);
 console.log("\nthe door, capacity, delete and a late join agree (a scratch world behind the real authority)");
 {
   const { scratchWorld } = await import("../protocol/scratchworld.ts");
-  const { openWorld } = await import("../../server/filehost.ts");
+  const { openWorld } = await import("../harness/filehost.ts");
   const { viewState } = await import("../../shared/protocol/view.js");
   const { SOCKETS_PER_HOST } = await import("../../shared/protocol/authority/sockets.js");
   S.reset();

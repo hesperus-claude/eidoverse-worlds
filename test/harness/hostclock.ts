@@ -1,4 +1,4 @@
-// server/clock.ts — the authority's wall clock when its host passes none: the lab clock if one is pinned, else Date.now.
+// test/harness/hostclock.ts — the authority's wall clock when its host passes none: the lab clock if one is pinned, else Date.now.
 // A test pins it through test/gate/clock.ts so physics and rate windows are repeatable; a real authority passes its own.
 
 export const CLOCK_ENV = "PROTOCOL_NOW";

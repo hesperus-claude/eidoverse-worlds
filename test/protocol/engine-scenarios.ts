@@ -5,7 +5,7 @@
 import "./fixture-ids.ts";
 import fs from "node:fs";
 import { request } from "../../shared/protocol/authority.js";
-import { openWorld } from "../../server/filehost.ts";
+import { openWorld } from "../harness/filehost.ts";
 import { scratch } from "../gate/common.ts";
 import { fileURLToPath } from "node:url";
 import { labClock } from "../gate/clock.ts";

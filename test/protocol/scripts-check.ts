@@ -210,7 +210,7 @@ function useSteady(s: any, actor: string, args: any) { let r: any;
   return r; }
 const root = scratch("scripts");
 
-// a world on disk over THIS tree's door (as server/filehost.ts does with the checkout's)
+// a world on disk over THIS tree's door (as test/harness/filehost.ts does with the checkout's)
 function openWorld(name: string, o: any = {}) {
   const logPath = path.join(root, "worlds", `${name}.jsonl`), storeDir = path.join(root, "store");
   const entries = F.readLog(readLogBytes(logPath)).map(D.posAt);

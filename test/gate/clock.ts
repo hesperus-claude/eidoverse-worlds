@@ -1,7 +1,7 @@
-// test/gate/clock.ts — the lab clock: the one place a test moves the authority's wall time (server/clock.ts reads it).
+// test/gate/clock.ts — the lab clock: the one place a test moves the authority's wall time (test/harness/hostclock.ts reads it).
 // The seam is process-global, so a suite owns one counter (`labClock`) and every request steps it forward through
 // `advance`; hygiene-check's lab-clock rule refuses setting the env anywhere else.
-import { CLOCK_ENV } from "../../server/clock.ts";
+import { CLOCK_ENV } from "../harness/hostclock.ts";
 
 export const LAB_EPOCH = 1_800_000_000_000;
 

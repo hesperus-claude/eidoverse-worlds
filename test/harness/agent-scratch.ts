@@ -8,7 +8,7 @@
 //   await act("set", { id: "console", component: "picture", value }, { who: "antra" });   // a live write, by antra
 //   await act("sky", { hours: 12 }, { at: T0 + 20 * 60e3 });            // …at a chosen door time
 //
-// The door is the real one (shared/protocol/authority.js request over server/filehost.ts openWorld, the test/protocol/authority-check.ts
+// The door is the real one (shared/protocol/authority.js request over test/harness/filehost.ts openWorld, the test/protocol/authority-check.ts
 // pattern), its clock pinned through the lab clock (test/gate/clock.ts): each request is stamped at `at`, or one second after the last. `who` is
 // the display name the agent's percepts attribute the change to (the door's actor in a scratch world is its founder).
 // @ts-nocheck
@@ -16,7 +16,7 @@ import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-
 import { scratch } from "../gate/common.ts";
 import { request } from "../../shared/protocol/authority.js";
 import { LAB_CATALOGUE } from "../protocol/labmodels.js";
-import { openWorld } from "../../server/filehost.ts";
+import { openWorld } from "./filehost.ts";
 import { viewState } from "../../shared/protocol/view.js";
 import { enc, encName } from "../../shared/protocol/names.js";
 import { qNorm, qFromYaw } from "../../shared/rot.js";

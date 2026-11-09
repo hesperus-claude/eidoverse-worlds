@@ -56,7 +56,7 @@ export function worldOf(io) {
   if (migratePresence(w.presence)) w.presenceDirty = true;
   w.savePresence = () => io.savePresence?.(w.presence);
   // Governance keys (§2.4) live outside the log. Custody is authority practice (§5 identity), injected like storage:
-  // io.custody = { sequencer() → "ed25519:…", keyOf(who, make?) → "ed25519:…" | null } (server/filehost.ts keeps the keys).
+  // io.custody = { sequencer() → "ed25519:…", keyOf(who, make?) → "ed25519:…" | null } (the host keeps the keys: server/livehost.ts, test/harness/filehost.ts).
   w.custody = () => io.custody ?? null;
   if (io.provenance) w.provenance = io.provenance;   // () → the writer's provenance genesis records (§F F-2; server/livehost.ts)
   // §2.1: moderation lives in a SEPARATE moderator log with the authority's enforcement, never in the world log

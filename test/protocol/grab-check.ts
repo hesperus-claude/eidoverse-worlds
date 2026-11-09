@@ -212,7 +212,7 @@ function session(o: any = {}) {
   const walk = (actor: string, to: number[]) => { for (let i = 0; i < 40; i++) { const at = W().presence.bodies[actor]?.at; if (!at) return call(actor, "move", { to });
     const d = Math.hypot(to[0] - at[0], to[2] - at[2]); if (d < 1e-9) return { ok: true }; const k = Math.min(1, 3.5 / d);
     const r = call(actor, "move", { to: [at[0] + (to[0] - at[0]) * k, to[1], at[2] + (to[2] - at[2]) * k] }, 1000); if (!r.ok) return r; } };
-  // a restart: the same log, a new door; presence as the host kept it (a copy: persisted, as server/filehost.ts; fresh: in memory, as livehost.ts)
+  // a restart: the same log, a new door; presence as the host kept it (a copy: persisted, as test/harness/filehost.ts; fresh: in memory, as livehost.ts)
   const reopen = (presence: any) => { w = openWorld(name, { ...o, presence: JSON.parse(JSON.stringify(presence ?? { bodies: {}, holds: {} })) }); return w; };
   return { name, call, walk, reopen, w: W, advance: (ms: number) => { clock.advance(ms); }, entries: () => W().entries };
 }

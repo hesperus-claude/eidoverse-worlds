@@ -15,7 +15,7 @@ import { scratch, labAt, controlNote } from "../gate/common.ts";
 import * as doorNow from "../../shared/protocol/authority.js";
 import * as simNow from "../../shared/protocol/simlayer.js";
 import { MODELS as LABM } from "./labmodels.js";
-import { openWorld as openNow } from "../../server/filehost.ts";
+import { openWorld as openNow } from "../harness/filehost.ts";
 import { fold as foldNow, readLog as readNow } from "../../shared/protocol/fold.js";
 import { labClock } from "../gate/clock.ts";
 

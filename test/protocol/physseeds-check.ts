@@ -195,7 +195,7 @@ if (!only || only.some((x) => x.startsWith("SV"))) {
 
 // ---- RS: reservations of research 10-11 C (PHYSICS §4.1): names the door refuses until built ----
 {
-  const FH = await imp("server/filehost.ts"); const root = scratch("physseeds-rs"); fs.mkdirSync(root + "worlds", { recursive: true });
+  const FH = await imp("test/harness/filehost.ts"); const root = scratch("physseeds-rs"); fs.mkdirSync(root + "worlds", { recursive: true });
   for (const f of ["rs.jsonl", "rs.presence.json"]) fs.rmSync(`${root}worlds/${f}`, { force: true });
   pin(LAB_EPOCH);
   const rq = (verb, args = {}) => AU.request(FH.openWorld(root, "rs"), "rowan", verb, args);

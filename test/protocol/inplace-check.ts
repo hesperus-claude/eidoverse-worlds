@@ -320,7 +320,7 @@ const NO_KEY = (out: string) => /nothing can yet bind a key to the old world's o
   ok(approvalProblem("sig-dst", mk) === null && mk.owner === null && mk.noOwner === NO_OWNER && verifies(OP, text, mk.operator.sig), "IP29 makeApproval makes the one form: owner null, NO_OWNER recorded, the operator's countersignature over the approval text", mk); }
 // ================= IP31: FOUNDING a brand-new world is a different path, and still takes its founder's own key =================
 { const { publicKey } = crypto.generateKeyPairSync("ed25519"); const KEY = "ed25519:" + (publicKey.export({ format: "jwk" }) as any).x;
-  const { openWorld } = await import("../../server/filehost.ts"); const { request } = await import("../../shared/protocol/authority.js");
+  const { openWorld } = await import("../harness/filehost.ts"); const { request } = await import("../../shared/protocol/authority.js");
   const froot = path.join(root, "found-k"); const w1 = openWorld(froot, "keyed"), w2 = openWorld(froot, "plain");
   const r1 = request(w1, "kay", "create-world", { title: "keyed", ownerKey: KEY }), r2 = request(w2, "kay", "create-world", { title: "plain" });
   ok(r1.ok && JSON.stringify(w1.entries[0].body.owners[0]) === JSON.stringify([KEY]) && r2.ok && w2.entries[0].body.owners[0].length === 0,

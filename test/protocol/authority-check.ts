@@ -28,7 +28,7 @@ import { refusalText, lockVerb, lockQuestion, lockChoices } from "../../shared/p
 import { VERBSPEC } from "../../shared/protocol/verbspec.js";
 import { custodyAt } from "../../server/custody.ts";
 import { translate, TRANSLATOR } from "../../tools/import-v1/translate-v1.js";
-import { openWorld } from "../../server/filehost.ts";
+import { openWorld } from "../harness/filehost.ts";
 import { openLive } from "./labhost.ts";
 import { v1FoldBuild, v1FoldFiles } from "../../tools/import-v1/build.ts";
 import { emptyState as v1Empty, foldEntry as v1fold } from "../../tools/import-v1/fold.js";

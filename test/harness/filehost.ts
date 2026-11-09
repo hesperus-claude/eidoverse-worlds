@@ -1,18 +1,18 @@
-// server/filehost.ts — a world on disk: the storage half of the lab's openWorld (the protocol lab's authority.js),
+// test/harness/filehost.ts — a world on disk: the storage half of the lab's openWorld (the protocol lab's authority.js),
 // split out so shared/protocol/authority.js stays pure. Same layout as the lab: <root>/worlds/<name>.jsonl (the log),
 // <root>/worlds/<name>.presence.json (the presence plane, a file only because a test process may call once per
 // request) and <root>/store/sha256-<hex>.json (blobs, §2.2: named by full hash, stored once, verified on read).
 //
-// Slice 1: used by the protocol suites only. Nothing in the running server imports this yet (slice 2 is the authority).
+// The suites' host only; the running server opens worlds through server/livehost.ts.
 import fs from "node:fs";
 import path from "node:path";
-import { readLog, jcs, sha256 } from "../shared/protocol/fold.js";
-import { worldOf, posAt } from "../shared/protocol/authority.js";
-import { readLogBytes, appendDurable, putBlobFile } from "./durable.ts";
-import { custodyAt, modLogAt } from "./custody.ts";
-import { SANDBOX } from "../shared/protocol/sandbox.js";
-import { now as hostNow } from "./clock.ts";
-import { LAB_CATALOGUE, MODELS } from "../test/protocol/labmodels.js";   // this file is the suites' host (slice 1): never the server's
+import { readLog, jcs, sha256 } from "../../shared/protocol/fold.js";
+import { worldOf, posAt } from "../../shared/protocol/authority.js";
+import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
+import { custodyAt, modLogAt } from "../../server/custody.ts";
+import { SANDBOX } from "../../shared/protocol/sandbox.js";
+import { now as hostNow } from "./hostclock.ts";
+import { LAB_CATALOGUE, MODELS } from "../protocol/labmodels.js";
 
 /** scripts: the sandbox (default: QuickJS, shared/protocol/sandbox.js); null = an authority with none (activations say unavailable).
  *  catalogue / simModels: the models it knows (a suite's world: the lab table, test/protocol/labmodels.js, unless it names another). */

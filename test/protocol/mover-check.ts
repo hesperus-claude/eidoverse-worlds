@@ -103,7 +103,7 @@ if (M) {
 
   // ---- A: agreement with the real authority, and with the client's body ----
   { const { request } = await import(ENGINE + "shared/protocol/authority.js");
-    const { openWorld } = await import(ENGINE + "server/filehost.ts");
+    const { openWorld } = await import(ENGINE + "test/harness/filehost.ts");
     const root = scratch("mover"); const clock = labClock(1_700_000_000_000);
     const call = (actor, verb, args = {}, step = 100) => { clock.advance(step); return request(openWorld(root, "walk"), actor, verb, args); };
     call("olive", "create-world", { title: "walk" });
@@ -243,7 +243,7 @@ if (M) {
   const { stepWalk, walkToward, MOVER } = await import(ENGINE + "shared/mover.js");
   const { terrainParams, makeHeightField } = await import(ENGINE + "shared/terrainmath.js");
   const { request } = await import(ENGINE + "shared/protocol/authority.js");
-  const { openWorld } = await import(ENGINE + "server/filehost.ts");
+  const { openWorld } = await import(ENGINE + "test/harness/filehost.ts");
   const root = scratch("ground"); const clock = labClock();
   const call = (world, actor, verb, args = {}, step = 100) => { clock.advance(step); return request(openWorld(root, world), actor, verb, args); };
   const r3 = (n) => Math.round(n * 1000) / 1000;

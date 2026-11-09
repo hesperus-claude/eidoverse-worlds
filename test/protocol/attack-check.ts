@@ -8,7 +8,7 @@ import fs from "node:fs";
 import { scratch, labAt, controlNote } from "../gate/common.ts";
 import * as doorNow from "../../shared/protocol/authority.js";
 import * as simNow from "../../shared/protocol/simlayer.js";
-import { openWorld as openNow } from "../../server/filehost.ts";
+import { openWorld as openNow } from "../harness/filehost.ts";
 import { labClock } from "../gate/clock.ts";
 
 const root = scratch("attack");

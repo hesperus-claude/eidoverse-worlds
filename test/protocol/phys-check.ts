@@ -5,7 +5,7 @@ import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writer
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import { request, settle, forkCopy, withCatalogue } from "../../shared/protocol/authority.js";
-import { openWorld } from "../../server/filehost.ts";
+import { openWorld } from "../harness/filehost.ts";
 import { fold, readLog, digest, redactionsIn, REDACTED } from "../../shared/protocol/fold.js";
 import { simSnapshotOf, restsOf, ENGINES } from "../../shared/protocol/simlayer.js";
 import { simFold, simFolder, LAB_CATALOGUE } from "./labmodels.js";   // the sim over the lab table (its logs name lab models)

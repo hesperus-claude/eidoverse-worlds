@@ -244,7 +244,7 @@ export function expireRoles(w) {
   });
 }
 /** A world opened after its host stopped without settling presence (a crash, a SIGKILL: no leave ran). Holds are
- *  presence. A host that persists presence (server/filehost.ts) still has the hold, with no one connected to let go: it's
+ *  presence. A host that persists presence (test/harness/filehost.ts) still has the hold, with no one connected to let go: it's
  *  settled as `leave` settles it (a drop as the holder, which its grabbable may send home, into a socket or straight
  *  down; a drop the authority refuses becomes its return-held). A host that keeps presence in memory (server/livehost.ts)
  *  has lost the hold, but in a world that runs physics the grab's `lift` took the thing out of the engine and nothing

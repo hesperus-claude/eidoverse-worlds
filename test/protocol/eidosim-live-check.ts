@@ -4,7 +4,7 @@
 import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import { request } from "../../shared/protocol/authority.js";
-import { openWorld } from "../../server/filehost.ts";
+import { openWorld } from "../harness/filehost.ts";
 import { openLive } from "./labhost.ts";
 import { fold, readLog } from "../../shared/protocol/fold.js";
 import { restsOf, worldPose, ENGINES } from "../../shared/protocol/simlayer.js";

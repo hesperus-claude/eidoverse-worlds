@@ -11,7 +11,7 @@ import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-
 import fs from "node:fs";
 import path from "node:path";
 import { request } from "../../shared/protocol/authority.js";
-import { openWorld } from "../../server/filehost.ts";
+import { openWorld } from "../harness/filehost.ts";
 import { ENGINES } from "../../shared/protocol/simlayer.js";
 import { grabOf } from "../../shared/grab.js";
 import { planLaunch } from "../../shared/protocol/launchplan.js";

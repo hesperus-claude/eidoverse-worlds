@@ -4,7 +4,7 @@
 // own follow-ups), is admitted by ONE function, `admit`, keyed on who asks, which components change (old and new),
 // locks, where it lands, sanity and rate. Tool checks may only add to it. The only code that appends a change entry is
 // `changeEntry`, and it takes only what `admit` returned.
-// Storage is injected (server/filehost.ts opens worlds), so this module has no node: imports and no process/Date of its
+// Storage is injected (server/livehost.ts opens worlds; test/harness/filehost.ts for the suites), so this module has no node: imports and no process/Date of its
 // own (callers pass the clock).
 import { bodyOf, socketQ } from "../components.js";
 import { MOVER, TRACK, bodyBox, bodyScale, floorStep, sweep, tokensAfter } from "../mover.js";

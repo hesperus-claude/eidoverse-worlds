@@ -6,7 +6,7 @@
 import { scratch } from "../gate/common.ts";
 import { request, fixtureIds } from "../../shared/protocol/authority.js";
 import { LAB_CATALOGUE } from "./labmodels.js";
-import { openWorld } from "../../server/filehost.ts";
+import { openWorld } from "../harness/filehost.ts";
 import { viewState } from "../../shared/protocol/view.js";
 import { enc, encName } from "../../shared/protocol/names.js";
 import { localOf } from "../../shared/hierarchy.js";
