@@ -627,7 +627,7 @@ const gonePid = await exitedPid();
   ok(m === null, "A9 a LISTED moderator still gets in", m);
 }
 // ---- A15–A17 (docs/decisions/WORLD-ACCESS.md, "Review (independent, 2026-10-17)"): the three bypasses that review reproduced,
-// once tools/access-test.ts §5b, on this protocol. A world of their own (door) and an open one (yard), on a fresh server.
+// on this protocol. A world of their own (door) and an open one (yard), on a fresh server.
 { ok(tool(["found", "door", "--owner", "Ann"]).code === 0 && tool(["found", "yard", "--owner", "Ann"]).code === 0, "(A15 setup) found door and yard, Ann owns both");
   const s4 = await start();
   const ann = await sock(s4.port); const ja = await ann.join("door", "Ann");

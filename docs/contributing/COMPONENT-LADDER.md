@@ -11,7 +11,7 @@ is the checklist that follows from them. R and Hesperus, 2026-10-10.
 4. `shared/protocol/authority/checks.js`: checks beyond the shape, and `dropped` pointers
 5. `shared/components.js`: the Add Component catalogue line
 6. `shared/editschema.js`: the Inspector card
-7. `client/lib/<name>s.js`: the browser host (e.g. `client/lib/pictures.js`)
+7. `client/lib/realize/<name>s.js`: the browser host (e.g. `client/lib/realize/pictures.js`)
 8. `client/main.js`: a side-effect `import './lib/<name>s.js'`, or the host never loads
 9. `mcpl/agent.ts`: the `spoken` list, if agents should read it
 10. `spec/PROTOCOL.md` §4 (only if a reader should meet it first), and tests: `test/shared/editschema-test.ts` plus a browser probe

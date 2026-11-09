@@ -25,7 +25,7 @@
 // endpoints, let the door write the REPOSITORY's mcpl/state.json, and its
 // teardown SIGKILLed without awaiting exit — the same defect class #125 just
 // closed. This is the repository's established pattern from
-// tools/join-rfc005.test.ts, reused rather than re-invented: kernel-assigned
+// test/mcpl/join-rfc005-test.ts, reused rather than re-invented: kernel-assigned
 // ports, per-run instance nonces both children echo, OS port-ownership as a
 // Linux second opinion, scratch-bound tokens/worlds/state, verified
 // termination, and repo-state before/after byte receipts. Once both slices

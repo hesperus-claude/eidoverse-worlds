@@ -1,6 +1,6 @@
 // @ts-nocheck
 // test/protocol/libfile-check.ts — the ONE resolver from a library path to a file (server/libfile.ts) agrees with what
-// /library serves. Port of upstream #213's resolver contract (tools/spawn-lint-unit-test.ts, v1) onto the protocol branch,
+// /library serves. Port of upstream #213's resolver contract (v1) onto the protocol branch,
 // where the authority REFUSES a model the catalogue can't name (authority.js valueCheck: "no model called …") instead of
 // v1's advisory lint — so the whole of #213 that survives is: the resolver walks /library's own ladder, in its order,
 // and answers exactly what the route would serve. Upstream #220 (ported 2026-10-19): a name is read as the route reads

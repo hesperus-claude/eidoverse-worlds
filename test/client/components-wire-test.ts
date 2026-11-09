@@ -7,7 +7,7 @@
 //   3. the browser   client/lib/realize/models.js over test/stubs/lod-client-stub.mjs, fed the views a client folds
 //                    from a scratch world behind the real door (test/protocol/scratchworld.ts)
 //   5. inspector     shared/editschema.js — reads either spelling, writes new on edit, through the authority
-// (Protocol v1 removed, 2026-10-07: tiers 1 (the v1 fold), 2 (server/verbs.ts) and 4 (the agent's v1 applyEntry
+// (Protocol v1 removed, 2026-10-07: tiers 1 (the v1 fold), 2 (the v1 server verbs) and 4 (the agent's v1 applyEntry
 //  reader) went with it; tier 3 was ported to the protocol's feed. Its v1-only checks were dropped: the spawn verb's legacy
 //  `collide`, light-verb lights, a re-spawn over an id as a wholesale replace, and cargo mount/dismount verbs.)
 import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)

@@ -61,7 +61,7 @@
  "test/server/seat-lifecycle-test.ts": "needs the library's claude.vrm, moves the repo's seats dir aside, and has 5 fixed pauses; dismount row predates vacated.at",
  "test/server/sfu-test.ts": "passes; before it can be a row: 48 fixed waits onto wait.ts / suite.ts",
  "test/server/sfu-verb-gate-test.mjs": "MERGE into test/server/sfu-adapter-test.ts pending (a duplicate or near-duplicate of its rows)",
- "test/client/shadow-res-probe.mjs": "Chromium probe: green on the CDP harness, hygiene-clean; MERGE into tools/shadow-pref-test.mjs (a duplicate of its rows: merge rather than gate)",
+ "test/client/shadow-res-probe.mjs": "Chromium probe: green on the CDP harness, hygiene-clean; MERGE into test/client/shadow-fade-test.mjs (a duplicate of its rows: merge rather than gate)",
  "test/client/sky-band-probe.mjs": "Chromium probe: waits converted; red last run when the client reloaded itself mid-evaluate (cdp-pw now re-runs such an evaluation, as playwright does): rerun, then gate",
  "test/client/sky-interim-probe.mjs": "Chromium probe: 5 fixed waits to turn into conditions; then MERGE into test/client/sky-band-probe.mjs",
  "test/client/sky-prebuild-probe.mjs": "Chromium probe: green on the CDP harness, hygiene-clean; MERGE into test/client/sky-band-probe.mjs (a duplicate of its rows: merge rather than gate)",

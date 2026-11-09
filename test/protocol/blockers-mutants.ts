@@ -20,7 +20,7 @@ const SUITE_FILE: Record<string, string> = {
   authority: "test/protocol/authority-check.ts", access: "test/protocol/access-check.ts", "reset-race": "test/protocol/reset-race-check.ts",
   r10: "test/protocol/r10-check.ts", "dismount-height": "test/client/dismount-height-test.ts", inplace: "test/protocol/inplace-check.ts",
   settle: "test/protocol/settle-check.ts", txn: "test/protocol/txn-check.ts", identity: "test/protocol/identity-check.ts",
-  kernel: "test/protocol/kernel-check.ts", "gov-reserved": "test/protocol/gov-reserved-check.ts", "shape-repair": "tools/shape-repair-test.ts",
+  kernel: "test/protocol/kernel-check.ts", "gov-reserved": "test/protocol/gov-reserved-check.ts",
 };
 
 const M: Mutant[] = [

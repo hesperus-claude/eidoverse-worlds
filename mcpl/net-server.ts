@@ -34,7 +34,7 @@ import { eventTags, catchupHeaderTags, catchupReplayTags } from "./event-wire.ts
 import { TypingRelay } from "./typing-relay.ts";
 import { MANIFEST_WITH_REVISION } from "./manifest.ts";
 import { verifyToken, aid1Slug } from "../server/aid1.ts";
-// archipelago-home door (connectome docs/home-node.md §7): a `?token=aid1.…` home-node token verified offline, no
+// archipelago-home door (connectome/docs/home-node.md §7): a `?token=aid1.…` home-node token verified offline, no
 // tokens.json entry (`hn mint --aud eidoverse --scopes worlds:join`). tokens.json remains the legacy/fleet door.
 import { HN_ISSUER_KEY, HN_ISS, HN_AUD } from "../server/aid1-issuer.ts";
 import { atomicWrite } from "../server/fsutil.ts";

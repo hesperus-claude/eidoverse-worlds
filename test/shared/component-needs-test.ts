@@ -11,7 +11,7 @@
 // rode on it (a need with a default, a need that asks) are retired with it: no record carries such a need now.
 //
 // the protocol port (2026-10-06): ops are door requests; "folded" means "sent to the door and read back". v1's
-// server/reactions.ts pendulumImpulse is replaced by the door's own `use {action: 'push'}`. Light-verb lights are gone.
+// server pendulumImpulse is replaced by the door's own `use {action: 'push'}`. Light-verb lights are gone.
 import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { inspectSchema, editOps, addOps, removeOps, needMet } from '../../shared/editschema.js';
 import { RECORDS, addable, componentsOf } from '../../shared/components.js';

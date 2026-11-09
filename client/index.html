@@ -2338,7 +2338,7 @@ try { const o = JSON.parse(localStorage.getItem('ew-style-tokens') || '{}');
      costs routes.ts a template it does not currently have. -->
 <script>
   // decideLite — the lite/full decision as ONE pure function, hung on globalThis so
-  // tools/lite-choice-test.ts can run it against fabricated signals rather than
+  // test/client/lite-choice-test.mjs can run it against fabricated signals rather than
   // trying to fabricate a weak phone. Inline, and not a module, on purpose: it has
   // to answer BEFORE the module graph or the preloads below exist, and a <script
   // src> here would cost exactly the round trip those preloads exist to save.

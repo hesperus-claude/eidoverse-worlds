@@ -13,8 +13,8 @@ import { chromium } from 'playwright';
 // A localhost pass proves nothing about WebRTC: 127.0.0.1 is a secure context
 // for free (so getUserMedia never faces the real gate) and ICE will happily
 // pick a loopback candidate, skipping exactly the exchange a remote listener
-// must complete. Run it through the cloudflare tunnel:
-//     BASE=$(tools/tunnel-up.sh) node test/server/sfu-browser-smoke.mjs
+// must complete. Run it through a public tunnel to the server (e.g. cloudflared):
+//     BASE=https://<tunnel host> node test/server/sfu-browser-smoke.mjs
 // It still ACCEPTS a localhost BASE — for a fast inner-loop check — but it says
 // loudly that such a run is not evidence for the PR.
 // No BASE ⇒ own a scratch child (VOICE_TRANSPORT=sfu, nonce identity) rather
@@ -27,7 +27,7 @@ const BASE = process.env.BASE ?? world.origin;
 const LOCAL = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])/.test(BASE);
 if (LOCAL) {
   console.log('  \x1b[33m⚠ LOCALHOST RUN — inner-loop only, NOT evidence the SFU works.\x1b[0m');
-  console.log('    Real check: BASE=$(tools/tunnel-up.sh) node test/server/sfu-browser-smoke.mjs');
+  console.log('    Real check: BASE=https://<tunnel host> node test/server/sfu-browser-smoke.mjs');
 } else {
   console.log(`  \x1b[36mreal-network run via ${BASE}\x1b[0m`);
 }
