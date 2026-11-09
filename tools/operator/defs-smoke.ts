@@ -1,16 +1,11 @@
-// defs-smoke — the def registry lane, proven end to end (charter §3, §24).
-//
+// defs-smoke — the def registry lane, proven end to end.
 //   bun tools/operator/defs-smoke.ts              # headless Chrome, own scratch sequencer
 //   bun tools/operator/defs-smoke.ts --headed
 //   bun tools/operator/defs-smoke.ts --console
-//
-// What it proves (see the section banners): the registry contract (novel
-// def served, broken def refused loudly, round-trip exact, sidecars), the
-// avatar + animation overlays, engine hydration ENGAGEMENT, hot reload
-// under a live client, a def-only species rendering, the def-composed
-// mojave biome, and unknown-species failing loudly while the boot stands.
-//
-// Scaffolding: test/harness/harness.ts (R2 — the shared scratch bench).
+// What it proves (see the section banners): the registry contract (novel def served, broken def refused loudly,
+// round-trip exact, sidecars), the avatar + animation overlays, hydration, hot reload under a live client, a def-only
+// species rendering, the def-composed mojave biome, and an unknown species failing loudly while the boot stands.
+// Scaffolding: test/harness/harness.ts scratchBench.
 
 import { mkdtempSync, readFileSync, readdirSync, copyFileSync, mkdirSync, writeFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -90,8 +85,7 @@ check("broken def is NOT served", !names.includes("broken"));
 }
 
 // ---- animation overlay ------------------------------------------------------
-// Same contract as avatars: declared beats discovered, unresolvable paths
-// cost the roster nothing.
+// same contract as avatars: declared beats discovered, unresolvable paths cost the roster nothing
 
 console.log(`\n${bold("── animations")}`);
 {
@@ -122,10 +116,8 @@ console.log(`\n${bold("── animations")}`);
 }
 
 // ---- avatar overlay ---------------------------------------------------------
-// Defs overlay the DISCOVERED roster (declared beats discovered): an
-// override def restates a scanned avatar's height, an alias def points a
-// new name at an existing .vrm, and a def with an unresolvable path is
-// refused without costing the roster anything.
+// Defs overlay the discovered roster (declared beats discovered): an override def restates a scanned avatar's height,
+// an alias def points a new name at an existing .vrm, and a def with an unresolvable path is refused without cost.
 
 console.log(`\n${bold("── avatars")}`);
 {
@@ -252,9 +244,8 @@ await bootInto(WORLDS.std);
 }
 
 // ---- hot reload -------------------------------------------------------------
-// Edit a def on disk while a client stands in the meadow: the defs-watch
-// tick pushes `defs-updated`, the client re-hydrates and regrows from the
-// SAME authored args — no reboot, no log entry, new content.
+// Edit a def on disk while a client stands in the meadow: the defs-watch tick pushes `defs-updated` and the client
+// re-hydrates from the same authored args. No reboot, no log entry.
 console.log(`\n${bold("── hot reload")}  ${dim("editing grass.json under a live client")}`);
 {
   const before = await evalJson(`(() => { try {
@@ -292,9 +283,7 @@ await bootInto(WORLDS.novel);
 console.log(`\n${bold("── def-composed biome")}  ${dim(`world ${WORLDS.preset}`)}`);
 await bootInto(WORLDS.preset);
 {
-  // the mojave recipe now lives in defs/flora/_presets.json — seven strokes
-  // (galleta + 2 blackbrush + 2 creosote + sagebrush + yucca) composed from
-  // the def's template vocabulary, no recipe in any .js file
+  // the mojave recipe lives in defs/flora/_presets.json: seven strokes composed from the def's template vocabulary
   let strokes: any[] = [];
   for (let i = 0; i < 120 && strokes.length < 7; i++) {
     await sleep(500);

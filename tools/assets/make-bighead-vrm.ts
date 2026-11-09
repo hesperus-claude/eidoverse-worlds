@@ -1,16 +1,6 @@
-// make-bighead-vrm — build the #75 head-volume test rig.
-//
+// make-bighead-vrm — a test rig whose head mesh surrounds a camera at the head joint (#75 eye anchor).
 //   bun tools/assets/make-bighead-vrm.ts <src.vrm> <out.vrm> [scale]
-//
-// Takes a working VRM and scales its humanoid HEAD BONE (default ×5), so all
-// head-skinned geometry becomes a volume that surrounds any camera placed at
-// the head joint — the shape of Sill's flower avatar, reproduced from a rig
-// we ship. The head joint's POSITION is untouched (scale is not translation),
-// so the #75 eye anchor stays honest while the surrounding mesh grows.
-//
-// Pure GLB surgery: parse container, edit the node in the JSON chunk, repack.
-// Handles VRM 0.x (extensions.VRM.humanoid.humanBones[]) and VRM 1.0
-// (extensions.VRMC_vrm.humanoid.humanBones.head.node).
+// Scales the humanoid head bone (default ×5) without moving it; GLB container surgery only. VRM 0.x and 1.0.
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";

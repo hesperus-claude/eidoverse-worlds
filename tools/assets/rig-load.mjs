@@ -1,17 +1,7 @@
-// Load the SHIPPED VRM rigs headless, for anything that needs to test or
-// measure against real skeletons rather than an idealised one.
-//
-// This exists because for a long time nothing did. ragdoll-test.ts and
-// rag-param-study.mjs both drove a synthetic T-pose humanoid — "the invariants
-// under test live in the particle sim, not in any particular VRM" — and the
-// suite was green while every real rig in the fleet was broken. The rigs are
-// the variable: heights run 0.63m to 1.53m, rests run T-pose to A-pose, and
-// the fleet splits into 19-21 bone rigs and 50-54 bone ones that carry an
-// upperChest and shoulders between the chest and the arm.
-//
-// No renderer and no textures are involved: the GLB's JSON chunk carries the
-// node tree and the humanoid map, and world rest positions are all a skeleton
-// test needs. VRM's normalized bone nodes share those positions by definition.
+// Load the shipped VRM rigs headless, so skeleton tests measure real rigs rather than an idealised T-pose humanoid
+// (heights run 0.63–1.53 m, rests T- to A-pose, 19–21 vs 50–54 bones with upperChest and shoulders).
+// No renderer: the GLB's JSON chunk carries the node tree and the humanoid map, and world rest positions are all a
+// skeleton test needs.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -26,16 +16,9 @@ export const VRM_DIR = fileURLToPath(new URL('../../assets/opt/eidoverse/assets/
 /** Every shipped rig, as { name, P } where P maps humanoid bone -> world rest
  *  position. Rigs without a humanoid extension or without hips are skipped
  *  loudly rather than silently. */
-/** The rigs the WORLD offers that assets/opt does not hold.
- *
- *  The optimized store and the avatar roster are not the same set: the world
- *  serves claude, claude_suit, aletheia and aporia straight from the library,
- *  and claude is the DEFAULT body. Every suite here ran on the 14 optimized
- *  rigs and none of them on the body most people are actually wearing, which
- *  is how a cross-body reach shipped looking wrong on it. Opt-in so the
- *  ragdoll's measured baseline is not silently re-based; the reach suites take
- *  it. Returns [] if the library is not on disk.
- */
+/** The rigs the world offers that assets/opt does not hold: served straight from the library, and claude is the DEFAULT
+ *  body. Opt-in, so the ragdoll's measured baseline is not silently re-based; the reach suites take it. [] when the
+ *  library is not on disk. */
 export function libraryRigs(dir = process.env.EIDOVERSE_DIR
   ? `${process.env.EIDOVERSE_DIR}/eidoverse/assets/vrms/`
   : fileURLToPath(new URL('../../../eidoverse-video/eidoverse/assets/vrms/', import.meta.url))) {
@@ -90,11 +73,8 @@ export function rigs() {
     const P = {};
     for (const [b, n] of Object.entries(bones)) if (g.nodes[n]) P[b] = wp(n);
     if (!P.hips) { out.push({ name, err: 'no hips bone' }); continue; }
-    // The REAL parent chain, as the VRM has it: each humanoid bone's nearest
-    // humanoid ANCESTOR. On 6 of the 14 shipped rigs that is not the simplified
-    // chain — leftUpperArm hangs off leftShoulder, which hangs off upperChest —
-    // and the ragdoll's `d.parent` is whatever the rig really says, so a
-    // harness that assumes the simple chain is testing a skeleton nobody ships.
+    // the real parent chain: each humanoid bone's nearest humanoid ANCESTOR (on 6 of 14 shipped rigs leftUpperArm hangs
+    // off leftShoulder, off upperChest), because the ragdoll's `d.parent` is whatever the rig says
     const nodeOf = new Map(Object.entries(bones).map(([b, n]) => [n, b]));
     const up = new Map();
     g.nodes.forEach((n, i) => (n.children ?? []).forEach((c) => up.set(c, i)));
@@ -114,16 +94,8 @@ export function makeAvatar(P, { stride = 0, ...options } = {}) {
   const av = makeRuntimeAvatar(P, options);
   const { root, nodes } = av;
   if (stride) {
-    // A plausible mid-walk frame: thighs split, one knee up, arms counterswung.
-    //
-    // About the RIG'S OWN axes, not the world's. 6 of the 14 shipped rigs
-    // (meebit, orion, shino, victoria, vroid_fem, vroid_masc) carry
-    // leftUpperArm on -X — they face -Z, the VRM 0.x convention, which the
-    // raw GLB read here does not normalise away. Rotating those about world X
-    // bent the knee FORWARD: not a mid-walk pose but a hyperextension no leg
-    // can reach, so a solver with real limits was correct to fight it and a
-    // fixture that produced it was testing an impossible body. Derived per
-    // rig, the pose is the same walk on every skeleton.
+    // a plausible mid-walk frame, about the RIG'S own axes: 6 of the 14 shipped rigs face -Z (VRM 0.x), and rotating
+    // those about world X bent the knee forward into a pose no leg can reach
     const up = (P.neck ?? P.chest ?? P.spine).clone().sub(P.hips).normalize();
     const lat = (P.leftUpperArm && P.rightUpperArm)
       ? P.leftUpperArm.clone().sub(P.rightUpperArm)
@@ -142,10 +114,8 @@ export function makeAvatar(P, { stride = 0, ...options } = {}) {
 
 // ---- geometry helpers shared by the measuring tools -----------------------
 
-/** The lean goLimp actually passes: you fall the way you are facing, harder
- *  the faster you were moving. Tests must use this, or they measure a path
- *  production never takes — which is exactly how the old parameter study came
- *  to be tuned against launch impulses nothing ever sent. */
+/** The lean goLimp actually passes: you fall the way you are facing, harder the faster you were moving. Tests must use
+ *  this or they measure a path production never takes. */
 export function toppleLean(yaw = 0, speed = 0) {
   return new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw))
     .multiplyScalar(0.9 + Math.min(1.2, speed * 0.35));
@@ -189,11 +159,8 @@ export function segDist(p1, q1, p2, q2) {
   return p1.clone().addScaledVector(d1, s).sub(p2.clone().addScaledVector(d2, t)).length();
 }
 
-/** Worst shaft-vs-shaft interpenetration among a ragdoll's own bone capsules,
- *  as a fraction of the separation those capsules should have kept. This is
- *  what colliding joint SPHERES could never see. Pairs that already overlap in
- *  the rest pose are excluded, exactly as the solver excludes them — a chest
- *  capsule genuinely does overlap a neck capsule on every real body. */
+/** Worst shaft-vs-shaft interpenetration among a ragdoll's own bone capsules, as a fraction of the separation they
+ *  should have kept. Pairs that overlap in the rest pose are excluded, as the solver excludes them. */
 export function worstOverlap(rd) {
   let worst = 0, name = '';
   for (const { A, B, min } of rd.pairs) {

@@ -1,36 +1,15 @@
-// import-tripo-avatar — Janus's Blender exports become wearable VRMs, in one
-// command. Born from three mythos-PAINT imports in three days, each export
-// missing something different; every repair below was needed at least once.
-//
-//   bun tools/assets/import-tripo-avatar.ts <in.glb> --name mythos_paint3 \
-//       [--donor path.glb] [--max-verts 200000] [--height 1.7] [--out dir]
-//
-// Stages, all detect-and-repair (a clean export passes through untouched):
-//   1. STRIP: BODY_PROXY (the rig pipeline's hand-sculpted collision hull
-//      ships inside some exports and would render as a blocky shell).
-//   2. MATERIALS: Blender exports from the rig blend LOSE the texture images
-//      and the paint (three for three so far). tripo_* materials get their
-//      texture set transplanted from a known-good donor (same mesh UUID —
-//      the UVs hold); PORCELAIN/RAVEN/GOLD get the factor materials the
-//      avatar actually looks right in (white glaze / iridescent black /
-//      default-metallic gold). A material that arrives WITH textures keeps
-//      them.
-//   3. DIET: weld + meshopt-simplify toward --max-verts (PAINT-inner shipped
-//      1.5M vertices — 12x the proven-good density; a skinned mesh that size
-//      is unwearable). Skipped when already under budget.
-//   4. VRMIFY: VRMC_vrm 1.0 humanoid stamped on (52-bone Tripo→VRM map,
-//      thumbs Metacarpal/Proximal/Distal, Pinky→Little; twist bones and
-//      finger metacarpals stay unmapped and FK-follow, per spec).
-//   5. SCALE: uniform bake to --height (node translations + POSITIONs + the
-//      inverse-bind translation row — no scale nodes, so every consumer,
-//      including rig-load's scale-blind worldPositions, agrees).
-//   6. VERIFY: the fleet suite's own fixtures drive a fall under BOTH the
-//      ammo engine (the avatar's native rig) and the verlet — settle, full
-//      pose, fingers if the rig has digits, no skipped joints.
-//
-// Output: <out>/<name>.vrm + a report. Install is a copy into
-// assets/opt/eidoverse/assets/vrms/ (any sequencer picks it up live) — this
-// tool never touches a box; deploy stays a human/scp step.
+// import-tripo-avatar — a Blender export of a Tripo-rigged character becomes a wearable VRM, in one command.
+//   bun tools/assets/import-tripo-avatar.ts <in.glb> --name mythos_paint3 [--donor path.glb] [--max-verts 200000] [--height 1.7] [--out dir]
+// Stages, each detect-and-repair (a clean export passes through untouched):
+//   1. STRIP: the BODY_PROXY collision hull some exports carry.
+//   2. MATERIALS: tripo_* materials that lost their textures get a known-good donor's set (same mesh, UVs hold);
+//      PORCELAIN/RAVEN/GOLD get factor materials. Anything that arrives with textures or its own factors keeps them.
+//   3. DIET: weld + meshopt-simplify toward --max-verts; skipped when under budget.
+//   4. VRMIFY: a VRMC_vrm 1.0 humanoid map (Tripo→VRM; twist bones and finger metacarpals stay unmapped), hair and
+//      wing chains as VRMC_springBone.
+//   5. SCALE: a uniform bake to --height into translations, positions and inverse-bind rows (no scale nodes).
+//   6. VERIFY: a fall under both the ammo and verlet engines with the fleet suite's fixtures.
+// Output: <out>/<name>.vrm + a report. Install is a copy into the opt store's vrms/; this tool never touches a box.
 
 import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
@@ -87,11 +66,7 @@ const carry = (srcTex: any) => {
 };
 const clearcoatExt = doc.createExtension(KHRMaterialsClearcoat);
 const iridescenceExt = doc.createExtension(KHRMaterialsIridescence);
-// "Does this primitive have a COLOR_0" is NOT a paint test — Blender happily
-// exports an all-white layer, and that trap produced white eyeballs right
-// after a log line said "vertex-painted, kept". Paint means the values VARY:
-// sample the prim's COLOR_0 and call it painted only if a real fraction of
-// verts is non-white.
+// "has a COLOR_0" is not a paint test (Blender exports all-white layers): painted means the sampled values vary
 const primPainted = (mat: any): boolean =>
   root.listMeshes().some((mesh2) => mesh2.listPrimitives().some((p2) => {
     if (p2.getMaterial() !== mat) return false;
@@ -108,9 +83,7 @@ const primPainted = (mat: any): boolean =>
 for (const mat of root.listMaterials()) {
   const name = mat.getName();
   if (name.startsWith('tripo_material') && !mat.getBaseColorTexture()) {
-    // A PAINTED body must not have donor textures stomped on top of it —
-    // the bake IS the look; texture × paint double-darkens. The donor
-    // transplant is a repair for paintless exports only.
+    // a painted body keeps its bake: the donor transplant is a repair for paintless exports only
     if (primPainted(mat)) { say(`${name}: vertex-painted, donor transplant skipped`); continue; }
     const src = (donorMats as any)[name];
     if (src?.getBaseColorTexture()) {
@@ -121,9 +94,7 @@ for (const mat of root.listMaterials()) {
       say(`textures transplanted onto ${name}`);
     } else say(`⚠ ${name} is textureless and the donor cannot help (${DONOR})`);
   } else if (name === 'RAVEN') {
-    // AUTHOR WINS: an export that arrives with its own factors or extensions
-    // (Janus ships her own iridescence now) passes through untouched — the
-    // house look below is a REPAIR for bare materials, not a house style
+    // author wins: an export with its own factors or extensions passes through; the house look repairs bare materials
     if (mat.getBaseColorFactor().some((v: number, i: number) => v !== 1 && i < 3)
       || mat.listExtensions().length) { say('RAVEN: author-provided, kept'); continue; }
     mat.setBaseColorFactor([0.015, 0.015, 0.022, 1]).setMetallicFactor(0.2)
@@ -144,12 +115,8 @@ for (const mat of root.listMaterials()) {
       clearcoatExt.createClearcoat().setClearcoatFactor(0.25).setClearcoatRoughnessFactor(0.12));
     say('PORCELAIN → white glaze');
   } else if (name === 'HAIR_UNDER') {
-    // The rig pipeline's hair_underlayer duplicates the hair inward as a
-    // second surface — it arrives wearing Blender's default light grey and
-    // glows PALE through every parting between locks ("vertices within the
-    // hair that don't have color", 08-12). It is the shadow layer: match
-    // the RAVEN locks but darker and matte, no sheen — depth should read
-    // as occlusion, not as a second head of hair.
+    // hair_underlayer is the hair's shadow layer: arrives default grey and glows through partings, so match the
+    // locks but darker and matte
     if (mat.getBaseColorFactor().some((v: number, i: number) => v < 0.7 && i < 3)
       || mat.listExtensions().length) { say('HAIR_UNDER: author-provided, kept'); continue; }
     mat.setBaseColorFactor([0.008, 0.008, 0.014, 1]).setMetallicFactor(0.1)
@@ -158,12 +125,8 @@ for (const mat of root.listMaterials()) {
   } else if (name === 'GOLD') {
     mat.setDoubleSided(true);            // factor + default metallic already right
   } else if (name === 'eyeballs' && !mat.getBaseColorTexture()) {
-    // AUTHOR WINS here too (the black-eyeballs incident): vertex-painted
-    // eyes (Janus paints the sclera per-vertex) pass through untouched; the
-    // dark gloss is a repair for eyes with no paint of ANY kind, which
-    // would otherwise render blank white. Tested by VALUE, not COLOR_0
-    // presence — an all-white COLOR_0 once passed this check and shipped
-    // white eyeballs right after the log said "vertex-painted, kept".
+    // author wins: vertex-painted eyes pass through; the dark gloss repairs eyes with no paint at all (tested by value,
+    // not COLOR_0 presence — an all-white layer once shipped white eyeballs)
     if (primPainted(mat)) { say('eyeballs: vertex-painted, kept'); continue; }
     mat.setBaseColorFactor([0.06, 0.05, 0.06, 1]).setMetallicFactor(0).setRoughnessFactor(0.1);
     say('eyeballs → dark gloss (no paint of any kind)');
@@ -203,9 +166,7 @@ const need = (n: string) => {
 const MAP: Record<string, string> = {
   hips: 'Hip', spine: 'Waist', chest: 'Spine01', upperChest: 'Spine02',
   neck: 'NeckTwist01', head: 'Head',
-  // eye bones arrived with the baked-dec-eyebones generation (08-12);
-  // mapping them gives three-vrm gaze for free. Eyelid bones have no VRM
-  // slot and FK-follow the head, per spec. Absent bones simply skip.
+  // eye bones give three-vrm gaze for free; eyelids have no VRM slot and FK-follow the head; absent bones skip
   leftEye: 'L_Eye', rightEye: 'R_Eye',
   leftShoulder: 'L_Clavicle', leftUpperArm: 'L_Upperarm', leftLowerArm: 'L_Forearm', leftHand: 'L_Hand',
   rightShoulder: 'R_Clavicle', rightUpperArm: 'R_Upperarm', rightLowerArm: 'R_Forearm', rightHand: 'R_Hand',
@@ -244,14 +205,8 @@ g.extensions.VRMC_vrm = {
 };
 say(`vrmified: ${Object.keys(humanBones).length} humanoid bones`);
 
-// ---- 4b: HAIR → VRM SpringBone --------------------------------------------
-// The rig pipeline builds per-lock bone chains (Hair_<chain>_<idx>, built by
-// hair_rig.py from hand-painted marks). Declared as VRMC_springBone, three-vrm
-// simulates them client-side every frame — hair that moves while WALKING, not
-// only in a Bullet fall, at zero engine cost. Parameters are the source's
-// hair-tuning translated to springbone semantics: stiffness ramps DOWN the
-// chain (roots hold shape, tips swing), a touch of gravity, and a head-sphere
-// collider so locks rest on the skull instead of inside it.
+// Per-lock bone chains (Hair_<chain>_<idx>) declared as VRMC_springBone: three-vrm simulates them client-side, so hair
+// moves while walking at zero engine cost. Stiffness ramps down the chain, a touch of gravity, a head-sphere collider.
 {
   const chains = new Map<string, { idx: number; node: number }[]>();
   for (const [name, ni] of idx.entries()) {
@@ -269,27 +224,16 @@ say(`vrmified: ${Object.keys(humanBones).length} humanoid bones`);
       if (joints.length < 2) continue;
       springs.push({
         name: `hair_${cname}`,
-        // center=hips: tails simulate RELATIVE to the hips, so locomotion
-        // does not excite the hair at all (without it, every walk step
-        // translates the root under world-anchored tails and the whole mass
-        // sweeps back like wind — drag/stiffness scalars cannot fix that;
-        // drag only damps accumulated velocity, and the displacement is
-        // instantaneous). Rotation and lean still give natural sway.
+        // center=hips: tails simulate relative to the hips, so locomotion doesn't sweep the hair back like wind
+        // (drag only damps velocity; the displacement would be instantaneous)
         center: need('Hip'),
         joints: joints.map((j, i) => {
           const t = i / Math.max(1, joints.length - 1);   // 0 root → 1 tip
           return {
             node: j.node,
             hitRadius: 0.012,
-            // Tuned on mythos_painthair (08-12), with center=hips doing the
-            // heavy lifting (see above). Three field iterations to get here:
-            // flat-stiff (1.2/0.6) read as rigid; flat-soft (0.75/0.45) let
-            // the ROOT segments swing as freely as the tips and the scalp
-            // showed through while running. Thick locks are anchored firm at
-            // the scalp and loosen toward the ends — so the ramp is
-            // root-heavy (quadratic falloff), not flat: roots hold coverage
-            // near the old-stiff numbers, tips stay softer than the flat-
-            // soft cut. Near-zero gravity: the droop is already modelled in.
+            // root-heavy (quadratic) ramp: roots hold coverage at the scalp, tips swing; gravity is already modelled in
+            // the rest pose. Tuned on mythos_painthair.
             stiffness: 0.35 + 0.95 * (1 - t) ** 2,
             gravityPower: 0.01 + 0.02 * t,
             gravityDir: [0, -1, 0],
@@ -299,19 +243,9 @@ say(`vrmified: ${Object.keys(humanBones).length} humanoid bones`);
         colliderGroups: [0],
       });
     }
-    // WINGS GET SPRINGBONES TOO, for the one case the client cannot cover.
-    //
-    // A wing is DRIVEN while the body is alive (the flap) and simulated in
-    // Bullet while it is limp — but only on the client that owns the body.
-    // Everyone else sees a REMOTE: no local doll, and the flap is gated on not
-    // being limp, so a fallen body's wings froze mid-stroke for every observer.
-    // Hair never had that problem because three-vrm was always catching it,
-    // which is exactly the fallback wings were missing.
-    //
-    // Stiffer and heavier-falling than hair: a wing is a limb, not a filament,
-    // so the root barely gives and the tip trails. Same hips center, so
-    // walking does not excite them. While a local sim owns the body these are
-    // suppressed wholesale (avatar.js), so this costs nothing where Bullet runs.
+    // Wings get springbones too: the flap is driven only on the owning client, so a fallen body's wings froze mid-stroke
+    // for every observer; three-vrm is the fallback hair always had. Stiffer than hair (a limb, not a filament), same
+    // hips center. Suppressed wholesale while a local sim owns the body (avatar.js).
     const wingChains = new Map<string, { idx: number; node: number }[]>();
     for (const [name, ni] of idx.entries()) {
       const m = /^([LR]_Wing_(?:Upper|Lower))(?:_(\d+))?$/.exec(String(name));
@@ -346,8 +280,7 @@ say(`vrmified: ${Object.keys(humanBones).length} humanoid bones`);
     g.extensionsUsed = [...new Set([...(g.extensionsUsed ?? []), 'VRMC_springBone'])];
     g.extensions.VRMC_springBone = {
       specVersion: '1.0',
-      // radius is a PLACEHOLDER — stage 5b re-fits it to the largest sphere
-      // that clears the authored rest pose, after the scale bake.
+      // placeholder radius: stage 5b re-fits it after the scale bake
       colliders: [{ node: need('Head'), shape: { sphere: { offset: [0, 0.05, 0.01], radius: 0.095 } } }],
       colliderGroups: [{ name: 'head', colliders: [0] }],
       springs,
@@ -358,10 +291,7 @@ say(`vrmified: ${Object.keys(humanBones).length} humanoid bones`);
 }
 
 // ---- 5: scale bake ----------------------------------------------------------
-// measure current height from hips..head span the way the engines do
-// FULL TRS walk — translations alone once measured a NEGATIVE height on an
-// export whose armature carried a rotation, and the tool nearly baked a
-// mirror-flip ×-5.857 into the avatar
+// height from the hips..head span by a full TRS walk (translations alone once read a negative height on a rotated armature)
 let wpReset = () => {};
 let wq: (i: number) => number[] = () => [0, 0, 0, 1];
 const wp = (() => {
@@ -396,12 +326,8 @@ const wp = (() => {
   wq = (i: number) => world(i).q;
   return (i: number) => world(i).p;
 })();
-// AXIS DETECTION: the rig pipeline's own exports are Z-up ("no conversion
-// anywhere" is its doctrine); a Y-span measured on one is ~0 and the abort
-// below would end the import. If the head-foot delta runs dominantly along
-// Z, rebase every parentless node with a -90° X rotation (Z-up → Y-up) and
-// re-measure — three-vrm normalizes rest rotations, so a rotated root is
-// legitimate VRM.
+// Axis detection: the rig pipeline exports Z-up. If the head-foot delta runs along Z, rebase every parentless node with
+// a -90° X rotation and re-measure (three-vrm normalizes rest rotations, so a rotated root is legitimate VRM).
 {
   const h0 = wp(need('Head') as number), f0 = wp(need('L_Foot') as number);
   const d = [h0[0] - f0[0], h0[1] - f0[1], h0[2] - f0[2]].map(Math.abs);
@@ -434,19 +360,9 @@ const S = HEIGHT / (span * 1.16);
 say(`scale ×${S.toFixed(3)} (head-foot span ${(headY - footY).toFixed(2)} → target ${HEIGHT}m)`);
 const bin = Buffer.from(rest0.subarray(8));
 for (const n of g.nodes) if (n.translation) n.translation = n.translation.map((x: number) => x * S);
-// An accessor's bufferView is OPTIONAL. Without one its values are all zeros,
-// which a `sparse` block may then override for named indices — and that is
-// exactly what a rig with SHAPE KEYS exports: every morph-target POSITION comes
-// through as a sparse accessor with no bufferView of its own, because most
-// vertices do not move. Indexing g.bufferViews[undefined] threw outright
-// ("undefined is not an object") the first time a blend with shape keys reached
-// this stage.
-//
-// Skipping them would stop the crash and quietly break the file instead: the
-// base mesh would scale by S and the morph DELTAS would not, so every shape key
-// would apply at the old scale on a body 1.8x bigger. Sparse values are the
-// real data for the vertices they name, so they take the same multiply. (Sparse
-// value blocks are tightly packed — the spec forbids byteStride on them.)
+// An accessor may have no bufferView: its values are zeros that a `sparse` block overrides, which is how shape-key
+// morph POSITIONs export. Sparse values are the real data for the vertices they name, so they take the same multiply
+// (skipping them would scale the base mesh and not the morph deltas). Sparse blocks are tightly packed, no byteStride.
 const accBytes = (a: any) => {
   if (a.bufferView == null) return null;
   const bv = g.bufferViews[a.bufferView];
@@ -488,14 +404,9 @@ for (const sk of g.skins ?? []) {
     bin.writeFloatLE(bin.readFloatLE(off) * S, off);
   }
 }
-// ---- 5b: collider fit — a springbone collider must never intersect the
-// authored rest pose (bit 08-12 on mythos_painthair: an eyeballed r=0.095
-// head sphere reached past the crown roots' rest tails and expelled every
-// back lock 37–94° AT IDLE — "misshapen bones in the back of the hair").
-// The largest safe sphere is a property of the rig, not a constant: min
-// rest-tail distance to the collider center, minus the joint hitRadius and
-// a margin, clamped to sanity. Runs AFTER the scale bake so the measurement
-// is in the same final-space units as the emitted radii.
+// ---- 5b: collider fit — a springbone collider must not intersect the authored rest pose (an eyeballed head sphere once
+// expelled every back lock at idle). The largest safe sphere is a property of the rig: min rest-tail distance to the
+// center, minus the joint hitRadius and a margin, clamped. After the scale bake, so units match the emitted radii.
 {
   const sb = (g.extensions ?? {}).VRMC_springBone;
   const sph = sb?.colliders?.[0]?.shape?.sphere;

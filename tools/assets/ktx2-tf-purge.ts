@@ -1,17 +1,9 @@
-// bun tools/assets/ktx2-tf-purge.ts <OPT_DIR> [--apply] — find (and with --apply, delete) the KTX2 variants whose DATA maps
-// had the sRGB→linear curve baked in by `ktx create` before the transfer fix (optimize.ts ktx2EncodeArgs --assign-tf).
-// The boot sweep (upload.ts) rebuilds every missing variant on the next restart. Dry run by default: it lists.
-//
-// Which files: a ktx-create-written KTX2 image with a LINEAR transfer (a normal/roughness/occlusion map) —
-//   inside a .ktx2.glb / .ktx2.vrm / .lod.*.glb: only when the image lacks optimize.ts's KTX2_TF_MARK (every image
-//     encoded since the fix carries it), so a rerun after the rebuild finds nothing;
-//   a loose <img>.ktx2: has no wrapper to carry a mark, so EVERY linear one is listed. Run this once, right after
-//     deploying the fix; a second run would just rebuild those few images again (seconds each).
-// Colour (sRGB) images were never affected: an sRGB source assigned an sRGB format is not converted.
-//
-// After --apply: restart; the sweep rebuilds what was purged. Built variants are served short-lived + revalidating
-// (routes.ts VARIANT_CC), so browsers and nginx pick the rebuilt bytes up within about a minute — no key rotation
-// needed for THAT. (A key bump is still how you force every variant to rebuild; that is a separate, deliberate call.)
+// bun tools/assets/ktx2-tf-purge.ts <OPT_DIR> [--apply] — list (with --apply, delete) KTX2 variants built before the
+// transfer fix: linear data maps (normal/roughness/occlusion) that `ktx create` wrote with the sRGB curve baked in.
+// Variants whose images carry optimize.ts KTX2_TF_MARK are current and skipped; a loose <img>.ktx2 has no mark, so every
+// linear one is listed (run once, after deploying the fix). sRGB images were never affected.
+// After --apply, restart: the boot sweep (upload.ts) rebuilds what is missing, and VARIANT_CC (routes.ts) lets caches
+// pick the new bytes up within about a minute. No key bump needed.
 import { parseGlb } from "../../server/glbparse.ts";
 import { KTX2_TF_MARK } from "../../server/optimize.ts";
 import { KTX2_TEXEL_CAP } from "../../server/store-variants.ts";
@@ -37,9 +29,8 @@ export function overCap(b: Uint8Array, cap = KTX2_TEXEL_CAP): boolean {
   return Math.max(dv.getUint32(20, true), dv.getUint32(24, true)) > cap;
 }
 
-/** A variant to purge for SIZE: only images the current encoder did NOT write (no KTX2_TF_MARK) — a marked image came
- *  from today's pipeline, so any size it kept is deliberate or environmental (no resizer on the host), and purging it
- *  would rebuild the same bytes and purge them again every run. Never an avatar: the VRM arm does not resize. */
+/** A variant to purge for SIZE: only unmarked images (a marked one came from today's pipeline, and purging it would
+ *  rebuild the same bytes every run). Never an avatar: the VRM arm does not resize. */
 export function staleOversize(file: string, imgs: { marked: boolean; bytes: Uint8Array | null }[]): boolean {
   if (/\.vrm$/.test(file)) return false;
   return imgs.some((im) => !im.marked && !!im.bytes && overCap(im.bytes));
@@ -65,9 +56,7 @@ for (const f of new Glob("**/*").scanSync({ cwd: root, onlyFiles: true })) {
 }
 for (const f of hits) console.log(`  ${apply ? "deleted" : "would delete"} ${f}  (converted data map)`);
 for (const f of big) console.log(`  ${apply ? "deleted" : "would delete"} ${f}  (textures over ${KTX2_TEXEL_CAP}² — built before the cap)`);
-// a purged variant's verdict markers go with it: a variant can serve beside a .failed (a forced rebuild that failed
-// keeps the old one), and every verdict but a stale size/tools one STANDS for the sweep, which would then never rebuild
-// what this deleted (Greptile #207). The purge's promise is "the sweep rebuilds it": clear what would stop that.
+// a purged variant's verdict markers go with it: a standing verdict would stop the sweep from rebuilding it (#207)
 const markers = [...hits, ...big].flatMap((f) => [`${f}.failed`, `${f}.deferred`]).filter((m) => existsSync(`${root}/${m}`));
 for (const m of markers) console.log(`  ${apply ? "deleted" : "would delete"} ${m}  (its variant is purged: the sweep must be free to rebuild it)`);
 if (apply) for (const f of [...hits, ...big, ...markers]) rmSync(`${root}/${f}`);

@@ -1,25 +1,15 @@
 /**
- * seat-accept — the operator's half of the seat-profile lifecycle (#101 B4).
- *
- * Countersign deliberately has NO HTTP path: an accepted profile moves every
- * wearer of an avatar, so acceptance is an act performed on the box, by the
- * operator, with a review receipt in hand. This tool edits the same store the
- * server serves (assets/opt/seats/profiles.json); a running server notices
- * the change by mtime within ~5s and pushes `avatar-profile-updated` itself —
- * no restart, no endpoint.
+ * seat-accept — the operator's half of the seat-profile lifecycle (#101). Acceptance has no HTTP path on purpose:
+ * an accepted profile moves every wearer of an avatar, so it is done on the box with a review receipt. This edits
+ * the store the server serves (OPT_DIR/seats/profiles.json); a running server notices by mtime (server/seats.ts)
+ * and pushes `avatar-profile-updated` itself.
  *
  *   bun run tools/operator/seat-accept.ts list
  *   bun run tools/operator/seat-accept.ts propose <derivation.json> [--operator name] [--allow-unrostered]
  *   bun run tools/operator/seat-accept.ts accept <avatar> <pose> --receipt <url> --by <reviewer> --expect-rev <n>
  *
- * `propose` is the operator-import lane: environments with no home node (a
- * local dev door) cannot attribute an HTTP proposer, and inventing authorship
- * is worse than naming the operator who carried the file in.
- *
- * `--expect-rev` is mandatory (#105 review B3): countersign exactly what you
- * reviewed. `list` prints the revision; if the store moves between list and
- * accept — a new proposal from the live door, another operator — the accept
- * refuses instead of blessing a record nobody looked at.
+ * `propose` names the operator who carried the file in (a local door has no HTTP proposer to attribute).
+ * `--expect-rev` is mandatory: if the store moved since `list`, accept refuses rather than bless an unreviewed record.
  */
 
 // the server's own store (server/config.ts OPT_DIR, LIBRARY_DIR, PATCH_DIR): the file a running server serves

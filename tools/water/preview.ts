@@ -1,3 +1,4 @@
+// Used outside this repo: the Unreal client's live tests run this file by path.
 // bun tools/water/preview.ts BUNDLE_DIR [PORT] — isolated loopback server: founds a scratch world and sends the manifest's
 // `uploads` and `requests` (prepare.ts writes them) as its owner, the way import.ts --apply does (the GLBs pre-copied to OPT_DIR).
 import {mkdtempSync,mkdirSync,readFileSync,copyFileSync} from 'node:fs';
