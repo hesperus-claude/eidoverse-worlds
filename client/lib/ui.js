@@ -815,8 +815,8 @@ let layoutBar = null;
 // ---- HUD layout mode: the old click-∃ behaviour, now its own switch. Frames show their title tabs and rims, the rail
 // its grip, the lantern's resting line goes grabbable (index.html body.arranging). It ends on Esc, on a press out in
 // the world, or on its own switch; never because the menu closed.
-export const isLayoutMode = () => document.body.classList.contains('arranging');
-export function setLayoutMode(on) {
+const isLayoutMode = () => document.body.classList.contains('arranging');
+function setLayoutMode(on) {
   document.body.classList.toggle('arranging', !!on);
   paintLayoutBar();
   paintEMenu();
@@ -1117,7 +1117,7 @@ function paintEMenu() {
 }
 /** Every window back where it started, and the lantern's resting line too (it is not a frame, but it moves in
  *  HUD layout mode). The rail's own edge is NOT reset — where you put the rail is your decision (loadDockEdge). */
-export function resetHudLayout() { resetLayout(); resetPillPlace(); }
+function resetHudLayout() { resetLayout(); resetPillPlace(); }
 // THE LANTERN'S RESTING LINE: a group of its own between the voice rows and the windows (not quite a panel, so it
 // can't be docked). The row opens the lantern, and its pin keeps the pill bottom-centre (commandbar.js setPillPinned,
 // its own key ew-lantern-pinned, like the glyphs'). Unpinned, the lantern is still one chord away.
@@ -1222,8 +1222,8 @@ function buildPanels(s) {
 // ============================================================ overlays
 
 const sheet = (node) => node.querySelector('.sheet');
-export function openOverlay(node) { node.classList.add('open'); }
-export function closeOverlay(node) { node.classList.remove('open'); }
+function openOverlay(node) { node.classList.add('open'); }
+function closeOverlay(node) { node.classList.remove('open'); }
 export const isOverlayOpen = () => document.querySelector('.scrim.open') !== null;
 
 addEventListener('keydown', (e) => {

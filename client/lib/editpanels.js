@@ -942,7 +942,7 @@ function consoleFields() {
   f.push({ t: 'info', label: '', value: 'click a script to watch its log · /debug = flight recorder' });
   return f;
 }
-export async function watchScript(id) {
+async function watchScript(id) {
   watching = id; await refreshWatch();
   const c = frames.get('console'); if (c && !c.frame.visible) c.frame.show();
   repaintAll();

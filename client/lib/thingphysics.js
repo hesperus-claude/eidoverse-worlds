@@ -149,7 +149,7 @@ export const holdsNow = () => holds;
 /** What I hold, per the authority. */
 // newest first: what I picked up last is what I put down, throw or use first. The order is this client's own (when it first saw each hold); the wire carries none.
 const heldSeen = new Map(); let heldN = 0;
-export const myHolds = () => { const mine = Object.keys(holds).filter((id) => holds[id].by === net.you);
+const myHolds = () => { const mine = Object.keys(holds).filter((id) => holds[id].by === net.you);
   for (const id of mine) if (!heldSeen.has(id)) heldSeen.set(id, ++heldN);
   for (const id of heldSeen.keys()) if (!mine.includes(id)) heldSeen.delete(id);
   return mine.sort((a, b) => heldSeen.get(b) - heldSeen.get(a)); };
@@ -659,7 +659,7 @@ export async function throwHeld(arg) {
 }
 /** A hand's grab (VR grip, or any caller with a hand position [x, y, z]): the nearest thing it can carry within reach of
  *  that point and of the authority's hand. The same request the desktop key sends. */
-export async function grabNear(at, within = 0.6) {
+async function grabNear(at, within = 0.6) {
   const f = feet(); if (!f) return null; let best = null, bd = within;
   for (const id of grabbableIds()) { if (holds[id]) continue; const obj = entities.get(id); if (!obj || outOfMyView(obj)) continue;
     const c = obj.getWorldPosition(new THREE.Vector3()).add(localCentre(id, obj).applyQuaternion(obj.getWorldQuaternion(_cq))); const d = Math.hypot(c.x - at[0], c.y - at[1], c.z - at[2]);

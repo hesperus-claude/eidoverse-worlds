@@ -229,7 +229,7 @@ export const getScrubFeel = () => ({ ...scrubFeel });
 export function setScrubFeel(next) { scrubFeel = { ...scrubFeel, ...next }; try { localStorage.setItem('ew-scrub-feel', JSON.stringify(scrubFeel)); } catch { /* fine */ } return getScrubFeel(); }
 /** pixels dragged → how far the value moves, in units of one 'step' of travel */
 export const scrubTravel = (px) => { const k = SCRUB_SPEEDS[scrubFeel.speed] ?? 1; return scrubFeel.accel ? px * k * (1 + Math.abs(px) / 120) : px * k; };
-export const SCRUB_TIP = KEYHINTS.scrub.before;
+const SCRUB_TIP = KEYHINTS.scrub.before;
 // while scrubbing, the keys go on the status line (keyhints.js); the speed rides along
 function scrubHint(on) { if (on) engage('scrub'); else release(); }
 

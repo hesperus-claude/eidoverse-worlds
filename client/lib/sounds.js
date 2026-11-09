@@ -214,12 +214,12 @@ bus.on('entity', ({ id, kind }) => { if (kind === 'remove') { blocked.delete(id)
 bus.on('world-reset', () => clearSounds());
 // the viewer changed what their browser may fetch: every sound is read again under the new rule
 bus.on('media:trust', () => { for (const [id, c] of bags()) if (c?.sound) applyFrom(id, c.sound); });
-export function clearSounds() { blocked.clear(); for (const id of [...playing.keys()]) teardown(id); }
+function clearSounds() { blocked.clear(); for (const id of [...playing.keys()]) teardown(id); }
 
 // ---- the editor block: how a HUMAN puts a sound on a thing ------------------
 const SOUND_ACCEPT = 'audio/mpeg,audio/ogg,audio/wav,audio/webm,audio/mp4,.mp3,.ogg,.opus,.wav,.webm,.m4a';
 
-export async function uploadSound(file) {
+async function uploadSound(file) {
   const q = new URLSearchParams({ as: 'audio', name: file.name });
   if (CONFIG.token) q.set('token', CONFIG.token);
   const r = await fetch(`/upload?${q}`, { method: 'POST', body: file });

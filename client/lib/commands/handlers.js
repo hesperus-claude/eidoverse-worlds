@@ -76,7 +76,7 @@ register('eyes', (arg) => {
 
 /** Who a typed name is here, through the world's own lookup (the server's directory, scoped to the people this world
  *  has seen): {id, name, declares?, guest?, imported?, role, here, banned}[]. */
-export async function lookupPerson(name) {
+async function lookupPerson(name) {
   const id = identityOf(name);
   const r = await sendRequest('whois', { name: id ?? name });
   return r?.ok ? r.people ?? [] : null;

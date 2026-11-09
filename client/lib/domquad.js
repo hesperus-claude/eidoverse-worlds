@@ -89,7 +89,7 @@ export const prepareQuadMaterial = (mesh) => quadMaterial(mesh, renderer);
 // VR panel opacity (--xr-panel-a, stylepanel.js): the background's alpha only. Below 1 the quad joins the
 // transparent pass with depthWrite ON (nothing later paints through the text) and alphaTest 0.01. The ACES undo
 // (quadcolour.js) is exact only at alpha 1.
-export const xrPanelAlpha = () => {
+const xrPanelAlpha = () => {
   const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--xr-panel-a'));
   return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
 };
@@ -266,7 +266,7 @@ export function domQuadsRelease(press, cancel = false) {
 
 // A control = anything a click acts on (incl. labels, and a pointer cursor its parent lacks). The laser sticks
 // to one (xr.js, xrpointer.js); a grip over one doesn't grab the panel.
-export const CONTROL_SEL = 'a[href],button,input,select,textarea,label,summary,.dd,[role=button],[role=checkbox],[role=radio],[role=switch],'
+const CONTROL_SEL = 'a[href],button,input,select,textarea,label,summary,.dd,[role=button],[role=checkbox],[role=radio],[role=switch],'
   + '[role=slider],[role=tab],[role=option],[role=link],[role=menuitem],[contenteditable=""],[contenteditable="true"],[tabindex]:not([tabindex="-1"])';
 /** The interactive element at uv (x, y down) on a quad's texture, or null (background, title, text). */
 export function controlAt(map, x, y) {
@@ -301,8 +301,8 @@ export function domQuadsAt(handRay) {
 
 // ---- ZONES: resize corners and left/right/bottom edges, in frame CSS px (windows.js frameResizeInfo) --------------
 // The rest is 'body' (a fallback move grab); a control under the laser outranks every zone.
-export const ZONE_EDGE_PX = 12, ZONE_CORNER_PX = 24;
-export function zoneAt(root, x, y) {
+const ZONE_EDGE_PX = 12, ZONE_CORNER_PX = 24;
+function zoneAt(root, x, y) {
   const fr = root.getBoundingClientRect(), W = fr.width, H = fr.height;
   if (!(x >= 0 && y >= 0 && x <= W && y <= H)) return null;
   if (frameResizeInfo(root)) {
@@ -321,8 +321,8 @@ export function zoneAt(root, x, y) {
 
 // The handle bar: a faint bar below each panel, the primary move grab (full on laser dwell or hold). A child of the
 // quad in its units, so it scales and rides along.
-export const HANDLE_W_PX = 120, HANDLE_H_PX = 14, HANDLE_GAP_PX = 10;
-export const HANDLE_IDLE = 0.35, HANDLE_ON = 0.95;
+const HANDLE_W_PX = 120, HANDLE_H_PX = 14, HANDLE_GAP_PX = 10;
+const HANDLE_IDLE = 0.35, HANDLE_ON = 0.95;
 let handleTex = null;
 function handleTexture() {
   if (handleTex) return handleTex;
@@ -340,7 +340,7 @@ function makeHandle(q) {
   q.mesh.add(m); q.handle = m;
 }
 /** Is the point inside an area that scrolls (a trigger-drag there scrolls it)? */
-export function scrollableAt(map, x, y) {
+function scrollableAt(map, x, y) {
   for (let n = map?.elementAt?.(x, y); n && n !== map.dom.parentElement; n = n.parentElement) {
     if (n.scrollHeight > n.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(n).overflowY)) return true;
     if (n === map.dom) break;
@@ -375,7 +375,7 @@ function aidMesh(q, zone) {
   g.add(m); return m;
 }
 /** Show quad `mesh`'s handle for `zone` ('move' | 'resize-*'), hiding its others; zone null hides them all. */
-export function domQuadReveal(mesh, zone) {
+function domQuadReveal(mesh, zone) {
   const q = all.find((x) => x.mesh === mesh); if (!q) return;
   const want = zone?.startsWith('resize-') ? aidMesh(q, zone) : null;
   for (const c of q.aids?.children ?? []) c.visible = c === want;
@@ -392,7 +392,7 @@ export function domQuadsRevealOnly(keep) {
 
 // ---- RESIZE in VR: the gripped corner/edge follows the laser. The size is VR's OWN (windows.js _setVrSize, saved in
 // ew-xr-quads); the desktop layout is untouched. Rebuilt at the same pixel density; floor minW/minH, ceiling RESIZE_MAX_M.
-export const RESIZE_MAX_M = 1.6;
+const RESIZE_MAX_M = 1.6;
 const _rp = new THREE.Plane(), _rv = new THREE.Vector3(), _rn = new THREE.Vector3(), _rq = new THREE.Quaternion();
 export function domQuadResizeBegin(at) {
   const q = all.find((x) => x.mesh === at?.mesh); const info = q && frameResizeInfo(q.el);

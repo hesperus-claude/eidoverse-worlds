@@ -320,7 +320,7 @@ function realize(id, ent) {
 export const structureIds = () => [...tracked.keys()];
 
 /** Full idempotent pass: hydration, world switch, late enable. */
-export function reconcileStructures() {
+function reconcileStructures() {
   const seen = new Set();
   for (const [id, ent] of Object.entries(state.st.entities ?? {})) {
     if (!structOf(ent)) continue;

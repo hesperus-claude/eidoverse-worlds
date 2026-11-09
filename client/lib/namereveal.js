@@ -44,7 +44,7 @@ if (lsGet(ALWAYS_LS) === '1') setReveal('always', true);
 
 // a timed reveal for surfaces that can't hold (the action list: choose "show every name" and they come up briefly)
 let pulseTimer = null;
-export function pulseReveal(ms = 2000) {
+function pulseReveal(ms = 2000) {
   setReveal('pulse', true);
   clearTimeout(pulseTimer);
   pulseTimer = setTimeout(() => setReveal('pulse', false), ms);
@@ -59,7 +59,7 @@ export const typingTarget = () => {
   if (el.tagName === 'TEXTAREA') return true;
   return el.tagName === 'INPUT' && TEXT_INPUT.test(el.type ?? '');
 };
-export const REVEAL_CODE = 'KeyN';
+const REVEAL_CODE = 'KeyN';
 /** keydown → should it start the reveal? (exported for the test) */
 export const revealKeyDown = (e) => e.code === REVEAL_CODE && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !typingTarget();
 

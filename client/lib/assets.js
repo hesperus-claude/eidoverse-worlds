@@ -40,7 +40,7 @@ export const bootBytes = () => ({ ...bytes });
 export const loadingItems = () => [...loads.values()];
 function announce() { bus.emit('loading', loadingItems()); }
 export function loadTrack(key, label) { loads.set(key, { label, done: 0, total: 0 }); announce(); }
-export function loadProgress(key, done, total) {
+function loadProgress(key, done, total) {
   const l = loads.get(key);
   if (!l) return;
   if (total && !l.total) bytes.total += total;       // count each asset once

@@ -71,9 +71,9 @@ const prettyLabel = (l) => String(l).split('/').pop().replace(/\.(vrm|glb|gltf|p
 // the sphere's leftmost point is 8, so D >= 80 hides it at rest; +0.5 clears the anti-aliased edge.
 const PEG_D = 88 - 8 + 0.5;
 /** Linear, easing out on the last stretch so the peg ARRIVES; ease(0) = 0, ease(1) = 1 exactly, monotone. */
-export function pegEase(p) { const k = 0.35; return (1 - k) * p + k * (1 - Math.pow(1 - p, 3)); }
+function pegEase(p) { const k = 0.35; return (1 - k) * p + k * (1 - Math.pow(1 - p, 3)); }
 /** The peg's x offset at progress p: −D at 0, exactly 0 at 1. */
-export const pegOffset = (p) => -PEG_D * (1 - pegEase(Math.min(1, Math.max(0, p))));
+const pegOffset = (p) => -PEG_D * (1 - pegEase(Math.min(1, Math.max(0, p))));
 /** At p ≥ 1 the transform and clip are REMOVED, not zeroed: a no-op clip still re-antialiases the skin edge. */
 export function paintPeg(p, root = document.getElementById('splash')) {
   const peg = root?.querySelector('.sp-peg'); if (!peg) return;

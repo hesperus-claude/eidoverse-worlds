@@ -67,7 +67,7 @@ let defsLoading = null;
  *  Accepts the whole /defs registry ({flora, floraColors}) or a bare
  *  species map. Colors land FIRST — `leafRecolor` may name a palette
  *  entry, resolved here so the defs stay declarative. */
-export function hydrateFloraDefs(reg) {
+function hydrateFloraDefs(reg) {
     const flora = reg?.flora ?? reg;
     for (const [name, c] of Object.entries(reg?.floraColors ?? {})) GRASS_COLORS[name] = c;
     for (const [name, p] of Object.entries(reg?.floraPresets ?? {})) FLORA_PRESETS[name] = p;

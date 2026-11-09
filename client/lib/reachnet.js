@@ -36,7 +36,7 @@ export function initReachNet(h) { hooks = { ...hooks, ...h }; }
 
 /** Where a named contact point on an avatar is NOW: { pos, normal } in world
  *  space, or null. Landmarks derive once per body and live on it. */
-export function contactFrameOf(avatar, point, standoff = 0.02) {
+function contactFrameOf(avatar, point, standoff = 0.02) {
   if (!avatar) return null;
   avatar.__marks ??= deriveLandmarks(avatar);
   const e = avatar.__marks.get(point);
@@ -49,7 +49,7 @@ export function contactFrameOf(avatar, point, standoff = 0.02) {
  * every frame. `ownerId` is the REACHER (for 'self' space). Bodies resolve
  * lazily, so a reach at someone still loading starts tracking once they exist.
  */
-export function resolveEntryFn(ownerId, entry) {
+function resolveEntryFn(ownerId, entry) {
   const t = entry.t;
   if (t.who !== undefined) {
     const standoff = t.standoff ?? 0.02;

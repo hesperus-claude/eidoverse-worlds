@@ -13,10 +13,10 @@
 export const TOPGRID_VERSION = 1;
 export const LIE_GRID = 24;              // cells per side
 export const SPARSE_MIN_CELLS = 8;       // a 4-corner quad covers 4: too sparse to accuse
-export const ROOM_MIN_AREA = 16;         // m² (scaled) — decide()'s room-scale gate
-export const ROOM_MIN_H = 2.2;           // m (scaled)
-export const FLOOR_MIN_AREA = 2;         // m² (scaled) — smaller and nobody walks on it
-export const FLOOR_MAX_H = 1.0;          // m (scaled) — decide()'s one movable line
+const ROOM_MIN_AREA = 16;         // m² (scaled) — decide()'s room-scale gate
+const ROOM_MIN_H = 2.2;           // m (scaled)
+const FLOOR_MIN_AREA = 2;         // m² (scaled) — smaller and nobody walks on it
+const FLOOR_MAX_H = 1.0;          // m (scaled) — decide()'s one movable line
 export const UNEVEN_MIN_LIE = 0.10;      // m (scaled) — below this a box is honest enough
 export const TOPGRID_MAX_JSON = 8192;    // hard cap on the serialized payload
 /** Per-cell certification: a cell is OFFERED as support only when a within-cell

@@ -47,7 +47,7 @@ let historyIdx = -1;
 
 /** @name, or the bare name as a whole word: simpler than the agent side's
  *  rule (mcpl/mention.ts), which handles qualified names. */
-export function mentionRx(name) {
+function mentionRx(name) {
   const safe = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`(@${safe}\\b|\\b${safe}\\b)`, 'i');
 }

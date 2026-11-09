@@ -470,7 +470,7 @@ function feetTick(vrm, av, dt) {
   dbg.feet = { L: gp.L.pos.toArray().map((v) => +v.toFixed(3)), R: gp.R.pos.toArray().map((v) => +v.toFixed(3)), stepping: !!(ud._gait.L.step || ud._gait.R.step) };
 }
 
-export function tickXRBody(dt) {
+function tickXRBody(dt) {
   dbg.ticks++;
   // ?xrsim with a fed head pose runs the chain WITHOUT a session: the headless
   // fake session lives ~1 frame/2 s and drops unpredictably; the math and the

@@ -17,7 +17,7 @@ const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;
 export const escapeHtml = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
 /** Wrap a string WE wrote (static markup, an svg from icons.js) as markup. Never call it on anything that came in. */
 export const markup = (s) => Object.freeze({ [BRAND]: true, html: String(s ?? ''), toString() { return this.html; } });
-export const isMarkup = (v) => !!v && typeof v === 'object' && v[BRAND] === true;
+const isMarkup = (v) => !!v && typeof v === 'object' && v[BRAND] === true;
 /** Tagged template: the literal parts are markup, every ${value} is escaped unless it is itself markup. */
 export function html(strings, ...vals) {
   let out = strings[0];

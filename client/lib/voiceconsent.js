@@ -124,7 +124,7 @@ export function setMicFloor(v) {
 // from the mic toggle.
 export const sttConsented = () => prefs.sttConsent === true;
 /** Has this ever been put to the person? Distinct from what they answered. */
-export const sttAsked = () => prefs.sttConsent !== null && prefs.sttConsent !== undefined;
+const sttAsked = () => prefs.sttConsent !== null && prefs.sttConsent !== undefined;
 export function setSttConsent(on) {
   prefs.sttConsent = !!on; save();      // a deliberate choice is always recordable
   bus.emit('audio:stt-consent', prefs.sttConsent);
@@ -166,7 +166,7 @@ function defaultAsk() {
 /** The gate threshold in dBFS. 0% = -60 dB (everything), 100% = 0 dB (nothing).
  *  Linear in dB, which is already logarithmic in amplitude — the standard shape
  *  for this control, and the reason Discord's slider feels even end to end. */
-export const gateThresholdDb = () => -60 + Math.min(1, Math.max(0, prefs.micFloor / 0.2)) * 60;
+const gateThresholdDb = () => -60 + Math.min(1, Math.max(0, prefs.micFloor / 0.2)) * 60;
 
 /** Same threshold as a linear amplitude, for comparing against an RMS reading. */
 export const gateThreshold = () => Math.pow(10, gateThresholdDb() / 20);

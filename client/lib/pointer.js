@@ -32,8 +32,8 @@ export function makePointerLine({ segments = 24, tint = 0x8fb0d6, opacity = 0.85
 // action). Icons are icons.js glyphs (Lucide; Phosphor's arrows-out-cardinal for move) on a dark disc, drawn once per
 // kind; constant in angle like the dot, a little larger so a glyph is readable.
 import { stroke, fillPath } from './icons.js';
-export const DOT_RAD = 0.007;      // its diameter as an angle at the eye: ≈0.4°, 6 mm at arm's length, 2 cm at 3 m
-export const ICON_RAD = 0.014;     // an icon's diameter: ≈0.8°, 11 mm at arm's length — a glyph needs about twice a dot
+const DOT_RAD = 0.007;      // its diameter as an angle at the eye: ≈0.4°, 6 mm at arm's length, 2 cm at 3 m
+const ICON_RAD = 0.014;     // an icon's diameter: ≈0.8°, 11 mm at arm's length — a glyph needs about twice a dot
 export const DOT_KINDS = { click: 'mouse-pointer-click', type: 'text-cursor', scroll: 'chevrons-up-down', move: 'arrows-out-cardinal',
   'resize-ew': 'move-horizontal', 'resize-ns': 'move-vertical', 'resize-nwse': 'move-diagonal-2', 'resize-nesw': 'move-diagonal' };
 const _iconTex = new Map();

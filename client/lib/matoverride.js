@@ -19,14 +19,14 @@ import { registerDraft } from '../../shared/drafts.js';
 export const MAT = 'hesperus/material';
 // Add Component offers it where this reader applies (every thing with meshes), as a draft or, once trusted here, in the main list
 registerDraft(MAT, { title: 'Material', summary: "override its look: colour, roughness, metalness, glow, opacity (a draft this client reads)", category: 'Look', blank: {}, applies: (ent) => ent?.model != null || (ent?.mesh && typeof ent.mesh === 'object') });
-export const slotKey = (name, i = 0) => {
+const slotKey = (name, i = 0) => {
   const k = String(name ?? '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
   return /^[a-z]/.test(k) ? k : `slot-${i}${k ? `-${k}` : ''}`.slice(0, 48);
 };
 const U = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1;
 const HEX = (v) => Number.isInteger(v) && v >= 0 && v <= 0xffffff;
 /** The fields of a value that a reader may use (anything else is ignored). */
-export function readMaterial(v) {
+function readMaterial(v) {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
   const o = {};
   if (HEX(v.color)) o.color = v.color;
@@ -82,7 +82,7 @@ function write(clone, orig, o) {
 }
 
 /** Make a thing's meshes show its override (or their own materials again). Returns how many slots carry one. */
-export function applyMaterials(id) {
+function applyMaterials(id) {
   const obj = entities.get(id); if (!obj) return 0;
   const bag = bagOf(id); let n = 0; const slots = slotsOf(obj);
   for (const mesh of meshes(obj)) {

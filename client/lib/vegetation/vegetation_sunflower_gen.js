@@ -60,7 +60,7 @@ const FIT_FALLBACK = {
     bractR: 1.0,
 };
 
-export const SUNFLOWER_GEN = {
+const SUNFLOWER_GEN = {
     sunflower: {
         height: 1.9,
         leaves: 11,

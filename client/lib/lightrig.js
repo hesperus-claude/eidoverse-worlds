@@ -173,7 +173,7 @@ if (lampMapFor(shadowRes()) !== SHADOW_MAP) setLampShadow({ map: lampMapFor(shad
 // VIEW frustum every frame, with lightMargin m behind the light, replacing the follow-box below. Each cascade is its
 // own map at mapSize: N cascades = N depth passes, for sharper near shadows + horizon coverage.
 const CSM_N = Math.min(4, Math.max(0, +CONFIG.params.get('csm') || 0));
-export let csm = null;
+let csm = null;
 if (CSM_N >= 2) {
   csm = new CSMShadowNode(sun, { cascades: CSM_N, maxFar: +CONFIG.params.get('csmfar') || 150, mode: CONFIG.params.get('csmmode') || 'practical', lightMargin: 100 });
   sun.shadow.shadowNode = csm;

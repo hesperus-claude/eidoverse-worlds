@@ -17,13 +17,13 @@
 // Upright in ordinary motion (STAND_SLOTS) the plate rides the REST crown over the root and the clip cannot move it;
 // the chase only runs when the target changes, which is a posture change (stand ↔ sit ↔ lie).
 
-export const EYE_K = 1.35;        // crown = eye + 1.35·(eye − head bone)            (Basis)
-export const NO_EYE_K = 0.45;     // no eyes: crown = head + 0.45·(head − hips)       (Basis)
-export const BOUNDS_CAP_K = 1.8;  // mesh bounds may raise the crown to head + 1.8·(that span), no further (Basis):
+const EYE_K = 1.35;        // crown = eye + 1.35·(eye − head bone)            (Basis)
+const NO_EYE_K = 0.45;     // no eyes: crown = head + 0.45·(head − hips)       (Basis)
+const BOUNDS_CAP_K = 1.8;  // mesh bounds may raise the crown to head + 1.8·(that span), no further (Basis):
                                   // hair and hats count, wings and a crown of tentacles don't launch the plate
-export const GAP_K = 0.05, GAP_MIN = 0.03, GAP_MAX = 0.15;   // gap over the crown: 5% of height, 3–15 cm (Basis)
-export const LIE_START = 0.5, LIE_FULL = 0.3;   // head height above feet, as a fraction of rest: blend band
-export const TORSO_START = 0.7, TORSO_FULL = 0.5;   // head height over the hips, as a fraction of rest: blend band
+const GAP_K = 0.05, GAP_MIN = 0.03, GAP_MAX = 0.15;   // gap over the crown: 5% of height, 3–15 cm (Basis)
+const LIE_START = 0.5, LIE_FULL = 0.3;   // head height above feet, as a fraction of rest: blend band
+const TORSO_START = 0.7, TORSO_FULL = 0.5;   // head height over the hips, as a fraction of rest: blend band
 export const TAU = 0.12;          // s — Y smoothing time constant (unsourced; tuned by eye, research says 0.1–0.15)
 export const DEAD = 0.02;         // m — Y dead zone (head bob, breathing)
 

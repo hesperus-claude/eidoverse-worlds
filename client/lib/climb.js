@@ -17,7 +17,7 @@ bus.on('net', (n) => { if (!n.joined) cancelClimb(); });
 
 const _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
 /** A host's live pose {pos, q, scale} (its drawn object), or null when it isn't drawn. */
-export function hostPose(id) {
+function hostPose(id) {
   const obj = objects().get(id); if (!obj) return null;
   obj.updateWorldMatrix(true, false); obj.matrixWorld.decompose(_p, _q, _s);
   return { pos: _p.toArray(), q: _q.toArray(), scale: _s.toArray() };

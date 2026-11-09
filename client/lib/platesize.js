@@ -23,10 +23,10 @@ export const PLATE_W = 0.9;            // metres: the label sprite's width at s 
 export const PLATE_CAP_H = 30 * PLATE_W / 512;   // ≈ 0.0527 m
 export const TEXT_DEG = 0.6;           // the comfortable-reading angle the caps hold at range
 export const MAX_GROW = 3;             // the most a plate grows before perspective takes over again
-export const PLATE_D0 = PLATE_CAP_H / Math.tan(TEXT_DEG * Math.PI / 180);   // ≈ 5.0 m: where 0.6° starts needing help
-export const FADE_FULL = 20, FADE_GONE = 30;   // metres: full to 20, gone by 30 (VRChat's 30 m cut, softened)
+const PLATE_D0 = PLATE_CAP_H / Math.tan(TEXT_DEG * Math.PI / 180);   // ≈ 5.0 m: where 0.6° starts needing help
+const FADE_FULL = 20, FADE_GONE = 30;   // metres: full to 20, gone by 30 (VRChat's 30 m cut, softened)
 
-export const REVEAL_FULL = 50, REVEAL_GONE = 60;   // metres: the held reveal's fade — 'every name within ~60 m'
+const REVEAL_FULL = 50, REVEAL_GONE = 60;   // metres: the held reveal's fade — 'every name within ~60 m'
 export const REVEAL_EASE_MS = 120;                 // press and release both ease over this
 
 const fade = (d, full, gone) => Math.min(1, Math.max(0, 1 - (d - full) / (gone - full)));

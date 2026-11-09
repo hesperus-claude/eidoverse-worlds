@@ -102,7 +102,7 @@ function pickSeat(ray) {
   return { id: host, sock: best, slot };
 }
 
-export function selectSocket(pick) {
+function selectSocket(pick) {
   deselect();                              // a seat and a thing never co-hold the keys
   seatSel = pick;
   refreshSeatHighlight();

@@ -51,8 +51,8 @@ export function setPanelAlpha(v) {
 
 // --xr-panel-a: the VR quads' panel alpha (domquad.js reads it; 1 = opaque). Separate from --panel-a on purpose:
 // desktop glass tints a live viewport, a quad has none.
-export const XR_PANEL_A_RANGE = [0.6, 1];
-export const xrPanelAlphaToken = () => {
+const XR_PANEL_A_RANGE = [0.6, 1];
+const xrPanelAlphaToken = () => {
   const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--xr-panel-a'));
   return Number.isFinite(v) ? v : 1;
 };

@@ -335,7 +335,7 @@ export function setBodyShadows(root, on = true) {
 
 // MY BODY CASTS A REAL SHADOW: a Video setting, own avatar only (mybody.js setMe). The lamp gate above stays the
 // default for everyone; remotes never pass through here.
-export const PREF_MY_SHADOW = 'ew-my-shadow';
+const PREF_MY_SHADOW = 'ew-my-shadow';
 export function myShadowPref() { try { return localStorage.getItem(PREF_MY_SHADOW) === '1'; } catch { return false; } }
 export function setMyShadowPref(on) {
   try { localStorage.setItem(PREF_MY_SHADOW, on ? '1' : '0'); } catch { /* private window */ }

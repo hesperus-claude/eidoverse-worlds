@@ -30,7 +30,7 @@ export const getFoliageMode = () => mode;
 /** What auto resolves to right now. */
 export const foliageEffective = () => (mode === 'auto' ? (renderer.xr?.isPresenting ? 'fast' : 'soft') : mode);
 
-export function qualifiesAsFoliage(o) {
+function qualifiesAsFoliage(o) {
   if (!o?.isMesh || o.isSkinnedMesh || Array.isArray(o.material)) return false;
   const m = o.material;
   return !!(m?.isNodeMaterial && m.transparent && m.map && (m.opacity ?? 1) >= 0.99);

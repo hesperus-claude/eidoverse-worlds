@@ -31,7 +31,7 @@ export function xrScales(u, k) {
 export const toRigLocal = (worldY, rigScale) => worldY / (rigScale > 0 ? rigScale : 1);
 
 /** The desktop follow camera's standing eye (controller.js: 1.45 m over the root for a 1.0 body). */
-export const DESK_EYE = 1.45;
+const DESK_EYE = 1.45;
 export const deskEyeY = (u) => DESK_EYE * clampBodyScale(u);
 
 /** Move speed for a size: stride grows with the legs. */
@@ -59,7 +59,7 @@ export function clipRate(speed, natural, u) {
 export const plateLift = (plateY, s) => clampPlateY(plateY) * (typeof s === 'number' && s > 0 ? s : 1);
 
 // ---- per body, per browser (like ew-xr-scale: keyed by the worn body's NAME) ----
-export const PREFS_LS = 'ew-body-prefs';
+const PREFS_LS = 'ew-body-prefs';
 function readAll(storage) {
   try { const v = JSON.parse(storage?.getItem(PREFS_LS) || '{}'); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; }
   catch { return {}; }

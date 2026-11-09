@@ -93,7 +93,7 @@ const CURL_D_CUTOFF = 1.0;     // Hz, for the speed estimate itself — its own 
 const CURL_PROBE = CONFIG.params.has('curlprobe');
 const curlProbe = { left: { index: { last: null, peak: 0, sum: 0, n: 0 }, grip: { last: null, peak: 0, sum: 0, n: 0 } },
                     right: { index: { last: null, peak: 0, sum: 0, n: 0 }, grip: { last: null, peak: 0, sum: 0, n: 0 } } };
-export function curlProbeTake() { const out = {};
+function curlProbeTake() { const out = {};
   for (const h of ['left', 'right']) for (const k of ['index', 'grip']) { const p = curlProbe[h][k];
     if (p.n) out[`${h[0]}${k[0]}`] = [+p.peak.toFixed(4), +(p.sum / p.n).toFixed(4), p.n];
     p.peak = 0; p.sum = 0; p.n = 0; }
@@ -180,7 +180,7 @@ const scaleState = { k: 1, source: 'fallback', samples: [], eyeY: null, locked: 
 // a body swap while presenting: the new body must not wear the old body's ratio (eyes off the HMD height)
 // announceWorn emits { name, path }, setMe a string: normalise as bodies.js does, or the scale keys '[object Object]'
 bus.on('avatar-worn', (v) => { wornName = wornNameOf(v); if (!presenting) return; scaleState.samples.length = 0; scaleState.locked = false; scaleState.firstAt = 0; scaleState.k = 1; scaleState.source = 'fallback'; loadSavedScale(); tee('[xr] body swapped while presenting — device scale re-measured'); });
-export const xrScale = () => ({ ...scaleState, samples: scaleState.samples.length });
+const xrScale = () => ({ ...scaleState, samples: scaleState.samples.length });
 /** The multiplier the self puppet wears while presenting (Basis: avatar scaled to the player). 1 when unmeasured. */
 export const puppetScale = () => (presenting && scaleState.k > 0 ? 1 / scaleState.k : 1);
 // harness hook (?xrsim only): feed HMD heights without waiting on a slow headless frame rate
@@ -233,7 +233,7 @@ export const xrPrefs = (() => { try { return { ...XR_PREF_DEFAULTS, ...JSON.pars
 // Eye resolution as WebXR framebufferScaleFactor ('auto' = 1.0, the runtime's size). Chrome clamps it to
 // 0.2–1.0 and it's read once at session start. ?xrres=0.2..1 overrides for an A/B.
 export const XR_RES_SCALES = { auto: 1, 85: 0.85, 70: 0.7, 50: 0.5 };
-export function xrResScale() {
+function xrResScale() {
   const q = +CONFIG.params.get('xrres');
   if (q >= 0.2 && q <= 1) return q;
   return XR_RES_SCALES[xrPrefs.res] ?? 1;
@@ -417,8 +417,8 @@ function tryGrab(hand, ray) {
 }
 // PUSH / PULL: holding hand + trigger, stick forward/back moves the panel along the laser, clamped to arm's and room
 // reach; only then is walk-forward held off (strafe and turn never). A released panel is uprighted and faces you.
-export const PUSH_RATE = 1.6;              // 1/s at full deflection: ≈5× farther per second
-export const PUSH_MIN_M = 0.25, PUSH_MAX_M = 3.0;
+const PUSH_RATE = 1.6;              // 1/s at full deflection: ≈5× farther per second
+const PUSH_MIN_M = 0.25, PUSH_MAX_M = 3.0;
 const _pp = new THREE.Vector3(), _po = new THREE.Vector3(), _pd = new THREE.Vector3();
 function pushPull(hand, aim, stickY, dt) {
   const d = dead(stickY); if (!d || !held) return;
@@ -887,7 +887,7 @@ const wrapPi = (a) => Math.atan2(Math.sin(a), Math.cos(a));   // every yaw write
 // camera is the rig's child, so that spins the world (only the stick turns the tracking space).
 const recentre = { x: 0, y: 0, z: 0, pending: false };
 /** @returns {{x,z,y}} rig-local head xz to fold in; y lift (seated only). No yaw: the rig is stick-only. */
-export function recentreSolve({ headLocal, seated, standingEyeY }) {
+function recentreSolve({ headLocal, seated, standingEyeY }) {
   const y = seated && standingEyeY > 0.5 && headLocal.y > 0.3 ? standingEyeY - headLocal.y : 0;
   return { x: headLocal.x, z: headLocal.z, y };
 }

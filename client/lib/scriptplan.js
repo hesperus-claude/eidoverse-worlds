@@ -32,7 +32,7 @@ world.on("tick", () => {
 export const TEMPLATE_SCOPE = Object.freeze({ use: { comps: ["local/counter"], say: true }, timer: { comps: ["local/counter"], say: false } });
 
 /** A script name the authority takes (script:<name>: a–z, 0–9 and '-', up to 64), from whatever was typed. */
-export function scriptName(typed) {
+function scriptName(typed) {
   const s = String(typed ?? "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").replace(/-{2,}/g, "-").slice(0, 64);
   return s || null;
 }
@@ -40,7 +40,7 @@ export function scriptName(typed) {
 /** The reaction action a use-script answers: `use` when the thing has none by that name (or it already runs this
  *  script), else the script's name, else that name with -2, -3… : the first that's free or already this script's, so a
  *  thing's existing reaction (a door's toggle, another script's) is never overwritten. */
-export function actionFor(reactions, name) {
+function actionFor(reactions, name) {
   const r = reactions && typeof reactions === "object" ? reactions : {};
   const free = (a) => !Object.hasOwn(r, a) || (r[a]?.kind === "script" && r[a]?.script === name);
   if (free("use")) return "use";

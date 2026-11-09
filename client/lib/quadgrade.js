@@ -28,7 +28,7 @@ export const ACES_FIT = Object.freeze({ A: 0.0245786, B: 0.000090537, C: 0.98372
 
 const mul3 = (m, v) => [0, 1, 2].map((i) => m[i * 3] * v[0] + m[i * 3 + 1] * v[1] + m[i * 3 + 2] * v[2]);   // as TSL's mat3(9 scalars) reads them
 /** One channel of RRTAndODTFit⁻¹: y = (v² + Av − B)/(Cv² + Dv + E) solved for v ≥ 0 (the shader's rrtInv). */
-export function acesFitInverse(y) {
+function acesFitInverse(y) {
   const { A, B, C, D, E } = ACES_FIT, yc = Math.min(1, Math.max(0, y));
   const a = 1 - yc * C, b = A - yc * D, c = B + yc * E;
   return (-b + Math.sqrt(Math.max(b * b + 4 * a * c, 0))) / (2 * a);

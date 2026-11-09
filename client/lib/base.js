@@ -248,7 +248,7 @@ const NAME_COLORS = [
   '#e9a6ff', '#7fe0a0', '#d8c470', '#62d3f0',
 ];
 /** FNV-1a: cheap, and spreads short similar names (bot1/bot2) far apart. */
-export function preferredColor(name) {
+function preferredColor(name) {
   let h = 0x811c9dc5;
   const s = String(name ?? '').toLowerCase();
   for (let i = 0; i < s.length; i++) {

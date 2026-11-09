@@ -78,7 +78,7 @@ export function usePromptHint() {
   return html`<kbd>E</kbd> ${u.verb} ${nameOf(u.id) ?? 'it'}${u.barred ? html` <span>(${u.barred})</span>` : ''}`;   // html``: every value escaped (markup.js)
 }
 /** Use what E points at. Returns the door's reply (or null when there's nothing in reach). */
-export async function useNearest() {
+async function useNearest() {
   const u = usable(); if (!u) return null;
   return useThing(u.id, u.action, u.verb);   // a use isn't an edit: no undo step
 }

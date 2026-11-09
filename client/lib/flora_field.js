@@ -41,7 +41,7 @@ export function strokeApplied(f, eff, i = 0) {
  *  visibility — terrain hides the group — so it applies even where count
  *  dialing is unsupported; any positive factor needs every live stroke's
  *  actual count to match what densityCount requested. */
-export function fieldApplied({ fields, groupVisible }, eff) {
+function fieldApplied({ fields, groupVisible }, eff) {
   if (eff <= 0) {
     const ok = groupVisible === false;
     return {

@@ -81,7 +81,7 @@ export function setTtsEnabled(on) {
 // rather than throwing.
 const CHUNK_MS = 20;
 
-export const canSynthesize = () => typeof MediaStreamTrackGenerator !== 'undefined';
+const canSynthesize = () => typeof MediaStreamTrackGenerator !== 'undefined';
 
 // Fired when a DEAD generator is replaced by a live one: every sender still
 // holding the old track would transmit silence forever. voice.js listens and
@@ -467,7 +467,7 @@ export const genTrackInfo = () => (genTrack
  *      localStorage.eidoTtsBackend = 'wasm'        // then reload and re-run
  *
  *  Reports P50 and best rather than a mean: a mean hides the slow first call. */
-export async function ttsTTFS(text = 'hello there, this is a test', runs = 3) {
+async function ttsTTFS(text = 'hello there, this is a test', runs = 3) {
   // TIME TO FIRST SOUND (TTFS): what a listener experiences, phonemize + infer
   // + everything until audio exists, measured via self-monitoring. Not `infer`.
   if (!isTtsEnabled() || !ttsFn) { console.warn('[ttfs] no voice loaded'); return null; }
@@ -488,7 +488,7 @@ export async function ttsTTFS(text = 'hello there, this is a test', runs = 3) {
 }
 if (typeof window !== 'undefined') window.ttsTTFS = ttsTTFS;
 
-export async function ttsBench(text = 'hello', runs = 5) {
+async function ttsBench(text = 'hello', runs = 5) {
   if (!isTtsEnabled() || !ttsFn) { console.warn('[bench] no voice loaded'); return null; }
   const ms = [];
   let secs = 0;
@@ -510,7 +510,7 @@ if (typeof window !== 'undefined') window.ttsBench = ttsBench;
 
 /** Speak the same text N times to hear the SPREAD: VITS samples noise on every
  *  call, so one utterance is one draw. */
-export async function ttsSpread(text = 'hello there', runs = 5) {
+async function ttsSpread(text = 'hello there', runs = 5) {
   if (!isTtsEnabled() || !ttsFn) { console.warn('[spread] no voice loaded'); return null; }
   const rows = [];
   for (let i = 0; i < runs; i++) {

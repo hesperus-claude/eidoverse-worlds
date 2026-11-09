@@ -36,7 +36,7 @@ export function registerEngine(spec) {
   if (i >= 0) engines[i] = spec; else engines.push(spec);   // re-register = replace
 }
 
-export function availableEngines() {
+function availableEngines() {
   return engines.filter((e) => e.supported?.() !== false).map(({ id, label, accept }) => ({ id, label, accept }));
 }
 

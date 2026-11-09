@@ -36,7 +36,7 @@ export function claimWords(claim) {
   return `You're its owner ${claim.by}${claim.how === 'name' ? ', recognised by your name (provisional, until durable accounts)' : ', by the account main recorded'}: the upgrade keeps ${claim.by}'s role on your account.`;
 }
 /** The dry-run report as a person reads it: what carries, what is mapped, what has no home, what is refused. */
-export function reportView(report, hash) {
+function reportView(report, hash) {
   const R = report ?? {}, box = el('div', 'sp-up-report');
   const e = R.entries ?? {}, carried = [`${e.old ?? 0} old entries become ${e.new ?? 0} (${e.change ?? 0} changes)`];
   if (R.actorsRenamed) carried.push(`${R.actorsRenamed} name(s) escaped`);

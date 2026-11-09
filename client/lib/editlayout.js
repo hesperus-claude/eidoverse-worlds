@@ -279,7 +279,7 @@ function toggleIsolate() {
 
 /** full screen, on or off: the viewport bar's ⛶, F11, and the ∃ menu's "full screen" (a clean frame for recording).
  *  Esc leaves it (the browser's own rule). */
-export function toggleFullscreen() { if (document.fullscreenElement) document.exitFullscreen?.(); else document.documentElement.requestFullscreen?.(); }
+function toggleFullscreen() { if (document.fullscreenElement) document.exitFullscreen?.(); else document.documentElement.requestFullscreen?.(); }
 register({ id: 'view:fullscreen', title: 'full screen', key: 'F11', group: 'view',
   keywords: ['fullscreen', 'full screen', 'video', 'record', 'hide browser', 'kiosk'],
   detail: 'the whole screen, no browser chrome: F11 or the button toggles it; Esc leaves it', run: toggleFullscreen });

@@ -29,11 +29,11 @@ import { qApply } from "./motioneval.js";
 export const SEAT_METHOD = "skinned-pelvis-contact-v1";
 import { SEAT_CLIP_FILE } from "../../shared/clipdefs.js";
 export { SEAT_CLIP_FILE };
-export const CONTACT_MIN = 0.02;   // metres root-local; below this the "contact" is the root itself
-export const CONTACT_MAX = 1.0;    // above this no humanoid sit pose is plausible
+const CONTACT_MIN = 0.02;   // metres root-local; below this the "contact" is the root itself
+const CONTACT_MAX = 1.0;    // above this no humanoid sit pose is plausible
 export const MIN_PATCH_VERTS = 8;  // fewer neighbours than this = the winner sits alone
 export const MAX_PATCH_SPREAD_Y = 0.02; // a real pelvis underside clusters within 2cm
-export const SCALE_UNIFORM_EPS = 1e-3;  // |sx−sy|,|sy−sz| beyond this = nonuniform, abstain
+const SCALE_UNIFORM_EPS = 1e-3;  // |sx−sy|,|sy−sz| beyond this = nonuniform, abstain
 
 const HEX64 = /^[0-9a-f]{64}$/;
 const SAFE_NAME = /^[a-zA-Z0-9_-]{1,48}$/;   // roster-name syntax — also what keeps map keys inert

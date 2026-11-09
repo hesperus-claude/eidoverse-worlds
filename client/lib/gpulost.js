@@ -18,10 +18,10 @@
 // saw an empty short window every time and reloaded forever, a driver reset each cycle.
 
 export const GPU_LOST_KEY = 'ew-gpu-lost';           // sessionStorage: ms timestamps of recent losses
-export const GPU_RECOVERED_KEY = 'ew-gpu-recovered'; // sessionStorage: the reason, read once by the next boot's notice
+const GPU_RECOVERED_KEY = 'ew-gpu-recovered'; // sessionStorage: the reason, read once by the next boot's notice
 export const GPU_LOST_WINDOW_MS = 120000;
 export const GPU_LOST_LONG_MS = 15 * 60000;   // …and at most GPU_LOST_LONG_MAX losses in this one
-export const GPU_LOST_LONG_MAX = 3;
+const GPU_LOST_LONG_MAX = 3;
 
 /** Pure: given recent loss times and now, reload or stop? `why` names the rule that stopped it. */
 export function gpuLostAction(now, recent) {

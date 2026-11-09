@@ -461,7 +461,7 @@ canvas.addEventListener('wheel', (e) => {
 // makes a body usable.
 
 const touchState = { moveX: 0, moveZ: 0, lookId: null, lastX: 0, lastY: 0 };
-export function enableTouch() {
+function enableTouch() {
   document.body.classList.add('touch');
   const stick = document.getElementById('stick');
   const nub = stick.querySelector('.nub');

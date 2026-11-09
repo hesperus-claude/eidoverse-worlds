@@ -209,7 +209,7 @@ export { bandCuts } from './sky_bands.js';   // pure maths, its own module so a 
 /** Render `fn` BETWEEN XR frames with the pump's discipline (see xrPumpTick): xr.enabled off, the stale eye contexts
  *  nulled (and never restored: null is the truth between frames). Awaits a macrotask first, so a caller woken from a
  *  frame callback (rAF is the session clock while presenting) is out of the frame before it renders. */
-export async function renderBetweenXRFrames(r, fn) {
+async function renderBetweenXRFrames(r, fn) {
   await new Promise((res) => setTimeout(res, 0));
   const xrWas = r.xr.enabled;
   r.xr.enabled = false;
@@ -600,7 +600,7 @@ globalThis.__skyRefresh ??= {
 };
 /** A frame to wait for between bake strips that never lands inside a headset session: the strips render
  *  with plain renderer.render, which must not run while XR owns the frame (see xrPumpTick). */
-export const nextDesktopFrame = () => new Promise(function wait(res) {
+const nextDesktopFrame = () => new Promise(function wait(res) {
   requestAnimationFrame(() => (renderer.xr?.isPresenting ? setTimeout(() => wait(res), 250) : res()));
 });
 function maybeRefreshGraph() {

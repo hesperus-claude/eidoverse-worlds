@@ -233,7 +233,7 @@ async function askDevice() {
 // No toast reaches the eyes (toasts and the hint bar are DOM; only registered frames ride quads), so a short message
 // gets its own head-locked plate: a child of the camera, 0.9 m out and a little low, drawn over the world.
 let note = null;
-export function vrNote(text, ms = 7000) {
+function vrNote(text, ms = 7000) {
   globalThis.__vrmic = { ...(globalThis.__vrmic ?? {}), note: text };
   if (!presenting) { flashHint(text); return; }
   try {

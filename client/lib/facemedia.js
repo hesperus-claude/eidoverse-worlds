@@ -16,7 +16,7 @@ const _m = new THREE.Matrix4(), _inv = new THREE.Matrix4(), _s = new THREE.Vecto
 
 /** The thing's model box in its OWN frame (before its scale), leaving out child things, signs and picture quads; null
  *  when it has no mesh of its own (an empty, a light). */
-export function ownBox(id) {
+function ownBox(id) {
   const obj = entities.get(id); if (!obj) return null;
   obj.updateWorldMatrix(true, true);
   _inv.copy(obj.matrixWorld).invert();

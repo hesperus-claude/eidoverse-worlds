@@ -16,7 +16,7 @@
 // Returns the clip AND the options setClip should receive, so the caller has no policy left to get wrong.
 export const AIRBORNE_GRACE = 0.04;   // s: stair-step tolerance before a fall reads as a jump
 export const RUN_SPEED = 2.6;         // m/s at 100% size: walk → run
-export const MOVE_EPS = 0.05;         // m/s: below this the body is not travelling
+const MOVE_EPS = 0.05;         // m/s: below this the body is not travelling
 export const FADE_PRESS = 0.1;        // s: a deliberate jump is snappy
 export const FADE_WALKOFF = 0.5;      // s: walking off an edge eases
 

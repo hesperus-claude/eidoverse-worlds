@@ -26,7 +26,7 @@ const fin = Number.isFinite;
 
 /** The motion that carries a socket: its part's (a `motion:<slot>` whose node it is, or an old `motion` naming that part) when it rides one,
  *  else the thing's whole motion. Null when nothing moves it. */
-export function carrierMotion(comp, sock) {
+function carrierMotion(comp, sock) {
   if (!comp) return null;
   const part = typeof sock?.part === 'string' ? sock.part : null;
   if (part) {

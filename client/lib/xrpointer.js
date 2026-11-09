@@ -52,8 +52,8 @@ export const interactable = (comp, sockets = 0) => !!comp && (sockets > 0 || (!!
 export const POINTER_TAU = 0.03;          // s
 // a step this large in ONE frame is not tremor: tracking re-acquired, a recentre, a teleport. Snap rather than swoop.
 export const POINTER_SNAP_RAD = 0.6;      // rad
-export const POINTER_SNAP_M = 0.5;        // m
-export const smoothAlpha = (dt, tau = POINTER_TAU) => (!(dt > 0) ? 0 : !(tau > 0) ? 1 : 1 - Math.exp(-dt / tau));
+const POINTER_SNAP_M = 0.5;        // m
+const smoothAlpha = (dt, tau = POINTER_TAU) => (!(dt > 0) ? 0 : !(tau > 0) ? 1 : 1 - Math.exp(-dt / tau));
 /** One frame: `out` ({position, quaternion}) moves toward `to`. `st` is the caller's per-hand state ({init}).
  *  Returns 'snap' or the alpha used. */
 export function smoothPose(out, to, dt, st, tau = POINTER_TAU) {

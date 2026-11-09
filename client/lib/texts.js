@@ -17,7 +17,7 @@ import { layoutLines } from '../../shared/text.js';
 import { COMPONENTS } from '../../shared/protocol/componentspec.js';
 
 const D = COMPONENTS.text.defaults;
-export const LINE_PX = 96, MAX_PX = 2048, MAX_EXTENT = 30;
+const LINE_PX = 96, MAX_PX = 2048, MAX_EXTENT = 30;
 export const FONT = (px) => `600 ${px}px system-ui, "Segoe UI", "Noto Sans", "Noto Sans CJK JP", "Noto Sans Arabic", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"`;
 const signs = new Map();     // id → { v, key, group, tex, mats, geo }
 const pending = new Map();   // id → value waiting for its entity
@@ -27,7 +27,7 @@ const lumaOf = (c) => { const r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 2
 const css = (c) => `#${(c >>> 0).toString(16).padStart(6, '0')}`;
 
 /** Paint a sign's canvas: {canvas, w, h} in metres. Pure of the scene (a probe can call it). */
-export function paintSign(v) {
+function paintSign(v) {
   const size = v.size ?? D.size, width = v.width ?? D.width;
   const fontPx = Math.round(LINE_PX * 0.8);
   const cv = document.createElement('canvas'); const ctx = cv.getContext('2d');

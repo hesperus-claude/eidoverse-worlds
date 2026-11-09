@@ -25,8 +25,8 @@ import { escapeHtml as esc } from './markup.js';
 // THE BYTES (shared/mediasrc.js): a store file always; a trusted host's link always; any other link only if this
 // viewer turned on "allow untrusted links", else nothing is fetched (the quad shows its empty plate). A link is
 // fetched without credentials or a referrer, and decoded at most 2048 px on its long side.
-export const QUAD_MAX_EXTENT = 50;
-export const MAX_TEXTURE_PX = 2048;
+const QUAD_MAX_EXTENT = 50;
+const MAX_TEXTURE_PX = 2048;
 const blocked = new Map();   // id → why this browser didn't fetch it (probes)
 export const _blocked = blocked;
 export const _quadOf = (...a) => quadOf(...a);   // picture-note-test: the quad's dispose owns a link's texture
@@ -189,7 +189,7 @@ bus.on('world-reset', () => clearPictures());
 // the viewer changed what their browser may fetch: every picture is read again under the new rule
 bus.on('media:trust', () => { for (const [id, c] of bags()) if (c?.picture) applyFrom(id, c.picture); });
 
-export function clearPictures() {
+function clearPictures() {
   pending.clear();
   notes.clear();
   for (const id of revision.keys()) bump(id);   // every load in flight is stale
@@ -214,7 +214,7 @@ export const _hung = hung;
 const PICTURE_ACCEPT = 'image/png,image/jpeg,image/webp';
 
 /** POST an image file through the store door; resolves to the library-relative path. */
-export async function uploadPicture(file) {
+async function uploadPicture(file) {
   const q = new URLSearchParams({ as: 'image', name: file.name });
   if (CONFIG.token) q.set('token', CONFIG.token);
   const r = await fetch(`/upload?${q}`, { method: 'POST', body: file });

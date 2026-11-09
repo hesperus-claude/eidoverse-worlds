@@ -29,7 +29,7 @@ const _m = new THREE.Matrix4(), _mv = new THREE.Vector3(), _mq = new THREE.Quate
 
 /** The pose choices that bear on one occupant: their own, and (in a sync group) every occupant's of the same thing
  *  whose socket shares the group — all from presence, so every client gathers the same list. */
-export function occupyChoices(occupantId, m, body) {
+function occupyChoices(occupantId, m, body) {
   if (!body?.sync) return m?.pose ? [{ name: m.pose, at: m.at ?? 0 }] : [];
   const host = seatSocket(m.to)?.host;
   const out = [];

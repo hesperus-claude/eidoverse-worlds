@@ -42,7 +42,7 @@ const COB_STA = [0, 1, 2, 3, 5, 7, 9, 11, 12, 13, 14, 16];   // lean in-plant su
 // triangle wave 0→1→0…, for seam-free mirrored UVs under ClampToEdge
 const tri = (s) => { const m = s % 2; return m <= 1 ? m : 2 - m; };
 
-export const CORN_GEN = {
+const CORN_GEN = {
     corn: {
         height: 2.15,        // cane height (m) before per-plant jitter
         leaves: 10,
