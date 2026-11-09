@@ -53,9 +53,9 @@ behind a home NAT, no port forwarding):
 - **`/audio`** (typed in the client): the phone-holder's report — starts with
   the served build sha (stale page vs broken probe are indistinguishable
   without it), then live ICE state, candidate types, gate and TTS state.
-- **`tools/operator/join-canary.mjs`** over your public URL: protocol-level join check — asserts a good key joins
-  AND a bad key is refused — the negative control is the half that catches
-  auth accidentally wired open.
+- **`bun tools/operator/join-canary.mjs <public-url> <world> <good-key>`**: protocol-level join check — exits 1
+  unless the good key joins `<world>` AND a made-up key is refused 4003 — the negative control is the half that
+  catches auth accidentally wired open.
 
 ## What operators do NOT manage
 
