@@ -178,8 +178,7 @@ export function revoked(profile, currentBoneNames) {
   return r.profile.digest !== profile.digest;
 }
 
-// A small, stable, dependency-free digest for change detection, not security: integrity of the ASSET is SHA-256 in
-// the clip receipt.
+// A small, stable, dependency-free digest for change detection, not security (asset integrity is SHA-256 elsewhere).
 function digestOf(parts) {
   const s = parts.join('|');
   let h1 = 0x811c9dc5, h2 = 0x01000193;

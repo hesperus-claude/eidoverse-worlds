@@ -1,4 +1,4 @@
-// avatardefs — the avatar def contract, as one pure module (charter §3;
+// avatardefs — the avatar def contract, as one pure module (docs/design/OVERHAUL-CHARTER.md §3;
 // sibling of floradefs.js, same constraints: pure).
 //
 // Avatars keep their prized discovery behavior — drop a .vrm into the
@@ -13,12 +13,11 @@
 // Unknown keys are preserved (`doc` is the notes field), same rule as flora.
 import { isNum, isStr } from "./protocol/is.js";
 
-/** Avatar names come from .vrm filenames, which predate any naming rule —
- *  so the def rule is permissive where flora's is strict: printable, no
- *  path separators or control characters, ≤64 chars. */
 /** The body anyone wears who names none (or whose choice is not in the roster): one path for client, server and agent. */
 export const DEFAULT_BODY = "eidoverse/assets/vrms/claude.vrm";
 
+/** Avatar names come from .vrm filenames, which predate any naming rule — so the def rule is permissive where
+ *  flora's is strict: printable, no path separators or control characters, ≤64 chars. */
 export const AVATAR_NAME_RE = /^[^/\\\x00-\x1f]{1,64}$/;
 
 

@@ -1,8 +1,7 @@
 // flightbody — what a body must HAVE to fly, checked by name and nothing else.
 //
-// Flight is bound to a NAMING CONTRACT, not an avatar hash: the same contract hair and wings already flow through
-// (rigtest/EIDOVERSE-DEPLOY.md: "the pipeline recognises bones by NAME and nothing else"). Re-export the body with the
-// same bone names and flight keeps working; rename them and this says so, loudly.
+// Flight is bound to a NAMING CONTRACT, not an avatar hash: the rig pipeline recognises bones by name and nothing else.
+// Re-export the body with the same bone names and flight keeps working; rename them and this says so, loudly.
 //
 // It returns a CAPABILITY REPORT, not a boolean: a body with no wing bones still flies the physics (the integrator
 // moves a point and has never heard of a skeleton); it just can't ANIMATE the wings.
@@ -10,8 +9,7 @@
 // PURE, per shared/README.md: no three, no DOM, no fetch. The caller passes a
 // list of bone names, however it happens to know them.
 
-/** The wing chains, as authored by rigtest/hair_rig.py's sibling convention:
- *  <side>_Wing_<row> then _1, _2 outward. Two rows per side, three deep. */
+/** The wing chains, as the rig authors them: <side>_Wing_<row> then _1, _2 outward. Two rows per side, three deep. */
 export const WING_RE = /^([LR])_Wing_(Upper|Lower)(?:_(\d+))?$/;
 
 /** Bones flight will DRIVE if they exist. Everything else the body has is its

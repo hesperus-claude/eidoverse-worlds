@@ -1,4 +1,4 @@
-// shared/components.js — the component library, engine rung (RFC #208 steps 3–4, data-only).
+// shared/components.js — the component library, engine rung (RFC #208, data-only).
 //
 // An entity is a Transform plus a list of components. Each component type is an
 // immutable, content-addressed RECORD: a name, a parameter schema (type, default,
@@ -6,7 +6,7 @@
 // text-tier resident reads. No record carries code; the realizers that give the
 // built-ins behaviour are the engine's own.
 //
-// Every spelling the wire has is an ALIAS here (design §2.4, §6): `lib`,
+// Every spelling the wire has is an ALIAS here: `lib`,
 // `collide`, `parent`, `comp.motion` with its `type` enum, `comp.sockets`, …,
 // `comp.light` on a thing of its own, `comp.collider`, and the Empty — a spawn with no
 // `lib`. (The old protocol's `kind: "light"` light entity is gone from the view:
@@ -53,7 +53,7 @@ export { sha256hex, sha256hexBytes };
 // closed set that IS a set — a particle preset, a loop mode — not a type switch), list, json.
 //
 // ONE description: a registered component's params are DERIVED here from the registry
-// (shared/protocol/componentspec.js: fields, defaults, ranges, units, docs) through its descriptor (shared/protocol/
+// (shared/protocol/componentspec.js: fields, defaults, ranges, units, docs) through its descriptor (shared/
 // descriptors.js: which fields the card shows, the editor's spellings — rate, burnsAtNoon, slot — and its translations).
 // This file adds no type, limit, unit or doc of its own for a registered field: paramsOf() throws if a hand entry tries.
 // What a record may still say by hand is the ALIAS LAYER's own: a param the wire doesn't spell as a field (Transform's
@@ -114,9 +114,9 @@ const part = { default: null };
 
 const DEFS = [
   { name: 'Transform', category: 'Core', builtin: true, summary: 'where it is: position, heading, size',
-    params: paramsOf('Transform', { yaw: { ...deg, default: 0 } }),   // no rotOrder: the rotate order is the viewer's (PROTOCOL §9.1; client/lib/viewprefs.js)
+    params: paramsOf('Transform', { yaw: { ...deg, default: 0 } }),   // no rotOrder: the rotate order is the viewer's (spec/PROTOCOL.md §9.1; client/lib/viewprefs.js)
     fallback: { text: 'at (x, y, z)' } },
-  // Pivot (research 52, Roblox's PivotOffset): where it turns and scales from, in its own frame before scale. It never
+  // Pivot (Roblox's PivotOffset): where it turns and scales from, in its own frame before scale. It never
   // moves the thing or changes how it draws: only the handles, the turn and the size go about it.
   { name: 'Pivot', category: 'Core', summary: 'where it turns and scales from (its own frame); never moves it',
     params: paramsOf('Pivot', { pos: { default: [0, 0, 0] } }),
@@ -131,8 +131,8 @@ const DEFS = [
     params: paramsOf('Light'),
     fallback: { visual: 'a glowing gizmo when the slot pool is spent', text: '(light)' },
     note: 'wire: comp.light {color, intensity, range, important, day}, on any thing (beside a model or a mesh too); Add Component ▸ Light on a model or a mesh puts it on a child a metre up, so its pose is its own' },
-  // the motions' READS: a whole thing swings and turns about its Pivot component, else its origin (shape audit 10-16; a pendulum
-  // was [0, 2, 0]); a part about its own origin; an orbit's part circles at 1 m
+  // the motions' READS: a whole thing swings and turns about its Pivot component, else its origin; a part about its own
+  // origin; an orbit's part circles at 1 m
   { name: 'Pendulum', category: 'Motion', summary: 'swings back and forth about an axis',
     params: paramsOf('Pendulum', { part, pivot: { default: [0, 0, 0], partDefault: [0, 0, 0] } }),
     fallback: { visual: 'stands still', text: 'in motion (pendulum)' } },
@@ -151,7 +151,7 @@ const DEFS = [
   { name: 'Sockets', category: 'Interaction', needs: ['Model'], summary: 'attachment points: a person attaches by using one (a chair, a swing, a saddle); things attach by parent',
     params: paramsOf('Sockets', { slots: { t: 'list', of: 'seat', default: {}, hint: 'slot → {pos, yaw?, part?, body?: {action, pose, exit, who}}' } }),
     seat: { bodyDefault: [0, 0.5, 0], cargoDefault: [0, 0, 0], pose: 'sitchair' }, fallback: { text: 'attach points: <slots>' } },
-  // grabbable (shared/grab.js; research RESEARCH-grab-2026-10-06): its own component, apart from physics. The spec is the
+  // grabbable (shared/grab.js): its own component, apart from physics. The spec is the
   // component's whole value; the inspector's card edits its fields, and its JSON hatch reaches grips, home and fx
   { name: 'Grabbable', category: 'Interaction', needs: ['Model'], summary: 'it can be picked up and carried: who may, how it is held (grips), where it goes when let go, what using it while held does',
     params: paramsOf('Grabbable', { spec: { t: 'json', default: {}, hint: '{who, enabled, steal, range, priority, hold, pose, grips, twoHanded, throw, release, returnAfter, home, fits, use, prompt, fx}' } }),
@@ -168,7 +168,7 @@ const DEFS = [
   // actions are written on its card: toggle, set, play, reset, script) and needs nothing
   { name: 'Reactions', category: 'Interaction', summary: 'what a `use` does: its actions (toggle, set, play, reset, script); an Openable brings its own',
     params: paramsOf('Reactions', { actions: { t: 'json', default: {} } }), fallback: { text: 'reacts to: <actions>' } },
-  // v2 of Particles (a new hash, L5): the instance names an effect document (shared/particle_effects.js) and sets
+  // Particles v2: the instance names an effect document (shared/particle_effects.js) and sets
   // its params; the first protocol's flat knobs are params of the Essentials now, and an older bag round-trips through
   // `extra` as every unknown key does
   { name: 'Particles', category: 'Effects', summary: 'an effect: fire, smoke, sparks… or a stored effect document',
@@ -207,7 +207,7 @@ const DEFS = [
     note: 'wire: comp.mesh {shape, size}; it may sit beside a model or a light. Its one material slot is \'surface\'' },
   { name: 'Annotation', category: 'Data', summary: 'any other data a world invents (recipe, notice, story…)',
     params: { type: { t: 'text', default: null, required: true }, data: { t: 'json', default: null } }, fallback: { text: 'components: <type>' } },
-  // The world entity's components (design §3, shared/worldentity.js): `@world`
+  // The world entity's components (shared/worldentity.js): `@world`
   // is ONE entity whose bag is these four, aliased both ways onto the fold's
   // state.sky / state.terrain / state.grass. `world: true` keeps them off every
   // other entity's Add Component; the world has exactly one of each. Their
@@ -234,7 +234,7 @@ const DEFS = [
 ];
 
 function freeze(o) { if (o && typeof o === 'object') { Object.values(o).forEach(freeze); Object.freeze(o); } return o; }
-// A record's hash covers its MEANING, not its prose (design §6): `summary`,
+// A record's hash covers its MEANING, not its prose: `summary`,
 // `note`, every `hint` (on the record or any parameter) and `fallback.text`
 // are documentation, and rewording them must not mint a new version of the
 // component. Everything else — kind, v, name, params with their types,
@@ -270,7 +270,7 @@ const MOTION_TYPE = Object.fromEntries(Object.entries(MOTION).map(([k, v]) => [v
 const MOTION_STAMPS = ['t0', 'cause', 'by'];
 // keys of the record that are not components: who/when the sequencer stamped
 const STAMPS = ['placer', 'born', 'actor', 'ts', 'box'];
-const FLAG = { lock: 'Lock' };   // the old `guard` merged into lock (PROTOCOL §5): no world carries one
+const FLAG = { lock: 'Lock' };   // the old `guard` merged into lock (spec/PROTOCOL.md §5): no world carries one
 
 const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
 const omit = (o, keys) => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
@@ -341,7 +341,7 @@ export function componentsOf(ent) {
       out.push(inst);
       continue;
     }
-    // step 2 (design §6): a Light or a Collider as a component. Only a plain
+    // a Light or a Collider as a component. Only a plain
     // object is one; any other data under these keys predates the meaning
     // (none in the corpus) and stays an Annotation, so its bytes still return.
     if ((key === 'light' || key === 'collider') && isBag(data)) { out.push(compInstance(key === 'light' ? 'Light' : 'Collider', key, data)); continue; }
@@ -472,7 +472,7 @@ export function lightOf(ent) {
   const src = isBag(ent?.light) ? ent.light : null;
   if (!src) return null;
   if (src.kind !== undefined && !COMPONENTS.light.enums.kind.includes(src.kind)) return null;
-  // an unknown daytime drops only daytime (PROTOCOL §9.2): it reads at its meaning of absence; kind says what the light IS, so an unknown kind is no light
+  // an unknown daytime drops only daytime (spec/PROTOCOL.md §9.2): it reads at its meaning of absence; kind says what the light IS, so an unknown kind is no light
   const daytime = COMPONENTS.light.enums.daytime.includes(src.daytime) ? src.daytime : undefined;
   const decay = finite(src.decay) && src.decay >= 0 && src.decay <= 4 ? src.decay : undefined;   // unread: an older value (the rig's 1.7 and 16)
   return {
@@ -492,7 +492,7 @@ export function lightOf(ent) {
 
 /** The collider preference the browser hands fitCollider: comp.collider.shape
  *  "mesh" (or the older "exact") as "exact", "box" as itself, else the legacy spawn `collide` verbatim (as
- *  the browser always passed it), else undefined (= decide by size). "sphere" is a physics request (PHYSICS §3.1): to
+ *  the browser always passed it), else undefined (= decide by size). "sphere" is a physics request (spec/PHYSICS.md §3.1): to
  *  walk on, a ball is what its size decides. */
 export function colliderOf(ent) {
   const s = isBag(ent?.collider) ? ent.collider.shape : undefined;
