@@ -26,7 +26,7 @@ import { join, extname, resolve } from 'node:path';
 
 const arg = (n, d) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : d; };
 const FPS = +arg('--fps', 60);
-const OUT = resolve(arg('--out', 'tools/flightbench/out'));
+const OUT = resolve(arg('--out', 'bench/flightbench/out'));
 const ONLY = arg('--take', null);
 const ROOT = resolve('.');
 const DT = 1 / FPS;
@@ -119,7 +119,7 @@ try {
   browser = await chromium.launch({ args: ['--force-device-scale-factor=1'] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   page.on('pageerror', e => { throw e; });
-  await page.goto(`http://127.0.0.1:${s.port}/tools/flightbench/bench.html`);
+  await page.goto(`http://127.0.0.1:${s.port}/bench/flightbench/bench.html`);
   await page.waitForFunction(() => window.__benchReady === true, null, { timeout: 20000 });
 
   const takes = [];

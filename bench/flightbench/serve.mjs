@@ -11,4 +11,4 @@ createServer((req,res)=>{
   if(!f.startsWith(ROOT)||!existsSync(f)||statSync(f).isDirectory()){res.writeHead(404);return res.end('no');}
   res.writeHead(200,{'content-type':MIME[extname(f)]??'application/octet-stream','cache-control':'no-store'});
   res.end(readFileSync(f));
-}).listen(8788,'127.0.0.1',()=>console.log('flight bench on http://localhost:8788/tools/flightbench/fly.html'));
+}).listen(8788,'127.0.0.1',()=>console.log('flight bench on http://localhost:8788/bench/flightbench/fly.html'));
