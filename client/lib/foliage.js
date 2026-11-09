@@ -1,11 +1,10 @@
 // foliage — alpha-blended, TEXTURED see-through surfaces drawn as two passes in 'fast' mode (Video › textured
 // transparency). Named for the case that motivated it; it applies to every qualifying surface, not only leaves.
 //
-// A blended leaf writes no depth, so every layer of a canopy is shaded in full (EW.overdraw: ~3 layers per covered
-// pixel on the Commons palms, 17+ at the crown).
-// fast = the classic foliage split: a CUTOUT twin (alphaTest 0.999, writes depth, no blending) draws each leaf's solid
-// interior in the opaque pass, then the original blend draws with depthFunc Less, filling only the soft edges.
-// Measured on the palms: −45% layers/px, frame −25%, 0.36% of pixels changed. 0.999 (not 0.98) halved the speckles.
+// A blended leaf writes no depth, so every layer of a canopy is shaded in full (EW.overdraw counts them).
+// fast = two passes: a CUTOUT twin (alphaTest 0.999, writes depth, no blending) draws each leaf's solid interior in the
+// opaque pass, then the original blend draws with depthFunc Less, filling only the soft edges (−45% layers/px, −25%
+// frame time on the Commons palms; 0.999 rather than 0.98 halves the speckles).
 // soft = the original single blended pass. auto = fast while presenting in a headset, soft on the desktop.
 //
 // Who qualifies: world models (prepareObject kind 'model'), not skinned, one material, transparent, textured, opacity
@@ -55,9 +54,8 @@ function warmCut(st, core) {
   st.warming = true;
   warm('foliage core', async () => {
     if (byMat.get(st.m) !== st) return;
-    // compileAsync projects synchronously and skips invisible materials: visible for that instant only, so no frame
-    // can draw a core before its pipeline exists
-    // …and frustum-culls: a core behind the viewer would compile nothing and still be marked warm
+    // compileAsync skips invisible materials and frustum-culls, so the twin is visible and unculled for this call
+    // only: no frame can draw a core before its pipeline exists
     st.cut.visible = true;
     const culled = core.frustumCulled; core.frustumCulled = false;
     let p;

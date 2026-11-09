@@ -109,8 +109,8 @@ export function beginWork(label) {
   return rec;
 }
 
-/** Record a one-line load fact outside any work record (beginWork only logs work over 120ms; a VRM pool hit, §19b,
- *  finishes in ~0ms and is the line that proves the cache worked). Same tag, mirror and cap. */
+/** Record a one-line load fact outside any work record (beginWork only logs work over LOG_THRESHOLD_MS; a VRM pool
+ *  hit finishes in ~0 ms and is the line that proves the cache worked). Same tag, mirror and cap. */
 export function loadNote(line) {
   console.log(`[load] ${line}`);
   if (loadLog.length < 300) loadLog.push(line);
@@ -150,13 +150,13 @@ function pumpLane(l) {
     })();
   }
 }
-/** Whether any lane holds running or queued work: the governor's loading grace reads it (§16.2.D). */
+/** Whether any lane holds running or queued work. */
 export const laneBusy = () => Boolean(
   lanes.cpu.running || lanes.gpu.running
   || lanes.cpu.jobs.length || lanes.gpu.jobs.length);
 const reportLanes = () => reportPending('lanes',
   lanes.cpu.running + lanes.gpu.running + lanes.cpu.jobs.length + lanes.gpu.jobs.length);
-/** Queue depths per lane — the 8e debug shape (EW.lanes). */
+/** Queue depths per lane (debug shape). */
 export const laneStats = () => ({
   cpu: { running: lanes.cpu.running, queued: lanes.cpu.jobs.length, max: lanes.cpu.max },
   gpu: { running: lanes.gpu.running, queued: lanes.gpu.jobs.length, max: lanes.gpu.max },
@@ -168,7 +168,7 @@ function checkIdle() {
     bus.emit('lanes-idle');
   }
 }
-/** Back-compat shape used by early call sites. */
+/** enqueue with the older `urgent` flag (priority 2). */
 export function serialize(fn, { urgent = false, lane = 'cpu', priority } = {}) {
   return enqueue(fn, { lane, priority: priority ?? (urgent ? 2 : 0) });
 }

@@ -4,7 +4,8 @@
 // where a moving thing IS, so both evaluate this one file.
 // This module is deliberately dependency-free — no THREE, no DOM, no scene,
 // no clock (its imports are pure: shared/rot.js, the one set of quaternion functions): callers pass {base, motion, nowMs} in and get a transform out.
-// motion.js consumes it per frame; mcpl/agent.ts consumes it at read time.
+// motion.js consumes it per frame; mcpl/effective.ts at read time. `since` is also imported by the native-renderer
+// bridge (outside this repo).
 //
 // Contract: evalWholeMotion returns a FINITE transform or an explicit
 // refusal ({ok:false, why}) — never a partially-composed number. Unknown
@@ -38,8 +39,8 @@ export const yawOfQuat = (q) => {
 };
 
 const yawQuat = (yaw) => qAxisAngle([0, 1, 0], yaw ?? 0);
-// the rest orientation motion composes on: the fold's full q when the thing
-// is tilted (PROTOCOL §9 amendment), else its yaw
+// the rest orientation motion composes on: the fold's full q when the thing is tilted (spec/PROTOCOL.md §9.1), else
+// its yaw
 const baseQuat = (base) => (Array.isArray(base?.q) && base.q.length === 4 ? base.q : yawQuat(base?.yaw));
 
 // ---- the generous reader ---------------------------------------------------
@@ -61,10 +62,8 @@ export const ampOf = (m, def = 0) => {
   return Number.isFinite(v) ? v : def;
 };
 
-/** Seconds since the motion's epoch. A motion with NO t0 anchors to when
- *  this process first evaluated it — same per-client fallback motion.js has
- *  always had, held here in a WeakMap instead of a stowaway `_t0` property
- *  so evaluation never mutates a component bag it does not own. */
+/** Seconds since the motion's epoch. A motion with NO t0 anchors to when this process first evaluated it, held in a
+ *  WeakMap so evaluation never mutates a component bag it does not own. */
 const t0Fallback = new WeakMap();
 export const since = (m, nowMs) => {
   let t0 = m.t0;
@@ -97,9 +96,8 @@ function rotateAtPivot(base, axis, pivot, theta) {
   return { pos: [base.pos[0] + shift[0], base.pos[1] + shift[1], base.pos[2] + shift[2]], quat };
 }
 
-// Path arc-length tables, cached per component object. A re-folded comp is a
-// new object, so the cache invalidates exactly when the points can change —
-// the same lifetime the old `m._len` stowaway had, without the mutation.
+// Path arc-length tables, cached per component object: a re-folded comp is a new object, so the cache invalidates
+// exactly when the points can change.
 const pathLen = new WeakMap();
 
 export function evalPath(m, t, base) {

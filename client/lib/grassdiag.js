@@ -1,4 +1,4 @@
-// grassdiag — which part of the meadow is eating the GPU? (§22)
+// grassdiag — which part of the meadow is eating the GPU? (TEL0S_NOTES §22)
 //
 // On a vsync-bound machine the grass cost hides inside 'render' as GPU time, invisible to the per-system CPU bill.
 // So this measures by DIFFERENCE: freeze one component at a time for a few seconds and watch fps / frame-ms
@@ -47,9 +47,8 @@ async function sample(secs) {
     fps: fps[Math.floor(fps.length / 2)],
     ms: +ms[Math.floor(ms.length / 2)].toFixed(1),
     worst: Math.round(Math.max(...worst)),
-    // §22p: pacing vs stutter, separated. doubled/s is EXPECTED to be
-    // nonzero whenever fps < refresh (vsync arithmetic); spikes/s > 0 is
-    // the only line that means a real hitch.
+    // pacing vs stutter (§22p): doubled/s is EXPECTED to be nonzero whenever fps < refresh (vsync arithmetic);
+    // spikes/s > 0 is the only line that means a real hitch
     doubledPerSec: +(doubled / n).toFixed(1),
     spikesPerSec: +(spikes / n).toFixed(1),
   };

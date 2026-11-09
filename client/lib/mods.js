@@ -9,12 +9,9 @@
 //     (A world doesn't offer client mods: what runs in a world is its own
 //     scripts, on the server, through the door — docs/guide/SCRIPTS.md.)
 //
-// What a mod can DO needs no new machinery: it animates your own body freely
-// (it is you), other bodies by their consent (bodydrag), objects through the
-// door as you would (EW.physics: grab/put/throw/drop/punt), and it may
-// build in-game UI through the
-// same panel primitives the client itself uses. The engine cannot tell a
-// mod's output from anyone else's, which is the point.
+// What a mod can DO needs no new machinery: it animates your own body freely (it is you), other bodies by their
+// consent (bodydrag), objects through the door as you would (EW.physics), and it builds in-game UI through the same
+// panel primitives the client uses. The engine cannot tell a mod's output from anyone else's, which is the point.
 //
 // Contract: a mod is an ES module. Its default export (if any) is called
 // with a context: { name, world, EW, ui, onTick, onDispose }. Ticks are

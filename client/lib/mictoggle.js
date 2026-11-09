@@ -10,21 +10,11 @@ import { bus } from './base.js';
 import { register as registerAction } from './actions.js';
 import { pathData } from './icons.js';
 
-// three states: off = grey + slash · live = clean bright white ·
-// hot (picking up your voice for STT) = warm yellow glow. No rings.
-// ONE palette for both glyphs. They sit side by side and are read as a pair,
-// so any divergence reads as a state difference that is not there (in the
-// field the off-states looked noticeably unalike). The apparent
-// weight difference was never the hex — it was INK COVERAGE: the headphone
-// carries two filled earcups and a long band, the mic is thin strokes with
-// air between them, so identical stroke colour lands heavier on the ear.
-// Equalising by giving the heavier glyph a slightly thinner stroke, which
-// matches perceived weight rather than nominal colour.
-// glyph inks come from the token sheet (no hex outside it) —
-// read fresh each paint (1Hz + events): live token edits restyle us too.
-// Read off the BUTTON (it inherits the sheet's tokens): build mode re-points the OFF inks on the glyphs alone
-// (index.html body.edit-workspace #micbtn…: --dim, --edge-hi) so an off glyph sits grey-on-grey in the editor bar;
-// live stays the brand and hot the attention gold there too (R, gym 10-17 20:44: they stayed grey when live).
+// Three states: off = dim + slash · live = brand · hot (your voice registering) = attention gold with a glow.
+// ONE palette for both glyphs: they read as a pair, so any divergence reads as a state difference. The headphone's
+// stroke is thinner (its filled cups carry more ink than the mic's thin strokes) so the two weigh the same to the eye.
+// Inks come from the token sheet, read off the BUTTON on each paint so live token edits and build mode's re-pointed
+// OFF inks (index.html body.edit-workspace #micbtn…: --dim, --edge-hi) restyle the glyphs too.
 const tok = (n, fb) => (getComputedStyle((micBtn?.isConnected && micBtn) || document.documentElement).getPropertyValue(n) || fb).trim();
 const INK = {
   get off()   { return tok('--dim', '#7d8f8a'); },
@@ -273,12 +263,11 @@ setInterval(placeMic, 2000);          // safety net only
 // the glyph REFLECTS state, never owns it: every surface that changes hush/consent repaints it
 bus.on('audio:hush', paint);
 bus.on('audio:receive', paint);
-// 🔴 without this the glyph repaints only from its poll, and never moves under SFU
-bus.on('audio:mic', paint);
+bus.on('audio:mic', paint);   // without it the glyph repaints only from its poll
 bus.on('style', paint);
 bus.on('xr:state', paint);
 // build mode moves the ∃ into the workspace's corner and re-inks the glyphs: re-seat and repaint once its CSS is on
-bus.on('build-mode', () => requestAnimationFrame(() => { paint(); placeMic(); }));   // session start/end (live 09-05 22:04)       // the badge is baked from tokens (INK) — a Style change repaints it (live, 09-05)
+bus.on('build-mode', () => requestAnimationFrame(() => { paint(); placeMic(); }));
 setInterval(ensure, 1000);
 ensure();
 
@@ -307,5 +296,5 @@ window.addEventListener('keyup', (e) => {
   setPttHeld(false);   // harmless in voice-activation mode; vital in PTT
   if (pttMode()) paint();
 });
-// 🔴 THE STUCK KEY: keyup never arrives if focus left with the key down, and PTT ships an open mic that says closed
+// the stuck key: keyup never arrives if focus left with the key down, and PTT would ship an open mic that says closed
 window.addEventListener('blur', () => { setPttHeld(false); if (pttMode()) paint(); });
