@@ -1,17 +1,11 @@
 // A tool, not a gate test: a compile-cost measurement in real three + Chromium; the module rules are xrpass-test.
-// VR enter/exit cost (notes: vr-exit-hang-commons.md — "why is entering and leaving VR such a heavy cost?"),
-// measured in REAL three (r186, WebGL backend) in real Chromium, no headset.
+// VR enter/exit compile cost, measured in real three (r186, WebGL backend) in real Chromium, no headset.
 //
-// three keys a render object on (object, material, render context, lights) — NOT the camera — but the XR
-// stereo ArrayCamera changes its dynamic cache key (`cameras.length`). So at the switch every object is
-// disposed and rebuilt IN THE SAME SLOT, the old pipeline loses its last user, and Pipelines._releaseProgram
-// deletes the compiled program. MEASURED (first run, 09-23): stock rebuilds the whole DESKTOP variant on the
-// first EXIT — the one it threw away at entry (60 materials: 61 programs, 314 ms in SwiftShader); after one round
-// trip it settles. So the first exit of every session recompiles every material that existed before entry.
-// This probe renders N distinct materials desktop → XR → desktop → XR → desktop and counts programs/pipelines
-// built per switch: stock; with client/lib/xrpass.js (stereo in its own pass); and xrpass + a desktop-side
-// pre-warm through a two-eye stand-in camera (xr.getCamera() has ZERO eyes before a session — the old warm
-// compiled the mono variant under a stereo name).
+// The XR stereo ArrayCamera changes three's render-object cache key (`cameras.length`), so at the switch every
+// object is rebuilt and the old pipeline's program is released: stock three recompiles every pre-entry material
+// on the first EXIT. This probe renders N distinct materials desktop → XR → desktop → XR → desktop and counts
+// programs/pipelines built per switch: stock; with client/lib/xrpass.js (stereo in its own pass); and xrpass + a
+// desktop-side pre-warm through a two-eye stand-in camera (xr.getCamera() has no eyes before a session).
 //
 // Run: node bench/xr-switch-compile-measure.mjs   (~30 s; run it under a memory guard)
 import { raw3Page, RAW3_IMPORTMAP } from '../test/harness/probe-harness.mjs';

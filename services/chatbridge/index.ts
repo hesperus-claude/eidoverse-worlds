@@ -20,16 +20,14 @@ import { helloOf } from "../../shared/protocol/hello.js";
 //
 // Loop safety (both directions, both by identity):
 //   world → Discord: entries whose actor is the bridge's own identity (the
-//     snapshot's cut.you) are skipped — that covers the echo of every line it
+//     snapshot's `actor`) are skipped — that covers the echo of every line it
 //     just spoke.
 //   Discord → world: messages from bots/webhooks are skipped — that covers
 //     the bridge's own posts (and any other bot; humans only by default).
 //
 // Env:
 //   WORLD_URL      ws(s)://host/ws            (default ws://127.0.0.1:8940/ws)
-//   WORLD_TOKEN    door key                    (JOIN_TOKEN accepted too — the
-//                                              one-secret-two-names footgun,
-//                                              issue #41, answered by taking both)
+//   WORLD_TOKEN    door key                    (JOIN_TOKEN accepted too, #41)
 //   WORLD_NAME     world to mirror             (default commons)
 //   BRIDGE_ID      in-world identity           (default "discord")
 //   DISCORD_TOKEN  bot token                   (omit with DRY_RUN=1)
@@ -56,7 +54,7 @@ const DRY_RUN = process.env.DRY_RUN === "1";
 const MAX_BACKLOG = 50;        // per direction; beyond this the oldest drop
 const MAX_LINE_CHARS = 1500;   // Discord → world cap (with honest ellipsis)
 const DISCORD_CHUNK = 1900;    // world → Discord split point (limit is 2000)
-const SEND_GAP_MS = 550;       // world say pacing: under the door's 20 says per 10 s per actor (authority/gate.js RATE), with room
+const SEND_GAP_MS = 550;       // world say pacing: under the door's 20 says per 10 s per actor (shared/protocol/authority/gate.js RATE_DEFAULT)
 const RATE_BACKOFF_MS = 2000;  // a say refused `rate` anyway goes back to the front of the queue and waits this long
 
 const log = (m: string) => console.log(`[chatbridge ${new Date().toISOString().slice(11, 19)}] ${m}`);
@@ -75,10 +73,7 @@ const hookName = (actor: string) =>
   (actor.replace(/discord/gi, "disc0rd").replace(/clyde/gi, "clyd3").trim() || "someone").slice(0, 80);
 
 // Discord rejects content that RENDERS empty (API 50006) even when JS trim()
-// keeps it — zero-width and other invisible code points survive .trim().
-// 2026-08-15 incident: one such say tripped the webhook error path, which
-// (being meant for deleted webhooks) stuck the mirror in plain-post mode
-// for 12 hours. Filter these before they ever reach the API.
+// keeps it: zero-width and other invisible code points survive .trim().
 const INVISIBLE =
   /[\s\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180b-\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0]/gu;
 const sendable = (s: string) => s.replace(INVISIBLE, "").length > 0;
@@ -92,12 +87,9 @@ async function postOnce(actor: string, chunk: string) {
       await postHook.send({ content: chunk, username: hookName(actor), ...quiet });
       return;
     } catch (e) {
-      // Only a webhook that is actually GONE justifies the (sticky) fallback:
-      // 10015 Unknown Webhook / 10003 Unknown Channel. Anything else — content
-      // errors (50006 empty, 50035 invalid form body), rate limits, hiccups —
-      // is about THIS send; the retry in pumpDiscord gets one more shot at it,
-      // and per-speaker names stay on. (2026-08-15: a content error here cost
-      // the mirror 12 hours of nameless posts.)
+      // Only a webhook that is actually GONE (10015 Unknown Webhook / 10003
+      // Unknown Channel) justifies the sticky fallback; anything else is about
+      // THIS send and pumpDiscord's retry gets one more shot at it.
       const code = (e as any)?.code;
       if (code !== 10015 && code !== 10003) throw e;
       log(`webhook gone (${(e as Error).message}) — falling back to plain posts`);
@@ -207,10 +199,8 @@ function connectWorld() {
       joined = true;
       myId = msg.actor ?? null;
       Object.assign(names, msg.names ?? {});
-      // live lines only: the channel is a window, not an archive. Everything at
-      // or before the snapshot's head is history (a reconnect replays none of
-      // it); the head, not a remembered high-water mark, so a reset world (a
-      // fresh, shorter log) isn't muted until it outgrows the old one
+      // live lines only: everything at or before the snapshot's head is history.
+      // The head, not a remembered high-water mark, so a reset world isn't muted.
       lastSeq = Number.isInteger(msg.seq) ? msg.seq : lastSeq;
       log(`joined "${msg.name}" as ${msg.you} (${msg.chat?.recentChat?.length ?? 0} recent lines skipped — live lines only)`);
       pumpWorld().catch((e) => log(`world pump error: ${e.message}`));

@@ -26,23 +26,15 @@
 //   VAD_DB         voiced threshold dBFS           (default -45; raise for noisy feeds)
 //   SPOOL          JSONL path of every line tried and every receipt (default
 //                  ./captionbot.spool.jsonl; SPOOL= empty for none). A restart
-//                  re-queues each line the world never confirmed, except
-//                  one whose overflow or refused row is on disk. Append-only:
-//                  rotate it between events. The spool is a promise, so it
-//                  fails closed: if a line's row cannot be written the line is
-//                  refused and intake halts, out loud, until a restart.
-//   SPOOL_BEST_EFFORT=1  the weaker promise: a spool failure is said once
-//                  (then every 100th line) and the line queues anyway — a
-//                  restart may then miss it. Either way a FILE run exits
-//                  non-zero when the spool's promise was not kept for a line
-//                  or for its end, or when lines were dropped for overflow.
-//   MAX_PENDING    queue bound in lines (default 600); past it the oldest
-//                  queued lines are dropped, out loud, into the spool as
-//                  overflow, and a FILE run that drops any exits non-zero
+//                  re-queues what the world never confirmed. Append-only:
+//                  rotate it between events. Fails closed: an unwritable row
+//                  refuses the line and halts intake until a restart (see world.ts).
+//   SPOOL_BEST_EFFORT=1  queue the line anyway on a spool failure (a restart may miss it)
+//   MAX_PENDING    queue bound in lines (default 600); past it the oldest are
+//                  dropped into the spool as overflow
 //   DRY_RUN=1      no world: print each line as it would be sent
-//   TRANSCRIPT     optional local JSONL copy of every final line — a
-//                  convenience for the operator, not the record: the world
-//                  log is the record
+//   TRANSCRIPT     optional local JSONL copy of every final line (the world log is the record)
+//   A FILE run exits non-zero when the spool's promise was not kept or lines were dropped.
 import { appendFileSync, readFileSync } from 'node:fs';
 import { ScribeSttProvider, AssemblyAiSttProvider } from '@animalabs/voice-kit';
 import { AudioTap } from './tap.ts';
@@ -93,15 +85,10 @@ tap.attach(captioner);
 const file = env('FILE');
 if (file) {
   if (file.endsWith('.jsonl')) {
-    // a saved TRANSCRIPT (one {t0, t1, text, speaker?} per line, as this bot
-    // writes it): the lines go through the same door as live ones, with no
-    // audio decoded and no STT session opened. What an operator uses to
-    // re-run an event's captions against a world, and what the CLI process
-    // test drives the real exit owner with.
+    // a saved TRANSCRIPT ({t0, t1, text, speaker?} per line): the lines go
+    // through the same door as live ones, with no audio and no STT
     log(`replaying lines from ${file}`);
-    // every row is checked before any is sent, with the caption checks the
-    // door applies: a row that isn't a caption line fails the run with its
-    // line number, rather than being counted here and dropped at the door
+    // every row is checked before any is sent: a bad row fails the run with its line number
     const replay: Caption[] = [];
     const refuse: (n: number, why: string) => never = (n, why) => { log(`⛔ ${file}:${n}: ${why}; nothing was sent`); world?.close(); process.exit(1); };
     readFileSync(file, 'utf8').split('\n').forEach((row, i) => {
@@ -128,9 +115,7 @@ if (file) {
     : ' (in the spool)';
   log(`done — ${lines} lines, ${captioner.lateRevisions} late revisions dropped${world ? `; ${world.acked} confirmed, ${world.pendingCount} unconfirmed${where}${world.spoolRefused ? `, ${world.spoolRefused} REFUSED (spool unwritable: ${world.spoolFailed})` : ''}${world.overflow ? `, ${world.overflow} DROPPED for overflow` : ''}` : ''}`);
   world?.close();
-  // a batch caller reads the exit status: a run that refused lines, or
-  // queued lines or its end without their rows, did not keep the spool's
-  // promise, and lines dropped for overflow didn't reach the world
+  // exit non-zero when the spool's promise was not kept or lines were dropped for overflow
   process.exit(world && (world.spoolLost || world.overflow) ? 1 : 0);
 } else {
   const url = env('STREAM_URL', 'rtsp://127.0.0.1:8554/screen');

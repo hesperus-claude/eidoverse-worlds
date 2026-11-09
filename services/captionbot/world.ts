@@ -5,51 +5,30 @@
 // world (shared/protocol/replica.js), so `speaker` is the operator's word, never
 // the bot's guess.
 //
-// RECEIPTS (Mica, #187 review B3). A line is not done when it is sent; it is
-// done when the door answers ok. Until then it is PENDING: kept in memory,
-// kept on disk in the spool, and resent after a disconnect or a silent
-// timeout. The door refuses a duplicate n before anything is written
-// (shared/captions.js captionRefusal), so a resend can never write twice within
-// the session it was sent in (after an end or a takeover the line may land again) —
-// that refusal is read here as the receipt it is.
+// RECEIPTS. A line is done when the door answers ok, not when it is sent.
+// Until then it is PENDING: in memory, on disk in the spool, and resent after
+// a disconnect or a silent timeout. The door refuses a duplicate n
+// (shared/captions.js captionRefusal), and that refusal is read as the receipt.
 //
 // ORDER. One line in flight at a time, FIFO, paced under the door's rate
-// (60 entries per 10 s; a caption is two): a burst of finals queues rather
-// than tripping the limiter. WHO the captioner is, is the server's fact, not
-// ours: it stamps this connection's leg generation on every line and the bag
-// follows the live leg (a same-identity join is a takeover). A restart's old-session tail still
-// drains first, FIFO, so the window switches exactly once.
+// (60 entries per 10 s; a caption is two). The server stamps the captioner's
+// leg generation on every line; a restart's old-session tail drains first.
 //
-// BACKPRESSURE. The queue is BOUNDED (`maxPending`, default 600 lines ≈ five
-// minutes at the pace). Past it the OLDEST queued lines are dropped, each
-// one written to the spool as `overflow` and counted out loud — never a
-// silent drop, never unbounded memory. The spool (`spool` path, JSONL,
-// append-only) is the bot's durable record of what it tried and what the
-// world confirmed; a restart re-queues each line it never saw confirmed,
-// except one whose overflow or refused row is on disk.
+// BACKPRESSURE. The queue is bounded (`maxPending`, default 600 lines). Past
+// it the OLDEST lines are dropped, each written to the spool as `overflow`
+// and counted out loud. The spool (JSONL, append-only) is the durable record
+// of what was tried and confirmed; a restart re-queues each line never seen
+// confirmed, except one whose overflow or refused row is on disk.
 //
-// THE SPOOL IS A PROMISE, SO IT FAILS CLOSED (Mica, #187 round-two
-// follow-up). A line is queued only once its `queued` row is on disk; if
-// that write fails, the line is REFUSED and intake halts — new captions are
-// counted and refused, out loud, until the operator fixes the disk and
-// restarts (the replay then picks up exactly what was confirmed). What is
-// already queued still drains: it is in memory and on disk. `end` is not a
-// line — a perception clear, idempotent at the door — so it goes through
-// even with the spool down; when its row can't be written that is said and
-// counted (`endMissed`), since a restart before the world confirms it
-// replays the session's lines without the clear. The other rows (acked,
-// refused, overflow) are bookkeeping, so those log and continue: a failed
-// acked or refused row means a restart may resend a line that already
-// landed, which the door's dedupe makes harmless, and a failed overflow row
-// means a restart sends a line this run reported dropped. `spoolBestEffort` (env
-// SPOOL_BEST_EFFORT=1) states the weaker promise instead: a `queued` row
-// that cannot be written is said once (then every 100th, like the refusals)
-// and the line queues anyway — counted in `spoolMissed`, because a restart
-// before it is confirmed loses it.
-//
-// Captions are durable world testimony like `say`; `end` clears current
-// perception, not history. This client keeps the spool (every line it tried, with its
-// receipt) until it is acknowledged or overflowed.
+// THE SPOOL FAILS CLOSED. A line is queued only once its `queued` row is on
+// disk; if that write fails the line is REFUSED and intake halts until a
+// restart (what is already queued still drains). `end` is a perception
+// clear, idempotent at the door, so it goes through with the spool down
+// (counted in `endMissed`). The bookkeeping rows (acked, refused, overflow)
+// log and continue: a lost one means at worst a resend the door dedupes, or
+// a resend of a line this run reported dropped. `spoolBestEffort`
+// (SPOOL_BEST_EFFORT=1) queues a line whose row failed anyway, counted in
+// `spoolMissed`: a restart before confirmation loses it.
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { normalizeCaptionArgs, mintSession } from '../../shared/captions.js';
 import { makeReplica } from '../../shared/protocol/replica.js';
@@ -72,7 +51,7 @@ export interface WorldOptions {
   spoolBestEffort?: boolean;
   /** Queue bound, in lines (default 600). */
   maxPending?: number;
-  /** Minimum ms between sends (default 500: 2/s, under the 12-per-4-s door). */
+  /** Minimum ms between sends (default 500: 2/s, under the door's 60 entries per 10 s). */
   paceMs?: number;
   /** Ms to wait for a receipt before resending (default 5000). */
   ackTimeoutMs?: number;
@@ -312,10 +291,8 @@ export class WorldClient {
       this.settle(p, { state: 'refused', key: p.key, why: error, at: Date.now() });
       return;
     }
-    // not a captioner of this screen / screen gone / a spectator: nothing will
-    // land until someone acts — hold everything, say so once, and try again
-    // later …and a NEWER leg holding the screen (another captioner joined
-    // after us): ours is superseded until we rejoin; hold, do not drop
+    // not a captioner of this screen / screen gone / spectator / superseded by a
+    // newer leg: nothing lands until someone acts — hold, say so once, retry later
     if (/^rights:|^not-found:|^no-such:|^spectator:|^banned:|superseded captioner/.test(error)) {
       if (this.ackTimer) { clearTimeout(this.ackTimer); this.ackTimer = null; }
       this.inflight = null; this.pending.unshift(p);
