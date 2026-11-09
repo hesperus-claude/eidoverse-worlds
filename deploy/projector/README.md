@@ -1,7 +1,7 @@
 # The projector appliance
 
 mediamtx, configured as the transport for the eidoverse screen — layer 2,
-route A of `anima_dev/eidoverse_projector_design.md`. It is an appliance you
+route A of `anima_dev/eidoverse_projector_design.md` (outside this repo). It is an appliance you
 plug in for an event, not an organ of the world: the world server is
 untouched, the client plays a URL, and the caption bot reads audio from it.
 
