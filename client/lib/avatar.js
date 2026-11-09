@@ -118,8 +118,8 @@ export const WING_POWER = {
   sweepPhase: 0.25,
 };
 
-// THE VIGIL POSTURE (flight-spec-v0 §1 "fold_down()"; §2 "distinct silhouette; readable at 50m",
-// test T6). A POSE, NOT A CLIP, for the flap's reasons; it composes through _flap, so folding
+// THE VIGIL POSTURE (fold_down: a distinct silhouette, readable at 50 m; test/client/flight-test.ts T6;
+// the flight spec it came from is not in this repo). A POSE, NOT A CLIP, for the flap's reasons; it composes through _flap, so folding
 // inherits the ragdoll handover. Read out of the authored Blender action (wings-folded_1.asset.blend):
 // quaternions LOCAL to each bone's rest, in three.js [x,y,z,w] order (Blender stores [w,x,y,z]).
 // The upper and lower roots were eased about their own axes after authoring (lower 10 deg, upper
