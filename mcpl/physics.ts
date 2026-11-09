@@ -89,9 +89,8 @@ function loadSim(): Promise<typeof simMods> {
   return simLoading;
 }
 
-/** Hand the sim the world's ground truth: the same heightAt the walking
- *  clamp uses. Null restores the bare stage (flat zero). Soft no-op when the
- *  sim is unavailable — a slumping agent has no clamp to feed. */
+/** Hand the sim the world's ground: the same heightAt the walking clamp uses. Null restores flat zero. No-op when
+ *  the sim is unavailable. */
 export async function setHeightField(fn: ((x: number, z: number) => number) | null) {
   const m = await loadSim();
   if (!m) return;
@@ -489,14 +488,12 @@ export class HeadlessBody {
     // hips-to-origin offset from it, so a cached one is wrong by any lift. A handover seed (world y) continues the
     // other machine's joint positions and velocities.
     const seed = opts.sim && Array.isArray(opts.sim.j) ? { ...opts.sim } : null;
-    // Free the previous body FIRST: a Bullet body owns a wasm world, and dropping the reference leaks it (OOM after
-    // repeated drag releases). dispose() is idempotent.
+    // free the previous body first: a Bullet body owns a wasm world, and dropping the reference leaks it
     this.rd?.dispose?.();
     this.rd = new this.m.Body(this.av, lean, this.av.restBonePositions(), seed);
     if (this.rd) this.rd.waterSource = this.waterSource;   // its own world's water, read live each step
     for (const p of opts.pins ?? []) this.setPin(p.j, p.at);
-    // hipsOffset (render root below hips) is a property of the rig and must match across builds; a drift shows only
-    // to others, as floating or sinking, so log it under BODY_DEBUG
+    // hipsOffset is the rig's and must match across builds; a drift shows only to others (floating or sinking)
     if (process.env.BODY_DEBUG && this.rd) {
       console.log(`[physics] ${opts.sim ? "handover" : "fresh"} build: `
         + `hipsOffset=${this.rd.hipsOffset?.toFixed(4)} `
