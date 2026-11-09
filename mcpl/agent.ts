@@ -125,6 +125,8 @@ import { DEFAULT_BODY } from "../shared/avatardefs.js";
 
 /** The body's clock: one stride of shared/mover.js (the one walker: the client's and the authority's too) per tick. */
 const TICK_MS = 100;
+/** The sequencer a body joins when neither its options nor WORLD_URL name one. */
+export const DEFAULT_WORLD_URL = "ws://127.0.0.1:8940/ws";
 /** E1: a walk asks the authority for the next stretch (PERMIT_STEP m; its track takes TRACK.cap m at most at once) when the
  *  body is within PERMIT_AHEAD m of the end of what it has accepted, so a run never waits on a local server. */
 const PERMIT_STEP = TRACK.cap / 2, PERMIT_AHEAD = 1;
@@ -746,7 +748,7 @@ export class WorldAgent {
 
   constructor(opts: { url?: string; name?: string; displayName?: string; dropMentionQualifiers?: boolean; world?: string; avatar?: string; agentToken?: string; declares?: string | null; tickEveryMs?: number } = {}) {
     this.tickEveryMs = opts.tickEveryMs ?? TICK_MS;
-    this.url = opts.url ?? process.env.WORLD_URL ?? "ws://127.0.0.1:8940/ws";
+    this.url = opts.url ?? process.env.WORLD_URL ?? DEFAULT_WORLD_URL;
     this.name = opts.name ?? process.env.AGENT_NAME ?? "claude";
     // The token's display name ("Artie (kube)"): a second form the body
     // answers to in chat. The id stays the addressing handle everywhere else.

@@ -26,7 +26,7 @@ import {
 import {
   CAP, capabilityMatches, MCPL_ADVERTISEMENT, FEATURE_SETS,
 } from "./declaration.ts";
-import { WorldAgent } from "./agent.ts";
+import { WorldAgent, DEFAULT_WORLD_URL } from "./agent.ts";
 import { shown } from "../shared/shown.js";
 import { toolList, handleTool, type ToolCtx } from "./tools.ts";
 import { pingDelivery, type WirePing } from "./ping-wire.ts";
@@ -173,7 +173,7 @@ class Session {
       dropMentionQualifiers: this.auth.dropMentionQualifiers ?? true,
       world,
       avatar: chosenAvatar[this.auth.id] ?? this.auth.avatar,
-      url: process.env.WORLD_URL ?? "ws://127.0.0.1:8940/ws",
+      url: process.env.WORLD_URL ?? DEFAULT_WORLD_URL,
       // the bearer that opened THIS door: the sequencer verifies the name against it (agent names are reserved there)
       agentToken: this.agentToken,
     });
@@ -905,7 +905,7 @@ const LIFECYCLE_NOT_GRANTED = "your host hasn't granted this door channels.lifec
 type AccessAnswer = { exists: boolean; you: "enter" | "watch" | "none"; why?: string; found?: { ok: boolean; why?: string } };
 async function accessProbe(name: string, token: string): Promise<AccessAnswer | null> {
   // URL surgery, not string surgery: a WORLD_URL with a query string or mount path defeats a regex replace
-  const u = new URL(process.env.WORLD_URL ?? "ws://127.0.0.1:8940/ws");
+  const u = new URL(process.env.WORLD_URL ?? DEFAULT_WORLD_URL);
   u.protocol = u.protocol === "wss:" ? "https:" : "http:";
   u.pathname = u.pathname.replace(/\/ws$/, "") + "/access";
   u.search = `?world=${encodeURIComponent(name)}`;
