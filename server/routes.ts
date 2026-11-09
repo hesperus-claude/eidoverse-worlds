@@ -76,6 +76,7 @@ import { readCapped, readCappedBytes } from "./reqbody.ts";
 
 import { recordComponents } from "../shared/protocol/view.js";
 import { WORLD_NAME_RE } from "./limits.ts";
+import { sha256 } from "../shared/protocol/hash.js";
 /** What the routes need from Bun's server object: the WS upgrade and the socket address (X-Real-IP's fallback). */
 export type Srv = {
   upgrade(req: Request, opts?: { data?: unknown }): boolean;
@@ -766,7 +767,7 @@ const ROUTES: Route[] = [
             // the address HASHED, like everywhere else this server keeps one : enough to tell one
             // visitor's lines from another's, never the address itself; and the beacon can't write its own ts/addr/ip
             const ip = addressOf(req, srv);
-            const addr = new Bun.CryptoHasher("sha256").update(`eidoverse-perflog:${ip}`).digest("hex").slice(0, 24);
+            const addr = sha256(`eidoverse-perflog:${ip}`).slice(0, 24);
             const { ts: _t, ip: _i, addr: _a, ...line } = JSON.parse(body) ?? {};
             appendFileSync(dest, JSON.stringify({ ts: Date.now(), addr, ...line }) + "\n");
           }

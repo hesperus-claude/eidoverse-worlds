@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { OPT_DIR, ROOT } from "./config.ts";
 import { atomicWrite } from "./fsutil.ts";
 import { windowLimiter } from "./ratewindow.ts";
+import { sha256Bytes as sha256 } from "../shared/protocol/hash.js";
 
 /** Bump when what a check finds changes (server/buildcheck.ts, the navgrid, the collider rules): stored reports from before are stale. */
 export const CHECK_VERSION = 4;   // 4: the walking body is MOVER.body (radius 0.2, was 0.32)
@@ -79,7 +80,6 @@ export function checkScale(s: unknown): number {
   return Math.round(Math.min(CHECK_SCALE.max, Math.max(CHECK_SCALE.min, n)) * 100) / 100;
 }
 
-const sha256 = (bytes: Uint8Array) => new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 const statId = (file: string) => { const st = statSync(file); return `${st.size}|${st.mtimeMs}|${st.ctimeMs}|${st.ino}`; };
 
 /** The build check for the model at `file`, at `scale`: cached, else queued and run. Rejects when the model can't be

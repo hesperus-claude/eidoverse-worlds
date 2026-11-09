@@ -22,6 +22,7 @@ import { parseGlb, rasterDims, GLB_MAGIC, CHUNK_JSON, CHUNK_BIN, KTX2_ID, align4
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename, dirname } from "node:path";
+import { sha256Bytes } from "../shared/protocol/hash.js";
 
 // ---- ONE libvips per process ------------------------------------------------
 // Never import "sharp" by bare specifier here: a second libvips in-process corrupts encoder output into bytes that
@@ -561,7 +562,7 @@ export async function optimizeGlbLod(bytes: Uint8Array, encoder: string | null, 
     return { out: null, verdict: "__no_encoder__", before, after, ...none };   // env, the CLI exit-3s
   }
   // identity: the variant SAYS what it is a variant of, and how it was made
-  const srcHash = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+  const srcHash = sha256Bytes(bytes);
   let meshoptVer = "unknown";
   try { meshoptVer = JSON.parse(await Bun.file(Bun.resolveSync("meshoptimizer/package.json", import.meta.dir)).text()).version; } catch { /* stays unknown */ }
   // the source's extras survive; ours ride alongside

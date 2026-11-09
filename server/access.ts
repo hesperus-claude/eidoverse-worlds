@@ -25,6 +25,7 @@ import { type World, type Client } from "./world.ts";
 import { WORLD_NAME_RE } from "./limits.ts";
 import { type OldWorld } from "./oldworlds.ts";
 import { lookup, ownerIn, type IndexEntry } from "./worldindex.ts";
+import { sha256 } from "../shared/protocol/hash.js";
 
 /** Close code for "this world is not open to you": refused at the door, or removed because access ended or changed.
  *  Clients don't redial it (4006 is moderation's, 4005 a bad link). */
@@ -182,7 +183,7 @@ export function bearerCaller(req: Request): Who | null | undefined {
 export const bearerOf = (req: Request): string => /^Bearer\s+(\S+)$/i.exec(req.headers.get("authorization") ?? "")?.[1] ?? "";
 /** A request's hashed address (never kept raw), as a guest's ban names it: the upgrade and the HTTP reads hash alike. */
 export const hashedAddress = (req: Request, srv?: Parameters<typeof addressOf>[1]) =>
-  new Bun.CryptoHasher("sha256").update(`eidoverse-addr:${addressOf(req, srv)}`).digest("hex").slice(0, 24);
+  sha256(`eidoverse-addr:${addressOf(req, srv)}`).slice(0, 24);
 /** Who a read is for: the caller, else a guest at their hashed address, so a guest's address ban holds at the reads. */
 export function httpVisitor(req: Request, srv?: Parameters<typeof addressOf>[1]): Who {
   return httpCaller(req) ?? { account: null, addr: hashedAddress(req, srv) };

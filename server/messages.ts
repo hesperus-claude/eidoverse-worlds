@@ -19,6 +19,7 @@ import { screenshots } from "./screenshots.ts";
 import { REMOVED_VERBS } from "../shared/protocol/verbspec.js";
 import { serverBans, saveServerBans, banKey, ADDR_BAN_MS, bansLiftedBy, serverBansText, takePending, notPersisted } from "./moderation.ts";
 import { isOwner } from "../shared/protocol/roles.js";
+import { sha256 } from "../shared/protocol/hash.js";
 
 /** Who a presence message (puppet, bodydrag, typing) is for. A sender that knows the identity names it by its opaque actor id
  *  (`targetActor` / `toActor`); then that identity's embodied leg is the target whatever name anyone wears, and the name beside
@@ -257,7 +258,7 @@ export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
       return;
     }
     const text = String((e.args as Record<string, unknown>)?.text ?? "");
-    const want = new Bun.CryptoHasher("sha256").update(text).digest("hex");
+    const want = sha256(text);
     if (digest !== want) {
       ws.send(JSON.stringify({ type: "error", error: "attest digest mismatch" }));
       return;

@@ -15,6 +15,7 @@ import { ingestHeightmap } from "./heightmap.ts";
 import { readCappedBytes } from "./reqbody.ts";
 import { checkFile } from "./buildcheck-queue.ts";
 import { envNumber } from "./limits.ts";
+import { sha256Bytes } from "../shared/protocol/hash.js";
 
 /** What the handler needs from Bun's server object, structurally: the socket address behind the proxy. */
 type UploadSrv = { requestIP(req: Request): { address: string } | null };
@@ -436,7 +437,7 @@ async function uploadBy(req: Request, url: URL, srv: UploadSrv): Promise<Respons
     if (!kind) return new Response("not a PNG, JPEG or WebP image (judged by content, not by name)", { status: 415 });
     // a decompression bomb (a tiny file that decodes to 16k × 16k) is refused before any viewer decodes it
     { const no = imageSizeRefusal(body, kind); if (no) return new Response(no.why, { status: no.status }); }
-    const ihash = new Bun.CryptoHasher("sha256").update(body).digest("hex").slice(0, 16);
+    const ihash = sha256Bytes(body).slice(0, 16);
     const idir = join(OPT_DIR, "store", "images");
     mkdirSync(idir, { recursive: true });
     const irel = `store/images/${ihash}.${kind}`;
@@ -463,7 +464,7 @@ async function uploadBy(req: Request, url: URL, srv: UploadSrv): Promise<Respons
     // WORLD is still the owner's `terrain` verb naming the grid.
     if (body.length > IMAGE_CAP) return new Response(`heightmap too large (${IMAGE_CAP / 1e6}MB cap)`, { status: 413 });
     if (sniffImage(body) !== "png") return new Response("a heightmap must be a PNG (16-bit grayscale is best)", { status: 415 });
-    const hhash = new Bun.CryptoHasher("sha256").update(body).digest("hex").slice(0, 16);
+    const hhash = sha256Bytes(body).slice(0, 16);
     const r = ingestHeightmap(body, hhash);
     if ("error" in r) return new Response(r.error, { status: r.status });
     console.log(`[upload] heightmap ${r.grid} (${r.w}×${r.h}, ${r.bits}-bit) by ${upBy}`);
@@ -474,7 +475,7 @@ async function uploadBy(req: Request, url: URL, srv: UploadSrv): Promise<Respons
     // BYTES (the sound allow-list keys on the extension)
     const kind = sniffAudio(body);
     if (!kind) return new Response("not an MP3, Ogg, WAV, WebM or M4A audio file (judged by content, not by name)", { status: 415 });
-    const ahash = new Bun.CryptoHasher("sha256").update(body).digest("hex").slice(0, 16);
+    const ahash = sha256Bytes(body).slice(0, 16);
     const adir = join(OPT_DIR, "store", "audio");
     mkdirSync(adir, { recursive: true });
     const arel = `store/audio/${ahash}.${kind}`;
@@ -549,7 +550,7 @@ async function uploadBy(req: Request, url: URL, srv: UploadSrv): Promise<Respons
     return new Response(JSON.stringify({ name, path: rel }),
       { headers: { "content-type": "application/json" } });
   }
-  const hash = new Bun.CryptoHasher("sha256").update(body).digest("hex").slice(0, 16);
+  const hash = sha256Bytes(body).slice(0, 16);
   const dir = join(OPT_DIR, "store");
   mkdirSync(dir, { recursive: true });
   const rel = `store/${hash}.glb`;

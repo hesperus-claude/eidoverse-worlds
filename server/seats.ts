@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { validateProfile, profileStatus } from "../client/lib/seatcore.js";
 import { OPT_DIR, LIBRARY_DIR, PATCH_DIR } from "./config.ts";
 import { worlds } from "./world.ts";
+import { sha256Bytes } from "../shared/protocol/hash.js";
 
 export const SEAT_POSE = "sitchair";
 export const CLIP_REL = "eidoverse/assets/animations/sitting_normal_chair.vrma";
@@ -297,7 +298,7 @@ export class SeatStore {
     const hit = this.shaCache.get(path);
     if (hit && hit.mtime === st.mtimeMs && hit.size === st.size) return hit.sha;
     try {
-      const sha = new Bun.CryptoHasher("sha256").update(readFileSync(path)).digest("hex");
+      const sha = sha256Bytes(readFileSync(path));
       this.shaCache.set(path, { mtime: st.mtimeMs, size: st.size, sha });
       return sha;
     } catch { return null; }

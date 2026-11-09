@@ -7,8 +7,8 @@
 // Nothing a world needs to load depends on this index: it resolves addresses stored by older translations and /eido/sha256/<hex>.
 import fs from "node:fs";
 import path from "node:path";
-import crypto from "node:crypto";
 import { OPT_DIR, LIBRARY_DIR } from "./config.ts";
+import { sha256Bytes } from "../shared/protocol/hash.js";
 
 const INDEX = path.join(OPT_DIR, "eido-index.json");
 let index: Record<string, string> | null = null, indexMtime = -1;
@@ -22,7 +22,7 @@ function load(): Record<string, string> {
 const hashed = new Map<string, { size: number; mtimeMs: number; hex: string }>();
 const sha = (p: string) => { const st = fs.statSync(p), h = hashed.get(p);
   if (h && h.size === st.size && h.mtimeMs === st.mtimeMs) return h.hex;
-  const hex = crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex");
+  const hex = sha256Bytes(fs.readFileSync(p));
   if (hashed.size > 4096) hashed.clear();
   hashed.set(p, { size: st.size, mtimeMs: st.mtimeMs, hex }); return hex; };
 const inside = (base: string, rel: string) => { const p = path.normalize(path.join(base, rel)); return p.startsWith(base + path.sep) ? p : null; };
