@@ -15,7 +15,7 @@ Start with [README](../README.md) (what this is, how to run it), [AGENTS](../AGE
 
 ## Operator — running a server
 
-[TRANSLATING-OLD-WORLDS](operator/TRANSLATING-OLD-WORLDS.md) · [KTX2-ENCODER](operator/KTX2-ENCODER.md) ·
+[RUNNING-A-SERVER](operator/RUNNING-A-SERVER.md) · [TRANSLATING-OLD-WORLDS](operator/TRANSLATING-OLD-WORLDS.md) · [KTX2-ENCODER](operator/KTX2-ENCODER.md) ·
 [NATIVE-LOGIN](operator/NATIVE-LOGIN.md) · [REMOTE-SCREENSHOTS](operator/REMOTE-SCREENSHOTS.md) · [SFU-OPERATOR](operator/SFU-OPERATOR.md) ·
 [SHOW-RUNBOOK](operator/SHOW-RUNBOOK.md)
 
