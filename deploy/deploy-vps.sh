@@ -24,7 +24,7 @@ if ! git diff --quiet "$before" "$after" -- client/package.json client/bun.lock 
   (cd client && "$BUN" install)
 fi
 # mcpl/'s siblings (mcpl-core-ts, which the door imports, and agent-framework) and services/captionbot's: run.ts pins them,
-# checks them out in tools/protocol/.siblings/ (gitignored, so the reset keeps them), builds them, and installs mcpl/ and
+# checks them out in .siblings/ (gitignored, so the reset keeps them), builds them, and installs mcpl/ and
 # services/captionbot/ with --frozen-lockfile; at the pin it only re-checks. Every deploy, since a pin can move in run.ts alone. A
 # plain `bun install` in mcpl/ dropped a missing optional sibling without a word and the door stopped on restart; this
 # fails here instead, under set -e, before the restarts.

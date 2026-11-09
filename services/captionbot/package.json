@@ -9,6 +9,6 @@
     "test": "bun ../../test/services/captionbot-test.ts"
   },
   "dependencies": {
-    "@animalabs/voice-kit": "file:../../tools/protocol/.siblings/voice-kit"
+    "@animalabs/voice-kit": "file:../../.siblings/voice-kit"
   }
 }

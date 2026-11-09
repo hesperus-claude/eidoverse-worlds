@@ -65,4 +65,4 @@ __pycache__/
 notes/surface-parity/
 
 # the protocol gate's sibling checkouts (run.ts --siblings: mcpl/ and services/captionbot/ take them by file:, deploy-vps.sh too)
-tools/protocol/.siblings/
+/.siblings/
