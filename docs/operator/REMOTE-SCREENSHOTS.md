@@ -97,7 +97,7 @@ player viewport.
 ## Validation / deployment
 
 ```sh
-bun test ./tools/screenshots-test.ts          # the broker: queue, deadlines, retryable failures, roamers, the sweep
+bun test/harness/bun-test.ts test/server/screenshots-test.ts   # the broker: queue, deadlines, retryable failures, roamers, the sweep
 bun test/server/screenshots-wire-test.ts            # the real route and sockets, a throwaway sequencer; each outcome's status and log line, SNAP_TIMEOUT_SEC
 bun test/client/snap-settle-test.ts               # the renderer waits for the world as long as `wait` says
 bun test/shared/door-wording-test.ts              # the MCPL screenshot tool: its words and its retries
@@ -115,6 +115,8 @@ provides a local-only test pose controller on :18994. Run Unreal's
 `Tools/eidoverse/capture_remote_views.ts` to collect first/third/selfie, surface,
 and pitched underwater images in a new temporary directory. No production
 identity, inhabited world, or production state is used for these tests.
+
+### Deployment record, 2026-09-10 (historical: the commits named here are long since upstream)
 
 Deployed with operator approval on 2026-09-10 (2026-09-11 03:36 UTC): targeted
 commit `2bd5e24b767452224802a735f90ab839b2fa2acc`, based on production native-login

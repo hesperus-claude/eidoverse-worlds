@@ -143,15 +143,8 @@ Events (`e`): every event has `on`.
   script whose scope covers the thing (`self` on the thing itself; `subtree` or ids for a game that watches its pieces);
 - `say`: `by`, `text`, `to?`, `seq`;
 - `enter` / `leave`: `by`, live only: the act records no identity for an arrival or a departure (no `trigger` actor, no
-  `event.by`), so the log never holds who came and went because a script listened. An auditor re-runs it with a
-  minted-shaped stand-in (`u-` and 20 lowercase) and, if the result differs from the log, again with one of another valid
-  shape (both valid identities, nobody's; an id never says what holds it, PROTOCOL §6a). Each part that differs from the
-  log (its writes, its says, its `world.use` calls) is judged on its own: a part the two agree on is flagged `rerun-anon`,
-  naming it (a difference to look at, never `rerun`, since two stand-ins can't prove the result is the same for
-  everyone); the act is listed `skipped` when every differing part differs between the two, when the two read
-  differently, or when the second re-run fails. A script that treats ids of one shape differently from another is fine:
-  the part that turns on the shape differs between its two re-runs, and is listed, not accused; another part the two
-  agree on and the log doesn't is still flagged `rerun-anon`;
+  `event.by`), so the log never holds who came and went because a script listened. How an auditor re-runs one with
+  stand-ins: "Auditing a script", below;
 - `changed:<comp>`: `id`, `comp`, `by` (whose request caused it), `seq` (the change entry). It fires for a change to that
   component on any id in the script's scope, by anyone but the script itself;
 - `tick`: nothing more. `wake`: `slept` (seconds asleep).
