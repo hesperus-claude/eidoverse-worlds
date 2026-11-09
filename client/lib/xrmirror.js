@@ -1,15 +1,10 @@
-// Desktop view while presenting. By default the desktop canvas goes black in VR — WebXR owns the framebuffer. This
-// system draws the scene once more, onto the canvas, from a desktop camera: 'first' = where the headset looks,
-// 'third' = behind-and-above the body, looking at it. After the eye render: renderer.xr.enabled OFF, render the scene
-// to the canvas, restore.
+// Desktop view while presenting. The desktop canvas goes black in VR (WebXR owns the framebuffer), so after the eye
+// render this draws the scene once more onto the canvas from a desktop camera: 'first' = where the headset looks,
+// 'third' = behind and above the body. Settings › VR › desktop view (vrpanel.js).
 //
-// The catch: three's WebGPURenderer renders the canvas through an intermediate target sized from its CanvasTarget,
-// and XRManager._setXRLayerSize overwrites that CanvasTarget's size with the XR LAYER's for the whole session
-// (Renderer.js "TODO: Find a better solution to resize the canvas when in XR") — so a canvas pass would draw through
-// a target the size of BOTH EYES and cost a second stereo frame. For this pass only, the CanvasTarget gets the
-// canvas's real size back, and the XR size is restored before the next eye frame.
-// Never read the XR layer's framebuffer (blitFramebuffer): on Windows that surface belongs to the SteamVR
-// compositor, and touching it froze the GPU.
+// three's XRManager sizes the CanvasTarget to the XR layer for the whole session, so a canvas pass would draw through
+// a target the size of both eyes; for this pass only the CanvasTarget gets the canvas's real size back.
+// Never read the XR layer's framebuffer (blitFramebuffer): on Windows it belongs to the SteamVR compositor and froze the GPU.
 import { THREE, renderer, scene, camera } from './core.js';
 import { isPresenting, xrPrefs, withHeadShown } from './xr.js';
 import { myState } from './controller.js';
@@ -35,10 +30,8 @@ function onCanvas(fn) {
   // this frame's shadow maps are already drawn for the eyes: the desk pass samples them instead of drawing them again
   const shadowLights = casters().map((l) => [l, l.shadow.autoUpdate]); for (const [l] of shadowLights) l.shadow.autoUpdate = false;
   renderer.xr.enabled = false;
-  // The pass runs after this frame's eye render, whose context the backend still holds. finishRender restores the
-  // previous context, and that XR framebuffer no longer resolves: WebGLState.drawBuffers → WeakMap.set(undefined)
-  // on the SECOND pass (xr-mirror-probe; the same throw sky_baked's XR pump documents). Same cure as the pump: null the
-  // pointers, never restore them — the next XR frame's beginRender sets its own.
+  // the backend still holds the eye render's context, whose XR framebuffer no longer resolves (drawBuffers throws on
+  // the second pass): null the pointers, never restore them — the next XR frame's beginRender sets its own
   if (renderer.backend) renderer.backend._currentContext = null;
   renderer._currentRenderContext = null;
   try {
@@ -48,8 +41,7 @@ function onCanvas(fn) {
     ct._viewport.set(0, 0, cw / pr, ch / pr); ct._scissor.set(0, 0, cw / pr, ch / pr); ct._scissorTest = false;
     fn();
   } catch (e) {
-    // a pass that threw mid-render left three's call depth raised and its context pointers on the dead pass; put them
-    // back, or every later render keys its contexts one level deep and rebuilds every render object (a headset hitch)
+    // a throw mid-render leaves three's call depth raised and its context pointers on the dead pass: put them back
     if (typeof depth === 'number') renderer._callDepth = depth;
     if (renderer.backend) renderer.backend._currentContext = null;
     renderer._currentRenderContext = null;
@@ -72,15 +64,11 @@ function casters() {
 }
 
 let slowFrames = 0, lastTick = 0, mirrorKilled = false, teed = false, failed = false;
-const stats = (globalThis.__xrMirror = { passes: 0, last: null });   // harness: xr-mirror-probe counts the mirror's own passes
-// holdKill: a HARNESS switch (xr-mirror-probe) so the killswitch can't end the specimen mid-sample on a slow headless
-// frame clock. It still counts and records wouldKill; the probe checks the switch itself in a separate run.
+const stats = (globalThis.__xrMirror = { passes: 0, last: null });   // test/client/xr-mirror-probe.mjs; its holdKill disarms the killswitch (wouldKill still recorded)
 
-// WHY THE DESKTOP STOPPED, said for as long as it's true: a banner centred on the desktop from the moment the mirror
-// switches itself off until the session ends (a toast is too easily missed by whoever is at the monitor).
+// A banner on the desktop, from the moment the mirror switches itself off until the session ends (a toast is too easily
+// missed at the monitor). Mirror off by choice gets a neutral 'in VR' label instead, so black doesn't read as a crash.
 let banner = null, bannerKind = null;
-// Mirror set to OFF by choice: the desktop is black for the whole session, which reads as a crash to whoever's at the
-// monitor, so it gets a neutral 'in VR' label. The self-kill banner above outranks it.
 function showInVRLabel() {
   if (typeof document === 'undefined' || bannerKind === 'killed') return;
   showMirrorBanner(null, 'inVR');
@@ -114,10 +102,9 @@ bus.on('xr:state', (on) => { if (on) { mirrorKilled = false; failed = false; slo
 export function tickXRMirror() {
   if (!isPresenting() || xrPrefs.mirror === 'off' || mirrorKilled || failed) return;
   if (xrCurtainOn()) return;   // entry: the curtain is up and pipelines are building; no desktop pass on top of that
-  // THE MIRROR MUST NEVER COST THE HEADSET: 30 consecutive frames over 30 ms while it runs → off for the session,
-  // said out loud. The pref is untouched.
+  // the mirror must never cost the headset: 30 consecutive frames over 30 ms → off for the session (the pref is untouched)
   { const now = performance.now(); if (lastTick && now - lastTick > 30) { if (++slowFrames >= 30 && !(stats.wouldKill = stats.holdKill)) { mirrorKilled = true; stats.killed = true; tee(`[xr] mirror: OFF for this session — 30 frames over 30 ms (mode ${xrPrefs.mirror})`); showMirrorBanner('Mirroring your eyes to this screen was costing the headset frames, so it switched itself off to keep VR smooth.'); return; } } else slowFrames = 0; lastTick = now; }
-  // Every frame: a skipped frame risks the desktop presenting a cleared buffer (a flicker).
+  // every frame: a skipped one presents a cleared buffer (a flicker)
   const cw = renderer.domElement.width || 1, ch = renderer.domElement.height || 1;
   if (cw / ch !== lastAspect) { lastAspect = cw / ch; deskCam.aspect = lastAspect; deskCam.updateProjectionMatrix(); }
   const xrCam = renderer.xr.getCamera();

@@ -1,8 +1,6 @@
-// xrmicicon — the mic, in view, while you are in VR (like VRChat's HUD mic icon, wiki.vrchat.com/wiki/HUD; the
-// desktop has our HUD glyph, a headset had nothing). Head-locked (a child of the camera, as vrmic.js's note), small,
-// low in the left of the view, drawing the HUD's own glyph in its own inks (mictoggle.js micIndicatorSvg): off = the
-// slashed glyph, on = brand ink but faint and a little smaller, hot = transmitting (under push-to-talk only while
-// held), full. Repainted only when the state changes.
+// xrmicicon — the mic state in view while in VR (the desktop has the HUD glyph; a headset had nothing). Head-locked
+// (a child of the camera, like vrmic.js's plate), small, low-left, drawing the HUD's own glyph (mictoggle.js
+// micIndicatorSvg): off = slashed, on = faint and smaller, hot = transmitting, full. Repainted only on a state change.
 import { THREE, camera, renderer } from './core.js';
 import { bus } from './base.js';
 import { quadMaterial } from './quadcolour.js';

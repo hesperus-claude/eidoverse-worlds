@@ -7,11 +7,11 @@
 import { confirmCenter } from './edit/confirmcenter.js';
 import { outOfMyView } from './edit/myview.js';
 import { installRenderListTolerance, THREE, renderer, camera, scene, XR_BOOT, PREF_HEADSET_SEEN, xrPixelRatio } from './core.js';
-import { decideEntryFailure } from './xr_entry_policy.js';   // what a failed session request MEANS (#197)
-import { withXREyes } from './xrpass.js';   // a warm needs THREE'S two eyes: xr.getCamera() has none before a session
-import { installDualWarm } from './xrwarm.js';   // content warms build both variants (BasisVR's warm-at-load)
+import { decideEntryFailure } from './xr_entry_policy.js';
+import { withXREyes } from './xrpass.js';
+import { installDualWarm } from './xrwarm.js';
 import { makeEntryEffects, handleEntryFailure } from './xr_entry_effects.js';
-import { installEntryClock } from './xr_frame_clock.js';   // who owns window.rAF while presenting (#197)
+import { installEntryClock } from './xr_frame_clock.js';
 import { CONFIG, report, bus, tee, wornNameOf } from './base.js';
 import { frameDebug } from './frameloop.js';
 import { resetFingers, xrBodyDebug } from './xrbody.js';
@@ -21,19 +21,19 @@ import { TEXT_SEL, domQuadsScroll, domQuadResizeBegin, domQuadResizeMove, domQua
 import { myState, xrIntent, camYaw, setCamYaw, setXrProbe } from './controller.js';
 import { ringActionEntries } from './actionbar.js';
 import { entities, bagOf, socketsOn } from './world.js';
-import { xrHand as grabHand, bindPresenting as bindGrabPresenting } from './thingphysics.js';   // world grabbing: the grabbable component's VR hands
+import { xrHand as grabHand, bindPresenting as bindGrabPresenting } from './thingphysics.js';   // the grabbable component's VR hands
 import { flashHint, toast } from './ui.js';
 import { vrMicPreflight } from './vrmic.js';
 import { makePointerLine, makeSurfaceDot, placeSurfaceDot, hideSurfaceDot, setSurfaceDotKind } from './pointer.js';
 import { markXrAbsent, registerXrGlyph, micGlyph, earGlyph, xrGlyph, micLive, earOn, flipEar } from './mictoggle.js';
-import { setPttHeld } from './micstate.js';   // the left A/X under push-to-talk: held = speak, as V
+import { setPttHeld } from './micstate.js';
 import { pttMode } from './voiceconsent.js';
-import './xrmicicon.js';   // the mic, in view, while presenting (VRChat's lower-left icon)
+import './xrmicicon.js';   // the mic icon in view while presenting
 import { markActive } from './presence.js';
-import { platePick, aimPlate, platePress } from './platecard.js';   // VR hover: a laser resting on a nameplate opens its card
+import { platePick, aimPlate, platePress } from './platecard.js';   // a laser resting on a nameplate opens its card
 import { makeDwell } from './dwell.js';
-import { showXRTip, hideXRTip, dropXRTip, tipTextFor } from './xrtip.js';   // a panel control's tooltip, on dwell
-import { POINTER_VIS_DEFAULT, pointerVisible, dotVisible, looksAtWorld, interactable, smoothPose, stickStep, angleTo, rayMatrixTo } from './xrpointer.js';   // the laser's policy: when it is drawn, how it follows the hand, how it holds a target
+import { showXRTip, hideXRTip, dropXRTip, tipTextFor } from './xrtip.js';
+import { POINTER_VIS_DEFAULT, pointerVisible, dotVisible, looksAtWorld, interactable, smoothPose, stickStep, angleTo, rayMatrixTo } from './xrpointer.js';   // the laser's policy
 import { dockPins } from './ui.js';
 import { xrScales, toRigLocal } from './bodyscale.js';   // the chosen size composes with the device fit (rig = u, body = u/k)
 import { perf } from './perf.js';
@@ -45,8 +45,7 @@ let getSelf = () => null;
 export const bindXRSelf = (fn) => { getSelf = fn; };
 const FP_LAYER = 9, TP_LAYER = 10;
 let fpVrm = null;   // which vrm the head-chop is applied to — re-applied after an avatar swap
-// HEAD CHOP, Basis's way (BasisLocalAvatarDriver.ScaleHeadToZero): the raw head bone scales to ~0 while presenting;
-// three-vrm copies rotations raw←normalized, so raw scale is ours
+// head chop (Basis ScaleHeadToZero): the raw head bone scales to ~0 while presenting; three-vrm only copies rotations raw←normalized
 const HEAD_CHOP = 0.0001;
 let choppedHead = null;   // { bone, scale: Vector3 }
 function selfFirstPerson(on) {
@@ -70,7 +69,7 @@ export function withHeadShown(fn) {
   b.scale.copy(choppedHead.scale);
   try { return fn(); } finally { b.scale.copy(kept); }
 }
-// how many of MY meshes the renderer actually drew this frame (all eyes) — 'invisible' becomes a number
+// how many of my meshes the renderer drew this frame (all eyes), for the flight recorder
 let selfDrawn = 0, selfDrawnLast = 0, drawHookVrm = null;
 function hookSelfDraws() {
   const av = getSelf(); const vrm = av?.vrm; if (!vrm || drawHookVrm === vrm) return;
@@ -85,11 +84,11 @@ export const xrHands = () => hands;   // { left, right }: { grip, ray, … } —
 // finger curl surrogate: trigger value → index, grip value → the other three
 const fingerCurl = { left: { index: 0, grip: 0 }, right: { index: 0, grip: 0 } };
 export const xrFingerCurl = () => fingerCurl;
-// curls go through a 1€ filter (Casiez, Roussel & Vogel, CHI 2012): raw values jitter and ride the wire (xrbody.js);
-// the cutoff rises with the finger's speed, so rest is smooth and a squeeze doesn't lag
-const CURL_MIN_CUTOFF = 2.0;   // Hz. Lower = quieter at rest, and the floor on responsiveness.
-const CURL_BETA = 3.0;         // how hard the cutoff opens with speed. Higher = less lag, more noise.
-const CURL_D_CUTOFF = 1.0;     // Hz, for the speed estimate itself — its own noise must not open the gate.
+// curls go through a 1€ filter (Casiez, Roussel & Vogel, CHI 2012): the cutoff rises with the finger's speed, so
+// rest is smooth and a squeeze doesn't lag. test/client/finger-curl-test.mjs.
+const CURL_MIN_CUTOFF = 2.0;   // Hz: lower = quieter at rest
+const CURL_BETA = 3.0;         // how hard the cutoff opens with speed: higher = less lag, more noise
+const CURL_D_CUTOFF = 1.0;     // Hz, for the speed estimate itself
 const CURL_PROBE = CONFIG.params.has('curlprobe');
 const curlProbe = { left: { index: { last: null, peak: 0, sum: 0, n: 0 }, grip: { last: null, peak: 0, sum: 0, n: 0 } },
                     right: { index: { last: null, peak: 0, sum: 0, n: 0 }, grip: { last: null, peak: 0, sum: 0, n: 0 } } };
@@ -145,8 +144,7 @@ function vrprobeLine() {
     vrprobeLast = now;
   } catch (e) { tee(`[vrprobe] failed: ${e?.message ?? e}`); }
 }
-// the DESKTOP half: a heartbeat every 10 s; a frame counter stuck 3 s tees a STALL line with the loop's state.
-// A blocked thread can't fire setInterval either: a SILENT heartbeat is that answer (?bc=1 names the system).
+// the desktop half: a heartbeat every 10 s, and a frame counter stuck for 3 s tees a STALL line
 if (VRPROBE) {
   let f0 = -1, still = 0, hb = 0, stalled = false;
   setInterval(() => {
@@ -171,14 +169,13 @@ let frameClock = null;   // the owned clock takeover for the live session
 let exitVeil = null;
 let floorSpace = null;              // 'local-floor' | 'bounded-floor' | null (fell back to 'local')
 
-// ---- DeviceScale (Basis BasisHeightDriver: the AVATAR is scaled to the player)
-// k = avatarEyeY / median of the first 120 HMD heights (> 0.5 m), clamped .6–1.6, saved per avatar. Scale the
-// puppet (vrm.scene.scale = 1/k), never the tracking, so hands sit on the controllers. Restored on session end.
+// ---- device scale (Basis BasisHeightDriver: the avatar is scaled to the player)
+// k = avatarEyeY / median of the first 120 HMD heights (> 0.5 m), clamped .6–1.6, saved per avatar. The puppet is
+// scaled (vrm.scene.scale = 1/k), never the tracking, so hands sit on the controllers. Restored on session end.
 const SCALE_LS = 'ew-xr-scale';
-let wornName = '';   // the avatar name from 'avatar-worn' — the per-body key for a saved scale (Avatar has no .name)
+let wornName = '';   // the per-body key for a saved scale
 const scaleState = { k: 1, source: 'fallback', samples: [], eyeY: null, locked: false, firstAt: 0 };
-// a body swap while presenting: the new body must not wear the old body's ratio (eyes off the HMD height)
-// announceWorn emits { name, path }, setMe a string: normalise as bodies.js does, or the scale keys '[object Object]'
+// a body swap while presenting re-measures: the new body must not wear the old body's ratio
 bus.on('avatar-worn', (v) => { wornName = wornNameOf(v); if (!presenting) return; scaleState.samples.length = 0; scaleState.locked = false; scaleState.firstAt = 0; scaleState.k = 1; scaleState.source = 'fallback'; loadSavedScale(); tee('[xr] body swapped while presenting — device scale re-measured'); });
 const xrScale = () => ({ ...scaleState, samples: scaleState.samples.length });
 /** The multiplier the self puppet wears while presenting (Basis: avatar scaled to the player). 1 when unmeasured. */
@@ -189,14 +186,14 @@ function avatarEyeY() {
   const av = getSelf(); const h = av?.vrm?.humanoid;
   if (!h) return null;
   const root = av.vrm.scene.getWorldPosition(new THREE.Vector3()).y;
-  const ps = av.vrm.scene.scale.y || 1;   // AUTHORED height: undo the puppet scale the body may already be wearing (a saved k would otherwise re-measure as 1)
+  const ps = av.vrm.scene.scale.y || 1;   // authored height: undo any puppet scale the body already wears
   const eye = h.getNormalizedBoneNode?.('leftEye') ?? h.getNormalizedBoneNode?.('rightEye');
   if (eye) return (eye.getWorldPosition(new THREE.Vector3()).y - root) / ps;
   const head = h.getNormalizedBoneNode?.('head');
   return head ? (head.getWorldPosition(new THREE.Vector3()).y - root) / ps + 0.06 : null;   // eyes ≈ 6 cm above the head joint
 }
 function loadSavedScale() {
-  if (!wornName) return;   // no body yet (visor clicked before it landed): nothing to load, and never a '' key
+  if (!wornName) return;   // no body yet: never a '' key
   try { const all = JSON.parse(localStorage.getItem(SCALE_LS) || '{}'); const name = wornName;
     const v = all[name]; if (v && v.k > 0.5 && v.k < 1.7) { scaleState.k = v.k; scaleState.source = 'saved'; scaleState.eyeY = v.eyeY ?? null; } } catch {}
 }
@@ -223,15 +220,12 @@ function sampleDeviceScale(hmdY) {
 let session = null;
 export const isPresenting = () => presenting;
 
-// ---- VR preferences (Settings › VR), persisted per browser. turn: 'snap' | 'smooth' · vignette · mirror:
-// 'off' | 'first' | 'third' · pointerVisibility: 'always' | 'never' | 'contextual' (xrpointer.js).
+// ---- VR preferences (Settings › VR, vrpanel.js), persisted per browser
 const PREF_XR = 'ew-xr-prefs';
-// dotVisibility: the surface dot, the same three words, its own setting
 const XR_PREF_DEFAULTS = { turn: 'smooth', vignette: false, mirror: 'first', seated: false, res: 'auto', pointerVisibility: POINTER_VIS_DEFAULT, dotVisibility: POINTER_VIS_DEFAULT };
 export const xrPrefs = (() => { try { return { ...XR_PREF_DEFAULTS, ...JSON.parse(localStorage.getItem(PREF_XR) || '{}') }; } catch { return { ...XR_PREF_DEFAULTS }; } })();
 { const m = CONFIG.params.get('mirror'); if (m === 'off' || m === 'first' || m === 'third') xrPrefs.mirror = m; }   // URL override for A/B
-// Eye resolution as WebXR framebufferScaleFactor ('auto' = 1.0, the runtime's size). Chrome clamps it to
-// 0.2–1.0 and it's read once at session start. ?xrres=0.2..1 overrides for an A/B.
+// eye resolution as WebXR framebufferScaleFactor ('auto' = 1.0), read once at session start; ?xrres=0.2..1 overrides
 export const XR_RES_SCALES = { auto: 1, 85: 0.85, 70: 0.7, 50: 0.5 };
 function xrResScale() {
   const q = +CONFIG.params.get('xrres');
@@ -239,7 +233,6 @@ function xrResScale() {
   return XR_RES_SCALES[xrPrefs.res] ?? 1;
 }
 export function setXrPref(k, v) { xrPrefs[k] = v; try { localStorage.setItem(PREF_XR, JSON.stringify(xrPrefs)); } catch {} bus.emit('xr:prefs', xrPrefs); }
-// tuning: exultation XR_DEFAULTS, ported values
 const DEADZONE = 0.18;
 const SNAP_DEG = 30;
 const SMOOTH_TURN_RAD_S = 2.2;   // ~126°/s at full deflection
@@ -252,9 +245,8 @@ const dead = (v, dz = DEADZONE) => {
 const pickAxis = (a, b) => (typeof a === 'number' && a !== 0 ? a : (b ?? 0));
 
 // ---- controllers -----------------------------------------------------------
-const hands = { left: null, right: null };   // {grip, ray, laser} — resolved by HANDEDNESS
-// three's controller slots 0/1 are enumeration order, NOT left/right: each files itself under
-// e.data.handedness on 'connected'; until then slot 0 = left, 1 = right as a guess.
+const hands = { left: null, right: null };   // {grip, ray, laser, …} by handedness
+// three's controller slots 0/1 are enumeration order, not left/right: each files itself on 'connected'; until then a guess
 const slots = [null, null];
 function fileHand(slotIdx, handedness) {
   const h = slots[slotIdx]; if (!h) return;
@@ -276,20 +268,16 @@ function makeHand(i) {
     new THREE.BoxGeometry(0.05, 0.035, 0.09),
     new THREE.MeshStandardMaterial({ color: 0xe8c9a0, roughness: 0.8 }));
   grip.add(box);
-  // the fading beam, in WORLD space along the smoothed pick ray (placeLaser), not parented to the raw controller:
-  // under the rig its length would be the hit distance times the chosen body size
+  // the beam lives in world space along the smoothed pick ray (placeLaser): under the rig its length would scale with the body size
   const laser = makePointerLine();
   laser.visible = false;
-  // the AIM: the target ray low-passed in rig space (xrpointer.js POINTER_TAU), so walking and turning never lag it
-  const aim = new THREE.Object3D(); aim.name = 'xr-aim';
+  const aim = new THREE.Object3D(); aim.name = 'xr-aim';   // the target ray low-passed in rig space (xrpointer.js)
   // the surface dot (pointer.js), parked under the rig so the hands' warm compiles it; first placement moves it to the scene
   const dot = makeSurfaceDot();
   rig.add(grip); rig.add(ray); rig.add(aim); rig.add(dot);
   return { grip, ray, aim, smooth: { init: false }, laser, dot, box };
 }
 const _dotP = new THREE.Vector3(), _dotN = new THREE.Vector3(), _dotO = new THREE.Vector3(), _dotD = new THREE.Vector3(), _eyeP = new THREE.Vector3();
-/** The dot on the hand's target (a panel hit {point, normal}, a plate at `plateDist` along the ray, an entity hit), or
- *  hidden when there is none. Plates are camera-facing sprites: the dot faces the eye there. */
 /** What a press would do on this target — the dot's icon (pointer.js DOT_KINDS). */
 const RESIZE_KIND = { 'resize-e': 'resize-ew', 'resize-w': 'resize-ew', 'resize-s': 'resize-ns', 'resize-nw': 'resize-nwse', 'resize-se': 'resize-nwse', 'resize-ne': 'resize-nesw', 'resize-sw': 'resize-nesw' };
 export function targetKind({ panel = null, plateDist = null, hit = null } = {}) {
@@ -298,9 +286,11 @@ export function targetKind({ panel = null, plateDist = null, hit = null } = {}) 
     if (RESIZE_KIND[panel.zone]) return RESIZE_KIND[panel.zone];
     return panel.zone === 'move' || !panel.scroll ? 'move' : 'scroll';
   }
-  if (plateDist != null) return 'dot';   // a nameplate: resting there IS the action (the card)
-  return hit?.interactable ? 'click' : 'dot';   // an entity with a seat or a reaction: the trigger selects it (the card offers sit/use); a plain one is only a surface
+  if (plateDist != null) return 'dot';   // a nameplate: resting there is the action
+  return hit?.interactable ? 'click' : 'dot';
 }
+/** The dot on the hand's target (a panel hit, a plate at `plateDist` along the ray, an entity hit), or hidden. Plates
+ *  are camera-facing sprites: the dot faces the eye there. */
 function placeDot(hand, ray, eye, { panel = null, plateDist = null, hit = null } = {}) {
   const dot = hand.dot;
   if (!panel && plateDist == null && !hit) { hideSurfaceDot(dot); return; }
@@ -328,7 +318,7 @@ function steerAim(hand, dtSec) {
   return hand.aim;
 }
 
-/** Silently a no-op on pads without actuators. Per HIGGS: touch = light tick, take = firmer. */
+/** A no-op on pads without actuators. Touch = light tick, take = firmer. */
 export function haptic(hand, val = 0.4, ms = 24) {
   try {
     if (!session) return;
@@ -359,11 +349,10 @@ function rayHitEntity(handRay, far = 24) {
 }
 
 
-// ---- stickiness (xrpointer.js §3) ------------------------------------------------------------------------------
+// ---- stickiness (xrpointer.js) -----------------------------------------------------------------------------------
 // per hand, the held target as a point local to its thing; no bending during a press or while this hand holds a panel
 const sticky = { left: null, right: null };   // {kind: 'panel'|'plate', key, obj, local: Vector3}
 const pickState = { left: { bent: false, kind: null }, right: { bent: false, kind: null } };   // probe window
-// THE DWELL, per hand (dwell.js), keyed on what the laser HOLDS, so stickiness carries it through a small drift
 const dwells = { left: makeDwell(), right: makeDwell() };
 const entSeen = { left: null, right: null };   // probe window: the entity under each laser, {id, interactable}
 const bentRay = { left: { matrixWorld: new THREE.Matrix4() }, right: { matrixWorld: new THREE.Matrix4() } };
@@ -396,12 +385,9 @@ function stickTo(side, aim, eye, hold) {
   return { ray, ...rayTargets(ray, eye) };
 }
 
-// ---- panel grab: GRIP takes a QUAD to reposition it -----------------------------
-// over a control (domquad.js controlAt) grip does nothing, so a squeeze mid-click can't yank the panel
-// panels are UI: no verb, no undo
+// ---- panel grab: grip takes a quad to reposition it (over a control it does nothing). Panels are UI: no verb, no undo.
 let held = null;   // {quad, hand}
-// a RESIZE in progress (grip on a panel's corner or edge; domquad.js does the geometry and the commit): {hand, drag}
-let resizing = null;
+let resizing = null;   // a grip on a panel's corner or edge: {hand, drag} (domquad.js does the geometry)
 function tryGrab(hand, ray) {
   const h = hands[hand];
   const at = xrPanelsAt(ray);
@@ -415,8 +401,7 @@ function tryGrab(hand, ray) {
   if (!q) return;
   held = { quad: q, hand }; haptic(hand, 0.4, 30); h.grip.attach(q.mesh); flashHint(`holding the ${q.id} panel — trigger + stick to push or pull it, release grip to place it`);
 }
-// PUSH / PULL: holding hand + trigger, stick forward/back moves the panel along the laser, clamped to arm's and room
-// reach; only then is walk-forward held off (strafe and turn never). A released panel is uprighted and faces you.
+// push / pull: holding hand + trigger, stick forward/back moves the panel along the laser, clamped
 const PUSH_RATE = 1.6;              // 1/s at full deflection: ≈5× farther per second
 const PUSH_MIN_M = 0.25, PUSH_MAX_M = 3.0;
 const _pp = new THREE.Vector3(), _po = new THREE.Vector3(), _pd = new THREE.Vector3();
@@ -445,8 +430,7 @@ function releaseGrab() {
 }
 
 // ---- radial menu: right-stick click opens, stick aims, trigger / flick / quick release commits -----
-/** The ring IS the dock, radially (every slot verb-backed): same pins and order, rebuilt per open. A frame with no VR
- *  surface is still a slot, dim, so parity gaps stay visible. */
+/** The ring is the dock, radially: same pins and order, rebuilt per open. A frame with no VR surface is a dim slot. */
 let ringLevel = 'root';   // 'root' | 'actions' — the sub-wheel in view
 const SPACER = { spacer: true, has: false, label: '', on: () => false, act: () => {} };
 const BACK_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 26 26" fill="none" stroke="#f2f7f5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-7 7 7 7"/></svg>';
@@ -483,26 +467,25 @@ export function radialEntries() {   // exported with makeRadial for the headless
   return [panels, ...right, leave, ...left];   // clockwise from the top: right side descends 1→5, left ascends 7→11
 }
 const RECENTRE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 26 26" fill="none" stroke="#f2f7f5" stroke-width="1.6" stroke-linecap="round"><circle cx="13" cy="13" r="7"/><circle cx="13" cy="13" r="1.6" fill="#f2f7f5"/><path d="M13 2v4M13 20v4M2 13h4M20 13h4"/></svg>';
-// THE RING: rides the right grip over the thumb, billboarded with headset-up; R = 7.5 cm, 5 cm icons drawn over
-// the world; focus scales 1.4× with a label pill; deflect > 0.5 selects, release < 0.35 commits.
-// Ink from the page's tokens: brand seafoam #8fe8c8, fg #ebebe9, panel rgb(5 20 20).
+// The ring rides the right grip over the thumb, billboarded to the eyes; icons drawn over the world, focus scales
+// 1.4× with a label pill. Ink from the page's tokens.
 const RING_R = 0.075, RING_ICON = 0.05, RING_ANCHOR = { x: 0, y: 0.05, z: 0.01 };
 const INK = { brand: '#8fe8c8', fg: '#ebebe9', dim: 'rgba(235,235,233,.42)', panel: 'rgb(5, 20, 20)', rule: 'rgba(143,232,200,.45)' };
 let radial = null;   // {group, slots[], entries[], sel, label:{mesh,cv,tx}}
 function ringIconTexture(s, focused) {
   const cv = document.createElement('canvas'); cv.width = cv.height = 128;
   const g = cv.getContext('2d'); const tex = new THREE.CanvasTexture(cv); tex.anisotropy = 4;
-  // eidoverse cap: a soft panel disc so glyphs read against any world; brand ring when focused/on
+  // a panel disc so glyphs read against any world; brand ring when focused/on
   g.beginPath(); g.arc(64, 64, 58, 0, Math.PI * 2); g.fillStyle = INK.panel; g.fill();
   g.lineWidth = focused ? 6 : 3; g.strokeStyle = focused ? INK.brand : INK.rule; g.stroke();
   const on = !!s.on?.();
   const ink = s.has === false ? INK.dim : (focused || on ? INK.brand : INK.fg);
   g.save(); g.translate(64, 64); g.fillStyle = ink; g.strokeStyle = ink;
-  // drawn glyphs, never fillText(emoji) (icons.js header); SVGs load via an Image, so the texture updates async
+  // drawn glyphs, never fillText(emoji) (icons.js); SVGs load via an Image, so the texture updates async
   if (s.svg) {
     const img = new Image();
     img.onload = () => { g.save(); g.translate(64, 64); g.drawImage(img, -30, -30, 60, 60); g.restore(); tex.needsUpdate = true; };
-    // an <svg> without xmlns renders INLINE but paints NOTHING as an <img> data-URI (the HUD's inline glyphs lack it)
+    // an <svg> without xmlns paints nothing as an <img> data-URI
     let svg = (typeof s.svg === 'function' ? s.svg() : s.svg).replace(/stroke="#f2f7f5"/g, `stroke="${ink}"`).replace(/fill="#f2f7f5"/g, `fill="${ink}"`);
     if (!/xmlns=/.test(svg)) svg = svg.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
     img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
@@ -530,8 +513,7 @@ function setRingLabel(text) {
 export function makeRadial(entries) {   // exported for the headless ring screenshot (smoke) — the ring is plain meshes
   const group = new THREE.Group();
   const N = Math.max(1, entries.length);
-  // with depthTest off and EQUAL renderOrder, three re-sorts overlapping discs each frame (a flicker): the radius
-  // grows with the count so discs never overlap, and every slot has a STABLE order
+  // the radius grows with the count so discs never overlap, and every slot has a stable renderOrder (equal orders flicker)
   const R = Math.max(RING_R, (N * RING_ICON * 1.15) / (2 * Math.PI));
   const slots = entries.map((s, i) => {
     const a = -Math.PI / 2 + i * (2 * Math.PI / N);   // -π/2 first (top), then clockwise, placed at (cos a, −sin a)
@@ -622,78 +604,74 @@ function aimRadial(x, y) {
 let radialOpen = false, stickPressWas = false, menuBtnWas = false, muteBtnWas = false, pttFromX = false;
 const triggerWas = { left: false, right: false }, gripWas = { left: false, right: false };
 const panelPress = { left: null, right: null };   // a trigger press on a panel, pending drag-or-click
-// buttons are NOT trusted for 700 ms after an input source appears (first frames report pressed=true garbage):
-// edges inside the window are swallowed
+// buttons are not trusted for 700 ms after an input source appears (first frames report pressed=true garbage)
 let inputsSettledAt = 0;
 const buttonsTrusted = () => performance.now() > inputsSettledAt;
 
 // ---- session ---------------------------------------------------------------
-let sessionNo = 0;   // per page: tee() folds byte-identical lines (repeats 2–19 are DROPPED), so every entry line carries its number
+let sessionNo = 0;   // per page; every entry tee line carries it (tee() folds byte-identical lines)
 const ringPanelsAct = () => { bus.emit('xr:panels'); tee('[xr] panels toggled (ring)'); };
-globalThis.__xrRingPanels = ringPanelsAct;   // harness: the ring's 'panels' slot, the real action
-let entering = false;   // requestSession → setSession is a window of ~1–3 s; a second click (or a leave) inside it made two sessions fight (Basis: refuse enter/leave while in flight)
-// the busy-session retry (#197) belongs to the intent that scheduled it (xr_entry_effects.js); a later click or a leave cancels it
+globalThis.__xrRingPanels = ringPanelsAct;   // harness: the ring's 'panels' slot
+let entering = false;   // requestSession → setSession is ~1–3 s; enter and leave are refused while in flight
+// the busy-session retry belongs to the intent that scheduled it (xr_entry_effects.js); a later click or a leave cancels it
 const entryEffects = makeEntryEffects({
   setTimer: (fn, ms) => setTimeout(fn, ms), clearTimer: (t) => clearTimeout(t),
   tee: (m) => tee(m), toast: (m, kind, ms) => toast(m, kind, ms),
   enter: (o) => enterVR(o), markAbsent: (v) => markXrAbsent(v),
 });
-let entryNo = 0;           // increments on every ENTRY INTENT, not every request: a retry inherits its parent's
+let entryNo = 0;           // per entry intent, not per request: a retry inherits its parent's
 const cancelBusyRetry = (why) => entryEffects.cancel(why);
 async function enterVR({ retryOf = null } = {}) {
   if (entering) { tee(`[xr] enter refused: a session request is already in flight`); return; }
   if (session && presenting) { tee(`[xr] enter refused: already presenting`); return; }
-  // a fresh click is a new intent with the retry budget (any pending retry is stale); a retry carries its parent's number
+  // a fresh click is a new intent with a fresh retry budget; a retry carries its parent's number
   const myEntry = retryOf ?? ++entryNo;
   if (retryOf === null) cancelBusyRetry('a new entry intent');
   entering = true;
   xrVeilShow(true, 'entering VR');   // from the click: requestSession + setSession is 1–3 s of nothing otherwise
   toast('entering VR…', 'info', 6000);
   try {
-    // LET IT PAINT: the request and compile storm stall the thread before the veil draws. Two frames, inside the try
-    // so a tab hidden mid-yield still releases `entering`; capped, as rAF stops in a hidden tab.
+    // let the veil paint first: two frames (capped, as rAF stops in a hidden tab)
     await Promise.race([new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))), new Promise((r) => setTimeout(r, 250))]);
-    // THE LADDER: on a WebGPU backend the 'webgpu' session feature is REQUIRED (three refuses a session without
-    // it); a browser that can't grant it rejects, and we reload onto WebGL (?webgl=1), classic XRWebGLLayer + MSAA.
+    // on a WebGPU backend the 'webgpu' session feature is required; a browser that can't grant it reloads onto WebGL (?webgl=1)
     const gpu = !!renderer.backend?.isWebGPUBackend;
     sessionNo++;
-    tee(`[xr] enter #${sessionNo}: requesting session (${gpu ? 'WebGPU' : 'WebGL'}; renderer.xr.enabled=${renderer.xr.enabled}; presenting=${renderer.xr.isPresenting})`);   // a silent gap between here and 'session on' names the await that hangs
+    tee(`[xr] enter #${sessionNo}: requesting session (${gpu ? 'WebGPU' : 'WebGL'}; renderer.xr.enabled=${renderer.xr.enabled}; presenting=${renderer.xr.isPresenting})`);
     const optionalFeatures = ['local-floor', 'bounded-floor', 'hand-tracking'];
     try {
-      installRenderListTolerance();   // the tolerant render loop, only now that a session is about to exist
+      installRenderListTolerance();   // only now that a session is about to exist
       session = await navigator.xr.requestSession('immersive-vr',
         gpu ? { requiredFeatures: ['webgpu'], optionalFeatures } : { optionalFeatures });
     } catch (e) {
-      // handleEntryFailure (xr_entry_effects.js) is the whole tested seam: nothing here may bypass it
+      // handleEntryFailure (xr_entry_effects.js) is the tested seam: nothing here may bypass it
       const next = handleEntryFailure({ effects: entryEffects, decide: decideEntryFailure,
                                         error: e, intent: myEntry, retryOf, gpu });
       if (next === 'handled') return;
-      if (next === 'throw') throw e;   // the outer catch posts the one toast, preferring userMessage
-      // 'reload': the effect already teed and toasted; only the navigation (it needs `location`) lives here
+      if (next === 'throw') throw e;   // the outer catch posts the one toast
+      // 'reload': the effect already teed and toasted; only the navigation lives here
       const u = new URL(location.href); u.searchParams.set('webgl', '1'); u.searchParams.set('xr', '1'); u.searchParams.set('why', 'vr-webgl');
       setTimeout(() => { location.href = u; }, 1200);
       return;
     }
-    try { localStorage.setItem(PREF_HEADSET_SEEN, String(Date.now())); } catch {}   // a REAL session, not a capability answer (phones say yes to Cardboard); the TIME, not a flag, so it expires
+    try { localStorage.setItem(PREF_HEADSET_SEEN, String(Date.now())); } catch {}   // a real session, not a capability answer; the time, so it expires
     tee(`[xr] enter #${sessionNo}: session granted (${session.enabledFeatures?.length ?? '?'} features)`); markXrAbsent(false);
     renderer.xr.enabled = true;
-    // the floor reference space (three defaults to 'local', eye-level); BEFORE setSession
+    // the floor reference space (three defaults to 'local', eye-level); before setSession
     const feats = session.enabledFeatures ?? [];
     const floor = feats.includes('local-floor') ? 'local-floor' : feats.includes('bounded-floor') ? 'bounded-floor' : null;
     try { renderer.xr.setReferenceSpaceType(floor ?? 'local'); } catch (e) { report('xr ref space', e); }
-    try { renderer.xr.setFramebufferScaleFactor(xrResScale()); } catch (e) { report('xr res scale', e); }   // also BEFORE setSession: the layer is sized as the session starts
+    try { renderer.xr.setFramebufferScaleFactor(xrResScale()); } catch (e) { report('xr res scale', e); }   // also before setSession
     floorSpace = floor;
     scaleState.samples.length = 0; scaleState.locked = false; scaleState.firstAt = 0; scaleState.k = 1; scaleState.source = 'fallback'; loadSavedScale();
-    bus.emit('xr:loop');   // frameloop.js hands the loop to three BEFORE setSession saves+wraps it (see frameloop.js)
+    bus.emit('xr:loop');   // frameloop.js hands the loop to three before setSession wraps it
     const tReq = performance.now();
-    // installFrameClock: the restore must register BEFORE setSession, ahead of three's 'end' (test/client/xr-session-lifecycle-test.mjs)
-    // window.rAF crawls at ~2 Hz in a WebXR session, stalling all that yields on it: this clock shim reroutes it
-    // saved: the page's FIRST capture, re-passed every entry; a fresh capture would save the old shim as native
+    // the window.rAF shim (xr_frame_clock.js): installed before setSession so its restore runs ahead of three's 'end';
+    // `saved` is the page's first capture, re-passed every entry (test/client/xr-session-lifecycle-test.mjs)
     sessionEnded = false;
     frameClock = installEntryClock({
       win: window, session, saved: nativeRAF ? { raf: nativeRAF, caf: nativeCAF } : null,
       onEnd: () => { sessionEnded = true; },
-    });   // what `emulated` MEANS lives in the module, where a test can prove a real runtime gets a shim
+    });
     nativeRAF = frameClock.native.raf; nativeCAF = frameClock.native.caf;
     await renderer.xr.setSession(session);
     tee(`[xr] enter #${sessionNo}: setSession resolved in ${(performance.now() - tReq).toFixed(0)} ms`);
@@ -703,31 +681,29 @@ async function enterVR({ retryOf = null } = {}) {
       try { const ex = gl?.getSupportedExtensions?.() ?? []; mv = ['OVR_multiview2', 'OCULUS_multiview'].filter((e) => ex.includes(e)).join('+') || 'none'; } catch { /* context lost */ }
       tee(`[xr] enter #${sessionNo}: projLayer=${!!renderer.xr._glProjLayer} baseLayer=${!!renderer.xr._glBaseLayer} foveation=${renderer.xr.getFoveation?.() ?? '?'} scale=${renderer.xr.getFramebufferScaleFactor?.() ?? '?'} target=${renderer.xr._xrRenderTarget?.width ?? '?'}x${renderer.xr._xrRenderTarget?.height ?? '?'} multiviewExt=${mv} outputPass=${renderer.needsFrameBufferTarget}`); }
     entryClock = { t0: performance.now(), setSessionMs: +(performance.now() - tReq).toFixed(0), frames: [], last: 0, programs: 0, programMs: 0, pipelines: 0 };
-    // ENTRY PROBE: count + time every program/pipeline built while the entry clock runs ('N programs in X ms')
+    // entry probe: count + time every program/pipeline built while the entry clock runs
     { const be = renderer.backend; if (be && !be.__entryProbe) { be.__entryProbe = true;
         for (const [k, field] of [['createProgram', 'programs'], ['createRenderPipeline', 'pipelines']]) { const orig = be[k]?.bind(be); if (!orig) continue;
           be[k] = (...a) => { const t = performance.now(); try { return orig(...a); } finally { buildTotals[field]++; if (field === 'programs') buildTotals.programMs += performance.now() - t; if (field === 'pipelines' && a[1] == null) { buildTotals.syncPipelines++; const ms = performance.now() - t; buildTotals.syncMs += ms; if (ms > 30) { const ro = a[0]; const nm = ro?.material?.name || ro?.material?.type || '?', ob = ro?.object?.name || ro?.object?.type || '?'; tee(`[xr] sync pipeline ${ms.toFixed(0)} ms: ${nm} on ${ob}${ro?.context?.material?.isShadowMaterial || ro?.material?.isDepthMaterial ? ' [shadow/depth]' : ''}`); } } if (entryClock) { entryClock[field]++; if (field === 'programs') entryClock.programMs += performance.now() - t; } } }; } } }
-    // ENTRY CURTAIN: a cheap curtain while the scene compiles against the real XR camera + target (compileAsync
-    // inside an XR frame captures that context); 15 s cap
+    // a cheap curtain while the scene compiles against the real XR camera + target (15 s cap; dropped in updateXR)
     setXRCurtain(true); curtainState = { armed: true, t0: performance.now() };
     if (!floor) tee('[xr] NO floor reference space granted — using local (eye-level origin); floor height is a guess');
     const onLine = `[xr] session on ${renderer.backend?.isWebGPUBackend ? 'WebGPU' : 'WebGL'} refspace=${floor ?? 'local'} features=${JSON.stringify(session.enabledFeatures ?? [])} xrctx=${JSON.stringify(globalThis.__xrCtx ?? 'default')}`;
     console.log(onLine); tee(onLine);
-    // Fixed foveation, Basis's split (BasisSettingsDefaults.cs FoveatedRendering): 1 standalone, where it's the
-    // biggest GPU lever; 0 on PC, where the periphery blur shows. ?fov=0..1 overrides.
+    // fixed foveation (Basis's split): 1 standalone, 0 on PC where the periphery blur shows; ?fov=0..1 overrides
     { const standalone = /OculusBrowser|Quest|Pico|Wolvic|Android/i.test(navigator.userAgent) && !/Windows|Macintosh|Linux x86/i.test(navigator.userAgent);
       const fov = CONFIG.params.has('fov') ? THREE.MathUtils.clamp(+CONFIG.params.get('fov') || 0, 0, 1) : (standalone ? 1 : 0);
       try { renderer.xr.setFoveation(fov); tee(`[xr] foveation ${fov} (${standalone ? 'standalone' : 'pc'}${CONFIG.params.has('fov') ? ', ?fov' : ''})`); } catch { /* not all runtimes */ } }
     rig.position.set(myState.pos.x, myState.pos.y, myState.pos.z);
     recentre.x = recentre.z = recentre.y = 0; recentre.pending = true;   // fold the head's playspace pose in on the first tracked frame
-    rig.rotation.y = wrapPi(myState.yaw);   // headset-forward = body-forward at entry, WRAPPED (an unwrapped yaw pops a full turn)
+    rig.rotation.y = wrapPi(myState.yaw);   // headset-forward = body-forward at entry
     scene.add(rig);
     rig.add(camera);
     slots[0] ??= makeHand(0); slots[1] ??= makeHand(1);
     hands.left ??= slots[0]; hands.right ??= slots[1];   // guess until 'connected' files them by handedness
     presenting = true; bus.emit('xr:state', true); xrVeilShow(false); vrprobe(true);
-    try { localStorage.setItem(PREF_HEADSET_SEEN, String(Date.now())); } catch { /* private mode */ }   // a headset was truly here: the next boot picks WebGL up front and enters in place
-    // HEADSET OFF: a switched-off headset still GRANTS a session; no viewer pose for 2.5 s → say so, mark absent, leave
+    try { localStorage.setItem(PREF_HEADSET_SEEN, String(Date.now())); } catch { /* private mode */ }   // the next boot picks WebGL up front
+    // a switched-off headset still grants a session: no viewer pose for 2.5 s → say so, mark absent, leave
     hadPose = false;
     const thisSession = sessionNo;
     setTimeout(() => {
@@ -736,52 +712,49 @@ async function enterVR({ retryOf = null } = {}) {
       markXrAbsent(true); toast('no headset detected — put it on (or wake it) and click the visor again', 'warn', 8000);
       leaveVR('no-headset');
     }, 2500);
-    // SHADER ERROR TEE: a material failing in the eye context draws black and only console.error()s; tee the first 6
+    // a material failing in the eye context draws black and only console.error()s: tee the first 6
     if (!consoleTapped) { consoleTapped = true; for (const k of ['error', 'warn']) { const orig = console[k].bind(console);
       console[k] = (...a) => { try { const m = a.map((x) => (typeof x === 'string' ? x : x?.message ?? '')).join(' '); if (presenting && shaderTees < 6 && /shader|program|link|compile|GLSL|uniform|invalid/i.test(m)) { shaderTees++; tee(`[xr] console.${k}: ${m.slice(0, 300)}`); } } catch {} orig(...a); }; } }
-    // we own the stereo camera update (render.js): with cameraAutoUpdate, ShadowNode's nested render put the eyes at the origin
-    renderer.xr.cameraAutoUpdate = false;
-    // never toggle shadowMap.enabled for XR: it is pipeline-shape (lightrig.js), so a flip recompiles everything both ways
+    renderer.xr.cameraAutoUpdate = false;   // render.js owns the stereo camera update
     xrIntent.active = true;
     selfFirstPerson(true);
-    { const t = performance.now(); xrPanelsEnter(rig); tee(`[xr] panels enter ${(performance.now() - t).toFixed(1)} ms`); }   // every registered frame as a physical surface (soft swap: staged each time, built on first show)
+    { const t = performance.now(); xrPanelsEnter(rig); tee(`[xr] panels enter ${(performance.now() - t).toFixed(1)} ms`); }
     session.addEventListener('end', () => {
-      // no restore here: an unconditional one lets a stale session's end take the clock mid-session (generation-checked above)
-      exitVeilShow(true);   // desktop feedback while the session tears down and the first desktop frames come back
-      tee('[xr] session end — teardown begins');   // proves the handler was reached
+      // no clock restore here: xr_frame_clock.js owns it, generation-checked
+      exitVeilShow(true);
+      tee('[xr] session end — teardown begins');
       try {
       presenting = false; vrprobe(false); bus.emit('xr:state', false); eyeBase = null; setXRCurtain(false); curtainState = null;
       renderer.xr.cameraAutoUpdate = true;
       xrIntent.active = false;
-      if (radialOpen) closeRadial(false);   // a session the browser ended leaves the ring open and the stick owned by it
+      if (radialOpen) closeRadial(false);
       resetFingers(getSelf()?.vrm);
       selfFirstPerson(false);
-      { const av = getSelf(), v = av?.vrm; if (v) { if (av.setPuppetScale) av.setPuppetScale(1); else v.scene.scale.setScalar(1); v.scene.position.set(0, 0, 0); v.scene.updateMatrixWorld(true); if (v.userData) { v.userData.ankleH = null; v.userData._gait = null; } } }   // the puppet scale AND the eye-anchor offset (left in place, it sinks the feet on the desktop)
-      releaseGrab();      // a gripped panel goes back to the rig BEFORE the quads are disposed, or a dead mesh stays in the rig
-      endResize();        // a resize in progress commits as it stands (as a released grip would)
+      { const av = getSelf(), v = av?.vrm; if (v) { if (av.setPuppetScale) av.setPuppetScale(1); else v.scene.scale.setScalar(1); v.scene.position.set(0, 0, 0); v.scene.updateMatrixWorld(true); if (v.userData) { v.userData.ankleH = null; v.userData._gait = null; } } }   // the puppet scale and the eye-anchor offset, or the feet sink on the desktop
+      releaseGrab();      // before the quads are disposed, or a dead mesh stays in the rig
+      endResize();        // commits as it stands
       sticky.left = sticky.right = null; dwells.left.reset(); dwells.right.reset(); dropXRTip();
-      for (const h of [hands.left, hands.right]) if (h) { h.laser.visible = false; h.laser.removeFromParent(); hideSurfaceDot(h.dot); rig.add(h.dot); h.smooth.init = false; }   // the beams live in the scene while presenting; the aim snaps on the next entry
+      for (const h of [hands.left, hands.right]) if (h) { h.laser.visible = false; h.laser.removeFromParent(); hideSurfaceDot(h.dot); rig.add(h.dot); h.smooth.init = false; }
       { const t = performance.now(); xrPanelsExit(rig); tee(`[xr] panels exit ${(performance.now() - t).toFixed(1)} ms`); }
       rig.remove(camera);
       scene.remove(rig);
-      rig.scale.setScalar(1);   // the chosen-size tracking scale (syncRigToBody) is a presenting thing too
+      rig.scale.setScalar(1);
       session = null;
       camera.position.set(3.5, 2.6, 5.5);
-      // FISHEYE FIX: WebXR overwrote the projection with the HMD's ~110° matrices
+      // WebXR overwrote the projection with the HMD's matrices
       camera.fov = 60; camera.aspect = innerWidth / innerHeight; camera.zoom = 1;
       camera.updateProjectionMatrix();
-      // the canvas back to the window's size and ratio (ours is the truth); a pixel ratio the #32 guard deferred lands now
+      // the canvas back to the window's size; a pixel ratio the guard deferred (xrpixelratio.js) lands now
       try { renderer.setPixelRatio(xrPixelRatio?.takeDeferred() ?? Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight); bus.emit('xr:exit-resized'); } catch (e) { report('xr exit resize', e); }
-      // THE BLACK DESKTOP: three's WebGL backend keeps `_currentContext` = the last XR frame's after the session
-      // ends, and every desktop finishRender then throws. Drop the dead context.
+      // three's WebGL backend keeps the last XR frame's `_currentContext` after the session ends, and every desktop
+      // finishRender then throws: drop it
       try { const be = renderer.backend; if (be && be._currentContext && be._currentContext !== null) { const rt = be._currentContext.renderTarget; tee(`[xr] exit: dropping stale backend context (${rt?.isXRRenderTarget ? 'XR' : rt?.constructor?.name ?? 'canvas'})`); be._currentContext = null; }
         renderer.setRenderTarget(null);
       } catch (e) { report('xr exit context', e); }
-      camera.quaternion.identity(); camera.scale.setScalar(1); camera.updateMatrixWorld(true);   // trap: pos+quat go NaN after exit (follow-camera lerp from XR-era numbers)
-      // AFTER-EXIT INSTRUMENT: at +0.5 s and +3 s, tee the loop, last frame, camera, canvas size and a REAL centre pixel
+      camera.quaternion.identity(); camera.scale.setScalar(1); camera.updateMatrixWorld(true);   // pos+quat went NaN after exit without this
+      // after-exit probe at +0.5 s and +3 s: the loop, camera, canvas size, a real centre pixel, programs/pipelines built
+      // since teardown began, and `held` = how late each timer fired
       const f0 = perf.frameNo ?? 0;
-      // EXIT COST: programs/pipelines built since teardown began, and `held` = how late each timer fired (a frozen
-      // tab shows as held time even when the block is in the GPU process and no longtask fires).
       const tExit = performance.now(); const c0 = { ...buildTotals };
       const probe = (tag, due) => {
         // the veil drops only when desktop frames flow, never on a timer; a loop still dead at +3 s is re-armed once
@@ -812,22 +785,20 @@ async function enterVR({ retryOf = null } = {}) {
     });
   } catch (e) {
     report('enter VR', e);
-    // a session that was GRANTED but whose setSession failed is alive and ours: end it, or the visor is dead
-    // until reload (the browser answers every later request 'already an active immersive XRSession')
+    // a granted session whose setSession failed is alive and ours: end it, or every later request is 'already active'
     if (session && !presenting) { try { session.end(); } catch { /* already ending */ } session = null; renderer.xr.enabled = false; }
-    // the failure must OUTLIVE the glance: a sticky toast with the actual message, 30 s (8 s when the policy supplied a userMessage)
+    // a sticky toast with the actual message (8 s when the policy supplied a userMessage)
     toast(e?.userMessage ?? `VR failed to start: ${e?.message ?? e}`, e?.userMessage ? 'warn' : 'err', e?.userMessage ? 8000 : 30000);
     tee(`[xr] ENTER FAILED: ${e?.name ?? ''} ${e?.message ?? e}`);
   } finally { entering = false; if (!presenting) xrVeilShow(false); }
 }
 
-/** The rig goes where the body is (root offset by the head's playspace position, recentreXR). Called from xrbody BEFORE
- *  the head/arm solve, or grips and camera lag the body a frame (a fore/aft stutter when running). */
+/** The rig goes where the body is (offset by the head's playspace position, recentreXR). Called from xrbody before
+ *  the head/arm solve, or grips and camera lag the body a frame. */
 export function syncRigToBody() {
   if (!presenting) return;
-  // THE CHOSEN SIZE scales the tracking space (bodyscale.js xrScales: rig = u, body = u/k): the HMD reads u× your real
-  // height and the controllers sit u× as far out, which is exactly where a u× body's eyes and hands are. recentre is
-  // measured rig-local (recentreXR's worldToLocal divides the scale out), so it goes back out × u here.
+  // the chosen size scales the tracking space (bodyscale.js xrScales: rig = u, body = u/k); recentre is measured
+  // rig-local, so it goes back out × u here
   const u = xrScales(getSelf()?.userScale ?? 1, scaleState.k).rig;
   if (rig.scale.x !== u) rig.scale.setScalar(u);
   const c = Math.cos(rig.rotation.y), sn = Math.sin(rig.rotation.y);
@@ -835,10 +806,10 @@ export function syncRigToBody() {
   rig.updateMatrixWorld(true);
   renderer.xr.updateCamera(camera);
 }
-/** Apply the smooth turn BEFORE the body solve, or the body is solved against last frame's yaw while the eyes render
- *  this one's. xrbody calls this ahead of syncRigToBody; snap turns stay in the input pass. */
+/** Apply the turn before the body solve, or the body is solved against last frame's yaw while the eyes render this
+ *  one's. xrbody calls this ahead of syncRigToBody. */
 let turnEarlyFrame = -1;
-let hadPose = false;   // a viewer pose has arrived this session (the eyes exist) — the headset is on someone's head
+let hadPose = false;   // a viewer pose has arrived this session: the headset is on someone's head
 export function applyTurnEarly(dtSec) {
   if (!presenting || radialOpen || !buttonsTrusted()) return;
   const R = sourceFor('right')?.gamepad; if (!R) return;
@@ -851,7 +822,7 @@ export function applyTurnEarly(dtSec) {
     turnTraceArm('smooth'); turnTraceInput(d, dtSec);
     return;
   }
-  // snap: written after the body solve, a 30° step puts the eyes 30° ahead of the hands for a frame
+  // snap
   if (Math.abs(rx) > 0.6 && !snapState.cooling) {
     rig.rotation.y = wrapPi(rig.rotation.y - Math.sign(rx) * (SNAP_DEG * Math.PI) / 180);
     snapState.cooling = true;
@@ -859,10 +830,7 @@ export function applyTurnEarly(dtSec) {
     turnTraceArm('snap');
   } else if (Math.abs(rx) < 0.3) snapState.cooling = false;
 }
-/** Per-frame while presenting. Order matters: read hands → fill intent →
- *  (controller.updateMe moves the body with THEIR loco) → rig follows body. */
-// TURN BURST TRACE: armed by a stick turn, 60 frames of rig/hips yaw and root/head/rig xz tee as one line (cm,
-// centi-radians), then it retires for 10 s. Read: does root or rig alternate sign frame to frame?
+// turn trace: armed by a stick turn, 60 frames of rig/hips yaw and root/head/rig xz tee as one line, then it retires for 10 s
 let turnTrace = null, turnTraceLast = 0;
 function turnTraceArm(kind) { if (turnTrace || performance.now() - turnTraceLast < 10000) return; turnTrace = { kind, rows: [], d: 0, dt: null }; }
 function turnTraceInput(d, dt) { if (turnTrace) { turnTrace.d = d; turnTrace.dt = dt; } }
@@ -872,7 +840,7 @@ function turnTraceTick() {
   const hy = hips ? Math.atan2(hips.getWorldDirection(_v).x, hips.getWorldDirection(_v).z) : 0;
   const rp = root ? root.getWorldPosition(_v2) : _v2.set(0, 0, 0);
   const hp = renderer.xr.getCamera().matrixWorld.elements;
-  // the HANDS: right hand bone vs grip, world, mm — sign-alternating = an ordering bug; steady = the solver; growing = lag
+  // right hand bone vs grip, world, mm
   let hd = 'u';
   { const g = hands.right?.grip, hb = av?.vrm?.humanoid?.getNormalizedBoneNode('rightHand');
     if (g && hb) { g.getWorldPosition(_v); hb.getWorldPosition(_v2); _v2.sub(_v); hd = `${Math.round(_v2.x * 1000)}:${Math.round(_v2.y * 1000)}:${Math.round(_v2.z * 1000)}`; } }
@@ -880,11 +848,11 @@ function turnTraceTick() {
   if (turnTrace.rows.length >= 60) { try { const sys = (Array.isArray(frameDebug?.()) ? frameDebug() : (frameDebug?.()?.systems ?? [])).map((x) => [x.name, +(x.ms ?? 0).toFixed(2)]).sort((a, b) => b[1] - a[1]).slice(0, 6); tee(`[xr] turn-trace systems (rolling ms, top 6): ${sys.map(([n, m]) => `${n}=${m}`).join(' ')} draws=${renderer.info.render.calls}`); } catch {} tee(`[xr] turn-trace ${turnTrace.kind} (rigYaw,camYaw,stick×100,dtMs|u,hipsYaw,rootX,rootZ,headX,headZ,rigX,rigZ,handΔx:y:z mm; angles×100, m×100): ${turnTrace.rows.join(' ')}`); turnTrace = null; turnTraceLast = performance.now(); }
 }
 function camYawWorld() { const e = renderer.xr.getCamera().matrixWorld.elements; return Math.atan2(-e[8], -e[10]); }   // world yaw of the HMD's -Z
-const wrapPi = (a) => Math.atan2(Math.sin(a), Math.cos(a));   // every yaw write wraps: an unwrapped body yaw against a wrapped camera yaw pops a full turn
-// ---- recentre / seated (Basis: seated suppresses height capture) ----------
+const wrapPi = (a) => Math.atan2(Math.sin(a), Math.cos(a));   // every yaw write wraps, or a body yaw against a camera yaw pops a full turn
+// ---- recentre / seated ----------
 // Measure the head's rig-local pose once and fold it into the rig every frame, so head xz lands on myState.pos;
-// seated lifts the rig to standing eye height. Pure math in recentreSolve. NEVER yaw the rig for a body: the
-// camera is the rig's child, so that spins the world (only the stick turns the tracking space).
+// seated lifts the rig to standing eye height. Never yaw the rig for a body: the camera is its child, so that spins
+// the world (only the stick turns the tracking space).
 const recentre = { x: 0, y: 0, z: 0, pending: false };
 /** @returns {{x,z,y}} rig-local head xz to fold in; y lift (seated only). No yaw: the rig is stick-only. */
 function recentreSolve({ headLocal, seated, standingEyeY }) {
@@ -896,10 +864,10 @@ export function recentreXR(why = 'verb') {
   if (!presenting) return false;
   const cam = renderer.xr.getCamera();
   _hl.setFromMatrixPosition(cam.matrixWorld);
-  rig.updateMatrixWorld(true); rig.worldToLocal(_hl);           // head in rig space == the playspace: the rig's origin is root − R·recentre (syncRigToBody), so the offset is already out
+  rig.updateMatrixWorld(true); rig.worldToLocal(_hl);           // head in rig space == the playspace
   if (![_hl.x, _hl.y, _hl.z].every(Number.isFinite)) return false;
-  // A tracked head is ~0.3–3 m up and within 10 m of the origin. The first presenting frames have no pose (the
-  // desktop camera at the origin): refuse, and on the entry pass retry next frame.
+  // a tracked head is ~0.3–3 m up and within 10 m of the origin; the first presenting frames have no pose: refuse,
+  // and on the entry pass retry next frame
   if (_hl.y < 0.3 || _hl.y > 3 || Math.hypot(_hl.x, _hl.z) > 10) {
     if (why === 'entry') recentre.pending = true;
     else tee(`[xr] recentre (${why}) refused: head at playspace ${_hl.x.toFixed(2)},${_hl.y.toFixed(2)},${_hl.z.toFixed(2)} is not a tracked pose`);
@@ -916,32 +884,31 @@ export function recentreXR(why = 'verb') {
 let lastLeaveAt = -1e9;
 export function leaveVR(why = 'verb') {
   if (entering) { tee(`[xr] leave (${why}) refused: enter still in flight`); return false; }
-  // before the `!session` return: a pending busy-retry has no session YET, and a leave must still cancel it
+  // before the `!session` return: a pending busy-retry has no session yet, and a leave must still cancel it
   if (entryEffects.hasPending) { cancelBusyRetry(`leave (${why})`); return true; }
   if (!session) { tee(`[xr] leave (${why}): no session`); return false; }
   tee(`[xr] leave (${why})`);
   lastLeaveAt = performance.now();
   toast('leaving VR…', 'info', 6000);
-  exitVeilShow(true);   // from the CLICK, not 'end': session.end() takes a moment that reads as nothing happening
+  exitVeilShow(true);   // from the click, not 'end': session.end() takes a moment
   try { const p = session.end(); p?.catch?.((e) => tee(`[xr] leave (${why}) rejected: ${e?.message ?? e}`)); } catch (e) { tee(`[xr] leave (${why}) threw: ${e?.message ?? e}`); }
   return true;
 }
-// ENTRY CLOCK: setSession → first presenting frame, then seven more frame gaps (a compile stall = one huge gap; a runtime
-// stall = the t0→first gap). One tee line, then it retires.
+// entry clock: setSession → first presenting frame, then seven more frame gaps; one tee line, then it retires
 let entryClock = null;
-const buildTotals = { programs: 0, programMs: 0, pipelines: 0, syncPipelines: 0, syncMs: 0 };   // lifetime totals the exit probe reads deltas off; sync = promises===null on a render frame (blocking link)
-let skyArriving = false;   // sky.js 'sky-busy': the gradient's up or a tier swap is compiling/baking
+const buildTotals = { programs: 0, programMs: 0, pipelines: 0, syncPipelines: 0, syncMs: 0 };   // lifetime totals the exit probe reads deltas off; sync = a blocking link on a render frame
+let skyArriving = false;   // sky.js 'sky-busy': a tier swap is compiling or baking
 bus.on('sky-busy', (b) => { skyArriving = !!b; });
 let curtainState = null;   // { armed, t0 } — the compile kicks off on the first presenting frame
 let eyeBase = null;
 let consoleTapped = false, shaderTees = 0;
 let turnMag = 0;                    // |stick-X| while smooth-turning — the vignette reads it
 export const turnMagnitude = () => turnMag;
+/** Per frame while presenting: read hands → fill intent (controller.updateMe moves the body) → rig follows body. */
 export function updateXR(dtSec = 1 / 72) {
   if (!presenting) { turnMag = 0; if (pttFromX) { setPttHeld(false); pttFromX = false; } muteBtnWas = false; return; }
   renderCensusTick();
-  // EYE WATCH: per frame, against a first-sample baseline; an eye whose vertical fov moves > 5° or whose viewport
-  // changes shape tees one line (both eyes' fov, viewport, last foreign render), re-armed on return to baseline.
+  // eye watch: an eye whose vertical fov moves > 5° or whose viewport changes shape tees one line, re-armed on return
   { const cams = renderer.xr.getCamera().cameras ?? [];
     if (cams.length && !hadPose) { hadPose = true; markXrAbsent(false); }
     if (cams.length === 2) {
@@ -955,22 +922,20 @@ export function updateXR(dtSec = 1 / 72) {
       }
     } }
   if (curtainState?.armed) { curtainState.armed = false;
-    // The curtain holds until the entry compileAsync resolves (cap 15 s), then drops after ≥2 presenting frames;
-    // it can resolve in-session only because window.rAF is routed onto the session clock (installFrameClock).
+    // the curtain holds until the entry compileAsync resolves (cap 15 s), then drops after ≥2 presenting frames
     const t0 = performance.now(); const f0 = perf.frameNo ?? 0; const clock = entryClock;
     curtainState = { down: false, resolved: false, t0, f0, clock };
     { let ticks = 0; const tw = performance.now(); const tick = () => { ticks++; if (performance.now() - tw < 3000) requestAnimationFrame(tick); }; requestAnimationFrame(tick);
-      const tc = performance.now(), mine = sessionNo; const pr = compileEverything(renderer.xr.getCamera());   // tagged: a leave/re-enter inside the window must not let session N drop session N+1's curtain
+      const tc = performance.now(), mine = sessionNo; const pr = compileEverything(renderer.xr.getCamera());   // tagged: session N must not drop session N+1's curtain
       pr.then(() => { tee(`[xr] entry compile resolved ${(performance.now() - tc).toFixed(0)} ms after arm (presenting=${presenting})`); if (curtainState && sessionNo === mine) curtainState.resolved = true; })
         .catch((e) => { report('xr entry compile', e); if (curtainState && sessionNo === mine) curtainState.resolved = true; });
       setTimeout(() => tee(`[xr] window.rAF in-session: ${ticks} ticks in 3 s; sync pipelines ${buildTotals.syncPipelines} (${buildTotals.syncMs.toFixed(0)} ms)`), 3200); }
   }
   if (curtainState && !curtainState.armed && !curtainState.down) {
     const frames = (perf.frameNo ?? 0) - curtainState.f0, ms = performance.now() - curtainState.t0;
-    // the curtain is on screen: the sky's entry swap may start its heavy work now (it waits for this, so the headset
-    // shows the curtain rather than black while that work occupies the GPU process)
+    // the curtain is on screen: the sky's entry swap waits for this before its heavy work
     if (frames >= 3 && !curtainState.shown) { curtainState.shown = true; bus.emit('xr:curtain-shown'); }
-    // …and the curtain covers the WHOLE transition, the sky's arrival included; still capped at 15 s
+    // the curtain covers the whole transition, the sky's arrival included; still capped at 15 s
     if ((curtainState.resolved && frames >= 2 && curtainState.shown && !skyArriving) || ms > 15000) {
       curtainState.down = true; setXRCurtain(false);
       const clock = curtainState.clock;
@@ -979,43 +944,41 @@ export function updateXR(dtSec = 1 / 72) {
   }
   if (entryClock) { const now = performance.now(); entryClock.frames.push(+(now - (entryClock.last || entryClock.t0)).toFixed(0)); entryClock.last = now;
     if (entryClock.frames.length === 8) { tee(`[xr] entry: setSession ${entryClock.setSessionMs} ms; first frame +${entryClock.frames[0]} ms; next gaps ${entryClock.frames.slice(1).join(',')} ms; programs so far ${entryClock.programs} (${entryClock.programMs.toFixed(0)} ms), pipelines ${entryClock.pipelines}; sync pipelines total ${buildTotals.syncPipelines} (${buildTotals.syncMs.toFixed(0)} ms)`); } }
-  if (entryClock && (entryClock.frames.length > 120 || performance.now() - entryClock.t0 > 12000)) entryClock = null;   // the probe retires after 12 s (the line above tees ONCE, at frame 8)
-  if (!xrPrefs.seated) { const e = renderer.xr.getCamera().matrixWorld.elements; const hy = toRigLocal(e[13] - rig.position.y, rig.scale.y); if (Number.isFinite(hy)) sampleDeviceScale(hy); }   // rig-local: k is YOUR height, whatever size you chose; seated suppresses capture (Basis)
+  if (entryClock && (entryClock.frames.length > 120 || performance.now() - entryClock.t0 > 12000)) entryClock = null;
+  if (!xrPrefs.seated) { const e = renderer.xr.getCamera().matrixWorld.elements; const hy = toRigLocal(e[13] - rig.position.y, rig.scale.y); if (Number.isFinite(hy)) sampleDeviceScale(hy); }   // rig-local: k is your real height; seated suppresses capture
   sampleFingerCurl();
   if (recentre.pending) { recentre.pending = false; recentreXR('entry'); }
 
   // head yaw becomes the movement frame. Read the -Z column of matrixWorld directly: getWorldDirection() calls
-  // updateWorldMatrix(), which clobbers the XR-set matrix and freezes forward at north.
+  // updateWorldMatrix(), which clobbers the XR-set matrix.
   const me_ = camera.matrixWorld.elements;
   _v.set(-me_[8], -me_[9], -me_[10]);
-  // NaN passes `< 1e-6`: a momentarily NaN XR matrix (tracking loss, a compile spike) would poison the move
-  // vector and myState.pos. Keep the last good yaw on a bad frame.
+  // a momentarily NaN XR matrix (tracking loss) must not poison the move vector: keep the last good yaw
   const yaw = Math.atan2(_v.x, _v.z) + Math.PI;
   if (Number.isFinite(yaw) && _v.lengthSq() > 1e-6) {
-    setCamYaw(yaw);   // orbit yaw (= facing + π) for the walk direction ONLY; the body's yaw is not driven from here
+    setCamYaw(yaw);   // orbit yaw for the walk direction only; the body's yaw is not driven from here
   }
 
-  // a NaN in the body anyway goes back to the last good spot before it poisons every matrix downstream
+  // a NaN in the body goes back to the last good spot before it poisons every matrix downstream
   if (Number.isFinite(myState.pos.x) && Number.isFinite(myState.pos.z)) lastGood.copy(myState.pos);
   else { tee(`[xr] myState.pos NaN — restored to ${lastGood.x.toFixed(1)},${lastGood.z.toFixed(1)} (speed ${myState.speed}, camYaw ${camYaw}, intent ${xrIntent.fwd},${xrIntent.strafe})`); myState.pos.copy(lastGood); }
-  // speed is a lerp accumulator: one NaN in it is permanent (every compare with NaN is false), and re-poisons pos every frame
+  // speed is a lerp accumulator: one NaN in it is permanent
   if (!Number.isFinite(myState.speed)) myState.speed = 0;
   if (!Number.isFinite(camYaw)) setCamYaw(0);
 
   // the head's pitch (+ looking down) — swimming goes where the headset looks
   { const e = renderer.xr.getCamera().matrixWorld.elements; const pd = Math.asin(Math.max(-1, Math.min(1, e[9])));
     xrIntent.pitchDown = Number.isFinite(pd) ? pd : 0; }
-  // sticks → intent (deadzone-with-rescale; snap cooldown — exultation math)
+  // sticks → intent
   const L = sourceFor('left')?.gamepad, R = sourceFor('right')?.gamepad;
   if (L) {
     xrIntent.fwd = dead(-pickAxis(L.axes[3], L.axes[1]));
     xrIntent.strafe = dead(pickAxis(L.axes[2], L.axes[0]));
-    // jump = the RIGHT A, as VRChat (docs.vrchat.com); the LEFT A/X is the mic (below)
+    // jump = the right A, as VRChat; the left A/X is the mic (below)
     xrIntent.jump = !!R?.buttons[4]?.pressed;
-    if (held?.hand === 'left' && L.buttons[0]?.pressed) xrIntent.fwd = 0;   // trigger + stick on the holding hand reels the panel: that push is not a step
+    if (held?.hand === 'left' && L.buttons[0]?.pressed) xrIntent.fwd = 0;   // trigger + stick on the holding hand reels the panel, not a step
   } else { xrIntent.fwd = 0; xrIntent.strafe = 0; xrIntent.jump = !!R?.buttons[4]?.pressed; }
-  // LEFT A / X = the mic (VRChat's convention), through the desktop V's doors: a press flips it in voice
-  // activation, hold-to-talk in push-to-talk (setPttHeld). Released on button-up, a dropped controller, session end.
+  // left A/X = the mic, as the desktop V: a press flips it in voice activation, hold-to-talk in push-to-talk
   { const x = buttonsTrusted() && !!L?.buttons[4]?.pressed;
     if (x && !muteBtnWas) {
       if (pttMode()) { if (micLive()) { setPttHeld(true); pttFromX = true; } }
@@ -1225,10 +1188,8 @@ export function updateXR(dtSec = 1 / 72) {
 }
 let recAt = 0;
 
-// XR PIPELINE PRE-WARM: once my body is in, compile the whole scene for the eye buffers so entry skips the first-frame compile
-
-// COMPILE THE WHOLE SCENE, NOT THE FRUSTUM: three's walk culls by camera, so a prop behind you compiles at its first
-// in-session draw (hundreds of ms each, after the curtain)
+// Compile the whole scene for the eyes, not the frustum: three's walk culls by camera, so a prop behind you would
+// compile at its first in-session draw (hundreds of ms each, after the curtain).
 async function compileEverything(cam) {
   const culled = []; scene.traverse((o) => { if (o.isMesh && o.frustumCulled) { culled.push(o); o.frustumCulled = false; } });
   try { await renderer.compileAsync(scene, cam, scene); }
@@ -1239,8 +1200,7 @@ function warmXRPipelines() {
   if (xrWarmed || !(XR_BOOT || headsetHere) || presenting || !getSelf()?.vrm) return;   // any boot with a headset present warms, not only ?xr=1
   xrWarmed = true;
   warm('xr pipelines', async () => {
-    // One compile through a two-eye stand-in, no target bound (bench/xr-dual-warm-measure.mjs): it lands in the render
-    // context the headset uses. Not xr.getCamera() (zero eyes before a session) nor a hand-built target (wrong context).
+    // one compile through three's own eyes (xrpass.js withXREyes), no target bound: it lands in the render context the headset uses
     const t0 = performance.now();
     try { await withXREyes(renderer, (eyes) => compileEverything(eyes)); }
     catch (e) { report('xr pipeline warm', e); }
@@ -1256,17 +1216,14 @@ export async function initXR() {
   if (!supported) return;
   // never write the headset-seen pref here: isSessionSupported is true with any XR runtime, headset or not
   headsetHere = true;
-  // From here every content warm also builds the other mode's variant (xrwarm.js), on the WebGL backend of any
-  // machine reporting immersive-vr. Content warmed before this compiles its stereo variant under the entry curtain.
+  // from here every content warm also builds the other mode's variant (xrwarm.js)
   if (renderer.backend?.isWebGLBackend) globalThis.__xrDualWarm = installDualWarm({ THREE, renderer, camera, presenting: () => presenting });
 
-  // Pre-warm the hand meshes: their first draw compiled on the frame the controllers arrived (a ~0.5 s spike);
-  // build them now, parked under the rig, and let the conductor compile them off-screen.
+  // pre-warm the hand meshes, parked under the rig, so their first draw isn't a ~0.5 s compile spike
   slots[0] ??= makeHand(0); slots[1] ??= makeHand(1);
   hands.left ??= slots[0]; hands.right ??= slots[1];
   warm('xr hands', async () => {
-    // the avatar warm's form, frustumCulled off so a parked mesh isn't culled out of the compile walk; the dot and
-    // an icon with its texture on (a map changes the shader) are shown for the compile only
+    // frustumCulled off so a parked mesh isn't culled out of the compile walk; the dot and a textured icon are shown for the compile only
     const dots = [hands.left?.dot, hands.right?.dot].filter(Boolean);
     for (const d of dots) { d.visible = true; setSurfaceDotKind(d, 'click'); d.userData.parts.rim.visible = d.userData.parts.core.visible = true; }
     const meshes = []; rig.traverse((o) => { if (o.isMesh) meshes.push(o); });
@@ -1277,8 +1234,7 @@ export async function initXR() {
   { let tries = 0; const iv = setInterval(() => { warmXRPipelines(); if (xrWarmed || ++tries > 240) clearInterval(iv); }, 500); }   // poll until the body is in; give up after 2 min (a viewer page has no body)
   // the third glyph of the mic/ear trio; exists only where a headset can present
   registerXrGlyph({
-    // ?xr=1 alone is enough: core.js picks the backend that can present (WebGL until Chrome's
-    // WebGPU-XR ships unflagged; ?webgpu=1 opts in early).
+    // core.js picks the backend that can present (WebGL until Chrome's WebGPU-XR ships unflagged)
     onclick: () => {
       if (presenting) { leaveVR('visor'); return; }
       // just after a leave, a controller trigger IS a click wherever the pointer sits: refuse re-entry for 1.5 s
@@ -1337,8 +1293,8 @@ export const xrDebug = () => {
 };
 
 
-// The veil, both ways: the splash's own mark (cloned from #splash, one drawing) and phase line, from the visor
-// click until the session's first frame, and from the leave click until desktop frames flow again (not a timer).
+// The veil, both ways: the splash's mark and a phase line, from the visor click until the session's first frame, and
+// from the leave click until desktop frames flow again.
 function xrVeilShow(on, phase = 'leaving VR') {
   if (!exitVeil) {
     exitVeil = document.createElement('div'); exitVeil.className = 'xr-veil'; exitVeil.setAttribute('aria-live', 'polite');

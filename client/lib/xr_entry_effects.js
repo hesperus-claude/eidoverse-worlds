@@ -1,9 +1,6 @@
-// WHO ACTS ON AN ENTRY FAILURE — the effect owner for the busy/absent/reload verdicts.
-//
-// xr_entry_policy.js decides what a failure MEANS; this acts on it, behind injected dependencies, so
-// test/client/xr-entry-effects-test.mjs executes the same module xr.js imports rather than source-checking it.
-// State is per-owner rather than module-global, so a test can hold two independent entry owners and
-// nothing leaks between page sessions.
+// Acts on an entry-failure verdict (busy / absent / reload). xr_entry_policy.js decides what a failure
+// means; this does the toasts, timers and retry behind injected deps, so test/client/xr-entry-effects-test.mjs
+// runs the same module xr.js imports. State is per-owner, not module-global.
 
 /** @param deps {{ setTimer, clearTimer, tee, toast, enter, markAbsent }} */
 export function makeEntryEffects(deps) {
@@ -23,8 +20,7 @@ export function makeEntryEffects(deps) {
   function apply(verdict, { intent, error } = {}) {
     switch (verdict.action) {
       case 'retry-once': {
-        // EXACTLY ONE automatic retry per entry intent. The retry carries its intent forward, so ITS
-        // failure is the second one and gives up (a flag reset inside the timeout retried forever).
+        // one automatic retry per entry intent: the retry carries its intent, so its own failure gives up
         cancel(null);
         pendingFor = intent;
         deps.tee(`[xr] session busy (another page holds it) — retrying once in ${verdict.delayMs} ms`);
@@ -38,8 +34,7 @@ export function makeEntryEffects(deps) {
         return 'retried';
       }
       case 'give-up':
-        // No scheduling. The visor waits for an explicit click, which starts a fresh budget because
-        // that click is a NEW intent and arrives with retryOf = null.
+        // no scheduling: the next visor click is a new intent (retryOf = null) with a fresh budget
         deps.toast(verdict.toast, 'warn', 8000);
         deps.tee('[xr] session busy after retry — giving up until the visor is clicked again');
         return 'gave-up';
@@ -56,18 +51,13 @@ export function makeEntryEffects(deps) {
     }
   }
 
-  // `hasPending` reads the TIMER because that is what leaveVR must not swallow. It and `pendingFor` are
-  // set and cleared together in every reachable state (no test can tell them apart), but they MEAN
-  // different things — a handle vs an identity — so they stay separate.
+  // hasPending reads the timer (what leaveVR must not swallow); pendingFor is the intent's identity
   return { apply, cancel, get pendingFor() { return pendingFor; }, get hasPending() { return timer !== null; } };
 }
 
-/** THE FAILURE SEAM ITSELF — decide, act, and say what the caller must do next. `enterVR`'s catch
- *  does nothing but call this and obey the result, so the suite drives the boundary itself, including
- *  the argument construction (`isRetry` from retryOf, `gpu` from the backend).
- *
- *  @returns 'handled' (the effect owns what happens next — return) | 'throw' (surface to the outer
- *           catch) | 'reload' (the caller performs the navigation, which needs `location`) */
+/** The failure seam: decide, act, and say what the caller must do next. enterVR's catch only calls this
+ *  and obeys the result.
+ *  @returns 'handled' (return) | 'throw' (rethrow) | 'reload' (the caller navigates; it has `location`) */
 export function handleEntryFailure({ effects, decide, error, intent, retryOf, gpu }) {
   const verdict = decide(error, { isRetry: retryOf !== null, gpu });
   const did = effects.apply(verdict, { intent, error });

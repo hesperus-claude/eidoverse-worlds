@@ -22,22 +22,18 @@ export function initVRPanel() {
       : 'No headset sensed. Chrome finds the OpenXR runtime only at browser start — if SteamVR came up after Chrome, use chrome://restart. These settings apply once one is found.';
     body.appendChild(note);
 
-    // rows.js: selectRow(label, options, value, onChange) RETURNS { row, select }; checkRow(label, get, set) returns the element
     const { row: turn } = selectRow('turning', [['snap', 'snap (30°)'], ['smooth', 'smooth']], xrPrefs.turn,
       (v) => { setXrPref('turn', v); flashHint(`VR turning: ${v}`); });
     turn.title = 'smooth: continuous, like a desktop mouse — the default. snap: the world pivots 30° per stick flick, a comfort option.';
     body.appendChild(turn);
 
-    // pointer visibility: whether the VR laser is drawn (pointing works in every mode; xrpointer.js). dropdown.js opens
-    // its list INSIDE the staged frame, so this <select> works on the VR quad (a native popup is never drawn there).
+    // whether the VR laser is drawn (xrpointer.js); dropdown.js opens the list inside the frame, so the <select> works on a quad
     const POINTER_VIS_OPTS = [['always', 'always'], ['never', 'never (still points)'], ['contextual', 'contextual']];
     const { row: pointerVis, select: pointerVisSel } = selectRow('pointer visibility', POINTER_VIS_OPTS, pointerVisibilityMode(xrPrefs.pointerVisibility),
       (v) => { setXrPref('pointerVisibility', pointerVisibilityMode(v)); flashHint(`VR pointer visibility: ${pointerVisibilityMode(v)}`); });
     pointerVisSel.id = 'vr-pointer-visibility';
     pointerVis.title = 'contextual (the default): the beam shows while it rests on a panel or a name, or while you hold grip or trigger. always: always drawn, faint when it points at nothing. never: no beam, but pointing, clicking and name hover still work (the surface dot has its own setting, below).';
     body.appendChild(pointerVis);
-    // surface dot visibility: the dot where the laser lands has its own say. Contextual: on what the contextual beam
-    // shows for (a panel, a name, something you can use); always: on any surface, a plain wall too.
     const { row: dotVis, select: dotVisSel } = selectRow('surface dot visibility', POINTER_VIS_OPTS.map(([v, t]) => [v, v === 'never' ? 'never' : t]), pointerVisibilityMode(xrPrefs.dotVisibility),
       (v) => { setXrPref('dotVisibility', pointerVisibilityMode(v)); flashHint(`VR surface dot visibility: ${pointerVisibilityMode(v)}`); });
     dotVisSel.id = 'vr-dot-visibility';
@@ -61,16 +57,12 @@ export function initVRPanel() {
     mir.title = 'what the browser window shows while you are in the headset. off costs nothing; the others draw one extra frame per tick.';
     body.appendChild(mir);
 
-    // C15: seated + recentre. Seated keeps the body standing while you sit (the head is lifted to the
-    // avatar's standing eye height and your real height is not measured); recentre puts the body
-    // under your head and turns it to face where you face — also on the VR ring.
     const seated = checkRow('seated', () => !!xrPrefs.seated,
       (on) => { setXrPref('seated', !!on); flashHint(`VR seated ${on ? 'on' : 'off'}`); if (isPresenting()) recentreXR('seated'); });
     seated.title = 'playing from a chair: the body stands at its own height under your head, and your real height is not measured. Recentres when toggled.';
     body.appendChild(seated);
 
-    // the VR panels' look: saturation and contrast applied to the panel quads only (quadcolour.js), never the design
-    // tokens or the desktop. Live while presenting; persisted.
+    // saturation and contrast of the panel quads only (quadcolour.js); live while presenting, persisted
     const g = { ...currentGrade() };
     const grade = sliderTable([['saturation', ...GRADE_RANGE.saturation, 0.05], ['contrast', ...GRADE_RANGE.contrast, 0.02]], g, {
       set: (k, v) => { g[k] = v; Object.assign(g, setGrade({ [k]: v })); },

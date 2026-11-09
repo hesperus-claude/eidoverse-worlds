@@ -1,24 +1,14 @@
-// Who owns window.requestAnimationFrame while a session presents — as pure state. xr.js installs and
-// restores it; this owns the rules. test/client/xr-frame-clock-test.mjs drives them. No imports on purpose.
+// Who owns window.requestAnimationFrame while a session presents. While presenting, frames must come
+// from the session's clock (the window's is throttled behind a headset), so window.rAF is shimmed onto
+// the session and restored at teardown. xr.js calls installEntryClock; this owns the rules, with no
+// imports. test/client/xr-frame-clock-test.mjs and xr-session-lifecycle-test.mjs drive them.
 //
-// While presenting, frames must come from the SESSION's clock, not the window's: a headset runs at its
-// own rate and the window clock is throttled or stopped behind it. So window.rAF is shimmed onto the
-// session for the session's duration, and restored at teardown.
-//
-// Three things make this sharp rather than cosmetic:
-//
-//  • RESTORE ORDERING. three registers its OWN 'end' listener inside setSession, and that listener
-//    restarts the desktop loop through window.requestAnimationFrame. If our restore has not run by
-//    then, the restart goes to the dead session and NO FRAME EVER TICKS AGAIN. Our restore therefore
-//    has to be registered BEFORE setSession, so it runs first.
-//  • THE LATCH. Between 'end' firing and the restore completing, a caller can still reach the shim.
-//    `sessionEnded` makes it fall through to the native clock instead of a dead session.
-//  • RE-ENTRY. The saved native functions must survive one session and still be correct for the next.
-//    Saving them twice (once per entry) captures the SHIM as "native" on the second entry and the
-//    desktop loop never comes back — the failure the save-once rule exists to prevent.
-//
-// An emulated runtime (IWER) drives the session clock ON window.rAF, so shimming would feed it to
-// itself. `shouldShim` says so.
+// The rules that matter:
+//  • restore BEFORE three's own 'end' listener (registered in setSession), which restarts the desktop
+//    loop through window.rAF — on a dead session, no frame ever ticks again;
+//  • once ended, the shim falls through to the native clock;
+//  • the native pair is saved once per page, never per entry (a second save would capture the shim);
+//  • no shim under an emulator (IWER), whose session clock IS window.rAF.
 
 /** Save the window's own clock exactly once per page, never per entry. */
 export function captureNative(saved, win) {
@@ -47,14 +37,12 @@ export function makeCancelShim({ session, native }) {
   };
 }
 
-/** Is the desktop clock actually back? The teardown's whole point, and what a test should assert —
- *  not "restore was called" but "window.rAF is the function we saved". */
+/** Is the desktop clock actually back (window.rAF is the function we saved)? */
 export function clockIsRestored(win, native) {
   return !!native && win.requestAnimationFrame === native.raf && win.cancelAnimationFrame === native.caf;
 }
 
-/** INSTALL AND TEAR DOWN, as one owned sequence: capture, register the restore listener BEFORE
- *  setSession, then shim. Driven by test/client/xr-session-lifecycle-test.mjs.
+/** Install and tear down as one sequence: capture, register the restore listener (before setSession), shim.
  *
  *  @param win     the window whose clock is being taken over
  *  @param session the XRSession (or anything with addEventListener/requestAnimationFrame)
@@ -65,9 +53,7 @@ export function clockIsRestored(win, native) {
 export function installFrameClock({ win, session, saved, emulated = false, onEnd = null }) {
   const native = captureNative(saved, win);   // save-once: a second capture would store the SHIM as native
   let ended = false, restored = false;
-  // A GENERATION, so a STALE session's end cannot take the clock from a live one (re-enter before
-  // the first session finished tearing down, then the OLD end fires): each install claims the
-  // window, and only the current claimant may hand it back.
+  // a generation: only the latest install may hand the clock back, so a stale session's end can't take it from a live one
   const gen = (win.__xrClockGen = (win.__xrClockGen ?? 0) + 1);
   const restore = () => {
     ended = true;
@@ -77,9 +63,7 @@ export function installFrameClock({ win, session, saved, emulated = false, onEnd
     win.requestAnimationFrame = native.raf; win.cancelAnimationFrame = native.caf;
     return true;
   };
-  // BEFORE setSession, which is where three registers its own 'end' listener: listeners fire in
-  // registration order, so ours must be first or three restarts the desktop loop against a dead
-  // session and no frame ever ticks again.
+  // registered before setSession so it fires before three's own 'end' listener (see the header)
   session.addEventListener('end', () => { restore(); if (onEnd) onEnd(); }, { once: true });
   let installed = false;
   if (shouldShim({ emulated })) {
@@ -90,11 +74,9 @@ export function installFrameClock({ win, session, saved, emulated = false, onEnd
   return { native, installed, restore };
 }
 
-/** THE INSTALL SEAM ITSELF — including the runtime arguments the product passes. `enterVR` passes
- *  the objects it has (window, session, the saved pair) and THIS decides what `emulated` means, so a
- *  test can prove that a real runtime — one with no IWER — actually gets a shim.
- *
- *  @param globals where to look for an emulator; defaults to globalThis so the product need not say. */
+/** What enterVR calls. Decides `emulated` here rather than at the call site, so a test can prove a real
+ *  runtime gets a shim.
+ *  @param globals where to look for an emulator (a test seam; the product never passes it) */
 export function installEntryClock({ win, session, saved, globals = globalThis, onEnd = null }) {
   const emulated = !!globals?.IWER;   // IWER drives the session clock ON window.rAF; shimming feeds it to itself
   return installFrameClock({ win, session, saved, emulated, onEnd });

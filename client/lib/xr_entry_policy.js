@@ -1,14 +1,10 @@
-// What a failed immersive-session request MEANS, as a pure function. xr.js owns the effects (toasts,
-// timers, reloads); this owns the decision. test/client/xr-entry-effects-test.mjs drives every outcome.
-// No imports on purpose.
+// What a failed immersive-session request means, as a pure function (no imports). xr_entry_effects.js
+// acts on the verdict; test/client/xr-entry-effects-test.mjs drives every outcome.
 //
-// The rules:
-//   busy (another page still holds the session) — retry ONCE, automatically, after BUSY_RETRY_MS.
-//     A SECOND busy failure on the same entry intent stops and waits for an explicit visor click.
-//     "Same intent" is the point: a flag reset inside the retry timer makes every failure look like the first.
-//   no device / not supported — there is no headset: say so, mark it absent, do not retry.
-//   webgpu refused on a WebGPU backend — the browser cannot grant the 'webgpu' feature; reload onto
-//     WebGL, where three's classic path runs. Not a failure the user can act on.
+//   busy (another page holds the session) — retry once after BUSY_RETRY_MS; a second busy failure on the
+//     same entry intent gives up until the visor is clicked again.
+//   no device / not supported — mark the headset absent, do not retry.
+//   webgpu refused on a WebGPU backend — reload onto WebGL, where three's classic path runs.
 //   anything else — surface it; retrying an unknown error is guessing.
 export const BUSY_RETRY_MS = 1500;
 

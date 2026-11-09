@@ -1,7 +1,5 @@
-// Comfort vignette. A soft dark ring fixed to the headset's view that closes in
-// while you move or turn on the stick and opens when you stop — the standard VR
-// comfort tool. Off by default; on via Settings › VR. Lives on the XR camera so
-// it rides every eye.
+// Comfort vignette: a soft dark ring on the camera that closes in while you move or turn on the stick and opens when
+// you stop. Off by default; Settings › VR.
 import { THREE, camera } from './core.js';
 import { xrPrefs, isPresenting, turnMagnitude } from './xr.js';
 import { xrIntent } from './controller.js';
@@ -27,6 +25,6 @@ export function tickXRVignette(dt) {
   const m = ensure();
   const move = Math.min(1, Math.hypot(xrIntent.fwd || 0, xrIntent.strafe || 0));
   const want = Math.min(1, Math.max(move, turnMagnitude()) * 1.2) * 0.85;
-  level += (want - level) * Math.min(1, dt * 8);   // closes fast, opens a little slower is fine either way
+  level += (want - level) * Math.min(1, dt * 8);
   m.material.opacity = level;
 }
