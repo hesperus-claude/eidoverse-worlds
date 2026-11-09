@@ -45,7 +45,7 @@ for (const n of BROWSER) NEEDS[n] = "Chromium";
 // is 5x that, at least 180 s: a slow host gets room, a hung suite is still killed.
 const EXPECT: Record<string, number> = {
   "water-preview": 3, "seatlab-measure": 1,
-  "agent-mesh-collision": 92, "kernel": 0.5, "hygiene": 0.4, "shard": 1, "trig": 0.2, "laws": 0.3, "engine": 0.6, "nov1": 0.7, "vocab": 3.5, "nonumber": 1.4, "hostile": 0.3, "attack": 1.5,
+  "agent-mesh-collision": 92, "kernel": 0.5, "hygiene": 0.4, "paths": 0.3, "shard": 1, "trig": 0.2, "laws": 0.3, "engine": 0.6, "nov1": 0.7, "vocab": 3.5, "nonumber": 1.4, "hostile": 0.3, "attack": 1.5,
   "determinism": 0.1,
   "libfile": 0.1, "gaps": 5.6, "phys": 3.9, "physlive": 1.2, "phystick": 5.7, "sclock": 2.8, "physseeds": 2.1,
   "eidosim": 12, "eidosim-live": 1.5, "mover": 4.5, "zone-water": 0.6, "climb-env": 0.5, "drive": 0.6, "physics-area": 0.5, "water-vectors": 0.2, "avatar": 1, "remotes-limp-edge": 0.5, "colliders": 0.2, "collider-off-bodies": 2, "lying-support": 16, "replay": 0.4,

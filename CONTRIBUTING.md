@@ -60,5 +60,5 @@ frozen: supersede them, don't edit them.
   commit message.
 - New docs are UPPER-CASE.md and live in `docs/`, except the root five (README, AGENTS, CONTRIBUTING, DESIGN,
   THIRD-PARTY), a directory's own README, and docs/research/ notes (lower-case, named by subject).
-- Every relative link and every `docs/…` path in a comment resolves. A moved file updates its references in the
-  same commit.
+- Every relative link and every repo path in a doc or a comment resolves (`test/gate/paths-check.ts`). A moved file
+  updates its references in the same commit.
