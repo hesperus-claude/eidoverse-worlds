@@ -15,7 +15,7 @@ function occupancyConflict(x, z, r) {
     return false;
 }
 
-// ── placement — jittered grid, slope rejection, bare patches (CK42BB) ───────
+// ── placement — jittered grid, slope rejection, bare patches ────────────────
 export function valueNoise2D(seed) {
     const h = (x, y) => { const s = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43758.5453; return s - Math.floor(s); };
     return (x, y) => {

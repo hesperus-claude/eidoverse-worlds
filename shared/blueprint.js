@@ -1,5 +1,5 @@
 // shared/blueprint.js — blueprints: the record, its hash, and the copy link as
-// pure functions (design §3 "Blueprints", §7 step 6a).
+// pure functions.
 //
 // A blueprint is the master design of a thing — an entity with its components
 // and children — saved as ONE immutable, content-hashed record:
@@ -12,14 +12,13 @@
 // node expands to wire bytes with the same alias table every surface uses.
 // The root carries no placement: its Transform may say `scale`,
 // never `pos`/`q`/`yaw` (where a copy stands is the copy's). A child's
-// Transform is LOCAL to its parent node, as a child entity's is to its carrier
-// (design §3 "Children"); the nesting is the attachment, so no node carries an
+// Transform is LOCAL to its parent node, as a child entity's is to its carrier;
+// the nesting is the attachment, so no node carries an
 // Attachment. A child names itself with `id`, unique among its siblings — the
 // handle an update uses to find the same part in the next version.
 //
 // Editing a blueprint makes a NEW record naming the old one's hash as `parent`
-// (lineage). The hash covers meaning, not prose (design §6's rule for component
-// records): `note` is documentation and may be reworded without minting a new
+// (lineage). The hash covers meaning, not prose (the component records' rule): `note` is documentation and may be reworded without minting a new
 // version; everything else — `name` included, since it is what copies show — is
 // hashed.
 //
@@ -38,8 +37,7 @@ import { qNorm, qHeading } from './rot.js';
 import { recordComponents } from './protocol/view.js';
 import { r9 } from './protocol/round.js';
 export const BLUEPRINT_KIND = 'eido.blueprint';
-/** What the door accepts. A component is written to the world as one `comp`
- *  (≤ 8 KB, PROTOCOL §3), so one instance may not exceed that either. */
+/** What the door accepts. */
 export const BLUEPRINT_LIMITS = Object.freeze({
   BYTES: 65536,          // the canonical record
   NODES: 256,            // root + every child, at any depth
@@ -373,7 +371,7 @@ export function modernize(components) {
 // The part marker is how a copy is read back as a tree whatever its entity ids
 // are (they are minted at placement), and how 6c's update finds "the bulb" in
 // the next version. It rides each part rather than a map on the root because a
-// comp is at most 8 KB and a record may hold 256 parts.
+// record may hold 256 parts.
 export const LINK_KEY = 'blueprint';
 const isBagV = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
 /** Is this comp.blueprint value a copy's link ({hash, name})? */

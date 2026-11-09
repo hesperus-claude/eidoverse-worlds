@@ -5,8 +5,8 @@
 // grass holds one spelling, and checks a preset's name with presetStrokes; the
 // preset itself is stored by its name and composed here on read.
 
-// makeGrass's blade atlas replacement has a known opaque mean (documented in
-// vegetation.js: 91/138/35). A legacy hex color maps to the multiplier that
+// makeGrass's blade atlas replacement has a known opaque mean (client/lib/vegetation/vegetation.js:
+// 91/138/35). A legacy hex color maps to the multiplier that
 // carries the atlas mean to that hex — the same field intent, spoken in the
 // new system's terms.
 export const ATLAS_MEAN = [91, 138, 35];
@@ -67,7 +67,7 @@ export function presetStrokes(args, presets = null) {
   // on the composed biomes, since every stroke carried a hardcoded density
   const k = args.density ?? 1;
   if (args.preset != null) {
-    // §24 defs: named presets are DATA (defs/flora/_presets.json), composed
+    // named presets are DATA (defs/flora/_presets.json), composed
     // here from a small template vocabulary — species/variant/… literal,
     // density × the caller's factor, inset in metres off both extents,
     // offset in min(W,D) fractions from the caller's center, seedAdd off

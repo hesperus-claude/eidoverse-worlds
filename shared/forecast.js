@@ -9,7 +9,7 @@
 // and no Date.now() of its own — callers pass `now`, tests pass whatever they
 // like.
 //
-// The shape (issue #29): a world's `sky` verb may carry a `forecast` policy —
+// The shape: a world's `sky` verb may carry a `forecast` policy —
 // seed, allowed states, dwell ranges, transition time. The POLICY is authored
 // (an actor, a log seq); every weather change derived from it is a
 // world-system realization of that policy, computed independently by each
@@ -165,7 +165,7 @@ function pickState(states, prev, r) {
 
 /** The forecast segment containing `nowMs`. Pure oracle: same answer from a
  *  cold walk or a resumed cursor (the returned segment IS the cursor — feed
- *  it back on the next tick and the walk is O(1) from then on; fence #3). */
+ *  it back on the next tick and the walk is O(1) from then on). */
 export function segmentAt(p, nowMs, cursor = null) {
   let idx = 0, start = p.epoch, prev = null;
   if (cursor && cursor.seed === p.seed && cursor.epoch === p.epoch
