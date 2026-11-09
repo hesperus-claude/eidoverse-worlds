@@ -57,6 +57,7 @@ export function qAxisAngle(axis, angle) {
  *  scale whenever every ancestor's scale is uniform; under a non-uniform ancestor the true transform shears, and here q
  *  is the plain product and scale the component-wise one (Unity's lossyScale). The authority compares this as JSON text
  *  (protocol/authority/checks.js), so its float order is pinned: no renormalization between links. */
+// TODO: return the composed matrix (or flag the sheared case) if a reader ever needs the exact one.
 export function composePose(chain) {
   let acc = chain[0];
   for (let i = 1; i < chain.length; i++) {
