@@ -1,4 +1,4 @@
-// worldentity — the world entity `@world` (design §3), as an ALIAS both ways.
+// worldentity — the world entity `@world` as an ALIAS both ways.
 //
 // A world's sky, ground and grass are the world entity's components (the view shows them as state.sky,
 // state.terrain, state.grass; weather is part of the sky). This file reads them as ONE entity whose components are
@@ -13,10 +13,8 @@
 //   worldEditOps(st, edits)   → { ops, errors } — `edit @world`, as requests
 //   worldPick(st, kind, v)    → the Build tab's World tiles: a preset pick as one request
 //
-// "One sky per world" is not a rule here: Sky is one-per-entity, and there is
-// one world entity. Picking a sky preset REPLACES the Sky component's params
-// (pickSky); the Weather component is a different component and is carried
-// across the sky verb's wholesale fold. Pure: no DOM, no I/O, `now` passed in.
+// Picking a sky preset REPLACES the Sky component's params (pickSky); the Weather component is carried across the sky
+// verb's wholesale fold. Pure: no DOM, no I/O, `now` passed in.
 
 import * as OP from './requests.js';
 import { RECORDS } from './components.js';
@@ -120,7 +118,7 @@ export function skyPresetOf(sky, presets) {
   return null;
 }
 
-/** Picking a sky REPLACES the Sky (design §3): the new Sky's params are the
+/** Picking a sky REPLACES the Sky: the new Sky's params are the
  *  preset's and nothing else. The Weather component is carried (the sky verb
  *  would otherwise wipe it); a preset that names weather itself wins. */
 export function pickSky(sky, preset) {
@@ -198,8 +196,7 @@ export function worldSchema(st, live = {}) {
   if (sky != null) skyFields.push({ t: 'btn', k: 'remove', label: 'remove the sky', danger: true, hint: 'back to a plain clear sky (weather goes with it)', ...ro });
   groups.push({ group: 'sky', label: 'Sky', fields: skyFields });
 
-  // Weather — state.sky's weather half; under a forecast a pick is a manual
-  // override that holds until the segment boundary (AGENTS.md "Weather")
+  // Weather — state.sky's weather half; under a forecast a pick is a manual override that holds until the segment boundary
   const eff = isBag(sky) ? effectiveSky(sky, now) : null;
   const f = isBag(sky?.forecast) ? sky.forecast : null;
   const wxFields = [
@@ -248,7 +245,7 @@ export function worldSchema(st, live = {}) {
     : [{ t: 'info', label: '', value: 'none: every draft here is unproven. An owner trusts one from its card on a thing' }];
   groups.push({ group: TRUSTED, label: 'Trusted components', fields: trustedFields });
 
-  // the cards (design §5): one per component, in the inspector's order
+  // the cards: one per component, in the inspector's order
   const have = new Set(worldComponents(st).components.map((c) => c.type));
   const list = groups.map(({ group, fields }) => {
     const type = { sky: 'Sky', weather: 'Weather', terrain: 'Terrain', grass: 'Grass' }[group];
@@ -298,8 +295,6 @@ export function worldEditOps(st, edits, live = {}) {
         if (k === 'tz') {
           if (v) skyPatch.tz = v;
           else {
-            // back to the authored clock (an empty timezone): an older fold parked the rated clock under
-            // dormantRated; hand it back, as the sky panel does
             Object.assign(skyPatch, { tz: undefined });   // back to the authored clock (an empty timezone)
           }
         }
