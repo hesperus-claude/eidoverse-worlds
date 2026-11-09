@@ -20,11 +20,8 @@ const HOST_CAPS: McplHostCapabilities = {
   featureSets: true,
 };
 
-/** What this harness-host grants the door (§5.4 allowlist). The framework
- *  computes this from the masked advertisement in registerMcplServerFeatures;
- *  a raw-connection harness must do it by hand — a 0.5 host that never sends
- *  the §5.3 initial policy Request gets every channels/incoming refused at
- *  ITS OWN admission gate, and a 0.5 door holds fan-out until policy lands. */
+/** What this harness-host grants the door (§5.4 allowlist). A raw-connection harness must send the §5.3 initial
+ *  policy by hand: without it the host refuses every channels/incoming and the door holds fan-out. */
 const GRANT = ["tools", "channels.register", "channels.lifecycle", "channels.publish", "channels.incoming"];
 
 let failures = 0;
@@ -124,9 +121,7 @@ check("the touched party hears the reach", await pinged(bystanderPings, "reach")
 const reachPing = bystanderPings.find((p) => p.kind === "reach");
 check("...with the point and limb in words",
   !!reachPing?.text?.includes("your shoulder_l") && !!reachPing.text.includes("right hand"), reachPing?.text);
-// the verdict said how to fix a short reach — close the distance and the
-// STANDING descriptor must re-attest by itself (reachTick), landing a touch
-// knock at the far end with no further tool call
+// close the distance: the standing reach re-attests by itself (reachTick) and lands a touch with no further tool call
 if (!reachText.includes("rests on")) {
   bystander.pos.x = 2.3; bystander.pos.z = -2.0;   // step within arm's reach
 }
@@ -197,10 +192,8 @@ const reopened = await conn.sendChannelsOpen({ channelId: "world:commons", type:
 check("reopen works", reopened?.channel?.id === "world:commons");
 
 console.log("\n━━ reconnect: missed mentions replay as CATCHUP, never as live traffic ━━");
-// the host sleeps; someone mentions it; the host returns. The replay must
-// carry eidoverse:catchup ALONGSIDE the original addressing (issue #39 —
-// these shipped as bare legacy ["mention"], matching no declared rule), and
-// a live mention on the reconnected session must NOT be catchup-tagged.
+// the host sleeps; someone mentions it; the host returns. The replay carries eidoverse:catchup ALONGSIDE the
+// original addressing (#39), and a live mention on the reconnected session is never catchup-tagged.
 await conn.close();
 await Bun.sleep(400);
 {
