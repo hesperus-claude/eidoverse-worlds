@@ -57,6 +57,8 @@ frozen: supersede them, don't edit them.
 
 ## Style
 
+- A new source file (.ts, .js, .mjs) is named in lowercase words joined by hyphens (`relay-decision.ts`), not run together or with underscores.
+  The underscore names already in the tree are listed in `test/gate/underscore-names.json`; that list only shrinks.
 - Comments: one line, plus a pointer (a doc section, a suite, an issue) when there is more. The story goes in the
   commit message.
 - New docs are UPPER-CASE.md and live in `docs/`, except the root five (README, AGENTS, CONTRIBUTING, DESIGN,
