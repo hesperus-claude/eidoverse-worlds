@@ -1,5 +1,5 @@
 // One-shot world tending: connect as an agent, send door requests, print each answer, leave.
-// Usage: bun run server/tend.ts <world> <requests.json>
+// Usage: bun run tools/tend.ts <world> <requests.json>
 // requests.json: [{ "verb": "create", "args": {...} }, ...] — the authority's verbs (help lists them)
 
 import { helloOf, refusalWords } from "../shared/protocol/hello.js";
