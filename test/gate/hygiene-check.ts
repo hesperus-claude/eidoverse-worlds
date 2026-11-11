@@ -160,6 +160,13 @@ const BASE = path.join(ENGINE, "test/gate/hygiene-baseline.json");
 /** Test-named files no SUITES row reaches (ungated.json lists the ones still out, each with its reason). */
 export const TEST_NAME = /(?:-test|-check|-probe|\.test|-bench|-mutants)\.(?:ts|mjs|js)$/;
 const UNGATED = path.join(ENGINE, "test/gate/ungated.json");
+const US_LIST = path.join(ENGINE, "test/gate/underscore-names.json");
+/** A tracked source file whose name has an underscore (vendored code and node_modules aside; Python keeps its own convention). */
+export const underscoreName = (f: string): boolean => /\.(?:js|mjs|ts)$/.test(f) && !/(?:^|\/)(?:vendor|node_modules)\//.test(f) && path.posix.basename(f).includes("_");
+export function underscoreNames(): string[] {
+  const r = Bun.spawnSync(["git", "ls-files", "-z", "--", "client", "server", "shared", "mcpl", "tools", "test", "services", "bench", "deploy"], { cwd: ENGINE });
+  return r.stdout.toString().split("\0").filter((f) => f && underscoreName(f)).sort();
+}
 export function ungatedTests(): string[] {
   const gated = new Set<string>();
   for (const [, file] of SUITES) {
@@ -237,6 +244,12 @@ if (import.meta.main) {
   const stale = Object.keys(listed).filter((f) => !out.includes(f));
   check(`H${i++} ungated: ungated.json names only files that exist and are still out of the gate (a gated or deleted one comes off)`, stale.length === 0, stale.join("\n      "));
   console.log(`[hygiene] tests still out of the gate: ${out.length}`);
+
+  // underscore-names: new files are lowercase-hyphen (CONTRIBUTING); underscore-names.json is today's exceptions, and it only shrinks
+  check(`H${i++} underscore-names: caught in its known-bad form, and not in hyphen names, vendored code or Python`, underscoreName("client/lib/foo_bar.js") && !underscoreName("client/lib/foo-bar.js") && !underscoreName("client/vendor/a/b_c.js") && !underscoreName("spec/x/test_vectors.py"));
+  const usNow = underscoreNames(), usListed: string[] = JSON.parse(fs.readFileSync(US_LIST, "utf8"));
+  check(`H${i++} underscore-names: no new file name with an underscore (name it with hyphens)`, usNow.every((f) => usListed.includes(f)), usNow.filter((f) => !usListed.includes(f)).join("\n      "));
+  check(`H${i++} underscore-names: the list names only files that still exist (a renamed one comes off)`, usListed.every((f) => usNow.includes(f)), usListed.filter((f) => !usNow.includes(f)).join("\n      "));
 
   // authority-async (tel0s #260 11-06): nothing under shared/protocol/authority* yields, so UP and CTX stay sound
   check(`H${i++} authority-async: caught in its known-bad form (3), and not in words that only contain it`, authorityAsync("async function f() { await g(); } const h = async () => 1;") === 3 && authorityAsync("// it awaits nothing; asynchronous work stays outside") === 0, "pattern");
