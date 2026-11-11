@@ -11,7 +11,7 @@ visible-toggled; an idle slot is intensity 0, and slot churn is uniform writes. 
 whole-scene recompile (grass + 4 lights measured never finishing), which is what a budget of 4, a compileAsync per
 grant and a one-way governor ratchet existed to ration.
 
-N defaults to 8, measured (lightbench --measure): with the compile at boot, a full grass field compiled in
+N defaults to 8, measured with lightbench --measure (removed in #13; see git history): with the compile at boot, a full grass field compiled in
 1379/1510/1551/1597 ms at 4/8/12/16 slots and held ~120 fps at every count on the dev machine. 8 is the modest end
 because per-fragment loop cost and WGSL→Metal compile scale with slot count on weaker machines; the governor's cap lever
 handles them downward, and `?slots=N` re-measures.
