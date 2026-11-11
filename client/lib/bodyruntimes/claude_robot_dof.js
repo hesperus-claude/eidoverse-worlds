@@ -125,7 +125,7 @@ function twistAbout(q, a, out) {
 //   13.2; nod +-30; pan +-60). (Round 2: the split had been the twist about Y, then XZY with y dropped, which moved a
 //   pose inside the stops: pan -60, nod -30, roll 11 came out -57.04 / -30.0 / 9.51, the head 2.56 deg off; the film
 //   rig's verifier, film/unboxing/rig/verify/NOTES.md:174)
-export const HEAD_RANGE = { pan: [-60, 60], x: [-30, 30], z: [-11, 11] };   // (roll +-11: the head's stops, 10-17)
+const HEAD_RANGE = { pan: [-60, 60], x: [-30, 30], z: [-11, 11] };   // (roll +-11: the head's stops, 10-17)
 // spine (the waist bellows bends; chest and upperChest rehomed into it): the design values stand, every first contact
 // measured 10-19 lies past them (torso fix round, work/tmp/tf/spine_reach.py: exact GPU contact scan of the assembled
 // body, pivot the bellows' foot (0, -27, 1000), the bellows itself skinned and not counted, 0.25 deg resolution):
@@ -136,7 +136,7 @@ export const HEAD_RANGE = { pan: [-60, 60], x: [-30, 30], z: [-11, 11] };   // (
 //     without it the forearm meets the hip dome at 8.0: the clearance is what keeps the hanging arm clear, so
 //     applyArmDOF applies it itself; the verifier re-measured 8.0 the same 10-19);
 //   y twist: clear to 90 both ways, both arm poses.
-export const SPINE_RANGE = { x: [-25, 25], z: [-15, 15], y: [-20, 20] };
+const SPINE_RANGE = { x: [-25, 25], z: [-15, 15], y: [-20, 20] };
 
 export function rehomeBody(vrm, stats) {
     const THREE = globalThis.THREE;
@@ -441,7 +441,7 @@ function hipSolve(q, s) {
 // top). The easing is measured against the clip's own motion, whatever the frame rate; dt turns the stance's motion into
 // velocities (2.1, C2: 1/30 s when absent); it keeps applyArmDOF's call shape.
 //   applyHardwareDOF(vrm, LEG_JOINTS, stats); applyLegClearance(vrm, stats, dt); applyArmDOF(vrm, stats, dt, 8) ...
-export const LEG_CLEARANCE = { width: 0.072, need: [0.18, 0.23], load: [0.003, 0.006], support: [45, 55], ease: 0.5, jump: 0.25, hold: 90,
+const LEG_CLEARANCE = { width: 0.072, need: [0.18, 0.23], load: [0.003, 0.006], support: [45, 55], ease: 0.5, jump: 0.25, hold: 90,
     swivel: [0.02, 0.1], level: true,
     // (design 2.1, 11-02: C1 the band on the other foot's shortfall over which it is taken, m, and the slide's noise in
     //  double / single support, m/s (at 30 Hz 6 mm a frame, C2's stay threshold / 20 mm a frame, past v_st's wander in a
@@ -932,7 +932,7 @@ const _arms = new WeakMap();
 // well, so not the thumb's solve). Before the arm's stages are solved, each upper arm that hangs is turned out about the
 // body's front axis by up to `deg`: all of it when the arm hangs straight down, none once it is raised 60 deg from
 // there (the hand-to-heart and reaching clips keep their targets). 8 cleared the walk in the engine test
-export function applyArmClearance(vrm, deg = 8) {
+function applyArmClearance(vrm, deg = 8) {
     const THREE = globalThis.THREE;
     const H = vrm.humanoid, z = new THREE.Vector3(0, 0, 1), dir = new THREE.Vector3(), q = new THREE.Quaternion();
     for (const [side, sg] of [['left', 1], ['right', -1]]) {
@@ -1044,7 +1044,7 @@ function initWrist(vrm, side) {
 // part B1b). q is set to the result; W.a / W.b / W.c keep the stages' angles (rad), W.asked the split's
 // the coupled wrist clamp (round 2): deviation's range [lo, hi] (deg) at flexion bDeg, linear in flexion between
 // ARM.wristCoupled's rows, the box's own limits (ARM.wristDev) outside them
-export function wristDevRange(bDeg) {
+function wristDevRange(bDeg) {
     const R = ARM.wristCoupled, box = ARM.wristDev;
     if (!R || !R.length || bDeg < R[0].flexion || bDeg > R[R.length - 1].flexion) return box;
     let i = 1;
@@ -1125,7 +1125,7 @@ function wristSolve(q, W) {
 //   restoreArmPose(vrm); mixer.update(dt); keepArmPose(vrm); rehomeBody(...); ...; applyArmDOF(...); ...
 // (a clip switched to after the restore takes the clip's pose as its start, as the mixer reads it; KNOWN: a clip without a
 //  track for one of these bones leaves it at the pose kept last)
-export const ARM_POSE_BONES = ['Shoulder', 'UpperArm', 'LowerArm', 'Hand'].flatMap((b) => ['left' + b, 'right' + b]);
+const ARM_POSE_BONES = ['Shoulder', 'UpperArm', 'LowerArm', 'Hand'].flatMap((b) => ['left' + b, 'right' + b]);
 const _armPose = new WeakMap();
 export function keepArmPose(vrm) {
     let k = _armPose.get(vrm);
@@ -1135,7 +1135,7 @@ export function keepArmPose(vrm) {
     }
     k.nodes.forEach((o, i) => k.qs[i].copy(o.quaternion));
 }
-export function restoreArmPose(vrm) {
+function restoreArmPose(vrm) {
     const k = _armPose.get(vrm);
     if (k) k.nodes.forEach((o, i) => o.quaternion.copy(k.qs[i]));
 }
@@ -1144,7 +1144,7 @@ export function restoreArmPose(vrm) {
 // load does: their turn limit's memo is cleared (VERIFY3 part B1c). For a cut or a seek (a new shot, a jump in the clip's
 // time), and for a tool that poses unrelated draws in turn on one VRM (each draw its own solve). Other VRMs, the other
 // hand, the shoulder's pitch stage (it turns at its rate, by dt) and the kept clip pose (keepArmPose) are left as they are
-export function resetArmDOF(vrm, side) {
+function resetArmDOF(vrm, side) {
     const st = _arms.get(vrm);
     if (!st) return;
     for (const s of side ? [side] : ['left', 'right']) if (st[s]?.wrist) delete st[s].wrist.memo;
@@ -1311,7 +1311,7 @@ export function setupHandDOF(vrm, hinges) {
 }
 
 // the thumb solve's last numbers per side (deg): alpha, beta, the direction's azimuth aDir, the clip's twist aTw, w, d
-export function handDebug(vrm) {
+function handDebug(vrm) {
     const st = _hands.get(vrm);
     return st ? { left: st.side.left.dbg, right: st.side.right.dbg } : null;
 }
@@ -1480,7 +1480,7 @@ export function applyHandDOF(vrm, stats) {
 // test_crown_dof.mjs checks them against v2_crown.py). The look's bias weighs each petal by its own station (the even
 // steps of 19 .. 140 used before lay up to 15.8 deg off them). A petal's rank (the top pair 0, down each side to the
 // stems 5) is its index's: i on the left, 11 - i on the right
-export const PETAL_A = [18.4, 49.4, 79.8, 107.4, 128.2, 148.5, -148.5, -128.2, -107.4, -79.8, -49.4, -18.4];
+const PETAL_A = [18.4, 49.4, 79.8, 107.4, 128.2, 148.5, -148.5, -128.2, -107.4, -79.8, -49.4, -18.4];
 const PETAL_REST = 35;
 // THE BUILT STOPS (fix round 1, 10-29: MECH-D1), fold [min, max] per petal as v2_crown.STOPS / FOLD_MAX build them and
 // work/v2/bones_crown.json limits.petal_NN.fold records them (test_crown_dof.mjs checks this table against that file).
@@ -1489,14 +1489,14 @@ const PETAL_REST = 35;
 // collar and the neck boot at every head pose by geometry (v2_crown: first contact at a 13.2 / 15.4 deg head roll, the
 // roll stop 11). The pad's face IS the stop (the tongue first crosses it at 10.001 / 30.001; past it the lug goes ~0.15
 // mm per deg into the rubber: the MECH-D1 skeptic), so no state, look or clip may take a petal past it
-export const PETAL_FOLD = [[-6, 100], [-6, 100], [-6, 100], [-6, 100], [10, 100], [30, 100],
+const PETAL_FOLD = [[-6, 100], [-6, 100], [-6, 100], [-6, 100], [10, 100], [30, 100],
                            [30, 100], [10, 100], [-6, 100], [-6, 100], [-6, 100], [-6, 100]];
 // SPEC's stem interlock: a stem folds back to 70 or more while the head rolls 4 deg or more toward it. With the stems on
 // their built +30 it is no longer needed for clearance (above); it stays as SPEC's behaviour
-export const STEM_LOCK = { roll: 4, fold: 70 };
+const STEM_LOCK = { roll: 4, fold: 70 };
 // phi per rank, the top pair first; every value inside both petals' built stops (ranks 4 and 5: 04 / 07 from +10, the
 // stems from +30), so a blend toward a state reaches its stop smoothly instead of sitting on the clamp
-export const CROWN_STATES = {
+const CROWN_STATES = {
     neutral: [35, 35, 35, 35, 35, 35],
     happy: [2, 8, 16, 26, 36, 44],            // a lift: the upper petals open to the light, the lower ones easing back
     angry: [-6, 20, 60, 74, 82, 88],          // a crest perked forward over the side petals pinned back, as ears flatten
@@ -1515,7 +1515,7 @@ const _crowns = new WeakMap();
 // emotion carries a small head pose, added on top of whatever the animation does and moved at the neck actuators' rate:
 // pitch (+ nods the chin down), roll (SPEC's sign: + lowers the +X side, the head tilting toward its left) and pan
 // (+ toward its left), deg, kept well inside the head's stops (bones_head.json: pan +-60, nod +-30, roll +-11)
-export const HEAD_STATES = {
+const HEAD_STATES = {
     happy: { pitch: -6, roll: 5, pan: 0 },       // a lift and a cheerful tilt
     angry: { pitch: 8, roll: 0, pan: 0 },        // the chin down
     sad: { pitch: 12, roll: -3, pan: 0 },        // lowered, drooping a little to the side

@@ -56,7 +56,7 @@ machinery: it animates your own body freely (it is you), other bodies only
 through their consent, and objects through the door exactly as you would
 (grab, put, throw, drop, punt); the engine can't tell its output from yours,
 which is the point. Its default export is called with `{name, world, EW, ui,
-onTick, onDispose}`; five consecutive tick throws pause it; disabling runs its
+onTick, onDispose}`, and that object (with `EW` and the class contract in §4) is the surface: the client's own modules under `/lib/` can be imported, but their paths and exports are not stable and move without notice. Five consecutive tick throws pause it; disabling runs its
 `onDispose` handlers and removes its panels, but an imported module can't be
 unloaded until the page reloads. Untrusted code should instead join as **its
 own participant** (its own identity and rights), not run as a hand in your
