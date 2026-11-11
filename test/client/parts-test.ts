@@ -36,7 +36,6 @@ if (process.env.__EIDO_TEST_CACHE_OFF !== '1') {
 const CORE = fileURLToPath(new URL('../stubs/core-stub.mjs', import.meta.url));
 const PARTS = fileURLToPath(new URL('../stubs/parts-stub.mjs', import.meta.url));
 const COLLIDERS = fileURLToPath(new URL('../stubs/colliders-stub.mjs', import.meta.url));
-const LOADWORK = fileURLToPath(new URL('../stubs/loadwork-stub.mjs', import.meta.url));
 const REMOTES = fileURLToPath(new URL('../stubs/remotes-stub.mjs', import.meta.url));
 plugin({
   name: 'parts-stub',
@@ -48,10 +47,6 @@ plugin({
     stubResolve(build, /^\.\.?\/core\.js$/, () => ({ path: CORE }));
     stubResolve(build, /^\.\.?\/world\.js$/, () => ({ path: PARTS }));
     stubResolve(build, /^\.\.?\/colliders\.js$/, () => ({ path: COLLIDERS }));
-    // motion.js's cone reaches remotes.js → loadwork.js, which schedules on
-    // requestAnimationFrame at module scope and dies headless. avatar-test
-    // already carries a stub for exactly this; share it.
-    stubResolve(build, /^\.\/loadwork\.js$/, () => ({ path: LOADWORK }));
     // motion.js reads one clock from remotes.js, whose own cone is every remote body (avatar.js, the renderer)
     stubResolve(build, /^\.\/remotes\.js$/, () => ({ path: REMOTES }));
   },

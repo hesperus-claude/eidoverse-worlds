@@ -32,7 +32,6 @@ const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, 
 plugin({ name: 'core-stub', setup(build) {
   stubResolve(build, /^\.\/core\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
   stubResolve(build, /^\.\/base\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
-  stubResolve(build, /^\.\/assets\.js$/, () => ({ path: here('../stubs/assets-stub.mjs') }));
   stubResolve(build, /^\.\/loadwork\.js$/, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
 } });
 // the rig's own THREE, so Skeleton/Bone are the same classes it tests against

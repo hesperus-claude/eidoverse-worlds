@@ -52,8 +52,8 @@ plugin({
     // policy, fold and the bus stay REAL, and so do models.js and governor.js
     for (const f of ['^\\.\\./core\\.js$', '^\\.\\./assets\\.js$', '^\\.\\./colliders\\.js$',
       '^\\.\\./lightrig\\.js$', '^\\.\\./lightgizmo\\.js$', '^\\.\\./world\\.js$', '^\\.\\./materials\\.js$',
-      '^\\./core\\.js$', '^\\./warmqueue\\.js$', '^\\./loadwork\\.js$', '^\\./lightrig\\.js$',
-      '^\\./realize/emitters\\.js$', '^\\./terrain\\.js$', '^\\./breadcrumbs\\.js$', '^\\./frameloop\\.js$', '^\\./remotes\\.js$', '^\\./frame\\.js$', '^\\./ui\\.js$', '^\\./statuschips\\.js$']) {
+      '^\\./core\\.js$', '^\\./lightrig\\.js$',
+      '^\\./realize/emitters\\.js$', '^\\./terrain\\.js$', '^\\./frameloop\\.js$', '^\\./remotes\\.js$', '^\\./ui\\.js$', '^\\./statuschips\\.js$']) {
       stubResolve(b, new RegExp(f), () => ({ path: STUB }));
     }
   },

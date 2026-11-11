@@ -13,7 +13,6 @@ const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({ name: 'debug-stubs', setup(b) {
   for (const m of ['core', 'base', 'xrpanels', 'gputime', 'perf', 'render', 'perfscope', 'colliders', 'ragdoll', 'ammodoll', 'avatar', 'ui'])
     stubResolve(b, new RegExp(`^\\./${m}\\.js$`), () => ({ path: here('../stubs/debug-stub.mjs') }));
-  stubResolve(b, /^three-mesh-bvh$/, () => ({ path: here('../stubs/debug-stub.mjs') }));
 } });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();

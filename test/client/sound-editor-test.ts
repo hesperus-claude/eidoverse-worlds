@@ -17,7 +17,7 @@ const check = (name: string, ok: unknown, detail = '') => {
   else { fail++; console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`); }
 };
 plugin({ name: 'sound-editor-stubs', setup(b) {
-  for (const m of ['core', 'base', 'world', 'net'])
+  for (const m of ['core', 'base', 'world'])
     stubResolve(b, new RegExp(`^\\.\\.?/${m}\\.js$`), () => ({ path: here('../stubs/guard-label-stub.mjs') }));
   for (const m of ['edit/inspect', 'ui', 'audioctx', 'audiounlock', 'voiceconsent', 'serverclock'])
     stubResolve(b, new RegExp(`^\\.\\.?/${m}\\.js$`), () => ({ path: here('../stubs/sound-clock-stub.mjs') }));

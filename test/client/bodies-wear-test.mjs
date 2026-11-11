@@ -31,7 +31,6 @@ plugin({
     stubResolve(b, /^\.\.?\/(edit\/)?mybody\.js$/, () => ({ path: here('../stubs/bodies-mybody-stub.mjs') }));
     stubResolve(b, /^\.\.?\/(edit\/)?catalog\.js$/, () => ({ path: here('../stubs/bodies-inert-stub.mjs') }));
     stubResolve(b, /^\.\.?\/(edit\/)?net\.js$/, () => ({ path: here('../stubs/bodies-net-stub.mjs') }));
-    stubResolve(b, /^\.\.?\/(edit\/)?core\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
     stubResolve(b, /^\.\.?\/(edit\/)?base\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
     stubResolve(b, /^\.\.?\/(edit\/)?fieldpanels\.js$/, () => ({ path: here('../stubs/bodies-inert-stub.mjs') }));
   },

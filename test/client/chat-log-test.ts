@@ -20,8 +20,7 @@ const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({
   name: "chat-stubs",
   setup(b) {
-    stubResolve(b, /^\.\/core\.js$/, () => ({ path: here("../stubs/chat-core-stub.mjs") }));
-    // rimward: CONFIG/bus/report live in base.js (the renderer-free substrate) — same stub, or the
+    // rimward: CONFIG/bus/report live in base.js (the renderer-free substrate) — stubbed, or the
     // test's CONFIG.name never reaches chat.js and every mention assertion passes vacuously (PR #160 B6)
     stubResolve(b, /^\.\/base\.js$/, () => ({ path: here("../stubs/chat-base-stub.mjs") }));
     stubResolve(b, /^\.\/windows\.js$/, () => ({ path: here("../stubs/chat-frames-stub.mjs") }));

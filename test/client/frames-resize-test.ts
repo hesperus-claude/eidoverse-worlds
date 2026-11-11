@@ -2,17 +2,6 @@
 // A drag released outside the browser never gets `pointerup`; teardown on that alone leaves `_resizing` true and the
 // listeners installed, silently killing every later resize. So: does it still work AFTER a drag that ended the wrong way?
 
-import { fileURLToPath } from "node:url";
-import { plugin } from "bun";
-import { stubResolve } from "../harness/stub.ts";
-const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
-plugin({
-  name: "frames-stubs",
-  setup(b) {
-    stubResolve(b, /^\.\/core\.js$/, () => ({ path: here("../stubs/chat-core-stub.mjs") }));
-  },
-});
-
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { suite } from "../gate/suite.ts";
 GlobalRegistrator.register();

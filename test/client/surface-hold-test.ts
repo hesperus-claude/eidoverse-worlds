@@ -20,12 +20,9 @@ const STUB = fileURLToPath(new URL("../stubs/world-hold-stub.mjs", import.meta.u
 plugin({
   name: "world-hold-stub",
   setup(build) {
-    // livechat.js imports ../core.js and ../chat.js (from realize/) and ./models.js (PORTED only), all stubbed; its bus
-    // comes from ../base.js, left REAL so it is the same bus the test drives below (#260 house I394/I240: two repairs of
-    // this one fault met in a merge; one bus, not both fixes)
-    for (const f of ["^\\.\\./core\\.js$", "^\\.\\./chat\\.js$", "^\\./models\\.js$"]) {
-      stubResolve(build, new RegExp(f), () => ({ path: STUB }));
-    }
+    // livechat.js imports ../chat.js (stubbed); its bus comes from ../base.js, left REAL so it is the same bus the test
+    // drives below (#260 house I394/I240: two repairs of this one fault met in a merge; one bus, not both fixes)
+    stubResolve(build, /^\.\.\/chat\.js$/, () => ({ path: STUB }));
   },
 });
 

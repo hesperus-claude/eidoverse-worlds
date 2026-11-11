@@ -150,8 +150,6 @@ if (CASE) {
 plugin({ name: 'core-stub', setup(build) {
   stubResolve(build, /^\.\/core\.js$/, () => ({ path: here('../stubs/shadow-fade-core-stub.mjs') }));
   stubResolve(build, /^\.\/base\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
-  stubResolve(build, /^\.\/assets\.js$/, () => ({ path: here('../stubs/assets-stub.mjs') }));
-  stubResolve(build, /^\.\/loadwork\.js$/, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
   stubResolve(build, /^\.\/state\.js$/, () => ({ path: here('../stubs/state-stub.mjs') }));
   stubResolve(build, /^\.\/warmqueue\.js$/, () => ({ path: here('../stubs/lod-client-stub.mjs') }));   // warmDepth resolves at once
 } });
