@@ -19,7 +19,6 @@ if (CASE) {
   plugin({ name: 'core-stub', setup(build) {
     stubResolve(build, /^\.\/core\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
     stubResolve(build, /^\.\/base\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
-    stubResolve(build, /^\.\/assets\.js$/, () => ({ path: here('../stubs/assets-stub.mjs') }));
     stubResolve(build, /^\.\/loadwork\.js$/, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
   } });
 
@@ -340,7 +339,7 @@ async function runCase(name, mutate = null) {
   const p = Bun.spawnSync(args, { stdout: 'pipe', stderr: 'pipe' });
   const text = p.stdout.toString();
   const line = text.split('\n').find((l) => l.startsWith('__RESULT__'));
-  if (!line) throw new Error(`case ${name} produced no result:\n${text}\n${p.stderr.toString()}`);
+  if (!line || p.exitCode !== 0) throw new Error(`case ${name} exited ${p.exitCode}${line ? '' : ' with no result'}:\n${text}\n${p.stderr.toString()}`);   // a FAIL in the child (stubResolve's) is a fail here
   return JSON.parse(line.slice('__RESULT__'.length));
 }
 

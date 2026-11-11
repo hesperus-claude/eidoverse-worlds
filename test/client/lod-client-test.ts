@@ -407,10 +407,11 @@ try {
       });
       const killer = setTimeout(() => { try { p.kill(); } catch { /* gone */ } }, 90_000);   // a wedged probe is a failure, not a hang
       const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
-      await p.exited;
+      const code = await p.exited;
       clearTimeout(killer);
       const line = out.split('\n').find((l) => l.startsWith('PROBE '));
       const r = line ? JSON.parse(line.slice(6)) : {};
+      if (code !== 0) r.error = `exit ${code}`;   // a FAIL in the child (stubResolve's) is a fail here
       if (!line || r.error) r.error = (r.error ?? '') + (err + out).split('\n').filter(Boolean).slice(-8).join(' | ');
       return r;
     };
