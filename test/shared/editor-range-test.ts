@@ -12,7 +12,7 @@ import { inspectSchema, editOps, fieldAt } from "../../shared/editschema.js";
 import { DESCRIPTORS } from "../../shared/descriptors.js";
 import { COMPONENTS } from "../../shared/protocol/componentspec.js";
 import { schemaRefusal } from "../../shared/protocol/authority.js";
-import { flat } from "../protocol/scratchworld.ts";
+import { flat } from "../harness/scratchworld.ts";
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail = "") => {

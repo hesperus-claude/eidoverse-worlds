@@ -1,14 +1,14 @@
 // Physics checks (design 20). Every scenario is built through the authority's ordinary tools, at pinned clock times.
 // Ported from the protocol lab's phys-check.js @ 11db981; only paths changed. usage: bun test/protocol/phys-check.ts
 // @ts-nocheck — lab code, kept as written
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import { request, settle, forkCopy, withCatalogue } from "../../shared/protocol/authority.js";
 import { openWorld } from "../harness/filehost.ts";
 import { fold, readLog, digest, redactionsIn, REDACTED } from "../../shared/protocol/fold.js";
 import { simSnapshotOf, restsOf, ENGINES } from "../../shared/protocol/simlayer.js";
-import { simFold, simFolder, LAB_CATALOGUE } from "./labmodels.js";   // the sim over the lab table (its logs name lab models)
+import { simFold, simFolder, LAB_CATALOGUE } from "../harness/labmodels.js";   // the sim over the lab table (its logs name lab models)
 import { makeReplica, wireState } from "../../shared/protocol/replica.js";
 import { ENGINE, scratch } from "../gate/common.ts";
 import { worldT, yawQ, qrot, qmul, aabb, surfacesOf } from "../../shared/protocol/authority/math.js";
@@ -368,7 +368,7 @@ function playground(name) {
   const forged = insertAt(L, catchSeq + 1, { world: L[1].world, kind: "change", ts: L[catchSeq].ts, actor: "sim", cause: t1.seq, op: "set", body: { id: "ball", comp: "transform", value: { pos: [0, 0, 1], q: [0, 0, 0, 1], scale: [1, 1, 1] } } });
   const fv = simFold(forged, w.now());
   ok(fv.checks.disagree.some((d) => d.id === "ball"), "M a forged rest(A) after the catch is rejected by carriers", fv.checks);
-  const read = () => { const r = Bun.spawnSync(["bun", "-e", `import fs from "node:fs"; import {simFold} from ${JSON.stringify(pathToFileURL(ENGINE + "test/protocol/labmodels.js").href)}; import {fold, readLog} from ${JSON.stringify(pathToFileURL(ENGINE + "shared/protocol/fold.js").href)};
+  const read = () => { const r = Bun.spawnSync(["bun", "-e", `import fs from "node:fs"; import {simFold} from ${JSON.stringify(pathToFileURL(ENGINE + "test/harness/labmodels.js").href)}; import {fold, readLog} from ${JSON.stringify(pathToFileURL(ENGINE + "shared/protocol/fold.js").href)};
     const L = readLog(fs.readFileSync("worlds/${W}.jsonl")); const sf = simFold(L, ${clock.t});
     console.log(JSON.stringify({ blind: fold(L).entities.ball.c.transform.pos, sim: sf.sim.bodies.ball?.p ?? null, checks: sf.checks }));`], { cwd: root, env: { ...process.env, ...pinEnv(clock.t) } });
     return r.stdout.toString().trim(); };

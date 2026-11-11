@@ -1,4 +1,4 @@
-// test/protocol/idalias.ts — a test client's names for the things it makes (R 10-17 ID HARDENING: a writer never chooses an
+// test/harness/idalias.ts — a test client's names for the things it makes (R 10-17 ID HARDENING: a writer never chooses an
 // id). A suite written as `create {id: "tbl"}` then `place {on: "tbl"}` keeps its words: the client sends the create's id (a
 // lower-case name of `[a-z0-9-]`; anything else goes out literal) as a placeholder ('$tbl'), keeps the id the authority minted (the reply's ids map), and writes that id wherever a later
 // request names "tbl" in a reference position. The wire only ever carries placeholders and minted ids — what a real client

@@ -41,7 +41,7 @@ import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { translatorVersion } from "../../tools/import-v1/translate-v1.js";
 import { labClock, pinned } from "../gate/clock.ts";
 import { suite } from "../gate/suite.ts";
-import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "../harness/labmodels.js";
 
 const BASE = "a6d05a6b";
 const EM = "em" + "ote";   // the old word, built so this file never spells it (row E3 scans every file, this one too)

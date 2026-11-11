@@ -18,7 +18,7 @@ import { viewState } from '../../shared/protocol/view.js';
 import { enc } from '../../shared/protocol/names.js';
 import { emptyState, applyInPlace, opsOf } from '../../shared/protocol/fold.js';
 import { v1FoldBuild } from '../../tools/import-v1/build.ts';
-import { scratchWorld, flat } from '../protocol/scratchworld.ts';
+import { scratchWorld, flat } from '../harness/scratchworld.ts';
 import { registerDraft, trustedOf } from '../../shared/drafts.js';
 import { materialize, COMPONENTS } from '../../shared/protocol/componentspec.js';
 import { pathList } from "../gate/common.ts";

@@ -57,7 +57,7 @@ const env = (extra = {}) => ({ ...process.env, WORLDS_DIR: W, OPT_DIR: OPT, SKIP
   BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0", JOIN_TOKEN: "", SERVER_OPERATORS: "", TRUST_NAMES: "1", EIDO_FLIGHT_REHEARSAL: "", SESSIONS_PATH: path.join(root, "sessions.json"), ...extra });
 const r0 = Bun.spawnSync(["bun", "tools/world.ts", "found", "yard", "--owner", "Ann"], { cwd: ENGINE, env: env() });
 ok(r0.exitCode === 0, "(setup) found yard, Ann owns it", r0.stderr.toString().slice(-300));
-import { idAliases } from "./idalias.ts";
+import { idAliases } from "../harness/idalias.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 const IDS = idAliases();
 let port = 9640; for (; port < 9740; port++) { try { const s = Bun.listen({ hostname: "127.0.0.1", port, socket: { data() {} } }); s.stop(true); break; } catch {} }
@@ -78,7 +78,7 @@ try {
     for (let i = 0; i < 80 && !msgs.some((m) => m.type === "snapshot" || m.type === "error"); i++) await sleep(50);
     let rn = 0;
     return { ws, msgs, close: () => ws.close(),
-      // R 10-17: the suite's names ride as placeholders and minted ids (test/protocol/idalias.ts)
+      // R 10-17: the suite's names ride as placeholders and minted ids (test/harness/idalias.ts)
       req: async (verb, args = {}) => { const id = `q${++rn}`; ws.send(JSON.stringify({ type: "request", id, verb, args: IDS.out(verb, args) }));
         for (let i = 0; i < 80; i++) { const r = msgs.find((m) => m.type === "reply" && m.id === id); if (r) return IDS.back(r.reply); await sleep(50); } return { ok: false, timeout: true }; } };
   }

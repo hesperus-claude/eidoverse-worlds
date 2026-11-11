@@ -20,7 +20,7 @@ const done = rows.find((r: any) => r.seq === 7);
 ok(done && !done.refused && !/refused|tried/.test(done.text) && /Ann/.test(done.text) && /light/.test(done.text), "H5 a real act reads as done, with who and what", done?.text);
 // a thing's History pages (client-check HT4-HT6, 10-17), against REAL authority replies: a scratch world, a thing with a few
 // acts and then 25 label sets, read as the panel reads it (history {id, limit: 20, before?}); the panel's merge on top
-{ const { scratchWorld } = await import("./scratchworld.ts");
+{ const { scratchWorld } = await import("../harness/scratchworld.ts");
   const W = scratchWorld("histpages");
   const mk = W.call("create", { model: "crate" }); const id = mk.refs[0].id;
   W.call("set", { id, component: "pivot", value: { pos: [0.5, 0, 0] } });

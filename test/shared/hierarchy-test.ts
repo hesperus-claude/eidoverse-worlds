@@ -1,6 +1,6 @@
 // hierarchy-test — the scene tree as a pure function of the world view (design §3
 // "Children", §5 "Hierarchy"; shared/hierarchy.js), checked against the REAL
-// door (a scratch world, test/protocol/scratchworld.ts, read back through
+// door (a scratch world, test/harness/scratchworld.ts, read back through
 // shared/protocol/view.js viewState) and against three.js composing Object3Ds the
 // way the renderer does.
 //
@@ -23,7 +23,7 @@ import * as THREE from '../../client/node_modules/three/build/three.module.js';
 import { treeRows, treeOf, cycleRefusal, parentOps, worldPose, localOf, childrenOf, kindHint, ancestors } from '../../shared/hierarchy.js';
 import { inspectSchema, editOps, fieldAt, describeSchema } from '../../shared/editschema.js';
 import { qNorm, qFromYaw, qHeading } from '../../shared/rot.js';
-import { scratchWorld, flat } from '../protocol/scratchworld.ts';
+import { scratchWorld, flat } from '../harness/scratchworld.ts';
 import { enc } from '../../shared/protocol/names.js';
 import { suite } from "../gate/suite.ts";
 

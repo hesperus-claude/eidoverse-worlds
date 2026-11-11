@@ -2,11 +2,11 @@
 // test/protocol/hands-check.ts — what is in a hand, and where a put lands (R's desktop test, 2026-10-10: crates hovering
 // after a put, five crates carried at once, a held barrel moved in build mode and then stuck).
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/protocol/hands-check.ts
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { openWorld } from "../harness/filehost.ts";
 import { fold } from "../../shared/protocol/fold.js";
-import { simFold } from "./labmodels.js";   // the sim over the lab table (its logs name lab models)
-import { ENG, labWorld } from "./labworld.ts";
+import { simFold } from "../harness/labmodels.js";   // the sim over the lab table (its logs name lab models)
+import { ENG, labWorld } from "../harness/labworld.ts";
 import { suite } from "../gate/suite.ts";
 const { ok, done } = suite("hands-check", { quiet: true, cap: Infinity });
 const { root, clock, call } = labWorld("hands");

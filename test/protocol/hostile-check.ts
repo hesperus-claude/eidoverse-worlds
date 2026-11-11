@@ -3,7 +3,7 @@
 // on the baseline and GOOD now, or be marked `held`: a regression guard where the baseline already held. Ported from the protocol lab's hostile-check.js @ 11db981; only paths changed.
 // usage: bun test/protocol/hostile-check.ts [--verbose]
 // @ts-nocheck — lab code, kept as written
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import { readLog, fold, digest, worldIdOf, parseLine, cloneState, REDACTED } from "../../shared/protocol/fold.js";

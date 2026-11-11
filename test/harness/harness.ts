@@ -4,7 +4,7 @@ import { tmpdir, loadavg, cpus } from "node:os";
 import { join, resolve } from "node:path";
 import { chromeArgs, findChrome, cdpOn, type Cdp } from "../gate/chrome.ts";
 import { MOVER, TRACK } from "../../shared/mover.js";
-import { idAliases } from "../protocol/idalias.ts";
+import { idAliases } from "./idalias.ts";
 export { cdpOn, type Cdp };
 
 export const ROOT = resolve(import.meta.dir, "..", "..");

@@ -2,11 +2,11 @@
 // test/protocol/settle-check.ts: what a thing at rest is attached to (settleSim): a crate across a gap must not parent to
 // the crate a row lower (read under its centre) and ride along above it when that one is carried.
 //   Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/protocol/settle-check.ts
-import "./fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import { openWorld } from "../harness/filehost.ts";
 import { fold } from "../../shared/protocol/fold.js";
 import { restsOf, worldPose } from "../../shared/protocol/simlayer.js";
-import { ENG, labWorld } from "./labworld.ts";
+import { ENG, labWorld } from "../harness/labworld.ts";
 import { suite } from "../gate/suite.ts";
 const { ok, done } = suite("settle-check", { quiet: true, cap: Infinity });
 const { root, clock, call } = labWorld("settle");

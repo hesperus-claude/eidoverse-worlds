@@ -1,12 +1,12 @@
 // @ts-nocheck
 // test/protocol/reset-check.ts — a reset button (reactions kind 'reset', the home component). R's ask, 2026-10-10.
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/protocol/reset-check.ts
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import { openWorld } from "../harness/filehost.ts";
 import { fold } from "../../shared/protocol/fold.js";
 import { simFold } from "../../shared/protocol/simlayer.js";
-import { ENG, labWorld } from "./labworld.ts";
+import { ENG, labWorld } from "../harness/labworld.ts";
 import { suite } from "../gate/suite.ts";
 const { ok, done } = suite("reset-check", { quiet: true, cap: Infinity });
 const { root, clock, call } = labWorld("reset");

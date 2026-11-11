@@ -1,7 +1,7 @@
-// test/protocol/labworld.ts: the in-process authority fixture the lab suites repeat: a scratch root, a lab clock, and
+// test/harness/labworld.ts: the in-process authority fixture the lab suites repeat: a scratch root, a lab clock, and
 // call(world, actor, verb, args), which advances the clock a step and then requests. ENG names the carried eidosim.
 import { request } from "../../shared/protocol/authority.js";
-import { openWorld } from "../harness/filehost.ts";
+import { openWorld } from "./filehost.ts";
 import { ENGINES } from "../../shared/protocol/simlayer.js";
 import { scratch } from "../gate/common.ts";
 import { labClock } from "../gate/clock.ts";

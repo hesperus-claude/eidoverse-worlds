@@ -25,9 +25,9 @@ const ENGINE = path.resolve(import.meta.dir, "../..");
 const ME = "b2bot", WORLD = "b2";
 process.env.TRUST_NAMES = "1";
 let worldsDir = "";
-import { pagedEval } from "./idalias.ts";
+import { pagedEval } from "../harness/idalias.ts";
 import { pageWaiter } from "../gate/wait.ts";
-// R 10-17: the page names what it makes with placeholders (test/protocol/idalias.ts pageIds); quoted names in page code are ids
+// R 10-17: the page names what it makes with placeholders (test/harness/idalias.ts pageIds); quoted names in page code are ids
 const NAMES = ["linkpic", "linkradio", "hostradio", "moon", "radio", "sign", "post", "statue", "kiosk", "telly", ...Array.from({ length: 10 }, (_, i) => `loop${i}`)];
 const { cdp, cws, evalJson: evalRaw, cleanup, die, BASE } = await scratchBench("batch2", {
   prepare: (scratch) => {

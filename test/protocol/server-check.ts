@@ -21,7 +21,7 @@ import { makeReplica, stateFromWire } from "../../shared/protocol/replica.js";
 import { viewState } from "../../shared/protocol/view.js";
 import { enc } from "../../shared/protocol/names.js";
 import { worldPose } from "../../shared/hierarchy.js";
-import { idAliases } from "./idalias.ts";
+import { idAliases } from "../harness/idalias.ts";
 import { shellWord } from "../../server/oldworlds.ts";
 import { suite } from "../gate/suite.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
@@ -75,7 +75,7 @@ async function client(port: number, world: string, id: string, extra: any = {}) 
   await tryUntil(`${id}'s join is answered`, () => msgs.some((m) => m.type === "snapshot" || m.type === "error"), { ms: 3000, step: 50 });
   const c = {
     id, ws, msgs, snapshot: msgs.find((m) => m.type === "snapshot"),
-    // R 10-17: the suite's names for things ride as placeholders and minted ids (test/protocol/idalias.ts)
+    // R 10-17: the suite's names for things ride as placeholders and minted ids (test/harness/idalias.ts)
     req: (verb: string, args: any = {}) => new Promise<any>((res) => { const rid = `${id}-${++n}`; waiters.set(rid, (r: any) => res(IDS.back(r))); ws.send(JSON.stringify({ type: "request", id: rid, verb, args: IDS.out(verb, args) })); setTimeout(() => { if (waiters.delete(rid)) res({ ok: false, refused: { code: "timeout" } }); }, 6000); }),
     send: (m: any) => ws.send(JSON.stringify(m)),
     of: (type: string) => msgs.filter((m) => m.type === type),

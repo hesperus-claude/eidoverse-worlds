@@ -16,7 +16,7 @@
 //   R   references: typed ref/refs/person fields; duplicate and publish rebind them (H5)
 //   P   privacy: arrivals and grabs log what correctness needs, not where people stood or what they are (M3)
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -33,8 +33,8 @@ const only = opt("only")?.split(",") ?? null;
 const T = ENGINE;
 const imp = async (p: string) => await import(path.join(T, p));
 const FOLD = await imp("shared/protocol/fold.js"), D = await imp("shared/protocol/authority.js"), CAT = await imp("shared/protocol/componentspec.js");
-const SD = await imp("test/protocol/scratchworld.ts");
-const PH = await imp("test/protocol/pinhistory.ts");
+const SD = await imp("test/harness/scratchworld.ts");
+const PH = await imp("test/harness/pinhistory.ts");
 const S = suite("pretrans", { cap: 600 });
 const ok = (id: string, cond: any, what: string, detail?: any) => { if (S.runs(id)) S.ok(cond, `${id} ${what}`, detail); };
 async function C(id: string, what: string, fn: () => any) {

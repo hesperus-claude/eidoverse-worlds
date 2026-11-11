@@ -2,7 +2,7 @@
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/lock-strength-test.ts
 import { scratchBench, mkCheck } from '../harness/harness.ts';
-import { pagedEval } from '../protocol/idalias.ts';
+import { pagedEval } from '../harness/idalias.ts';
 import { pageWaiter, tryUntil } from '../gate/wait.ts';
 import { helloOf } from '../../shared/protocol/hello.js';
 

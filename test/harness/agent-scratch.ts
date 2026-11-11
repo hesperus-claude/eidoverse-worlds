@@ -12,10 +12,10 @@
 // pattern), its clock pinned through the lab clock (test/gate/clock.ts): each request is stamped at `at`, or one second after the last. `who` is
 // the display name the agent's percepts attribute the change to (the door's actor in a scratch world is its founder).
 // @ts-nocheck
-import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { scratch } from "../gate/common.ts";
 import { request } from "../../shared/protocol/authority.js";
-import { LAB_CATALOGUE } from "../protocol/labmodels.js";
+import { LAB_CATALOGUE } from "./labmodels.js";
 import { openWorld } from "./filehost.ts";
 import { viewState } from "../../shared/protocol/view.js";
 import { enc, encName } from "../../shared/protocol/names.js";

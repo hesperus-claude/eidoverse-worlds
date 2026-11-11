@@ -18,7 +18,7 @@ import * as R from "../../shared/protocol/roles.js";
 import * as RC from "../../shared/protocol/refusalcodes.js";
 import * as VC from "../../shared/protocol/verbclasses.js";
 import { writeFileSync, appendFileSync } from "node:fs";
-import * as PH from "./pinhistory.ts";
+import * as PH from "../harness/pinhistory.ts";
 import { suite } from "../gate/suite.ts";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));

@@ -12,7 +12,7 @@ import { COMPONENTS, materialize } from "../../shared/protocol/componentspec.js"
 import { RECORDS, LIGHT_DEFAULTS } from "../../shared/components.js";
 import { inspectSchema, fieldAt, addOps, editOps } from "../../shared/editschema.js";
 import { DEFAULTS as GRAB_DEFAULTS } from "../../shared/grab.js";
-import { scratchWorld } from "../protocol/scratchworld.ts";
+import { scratchWorld } from "../harness/scratchworld.ts";
 
 let pass = 0, fail = 0, unwritten = 0;
 const check = (name: string, ok: boolean, detail = "") => {

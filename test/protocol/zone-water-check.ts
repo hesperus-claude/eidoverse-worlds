@@ -7,14 +7,14 @@
 //   bun test/protocol/zone-water-check.ts --mutants       remove each rule in turn (a copy of the tree): its cases must go red;
 //                                                         a no-op control must stay green
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch, copyTree } from "../gate/common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "../gate/clock.ts";
-import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "../harness/labmodels.js";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };

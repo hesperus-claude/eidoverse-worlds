@@ -6,7 +6,7 @@
 //   bun test/protocol/trig-check.ts [--write]
 import fs from "node:fs";
 import { sinT, cosT, atan2T, SIMMATH_ID } from "../../shared/simmath.js";
-import * as PH from "./pinhistory.ts";
+import * as PH from "../harness/pinhistory.ts";
 import { fileURLToPath } from "node:url";
 import { suite } from "../gate/suite.ts";
 export const LAW = "heading-trig@1";

@@ -182,7 +182,7 @@ try {
     avatar: "eidoverse/assets/vrms/claude.vrm", agentToken: namedToken });
   await ag.connect();
   // R 10-17: the suite's names ride as placeholders (and the crate is labelled crate1: the tools take a label as an id)
-  const { idAliases } = await import("../protocol/idalias.ts"); const IDS = idAliases();
+  const { idAliases } = await import("../harness/idalias.ts"); const IDS = idAliases();
   const areq = async (verb: string, args: any) => IDS.back(await ag!.request(verb, IDS.out(verb, args)));
   // building is door requests (the agent waits for each answer); sitting is presence (the sit tool, nothing logged)
   const built = await areq("create", { id: "crate1", model: "eidoverse/assets/models/crate_large_blue.glb", components: { transform: { pos: [0, 0, 0] }, label: "crate1" } });

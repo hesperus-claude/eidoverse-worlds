@@ -11,7 +11,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { scratchBench, mkCheck, sleep } from "../harness/harness.ts";
-import { idAliases } from "../protocol/idalias.ts";
+import { idAliases } from "../harness/idalias.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 const IDS = idAliases();   // R 10-17: the owner's names ride as placeholders and minted ids
 

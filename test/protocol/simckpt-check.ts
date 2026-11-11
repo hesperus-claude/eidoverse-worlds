@@ -14,7 +14,7 @@
 //   PC8 an older checkpoint (time inside the blob) still boots
 //   PC9 log-size cost on a busy world (printed) and boot before/after on a generated large log (printed; the replay must shrink)
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import path from "node:path";
 import { scratch, ENGINE } from "../gate/common.ts";
@@ -26,8 +26,8 @@ const A = await import("../../shared/protocol/authority.js"); const { request, s
 const checkpointNow = A.checkpointNow ?? (() => 0);   // absent before 10-28: its rows go red, the rest still run
 const { readLog, fold, worldIdOf, digest } = await import("../../shared/protocol/fold.js");
 const { seal } = await import("../../shared/protocol/authority/storage.js");
-const { simSnapshotOf, digestOf } = await import("../../shared/protocol/simlayer.js"); const { simFold } = await import("./labmodels.js");
-const { openLive } = await import("./labhost.ts");
+const { simSnapshotOf, digestOf } = await import("../../shared/protocol/simlayer.js"); const { simFold } = await import("../harness/labmodels.js");
+const { openLive } = await import("../harness/labhost.ts");
 const { custodyAt } = await import("../../server/custody.ts");
 const SC = await import("../../server/statecache.ts");
 

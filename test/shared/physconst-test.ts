@@ -7,7 +7,7 @@
 // B  one binding: the shared values are the ones the design states (the imports and the no-copy scan over every file
 //    are test/client/one-binding-test.ts's).
 // @ts-nocheck
-import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import path from "node:path";
 import { request } from "../../shared/protocol/authority.js";

@@ -4,13 +4,13 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/light-readers-test.ts
 //
 // lightgizmo.js, material_draft.js, inspect.js and realize/models.js boxOf are real. inspect.js runs in the inspect harness
-// (test/protocol/inspectharness.ts); the realizer in the lod-client stub cone (test/stubs/lod-client-stub.mjs); the light rig
+// (test/harness/inspectharness.ts); the realizer in the lod-client stub cone (test/stubs/lod-client-stub.mjs); the light rig
 // is a Set of the keys that hold a slot.
 // @ts-nocheck
 import { plugin } from "bun";
 import { stubResolve } from "../harness/stub.ts";
 import { fileURLToPath } from "node:url";
-import { inspectHarness } from "../protocol/inspectharness.ts";
+import { inspectHarness } from "../harness/inspectharness.ts";
 
 const H = inspectHarness("light-readers");
 const LOD = fileURLToPath(new URL("../stubs/lod-client-stub.mjs", import.meta.url));

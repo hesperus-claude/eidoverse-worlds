@@ -5,9 +5,9 @@
 //   usage: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/shared/shape-render-test.ts
 // @ts-nocheck
 import { fileURLToPath } from "node:url";
-import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from 'node:fs';
-import { scratchWorld } from '../protocol/scratchworld.ts';
+import { scratchWorld } from '../harness/scratchworld.ts';
 import { COMPONENTS, statusOf, pinOf, materialize } from '../../shared/protocol/componentspec.js';
 import { lightOf } from '../../shared/components.js';
 import { isMeshBag } from '../../shared/components.js';
@@ -138,9 +138,9 @@ await tryRow('AD', async () => {
   check('AD7 every client and agent reader that names a thing by its model goes through the shared word', stale.length === 0, stale);
   // the sim (shiplist FL1, 10-16): an addressed dynamic thing is stamped, punted, and flies in the authority and in a client's fold
   {
-    const { request } = await import('../../shared/protocol/authority.js'); const { LAB_CATALOGUE } = await import('../protocol/labmodels.js');
+    const { request } = await import('../../shared/protocol/authority.js'); const { LAB_CATALOGUE } = await import('../harness/labmodels.js');
     const { readLog } = await import('../../shared/protocol/fold.js');
-    const { openLive } = await import('../protocol/labhost.ts');
+    const { openLive } = await import('../harness/labhost.ts');
     const { makeReplica, clientSnapshotOf } = await import('../../shared/protocol/replica.js');
     const { scratch } = await import('../gate/common.ts');
     const CA = `eido:sha256/${'5'.repeat(64)}`;

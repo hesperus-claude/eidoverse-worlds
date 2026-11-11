@@ -1,16 +1,16 @@
 // test/protocol/catalogue-check.ts — a world knows only the models of the catalogue it is handed; there is no silent lab
-// default (the lab table is a suite fixture: test/protocol/labmodels.js). Mica 11-04: explicit-catalogue acceptance, a
+// default (the lab table is a suite fixture: test/harness/labmodels.js). Mica 11-04: explicit-catalogue acceptance, a
 // negative control that an uncatalogued model refuses truthfully, and no silent loss of previously valid authored state.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/protocol/catalogue-check.ts
 // @ts-nocheck
-import "./fixture-ids.ts";
+import "../harness/fixture-ids.ts";
 import fs from "node:fs";
 import path from "node:path";
 import { scratch, ENGINE } from "../gate/common.ts";
 import { request, worldOf, NO_CATALOGUE } from "../../shared/protocol/authority.js";
 import { openLive } from "../../server/livehost.ts";
 import { digest } from "../../shared/protocol/fold.js";
-import { LAB_CATALOGUE } from "./labmodels.js";
+import { LAB_CATALOGUE } from "../harness/labmodels.js";
 
 let pass = 0, fail = 0;
 const ok = (name, c, info) => { if (c) { pass++; console.log(`ok   ${name}`); } else { fail++; console.log(`FAIL ${name}${info === undefined ? "" : " — " + JSON.stringify(info).slice(0, 300)}`); } };
@@ -46,7 +46,7 @@ const ONE = Object.freeze({ get: (n) => (n === "crate" ? { label: "a crate", siz
 // C5: the suites' lab table is a fixture: it lives in test/, and no runtime file imports it
 { const g = Bun.spawnSync(["git", "-C", ENGINE, "grep", "-l", "labmodels", "--", "shared", "server", "mcpl", "client/lib"]);
   const users = String(g.stdout).split("\n").filter(Boolean);
-  ok("C5 the lab table is test/protocol/labmodels.js and no runtime file imports it", !fs.existsSync(path.join(ENGINE, "shared/protocol/labmodels.js")) && !users.length && !!LAB_CATALOGUE.get("crate"), users); }
+  ok("C5 the lab table is test/harness/labmodels.js and no runtime file imports it", !fs.existsSync(path.join(ENGINE, "shared/protocol/labmodels.js")) && !users.length && !!LAB_CATALOGUE.get("crate"), users); }
 
 console.log(`[catalogue-check] ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

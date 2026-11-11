@@ -8,7 +8,7 @@
 //   F20 a reader given the next v returns unknown-version: no world, nothing folded or cached; a stray minor is malformed (Mica 11-04)
 // usage: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/protocol/vocab-fixtures-check.ts
 // @ts-nocheck
-import "./fixture-ids.ts";
+import "../harness/fixture-ids.ts";
 import fs from "node:fs";
 import path from "node:path";
 import { scratch, ENGINE } from "../gate/common.ts";
@@ -19,7 +19,7 @@ const F = await import("../../shared/protocol/fold.js"); const { readLog, fold, 
 const { makeReplica, wireState, stateFromWire, snapshotVersion, clientSnapshotOf } = await import("../../shared/protocol/replica.js");
 const { request, settle, checkpointNow } = await import("../../shared/protocol/authority.js");
 const { simSnapshotOf, digestOf, simFold } = await import("../../shared/protocol/simlayer.js");
-const { openLive } = await import("./labhost.ts");
+const { openLive } = await import("../harness/labhost.ts");
 const { translate } = await import("../../tools/import-v1/translate-v1.js");
 
 let pass = 0, fail = 0;

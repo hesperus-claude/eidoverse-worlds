@@ -6,7 +6,7 @@ process.env.WORLD_TOKEN = "";
 import { ghostMeshSize } from "../../client/lib/meshdefaults.js";
 import { COMPONENTS } from "../../shared/protocol/componentspec.js";
 import * as OP from "../../shared/requests.js";
-import { scratchWorld } from "../protocol/scratchworld.ts";
+import { scratchWorld } from "../harness/scratchworld.ts";
 import { mkCheck } from "../harness/harness.ts";
 const { check, tally } = mkCheck();
 

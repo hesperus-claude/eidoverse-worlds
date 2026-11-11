@@ -17,9 +17,9 @@
 // 5. the text tier: inspect / edit / hierarchy speak @world (the agent's edit sent to a real door)
 //
 // the world is read from the view (shared/protocol/view.js viewState); results and `undo` are the door's
-// (test/protocol/scratchworld.ts).
+// (test/harness/scratchworld.ts).
 import { noWorldUrl } from '../harness/no-world.ts';
-import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read: writers never choose ids
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { canon, RECORDS, addable, componentsOf } from '../../shared/components.js';
@@ -31,7 +31,7 @@ import { viewState, emptyView } from '../../shared/protocol/view.js';
 import { translate } from '../../tools/import-v1/translate-v1.js';
 import { emptyState, applyInPlace, opsOf } from '../../shared/protocol/fold.js';
 import { v1FoldBuild } from '../../tools/import-v1/build.ts';
-import { scratchWorld, flat } from '../protocol/scratchworld.ts';
+import { scratchWorld, flat } from '../harness/scratchworld.ts';
 import { COMPONENTS as SPEC } from '../../shared/protocol/componentspec.js';
 import { pinned } from "../gate/clock.ts";
 import { suite } from "../gate/suite.ts";

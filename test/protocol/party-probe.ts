@@ -27,10 +27,10 @@ const ME = "partyhost", WORLD = "party1";
 process.env.TRUST_NAMES = "1";
 const CRATE = "eidoverse/assets/models/crate_large_blue.glb";
 let worldsDir = "";
-import { inPage } from "./idalias.ts";
+import { inPage } from "../harness/idalias.ts";
 import { until, tryUntil, pageWaiter } from "../gate/wait.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
-// R 10-17: the page names what it makes with placeholders (test/protocol/idalias.ts pageIds); NODE holds the minted ids
+// R 10-17: the page names what it makes with placeholders (test/harness/idalias.ts pageIds); NODE holds the minted ids
 const NODE = new Map<string, string>(); const NAMES = ["box2", "bench5", "lockd", "signbox", "bpbox", "child1"];
 const { cdp, evalJson: evalRaw, cleanup, die, BASE } = await scratchBench("party", {
   prepare: (scratch) => {

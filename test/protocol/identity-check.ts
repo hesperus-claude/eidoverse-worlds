@@ -40,7 +40,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { generateKeyPairSync, sign as cryptoSign } from "node:crypto";
 import { ENGINE, scratch } from "../gate/common.ts";
-import { idAliases } from "./idalias.ts";
+import { idAliases } from "../harness/idalias.ts";
 import { tryUntil, until } from "../gate/wait.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 const IDS = idAliases();   // R 10-17: the suite's names ride as placeholders and minted ids

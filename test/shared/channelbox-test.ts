@@ -1,7 +1,7 @@
 // channelbox-test — the inspector's channel box (design §5, step 3): Translate,
 // Rotate (Euler read from q in the entity's rotation order), Scale, the order,
 // and the Quaternion row — schema → editOps → the REAL door (a scratch
-// world, test/protocol/scratchworld.ts) → the view → schema again.
+// world, test/harness/scratchworld.ts) → the view → schema again.
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/shared/channelbox-test.ts
 //
@@ -18,7 +18,7 @@ import * as THREE from '../../client/node_modules/three/build/three.module.js';
 import { inspectSchema, editOps, fieldAt, describeSchema, poseEdits } from '../../shared/editschema.js';
 import { qFromEuler, eulerFromQ, ROT_ORDERS, sameRotation } from '../../shared/euler.js';
 import { qHeading, qRotate, qFromYaw } from '../../shared/rot.js';
-import { scratchWorld, flat } from '../protocol/scratchworld.ts';
+import { scratchWorld, flat } from '../harness/scratchworld.ts';
 import { encName } from '../../shared/protocol/names.js';
 import { recordComponents } from "../../shared/protocol/view.js";
 

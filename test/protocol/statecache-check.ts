@@ -15,7 +15,7 @@
 //   SC11 the re-derive runs off the event loop
 //   SC12 a cache that parses but whose views are malformed: the world opens from the whole log, never throws
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import path from "node:path";
 import { scratch } from "../gate/common.ts";
@@ -26,7 +26,7 @@ Object.assign(process.env, { WORLDS_DIR: W, BACKUPS_DIR: path.join(root, "backup
 const { request } = await import("../../shared/protocol/authority.js");
 const { readLog, fold, jcs, REDACTED } = await import("../../shared/protocol/fold.js");
 const { chainStep } = await import("../../shared/protocol/authority/storage.js");
-const { openLive } = await import("./labhost.ts");
+const { openLive } = await import("../harness/labhost.ts");
 const SC = await import("../../server/statecache.ts");
 const { forkWorld, resetWorld } = await import("../../server/worldlog.ts");
 const { backupWorld } = await import("../../server/backups.ts");

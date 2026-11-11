@@ -18,7 +18,7 @@
 //   H   help text: physics.who and grabbable.who default to member (visitor until R 10-21), and every place an agent reads says so
 //   P   people: a refusal in a person's words (no code, no tool syntax, things by label); warnings by label
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch, copyTree } from "../gate/common.ts";
@@ -122,8 +122,8 @@ if (argv.includes("--control")) {
 const T = opt("tree") ?? ENGINE;
 const only = opt("only")?.split(",") ?? null;
 const imp = async (p: string) => { try { return await import(path.join(T, p)); } catch (e) { return { __err: String(e?.message ?? e) }; } };
-const D = await imp("shared/protocol/authority.js"), CAT = await imp("shared/protocol/componentspec.js"), LAB = await import(ENGINE + "test/protocol/labmodels.js"), TS = await imp("shared/protocol/verbspec.js");
-const SD = await imp("test/protocol/scratchworld.ts"), TV1 = await imp("tools/import-v1/translate-v1.js"), FOLD = await imp("shared/protocol/fold.js");
+const D = await imp("shared/protocol/authority.js"), CAT = await imp("shared/protocol/componentspec.js"), LAB = await import(ENGINE + "test/harness/labmodels.js"), TS = await imp("shared/protocol/verbspec.js");
+const SD = await imp("test/harness/scratchworld.ts"), TV1 = await imp("tools/import-v1/translate-v1.js"), FOLD = await imp("shared/protocol/fold.js");
 const ME = await imp("client/lib/motioneval.js"), ES = await imp("shared/editschema.js"), RF = await imp("shared/protocol/refusal.js");
 const S = suite("shiplist", { cap: 500 });
 const ok = (id: string, cond: any, what: string, detail?: any) => { if (S.runs(id)) S.ok(cond, `${id} ${what}`, detail); };

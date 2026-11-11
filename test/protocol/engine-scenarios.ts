@@ -2,7 +2,7 @@
 // including its throw, before any rest is written, so it holds the engine's INPUTS only. engine-check.ts replays each
 // through every engine version this server carries and holds the result to that version's digests: what "carries"
 // means (house, #260 10-21). Run once to (re)write the inputs; the digests are written by engine-check --write.
-import "./fixture-ids.ts";
+import "../harness/fixture-ids.ts";
 import fs from "node:fs";
 import { request } from "../../shared/protocol/authority.js";
 import { openWorld } from "../harness/filehost.ts";

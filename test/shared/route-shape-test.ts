@@ -13,7 +13,7 @@
 import { mkCheck, scratchSequencer } from "../harness/harness.ts";
 import { makeReplica } from "../../shared/protocol/replica.js";
 import { viewOf } from "../../shared/protocol/view.js";
-import { idAliases } from "../protocol/idalias.ts";
+import { idAliases } from "../harness/idalias.ts";
 import { tryUntil } from "../gate/wait.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 const IDS = idAliases();   // R 10-17: the suite's names ride as placeholders and minted ids

@@ -12,13 +12,13 @@
 // exist, owned by the names this suite joins as (alice, groundskeeper, lampsmith; TRUST_NAMES=1). Checks that read
 // world.jsonl off this disk are skipped there.
 
-import "../../test/protocol/fixture-ids.ts";   // fixtures seed the ids they read (writers never choose ids)
+import "../../test/harness/fixture-ids.ts";   // fixtures seed the ids they read (writers never choose ids)
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { foundWorlds, freePort } from "../../test/harness/harness.ts";
-import { idAliases } from "../../test/protocol/idalias.ts";
+import { idAliases } from "../../test/harness/idalias.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
 const IDS = idAliases();
 

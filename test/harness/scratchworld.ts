@@ -1,4 +1,4 @@
-// test/protocol/scratchworld.ts — a scratch world behind the real authority, for the planner tests (tools/*-test.ts) that
+// test/harness/scratchworld.ts — a scratch world behind the real authority, for the planner tests (tools/*-test.ts) that
 // check the RESULT of an edit: seed the records a test reads (view form), send the planner's requests, read the
 // state back as the view the planners read (shared/protocol/view.js viewState). Same pattern as test/protocol/authority-check.ts:
 // request(openWorld(root, name), actor, verb, args), a `create-world` first to found the world (its founder is its owner).
@@ -6,7 +6,7 @@
 import { scratch } from "../gate/common.ts";
 import { request, fixtureIds } from "../../shared/protocol/authority.js";
 import { LAB_CATALOGUE } from "./labmodels.js";
-import { openWorld } from "../harness/filehost.ts";
+import { openWorld } from "./filehost.ts";
 import { viewState } from "../../shared/protocol/view.js";
 import { enc, encName } from "../../shared/protocol/names.js";
 import { localOf } from "../../shared/hierarchy.js";

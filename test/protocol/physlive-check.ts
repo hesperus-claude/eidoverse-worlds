@@ -9,16 +9,16 @@
 //   F   the client's fold (shared/protocol/replica.js): adopt a cut (mid-flight too), fold the authority's entries, and its own
 //       presentation flight comes to rest bit for bit where the authority logs the rest
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import { scratch } from "../gate/common.ts";
 import { request } from "../../shared/protocol/authority.js";
 import { readLog, fold, opsOf, REDACTED } from "../../shared/protocol/fold.js";
 import { restsOf, digestOf } from "../../shared/protocol/simlayer.js";
-import { simFold } from "./labmodels.js";   // the sim over the lab table (its logs name lab models)
+import { simFold } from "../harness/labmodels.js";   // the sim over the lab table (its logs name lab models)
 import { makeReplica } from "../../shared/protocol/replica.js";
 import { suite } from "../gate/suite.ts";
-import { openLive } from "./labhost.ts";
+import { openLive } from "../harness/labhost.ts";
 import { clientSnapshotOf } from "../../shared/protocol/replica.js";
 
 const root = scratch("physlive");

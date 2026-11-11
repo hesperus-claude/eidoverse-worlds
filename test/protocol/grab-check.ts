@@ -21,7 +21,7 @@
 //   A   what an agent reads: look, inspect and help
 //   F   the independent review's findings (10-06), each red before its fix
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import { ENGINES } from "../../shared/protocol/simlayer.js";
 import path from "node:path";
@@ -30,7 +30,7 @@ import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.t
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "../gate/clock.ts";
 import { suite } from "../gate/suite.ts";
-import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "../harness/labmodels.js";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -179,7 +179,7 @@ const D = await import(TREE + "shared/protocol/authority.js");
 D.fixtureIds?.(true);
 const F = await import(TREE + "shared/protocol/fold.js");
 const SL = await import(TREE + "shared/protocol/simlayer.js");
-const { MODELS: LABM } = await import(ENGINE + "test/protocol/labmodels.js");
+const { MODELS: LABM } = await import(ENGINE + "test/harness/labmodels.js");
 const { KILL_MARGIN = 0 } = await import(TREE + "shared/protocol/physconst.js");
 const G = await import(TREE + "shared/grab.js").catch(() => ({}));   // absent at the base commit (--control)
 const SB = await import(TREE + "shared/protocol/sandbox.js");

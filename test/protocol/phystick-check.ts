@@ -7,12 +7,12 @@
 //   T3  bounded passes: one pass advances at most maxTicks engine ticks, a stall catches up over later passes, and the
 //       result is bit-identical to advancing straight (Covenant IV: advancement is schedule-independent)
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import { request, settle } from "../../shared/protocol/authority.js";
-import { openLive } from "./labhost.ts";
+import { openLive } from "../harness/labhost.ts";
 import { restsOf, digestOf, livePoses } from "../../shared/protocol/simlayer.js";
-import { simFold } from "./labmodels.js";   // the sim over the lab table (its logs name lab models)
+import { simFold } from "../harness/labmodels.js";   // the sim over the lab table (its logs name lab models)
 import { scratch } from "../gate/common.ts";
 import { suite } from "../gate/suite.ts";
 

@@ -12,7 +12,7 @@ import { ENGINE, scratch } from "../gate/common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "../gate/clock.ts";
-import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "../protocol/labmodels.js";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "../harness/labmodels.js";
 
 const MAIN = "ccd5c53fa";   // upstream main (#281's merge): its shared/water.js is the reference reader
 let pass = 0, fail = 0;

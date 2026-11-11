@@ -1,4 +1,4 @@
-// test/protocol/labhost.ts — openLive for the suites: the lab's hand-written models (./labmodels.js) as the catalogue, the
+// test/harness/labhost.ts — openLive for the suites: the lab's hand-written models (./labmodels.js) as the catalogue, the
 // sim's models left as the host's ({} unless a suite names them). The runtime's openLive knows no model it isn't handed.
 import { openLive as hostOpen, type LiveOpts } from "../../server/livehost.ts";
 import { LAB_CATALOGUE } from "./labmodels.js";

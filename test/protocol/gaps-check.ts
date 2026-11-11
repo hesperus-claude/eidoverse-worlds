@@ -9,12 +9,12 @@
 // Ported from the protocol lab's gaps-check.js @ 11db981; the "before" door (lab c9b4a67) is the control arm and runs only
 // with PROTOCOL_LAB (see common.ts). usage: bun test/protocol/gaps-check.ts
 // @ts-nocheck — lab code, kept as written
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import { scratch, labAt, controlNote } from "../gate/common.ts";
 import * as doorNow from "../../shared/protocol/authority.js";
 import * as simNow from "../../shared/protocol/simlayer.js";
-import { MODELS as LABM } from "./labmodels.js";
+import { MODELS as LABM } from "../harness/labmodels.js";
 import { openWorld as openNow } from "../harness/filehost.ts";
 import { fold as foldNow, readLog as readNow } from "../../shared/protocol/fold.js";
 import { labClock } from "../gate/clock.ts";

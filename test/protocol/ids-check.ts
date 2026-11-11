@@ -27,7 +27,7 @@ const T = ENGINE;
 const imp = async (p: string) => await import(path.join(T, p));
 const FOLD = await imp("shared/protocol/fold.js"), D = await imp("shared/protocol/authority.js"), CAT = await imp("shared/protocol/componentspec.js");
 const IDS = await imp("shared/protocol/ids.js");
-const SD = await imp("test/protocol/scratchworld.ts");
+const SD = await imp("test/harness/scratchworld.ts");
 const S = suite("ids", { cap: 700 });
 const ok = (id: string, cond: any, what: string, detail?: any) => { if (S.runs(id)) S.ok(cond, `${id} ${what}`, detail); };
 async function C(id: string, what: string, fn: () => any) {
@@ -238,7 +238,7 @@ await C("G2", "at runtime, loading the server's and the agent door's own code ne
   const src = `
     await import(${JSON.stringify(path.join(T, "server/worldlog.ts"))}); await import(${JSON.stringify(path.join(T, "server/messages.ts"))});
     await import(${JSON.stringify(path.join(T, "mcpl/tools.ts"))}); await import(${JSON.stringify(path.join(T, "mcpl/agent.ts"))});
-    const { request } = await import(${JSON.stringify(path.join(T, "shared/protocol/authority.js"))}); const { LAB_CATALOGUE } = await import(${JSON.stringify(path.join(T, "test/protocol/labmodels.js"))});
+    const { request } = await import(${JSON.stringify(path.join(T, "shared/protocol/authority.js"))}); const { LAB_CATALOGUE } = await import(${JSON.stringify(path.join(T, "test/harness/labmodels.js"))});
     const { openWorld } = await import(${JSON.stringify(path.join(T, "test/harness/filehost.ts"))});
     const { scratch } = await import(${JSON.stringify(path.join(T, "test/gate/common.ts"))});
     const { pin } = await import(${JSON.stringify(path.join(T, "test/gate/clock.ts"))});

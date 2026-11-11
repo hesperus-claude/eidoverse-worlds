@@ -18,12 +18,12 @@ import path from "node:path";
 import { ENGINE, scratch, archiveTo } from "../gate/common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
-import { idAliases } from "./idalias.ts";
+import { idAliases } from "../harness/idalias.ts";
 import { tryUntil, pause } from "../gate/wait.ts";
 import { labClock, pinned } from "../gate/clock.ts";
 import { suite } from "../gate/suite.ts";
 const IDS = idAliases();   // the real-server rows: the suite's names ride as placeholders and minted ids
-import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "../harness/labmodels.js";
 import { helloOf } from "../../shared/protocol/hello.js";
 
 const argv = process.argv.slice(2);

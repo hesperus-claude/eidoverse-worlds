@@ -1,4 +1,4 @@
-// test/protocol/pinhistory.ts — a pinned file's history in git, for rows that hold a rule against the record and not just
+// test/harness/pinhistory.ts — a pinned file's history in git, for rows that hold a rule against the record and not just
 // against the live code. A pin edited together with the code it pins agrees with the code, so a row comparing the two can't
 // see the break; only the pin's earlier version can. Shared by pretrans-check (registry-pin.json), normative-check
 // (refusal-codes.json, readback.json) and the conformance files' version rule (engine-check, trig-check, laws-check).

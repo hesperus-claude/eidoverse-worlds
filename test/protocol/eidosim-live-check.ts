@@ -1,14 +1,14 @@
 // @ts-nocheck
 // test/protocol/eidosim-live-check.ts — eidosim at the authority: who may be knocked, knocked children, and spheres on the
 // live host (no lab catalogue). Review of 8377ec52 #1 #3 #4 #5 #6. Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/protocol/eidosim-live-check.ts
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import { request } from "../../shared/protocol/authority.js";
 import { openWorld } from "../harness/filehost.ts";
-import { openLive } from "./labhost.ts";
+import { openLive } from "../harness/labhost.ts";
 import { fold, readLog } from "../../shared/protocol/fold.js";
 import { restsOf, worldPose, ENGINES } from "../../shared/protocol/simlayer.js";
-import { simFold } from "./labmodels.js";   // the sim over the lab table (its logs name lab models)
+import { simFold } from "../harness/labmodels.js";   // the sim over the lab table (its logs name lab models)
 import { scratch } from "../gate/common.ts";
 import { labClock } from "../gate/clock.ts";
 import { suite } from "../gate/suite.ts";

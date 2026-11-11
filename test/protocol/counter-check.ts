@@ -11,17 +11,17 @@
 // fallback (C10, C11 assert it).
 //
 // Harness: test/shared/blueprint-test.ts's pattern (a scratch world dir, identities with roles, requests through request(), the
-// fold read back), over server/livehost.ts openLive rather than test/protocol/scratchworld.ts's filehost, for two reasons
+// fold read back), over server/livehost.ts openLive rather than test/harness/scratchworld.ts's filehost, for two reasons
 // the list needs: scripts run only with a sandbox (openLive's default is QuickJS, SANDBOX), and blobs are PER WORLD DIR
 // there (<dir>/blobs, livehost.ts:52) where filehost's store is per ROOT (filehost.ts:26) — C2 is a test of exactly that.
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import path from "node:path";
 import { scratch } from "../gate/common.ts";
 import { request } from "../../shared/protocol/authority.js";
 import { creatorOf } from "../../shared/protocol/authority/rights.js";
-import { openLive } from "./labhost.ts";
+import { openLive } from "../harness/labhost.ts";
 import { SANDBOX } from "../../shared/protocol/sandbox.js";
 import { labClock, pinned } from "../gate/clock.ts";
 import { suite } from "../gate/suite.ts";

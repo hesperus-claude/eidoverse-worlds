@@ -1,14 +1,14 @@
 // test/protocol/directory-check.ts — the authority directory (server/directory.ts): who an identity is lives outside the log
 // (§2.3), an id is reached only through an account, and typing someone's name yields nothing (round-2 review R1, R2).
 // usage: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/protocol/directory-check.ts
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { directoryAt, directoryFor, isMinted, accountTag, foldName, lockFor } from "../../server/directory.ts";
 import { CUSTODY_FILE, DIRECTORY_FILE, OLD_NAMES, custodyFileIn } from "../../server/keyfiles.ts";
 import { custodyAt } from "../../server/custody.ts";
-import { openLive } from "./labhost.ts";
+import { openLive } from "../harness/labhost.ts";
 import { request, actIndexOf, isBanned } from "../../shared/protocol/authority.js";
 import { suite } from "../gate/suite.ts";
 import { COMPONENTS } from "../../shared/protocol/componentspec.js";
@@ -348,7 +348,7 @@ ok(foldName("Marígold") === foldName("marigold") && foldName("JOSÉ") === foldN
 // directory identities and content addresses, and is compared with HER sim (shared/sim.js beside the v1 fold, as sweep §3).
 { const { emptyState: v1Empty, foldEntry } = await import("../../tools/import-v1/fold.js");
   const eidosim = await import("../../tools/import-v1/eidosim-v1.js");   // HER engine: what the v1 log means
-  const { DEFAULT_ENGINE } = await import("../../shared/protocol/simlayer.js"); const { simFold } = await import("./labmodels.js");
+  const { DEFAULT_ENGINE } = await import("../../shared/protocol/simlayer.js"); const { simFold } = await import("../harness/labmodels.js");
   const { readLog, fold } = await import("../../shared/protocol/fold.js");
   const TV1 = await import("../../tools/import-v1/translate-v1.js");
   const crypto = await import("node:crypto");

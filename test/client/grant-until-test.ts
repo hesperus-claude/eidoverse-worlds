@@ -22,7 +22,7 @@ const check = (name, ok, detail = "") => {
 };
 
 // 1. the door
-const { scratchWorld } = await import("../protocol/scratchworld.ts");
+const { scratchWorld } = await import("../harness/scratchworld.ts");
 const W = scratchWorld("grant-until");
 const now = pinned();
 const frac = W.call("set", { id: "@world", component: "roles:u-pip", value: { role: "builder", until: now + 7_200_000.37 } });

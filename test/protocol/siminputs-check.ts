@@ -5,14 +5,14 @@
 //       G1/G2 late at join, G3 control (held from the start), G4 a terrain changed mid-session to one not yet fetched
 // usage: bun test/protocol/siminputs-check.ts
 // @ts-nocheck
-import "./fixture-ids.ts";
+import "../harness/fixture-ids.ts";
 import fs from "node:fs";
 import { scratch } from "../gate/common.ts";
 import { request } from "../../shared/protocol/authority.js";
 import { readLog } from "../../shared/protocol/fold.js";
 import { restsOf } from "../../shared/protocol/simlayer.js";
 import { makeReplica, clientSnapshotOf } from "../../shared/protocol/replica.js";
-import { openLive } from "./labhost.ts";
+import { openLive } from "../harness/labhost.ts";
 import { registerGrid, setGridLoader, shapeReady, shapeParams } from "../../shared/terrainshape.js";
 import { SIM_INPUTS } from "../../shared/protocol/siminputs.js";
 import { ENGINE } from "../gate/common.ts";

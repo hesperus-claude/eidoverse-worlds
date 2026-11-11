@@ -22,10 +22,10 @@ const ME = "editbot", WORLD = "buildp";
 process.env.TRUST_NAMES = "1";
 const CRATE = "eidoverse/assets/models/crate_large_blue.glb";
 let worldsDir = "";
-import { inPage } from "./idalias.ts";
+import { inPage } from "../harness/idalias.ts";
 import { pageWaiter } from "../gate/wait.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
-// R 10-17: the page names what it makes with placeholders (test/protocol/idalias.ts pageIds); NODE holds the minted ids
+// R 10-17: the page names what it makes with placeholders (test/harness/idalias.ts pageIds); NODE holds the minted ids
 // once read back, so node-side checks and later page code use them
 const NODE = new Map<string, string>(); const NAMES = ["house-a", "house-b"];
 const { cdp, evalJson: evalRaw, cleanup, die, BASE } = await scratchBench("build", {

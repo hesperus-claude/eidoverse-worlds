@@ -12,7 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch } from "../gate/common.ts";
 import { readLog, fold } from "../../shared/protocol/fold.js";
-import { idAliases } from "./idalias.ts";
+import { idAliases } from "../harness/idalias.ts";
 import { tryUntil } from "../gate/wait.ts";
 import { suite } from "../gate/suite.ts";
 import { helloOf } from "../../shared/protocol/hello.js";

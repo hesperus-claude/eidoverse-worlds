@@ -5,11 +5,11 @@
 //   CHROME=… bun test/client/colour-picker-bench.ts        (EDIT_SHOT=/path.png saves the open picker)
 
 import { scratchBench, mkCheck, sleep } from '../harness/harness.ts';
-import { pagedEval } from '../protocol/idalias.ts';
+import { pagedEval } from '../harness/idalias.ts';
 import { pageWaiter } from '../gate/wait.ts';
 
 const { cdp, evalJson: evalRaw, cleanup, die, BASE } = await scratchBench('colourpick', { worlds: ['pickbench'], owner: 'pickbot', serverEnv: { TRUST_NAMES: '1', ACT_RATE: '1000' } });
-// R 10-17: the page names its lamp with a placeholder (test/protocol/idalias.ts pageIds); 'picklamp' in page code is its id
+// R 10-17: the page names its lamp with a placeholder (test/harness/idalias.ts pageIds); 'picklamp' in page code is its id
 const evalJson = pagedEval(evalRaw, ['picklamp']);
 const { check, tally } = mkCheck();
 const waitFor = pageWaiter(evalJson, 6000);

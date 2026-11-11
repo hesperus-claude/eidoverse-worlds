@@ -20,9 +20,9 @@ const ME = "shipbot", WORLD = "ship4";
 process.env.TRUST_NAMES = "1";
 const CRATE = "eidoverse/assets/models/crate_large_blue.glb";
 let worldsDir = "";
-import { pagedEval } from "./idalias.ts";
+import { pagedEval } from "../harness/idalias.ts";
 import { pageWaiter, tryUntil } from "../gate/wait.ts";
-// R 10-17: the page names what it makes with placeholders (test/protocol/idalias.ts pageIds); every page answer brings the
+// R 10-17: the page names what it makes with placeholders (test/harness/idalias.ts pageIds); every page answer brings the
 // minted ids back (NODE), and N(name) reads a scene name as its id for the node-side checks
 const NAMES = ["mta", "mtb", "prbox0", "prbox1", "prbox2", "acbox", "anchor", "atbox", "box1", "clbox", "cloud", "ctbox", "cuball", "gate", "getool", "hdsign", "hpball", "htcrate", "hysign", "nhball", "nlbox", "pobase", "potop", "rbbtn", "rbtgt", "slcrate", "slfloor", "sthigh", "stlow", "syb", "syorb", "wbcrate", "wgcrate", "sba", "sbb", "crate-2", "crate-3"];
 const NODE = new Map<string, string>(); const N = (n: string) => NODE.get(n) ?? n;

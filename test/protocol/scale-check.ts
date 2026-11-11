@@ -23,7 +23,7 @@
 //   R   re-entrancy: a request nested in another (leave → drop, or a host's callback) leaves the outer call's state alone
 //   G   guards (green at base too): the index answers what the scans answered; a derived index files what a fresh one does
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch, copyTree, archiveTo } from "../gate/common.ts";
@@ -32,7 +32,7 @@ import { suite } from "../gate/suite.ts";
 import { CAPACITY, CAPACITY_CEILING } from "../../shared/protocol/authority.js";
 import { COMPONENTS } from "../../shared/protocol/componentspec.js";
 import { labClock, pinned } from "../gate/clock.ts";
-import { LAB_CATALOGUE } from "./labmodels.js";
+import { LAB_CATALOGUE } from "../harness/labmodels.js";
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
 const BASE = "d374d2ef";

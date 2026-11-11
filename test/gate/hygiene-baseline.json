@@ -232,7 +232,7 @@
  "test/protocol/inplace-check.ts": {
   "bare-wait": 3
  },
- "test/protocol/inspectharness.ts": {
+ "test/harness/inspectharness.ts": {
   "bare-wait": 1
  },
  "test/protocol/names-check.ts": {

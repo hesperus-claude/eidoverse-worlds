@@ -13,10 +13,10 @@
 // Hygiene (memory reference_browser_probe_hygiene.md): wait on conditions, every gate prints its stage, teardown in finally.
 import { scratchBench, mkCheck } from '../harness/harness.ts';
 import { tryUntil } from '../gate/wait.ts';
-import { pagedEval } from '../protocol/idalias.ts';
+import { pagedEval } from '../harness/idalias.ts';
 
 const { cdp, evalJson: evalRaw, cleanup, die, BASE } = await scratchBench('comps-parity', { worlds: ['parity'], owner: 'editbot', serverEnv: { TRUST_NAMES: '1', ACT_RATE: '1000' } });
-// R 10-17: the page names its crate with a placeholder (test/protocol/idalias.ts pageIds); 'crate' in page code is its id
+// R 10-17: the page names its crate with a placeholder (test/harness/idalias.ts pageIds); 'crate' in page code is its id
 const evalJson = pagedEval(evalRaw, ['crate']);
 const { check, tally } = mkCheck();
 const becomes = async (expr: string, ms = 8000) => !!(await tryUntil(expr.slice(0, 80), () => evalJson(expr), { ms, step: 100 }));

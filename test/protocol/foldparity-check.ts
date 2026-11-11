@@ -22,7 +22,7 @@
 //   FP10 the readers rewritten not to scan (creatorOf, modlog, chat pages, client cuts) answer as their whole-log formulas
 //   FP11 the boot sweep's script peek (durable.ts fileIncludes) reads in chunks and finds a needle across a chunk's edge
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import path from "node:path";
 import { scratch, ENGINE } from "../gate/common.ts";
@@ -36,7 +36,7 @@ const { readLog, fold, jcs, worldIdOf } = await import("../../shared/protocol/fo
 const { seal } = await import("../../shared/protocol/authority/storage.js");
 const { actIndexOf, entityBefore } = await import("../../shared/protocol/authority/undo.js");
 const { digestOf } = await import("../../shared/protocol/simlayer.js");
-const { openLive } = await import("./labhost.ts");
+const { openLive } = await import("../harness/labhost.ts");
 const { custodyAt } = await import("../../server/custody.ts");
 const SC = await import("../../server/statecache.ts");
 const FV = await import("../../server/foldviews.ts").catch(() => null);   // absent before 10-28: its rows go red, the rest still run

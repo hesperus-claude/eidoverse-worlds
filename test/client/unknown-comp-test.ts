@@ -5,7 +5,7 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/unknown-comp-test.ts
 //
 // Four tiers, each the REAL module, no server process, no browser:
-//   1. the door      shared/protocol/authority.js on a scratch world (test/protocol/scratchworld.ts): a set of an unknown type is
+//   1. the door      shared/protocol/authority.js on a scratch world (test/harness/scratchworld.ts): a set of an unknown type is
 //                    accepted, with a note that the door knows no evaluator for it
 //   2. the fold      the door's state as the view a client reads (view.js viewState): kept verbatim, replaced
 //                    wholesale, removed by delete {id, component}
@@ -54,7 +54,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const settle = async () => { for (let i = 0; i < 8; i++) await sleep(15); };
 
 const { inspectSchema, editOps, fieldAt } = await import('../../shared/editschema.js');
-const { scratchWorld } = await import('../protocol/scratchworld.ts');
+const { scratchWorld } = await import('../harness/scratchworld.ts');
 
 const TYPE = 'example.org/weathervane';     // a type no evaluator in this tree knows, in someone's own namespace (a bare name is refused at the door, PROTOCOL §4)
 const D1 = { points: 'north', vanes: [1, 2, { deep: true }], note: 'a cockerel' };

@@ -11,7 +11,7 @@
 //   bun test/protocol/describe-particles-check.ts --mutants    remove each gate in a copy of the tree: its cases go red; a no-op stays green
 //   bun test/protocol/describe-particles-check.ts --tree <dir> against another checkout
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch, copyTree, archiveTo } from "../gate/common.ts";
@@ -19,7 +19,7 @@ import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.t
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { translatorVersion } from "../../tools/import-v1/translate-v1.js";
 import { labClock, pinned } from "../gate/clock.ts";
-import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "../harness/labmodels.js";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };

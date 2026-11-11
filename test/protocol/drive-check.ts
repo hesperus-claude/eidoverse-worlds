@@ -5,14 +5,14 @@
 //   bun test/protocol/drive-check.ts --tree <dir>    against another checkout's shared/ (durable and custody are always this checkout's; a mutant, or the base)
 //   bun test/protocol/drive-check.ts --mutants       remove each rule in turn (a copy of the tree): its cases must go red
 // @ts-nocheck
-import "./fixture-ids.ts";
+import "../harness/fixture-ids.ts";
 import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch, copyTree } from "../gate/common.ts";
 import { readLogBytes, appendDurable, putBlobFile } from "../../server/durable.ts";
 import { custodyAt, modLogAt } from "../../server/custody.ts";
 import { labClock, pinned } from "../gate/clock.ts";
-import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "./labmodels.js";
+import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "../harness/labmodels.js";
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };

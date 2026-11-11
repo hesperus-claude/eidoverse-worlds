@@ -64,7 +64,7 @@ if (process.argv.includes("--mutants")) {
     ran++;
     const d = scratch("txnmut");
     for (const dir of ["server", "shared", "client", "mcpl"]) copyTree(path.join(ENGINE, dir), path.join(d, dir));
-    for (const f of ["test/gate/common.ts", "test/gate/suite.ts", "test/gate/wait.ts", "test/protocol/txn-check.ts", "test/protocol/labhost.ts", "test/protocol/labmodels.js"]) { fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true }); fs.copyFileSync(path.join(ENGINE, f), path.join(d, f)); }
+    for (const f of ["test/gate/common.ts", "test/gate/suite.ts", "test/gate/wait.ts", "test/protocol/txn-check.ts", "test/harness/labhost.ts", "test/harness/labmodels.js"]) { fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true }); fs.copyFileSync(path.join(ENGINE, f), path.join(d, f)); }
     fs.copyFileSync(path.join(ENGINE, "package.json"), path.join(d, "package.json")); fs.symlinkSync(path.join(ENGINE, "node_modules"), path.join(d, "node_modules"), "junction");
     const f = path.join(d, file); const src = fs.readFileSync(f, "utf8");
     if (src.split(find).length !== 2) { bad++; console.log(`FAIL mutant '${name}': its text isn't found exactly once in ${file} (the fix moved?)`); continue; }
@@ -86,7 +86,7 @@ const { foundWorld, WorldLog, wireEntry } = await import("../../server/worldlog.
 const { World } = await import("../../server/world.ts");
 const { REQUEST_MESSAGES } = await import("../../server/requestwire.ts");
 const { directoryFor } = await import("../../server/directory.ts");
-const { openLive } = await import("./labhost.ts");
+const { openLive } = await import("../harness/labhost.ts");
 const { appendDurable } = await import("../../server/durable.ts");
 const { OPERATORS } = await import("../../server/operators.ts");
 const nodefs = (await import("node:fs")).default;

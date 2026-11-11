@@ -31,7 +31,7 @@ const ME = "editbot", WORLD = "edit4";
 process.env.TRUST_NAMES = "1"; // a private test server: the name editbot is the account local:editbot (server/config.ts)
 const CRATE = "eidoverse/assets/models/crate_large_blue.glb", RED = "eidoverse/assets/models/crate_large_red.glb";
 let worldsDir = "";
-import { idAliases, inPage } from "./idalias.ts";
+import { idAliases, inPage } from "../harness/idalias.ts";
 import { pause, tryUntil, pageWaiter, WAIT_SCALE } from "../gate/wait.ts";
 import { helloOf } from '../../shared/protocol/hello.js';
 // R 10-17: the scene's names ride as placeholders and minted ids — bob's through IDS (node), the page's own through the page

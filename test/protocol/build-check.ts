@@ -17,13 +17,13 @@
 //       part — one child, not two (U2)
 //   G   guards (green at base too)
 // @ts-nocheck
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import path from "node:path";
 import { ENGINE, scratch, archiveTo } from "../gate/common.ts";
 import { labClock, pinned } from "../gate/clock.ts";
 import { suite } from "../gate/suite.ts";
-import { LAB_CATALOGUE } from "./labmodels.js";   // the suites' model table (a base or mutant tree reads it from here)
+import { LAB_CATALOGUE } from "../harness/labmodels.js";   // the suites' model table (a base or mutant tree reads it from here)
 
 const argv = process.argv.slice(2);
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };

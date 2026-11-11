@@ -4,11 +4,11 @@
 // pointed at the importer; the ones that pinned the command went with it.)
 //   usage: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/shared/shape-import-test.ts
 // @ts-nocheck
-import "../protocol/fixture-ids.ts";
+import "../harness/fixture-ids.ts";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { scratchWorld } from "../protocol/scratchworld.ts";
+import { scratchWorld } from "../harness/scratchworld.ts";
 import { isComponent } from "../../shared/protocol/fold.js";
 import { partSlot } from "../../shared/protocol/names.js";
 import { repairComps, repairWorld, repairMotion } from "../../tools/import-v1/shapes.js";

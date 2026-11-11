@@ -10,7 +10,7 @@
 // reproducing it. This pins it either way: after each seam, ALL FOUR registries are empty for a removed id, and all
 // four hold it after a full realize. Same cone as lod-client-test (test/stubs/lod-client-stub.mjs: a loader the test holds
 // open and releases by hand; colliders and casters recorded, never built).
-import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { plugin } from 'bun';
 import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
@@ -35,7 +35,7 @@ const store = new Map<string, string>();
 const stub: any = await import('../stubs/lod-client-stub.mjs');
 const M: any = await import('../../client/lib/realize/models.js');
 const S: any = await import('../../client/lib/state.js');
-const { scratchWorld } = await import('../protocol/scratchworld.ts');
+const { scratchWorld } = await import('../harness/scratchworld.ts');
 const { emptyView } = await import('../../shared/protocol/view.js');
 const { bus } = await import('../../client/lib/base.js');
 

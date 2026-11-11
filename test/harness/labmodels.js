@@ -1,4 +1,4 @@
-// test/protocol/labmodels.js — the lab's hand-written models: a test fixture. A world reads only the catalogue it is
+// test/harness/labmodels.js — the lab's hand-written models: a test fixture. A world reads only the catalogue it is
 // handed (server/modelcatalogue.ts measures library GLBs); suites hand it this one (LAB_CATALOGUE) or pass MODELS to the sim. Models are
 // local-space boxes with the origin at the base centre, front = +Z, with their support surfaces.
 export const MODELS = {

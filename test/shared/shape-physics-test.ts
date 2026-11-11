@@ -4,10 +4,10 @@
 //   usage: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/shared/shape-physics-test.ts
 // @ts-nocheck
 import { fileURLToPath } from "node:url";
-import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from 'node:fs';
 import { addSocket } from '../../shared/requests.js';
-import { scratchWorld } from '../protocol/scratchworld.ts';
+import { scratchWorld } from '../harness/scratchworld.ts';
 import { COMPONENTS, statusOf, pinOf, materialize } from '../../shared/protocol/componentspec.js';
 import { evalWholeMotion } from '../../client/lib/motioneval.js';
 import { worldPose, TICK_MS } from '../../shared/protocol/simlayer.js';

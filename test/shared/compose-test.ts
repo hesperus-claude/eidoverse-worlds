@@ -5,7 +5,7 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/shared/compose-test.ts
 //
 // The realizer is the real client/lib/realize/models.js over test/stubs/lod-client-stub.mjs (as components-wire-test runs it).
-import "../protocol/fixture-ids.ts";
+import "../harness/fixture-ids.ts";
 import { plugin } from "bun";
 import { stubResolve } from "../harness/stub.ts";
 import { fileURLToPath } from "node:url";
@@ -73,7 +73,7 @@ check("the realizer reported nothing", spy.reports.length === 0, spy.reports);
 
 console.log("\nthe door, capacity, delete and a late join agree (a scratch world behind the real authority)");
 {
-  const { scratchWorld } = await import("../protocol/scratchworld.ts");
+  const { scratchWorld } = await import("../harness/scratchworld.ts");
   const { openWorld } = await import("../harness/filehost.ts");
   const { viewState } = await import("../../shared/protocol/view.js");
   const { SOCKETS_PER_HOST } = await import("../../shared/protocol/authority/sockets.js");

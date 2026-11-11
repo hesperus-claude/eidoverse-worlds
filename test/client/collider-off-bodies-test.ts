@@ -18,7 +18,7 @@
 //    structure keeps its `hidden`, its collider off, and the collider preference it asked for; and a building whose
 //    structure is removed has its anchor back as hidden as it says, with the collider preference it asks for;
 //  - controls beside each: the same thing with collision on has its collider, and a walker stepping into it is pushed out.
-import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { plugin } from 'bun';
 import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
@@ -48,7 +48,7 @@ const C: any = await import('../../client/lib/colliders.js');
 const M: any = await import('../../client/lib/realize/models.js');
 const ST: any = await import('../../client/lib/realize/structure.js');
 const S: any = await import('../../client/lib/state.js');
-const { scratchWorld } = await import('../protocol/scratchworld.ts');
+const { scratchWorld } = await import('../harness/scratchworld.ts');
 const { until } = await import('../gate/wait.ts');
 
 const MESH = { shape: 'box', size: [2, 2, 2] };

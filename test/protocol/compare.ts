@@ -2,7 +2,7 @@
 // PROTOCOL alone) on every conformance log: status, digest, and diagnostic codes. Ported from
 // the protocol lab's conformance/compare.js @ 11db981. Also runs the reference reader's own tests (test_reader.py,
 // test_chain.py; the latter needs python3 `cryptography`). usage: bun test/protocol/compare.ts  (exit 1 on any difference; PYTHON=<interpreter>, default python3 on PATH)
-import "./fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
+import "../harness/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import fs from "node:fs";
 import { readLog, fold, digest } from "../../shared/protocol/fold.js";
 import { ENGINE } from "../gate/common.ts";
@@ -57,7 +57,7 @@ if (drift.length) { suiteFails++; console.log(`FAIL test_reader.py rewrote ${dri
 // logs but never what this server writes). Found a world through the engine authority, write a few kinds of request, then
 // the reference reader must say ok with 0 malformed, the Python chain verifier must accept every head and signature,
 // and a value altered after the fact must break the chain.
-{ const { openLive } = await import("./labhost.ts"); const { request } = await import("../../shared/protocol/authority.js");
+{ const { openLive } = await import("../harness/labhost.ts"); const { request } = await import("../../shared/protocol/authority.js");
   const os = await import("node:os"); const path = await import("node:path");
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "engine-conf-")); let T = 1800000000000;
   const w: any = openLive(path.join(tmp, "w"), "w", { now: () => (T += 100), custodyFile: path.join(tmp, "custody.json") });

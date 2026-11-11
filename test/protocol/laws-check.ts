@@ -10,7 +10,7 @@ import fs from "node:fs";
 import { makeHeightField, terrainParams } from "../../shared/terrainmath.js";
 import { MAX_FEATURES } from "../../shared/terrainshape.js";
 import { normalizePolicy, segmentAt } from "../../shared/forecast.js";
-import * as PH from "./pinhistory.ts";
+import * as PH from "../harness/pinhistory.ts";
 import { fileURLToPath } from "node:url";
 import { suite } from "../gate/suite.ts";
 export const LAWS = { ground: { version: "ground@1", data: "terrain" }, sky: { version: "forecast@1", data: "sky" } } as const;
