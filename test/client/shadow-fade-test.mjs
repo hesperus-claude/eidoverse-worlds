@@ -4,6 +4,7 @@
 // boot cases each run as a child (`--case <name>`); `--mutants` runs the child mutation controls, each must go red.
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { suite } from "../gate/suite.ts";
 GlobalRegistrator.register();
 HTMLCanvasElement.prototype.getContext = function () { const a = new Proxy(function () {}, { get: (_t, k) => (k === 'width' ? 100 : a), apply: () => a, set: () => true }); return new Proxy({}, { get: (_t, k) => (k === 'measureText' ? () => ({ width: 100 }) : a), set: () => true }); };
@@ -16,10 +17,9 @@ const MUTATE = argOf('--mutate');
 // ---- the child: one shadow-preference boot state, measured ----
 if (CASE) {
   plugin({ name: 'core-stub', setup(build) {
-    build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
-    build.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
-    build.onResolve({ filter: /^\.\/assets\.js$/ }, () => ({ path: here('../stubs/assets-stub.mjs') }));
-    build.onResolve({ filter: /^\.\/loadwork\.js$/ }, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
+    stubResolve(build, /^\.\/core\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
+    stubResolve(build, /^\.\/base\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
+    stubResolve(build, /^\.\/loadwork\.js$/, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
   } });
 
   // the preference, set BEFORE the import that reads it
@@ -147,12 +147,10 @@ if (CASE) {
 
 // ---- the parent ----
 plugin({ name: 'core-stub', setup(build) {
-  build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('../stubs/shadow-fade-core-stub.mjs') }));
-  build.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
-  build.onResolve({ filter: /^\.\/assets\.js$/ }, () => ({ path: here('../stubs/assets-stub.mjs') }));
-  build.onResolve({ filter: /^\.\/loadwork\.js$/ }, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
-  build.onResolve({ filter: /^\.\/state\.js$/ }, () => ({ path: here('../stubs/state-stub.mjs') }));
-  build.onResolve({ filter: /^\.\/warmqueue\.js$/ }, () => ({ path: here('../stubs/lod-client-stub.mjs') }));   // warmDepth resolves at once
+  stubResolve(build, /^\.\/core\.js$/, () => ({ path: here('../stubs/shadow-fade-core-stub.mjs') }));
+  stubResolve(build, /^\.\/base\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
+  stubResolve(build, /^\.\/state\.js$/, () => ({ path: here('../stubs/state-stub.mjs') }));
+  stubResolve(build, /^\.\/warmqueue\.js$/, () => ({ path: here('../stubs/lod-client-stub.mjs') }));   // warmDepth resolves at once
 } });
 const S = suite("shadow-fade");
 const check = (name, ok, note) => S.check(name, ok, note);
@@ -341,7 +339,7 @@ async function runCase(name, mutate = null) {
   const p = Bun.spawnSync(args, { stdout: 'pipe', stderr: 'pipe' });
   const text = p.stdout.toString();
   const line = text.split('\n').find((l) => l.startsWith('__RESULT__'));
-  if (!line) throw new Error(`case ${name} produced no result:\n${text}\n${p.stderr.toString()}`);
+  if (!line || p.exitCode !== 0) throw new Error(`case ${name} exited ${p.exitCode}${line ? '' : ' with no result'}:\n${text}\n${p.stderr.toString()}`);   // a FAIL in the child (stubResolve's) is a fail here
   return JSON.parse(line.slice('__RESULT__'.length));
 }
 

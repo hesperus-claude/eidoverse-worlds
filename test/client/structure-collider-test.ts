@@ -19,6 +19,7 @@
 // because there is NO BOX there, with no change to the movement solver.
 
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 import { suite } from "../gate/suite.ts";
 
@@ -35,7 +36,7 @@ if (process.env.__EIDO_TEST_CACHE_OFF !== '1') {
 const STUB = fileURLToPath(new URL('../stubs/core-stub.mjs', import.meta.url));
 plugin({
   name: 'core-stub',
-  setup(build) { build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB })); },
+  setup(build) { stubResolve(build, /^\.\/core\.js$/, () => ({ path: STUB })); },
 });
 
 const { THREE } = await import('../stubs/core-stub.mjs');

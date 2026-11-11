@@ -17,6 +17,7 @@
 //   'gone' at t=30 ends it
 //   the collider sits out the ease and comes back at the end; whereIs (what a request reads) is the truth throughout
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 import { suite } from "../gate/suite.ts";
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
@@ -24,9 +25,9 @@ const STUB = here('../stubs/put-settle-stub.mjs');
 plugin({
   name: 'put-settle-stubs',
   setup(b) {
-    b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
+    stubResolve(b, /^\.\/core\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
     for (const m of ['world', 'remotes', 'colliders', 'autohooks', 'bodyscale', 'net', 'ui', 'chat', 'actions', 'realize/emitters', 'serverclock', 'plainwords', 'markup', 'xrask'])
-      b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: STUB }));
+      stubResolve(b, new RegExp(`^\\./${m}\\.js$`), () => ({ path: STUB }));
   },
 });
 const MUTANT = process.argv.includes('--mutant');

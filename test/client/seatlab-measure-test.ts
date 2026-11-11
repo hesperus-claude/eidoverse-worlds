@@ -3,11 +3,12 @@
 // three and seatcore are real.
 //   bun test/client/seatlab-measure-test.ts
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 import path from "node:path";
 const ROOT = path.resolve(import.meta.dir, "..", "..");
 const S = (globalThis as any).__seat = { mounts: new Map(), bags: new Map(), entities: new Map() };
 plugin({ name: "seatlab-lib", setup(b) {
-  b.onResolve({ filter: /^\/(lib|shared)\// }, (a) => ({ path: a.path, namespace: "seatlab-lib" }));
+  stubResolve(b, /^\/(lib|shared)\//, (a) => ({ path: a.path, namespace: "seatlab-lib" }));
   b.onLoad({ filter: /.*/, namespace: "seatlab-lib" }, (a) => {
     const three = JSON.stringify(path.join(ROOT, "client/node_modules/three/build/three.module.js"));
     const src: Record<string, string> = {

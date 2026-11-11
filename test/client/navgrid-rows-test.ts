@@ -3,8 +3,9 @@
 // with its reason; a scaled thing scales its places' coordinates and extents, never the walking body's tolerances.
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 const STUB = fileURLToPath(new URL("../stubs/core-stub.mjs", import.meta.url));
-plugin({ name: "core-stub", setup(b) { b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB })); } });
+plugin({ name: "core-stub", setup(b) { stubResolve(b, /^\.\/core\.js$/, () => ({ path: STUB })); } });
 const { THREE } = await import(STUB);
 const { mergeGeometries } = await import("../../client/node_modules/three/examples/jsm/utils/BufferGeometryUtils.js");
 const C: any = await import("../../client/lib/colliders.js");

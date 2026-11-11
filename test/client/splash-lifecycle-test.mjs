@@ -9,11 +9,11 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 const RAYS0 = process.env.SPLASH_RAYS0 === '1';
 GlobalRegistrator.register({ url: RAYS0 ? 'http://localhost/?rays=0' : 'http://localhost/' });
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { suite } from "../gate/suite.ts";
 const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
 plugin({ name: 'core-stub', setup(build) {
-  build.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
-  build.onResolve({ filter: /^\.\/assets\.js$/ }, () => ({ path: here('../stubs/assets-stub.mjs') }));
+  stubResolve(build, /^\.\/base\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
 } });
 
 // ---- the world the splash lives in

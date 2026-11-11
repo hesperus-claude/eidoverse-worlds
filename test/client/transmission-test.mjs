@@ -44,6 +44,7 @@ HTMLCanvasElement.prototype.getContext = function () {
 };
 
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { suite } from "../gate/suite.ts";
 // import.meta.dir is a plain filesystem path; a `file:` URL string reaches
 // readFile as a literal name and ENOENTs on a stub that is right there. This
@@ -55,16 +56,16 @@ const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
 plugin({
   name: 'core-stub',
   setup(build) {
-    build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
+    stubResolve(build, /^\.\/core\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
     // lightrig pulls warmqueue -> loadwork, which calls requestAnimationFrame
     // at module scope. Same stub avatar-test and parts-test use.
-    build.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
+    stubResolve(build, /^\.\/base\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
     // avatar.js pulls assets.js, which builds a KTX2Loader against a real
     // renderer. Without this the run's outcome depended on whether assets.js
     // had already been imported and cached -- a harness that sometimes passes
     // is worse than one that fails.
-    build.onResolve({ filter: /^\.\/assets\.js$/ }, () => ({ path: here('../stubs/assets-stub.mjs') }));
-    build.onResolve({ filter: /^\.\/loadwork\.js$/ }, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
+    stubResolve(build, /^\.\/assets\.js$/, () => ({ path: here('../stubs/assets-stub.mjs') }));
+    stubResolve(build, /^\.\/loadwork\.js$/, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
   },
 });
 

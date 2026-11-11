@@ -8,6 +8,7 @@
 // namespace import so a pre-revision head FAILS the certification checks by
 // name instead of crashing the file on a missing export — controls stay controls
 import * as SC from "../../shared/supportclass.js";
+import { stubResolve } from "../harness/stub.ts";
 const { gridAccumulator, decideSupportClass, validTopGrid, UNEVEN_MIN_LIE,
   LIE_GRID, SPARSE_MIN_CELLS, TOPGRID_VERSION, TOPGRID_MAX_JSON } = SC;
 const CERT_SPREAD = (SC as any).CERT_SPREAD ?? 0.03;
@@ -88,7 +89,7 @@ console.log("\n━━ B2: browser and server verdicts agree at the 0.10 gate ━
   const { fileURLToPath } = await import("node:url");
   const STUB = fileURLToPath(new URL("../stubs/core-stub.mjs", import.meta.url));
   plugin({ name: "core-stub-supportclass", setup(build) {
-    build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB }));
+    stubResolve(build, /^\.\/core\.js$/, () => ({ path: STUB }));
   } });
   const { THREE } = await import("../stubs/core-stub.mjs");
   const { topLie } = await import("../../client/lib/colliders.js");

@@ -3,6 +3,7 @@
 // put-settle's stubs (test/stubs/put-settle-stub.mjs).
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/track-teleport-test.ts
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 import { suite } from "../gate/suite.ts";
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
@@ -10,9 +11,9 @@ const STUB = here('../stubs/put-settle-stub.mjs');
 plugin({
   name: 'track-teleport-stubs',
   setup(b) {
-    b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
+    stubResolve(b, /^\.\/core\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
     for (const m of ['world', 'remotes', 'colliders', 'autohooks', 'bodyscale', 'net', 'ui', 'chat', 'actions', 'realize/emitters', 'serverclock', 'plainwords', 'markup', 'xrask'])
-      b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: STUB }));
+      stubResolve(b, new RegExp(`^\\./${m}\\.js$`), () => ({ path: STUB }));
   },
 });
 

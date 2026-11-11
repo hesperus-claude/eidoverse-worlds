@@ -5,11 +5,12 @@
 // it should name — and the good building against no warnings at all.
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 const STUB = fileURLToPath(new URL("../stubs/core-stub.mjs", import.meta.url));
-plugin({ name: "core-stub", setup(b) { b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB })); } });
+plugin({ name: "core-stub", setup(b) { stubResolve(b, /^\.\/core\.js$/, () => ({ path: STUB })); } });
 const { THREE } = await import(STUB);
 const C = await import("../../client/lib/colliders.js");
 const { checkModel } = await import("../../server/buildcheck.ts");

@@ -4,17 +4,18 @@
 // REAL eidosim epoch (shared/sim.js) for the replica's sim so the launch folds into the copy.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/predict-pending-test.ts
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 const STUB = here('../stubs/put-settle-stub.mjs');
 plugin({
   name: 'predict-pending-stubs',
   setup(b) {
-    b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
+    stubResolve(b, /^\.\/core\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
     for (const m of ['world', 'remotes', 'colliders', 'autohooks', 'bodyscale', 'net', 'ui', 'chat', 'actions', 'realize/emitters', 'plainwords', 'markup', 'xrask'])
-      b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: STUB }));
+      stubResolve(b, new RegExp(`^\\./${m}\\.js$`), () => ({ path: STUB }));
     // a measured round trip: the stub's null would refuse every guess (planRelease)
-    b.onResolve({ filter: /^\.\/serverclock\.js$/ }, () => ({ path: 'rtt', namespace: 'rtt' }));
+    stubResolve(b, /^\.\/serverclock\.js$/, () => ({ path: 'rtt', namespace: 'rtt' }));
     b.onLoad({ filter: /.*/, namespace: 'rtt' }, () => ({ contents: 'export const clockRtt = () => 100;', loader: 'js' }));
   },
 });

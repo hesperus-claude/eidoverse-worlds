@@ -5,14 +5,15 @@
 // stateful levers), so each restore is asserted on the value it sets, not on the governor's own flags. Controls: the
 // same drives with the switch off DO shed, so every "nothing moved" has a subject.
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 import { suite } from "../gate/suite.ts";
 const STUB = fileURLToPath(new URL('../stubs/full-detail-stub.mjs', import.meta.url));
 plugin({ name: 'full-detail-stub', setup(b) {
-  for (const f of ['^\\./core\\.js$', '^\\./warmqueue\\.js$', '^\\./loadwork\\.js$', '^\\./lightrig\\.js$', '^\\./realize/emitters\\.js$',
-    '^\\./terrain\\.js$', '^\\./breadcrumbs\\.js$', '^\\./frameloop\\.js$', '^\\./remotes\\.js$', '^\\./frame\\.js$', '^\\./ui\\.js$', '^\\./statuschips\\.js$',
+  for (const f of ['^\\./core\\.js$', '^\\./lightrig\\.js$', '^\\./realize/emitters\\.js$',
+    '^\\./terrain\\.js$', '^\\./frameloop\\.js$', '^\\./remotes\\.js$', '^\\./ui\\.js$', '^\\./statuschips\\.js$',
     '^\\.\\./core\\.js$', '^\\.\\./assets\\.js$', '^\\.\\./colliders\\.js$', '^\\.\\./lightrig\\.js$', '^\\.\\./lightgizmo\\.js$', '^\\.\\./world\\.js$', '^\\.\\./materials\\.js$'])
-    b.onResolve({ filter: new RegExp(f) }, () => ({ path: STUB }));
+    stubResolve(b, new RegExp(f), () => ({ path: STUB }));
 } });
 const mem = new Map<string, string>();
 (globalThis as any).localStorage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => mem.set(k, String(v)), removeItem: (k: string) => mem.delete(k) };

@@ -2,6 +2,7 @@
 // once a loss is handled (globalThis.__gpuLost.fired) every GPU entry point reaches nothing, and reads the flag (no latch).
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { gpuLostAction, recoveryUrl, recentGpuLosses, installGpuLostRecovery, GPU_LOST_KEY, GPU_LOST_WINDOW_MS, GPU_LOST_LONG_MS } from '../../client/lib/gpulost.js';
 import { suite } from "../gate/suite.ts";
 const S = suite("gpulost");
@@ -45,9 +46,9 @@ ok('recovery drops ?xr and ?why, keeps world/name/key', recoveryUrl('https://h:1
 GlobalRegistrator.register();
 const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
 plugin({ name: 'core-stub', setup(build) {
-  build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
-  build.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
-  build.onResolve({ filter: /^\.\/loadwork\.js$/ }, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
+  stubResolve(build, /^\.\/core\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
+  stubResolve(build, /^\.\/base\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
+  stubResolve(build, /^\.\/loadwork\.js$/, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
 } });
 { const { renderer, scene, camera } = await import('../stubs/core-stub.mjs');
   // installed BEFORE render.js imports: render.js binds renderer.render / compileAsync at module scope

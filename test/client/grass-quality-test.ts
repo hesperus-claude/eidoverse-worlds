@@ -27,6 +27,7 @@
 // it actually reports (policy 0.35, stroke drawing its full built count).
 
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 import { fileURLToPath } from "node:url";
 import { suite } from "../gate/suite.ts";
 // URL.pathname yields "/D:/…" on Windows, which nothing can open —
@@ -35,7 +36,7 @@ const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({
   name: "grass-stubs",
   setup(b) {
-    b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here("../stubs/grass-terrain-stub.mjs") }));
+    stubResolve(b, /^\.\/core\.js$/, () => ({ path: here("../stubs/grass-terrain-stub.mjs") }));
   },
 });
 

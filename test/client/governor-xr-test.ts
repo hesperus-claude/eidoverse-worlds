@@ -4,14 +4,15 @@
 // plain object, so presenting is a flag here). Each case drives the governor's own 1 Hz input (governPerformance) and
 // reads its own history + the pixel ratio it set. Controls: the same drive on the desktop DOES move pixels.
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 const STUB = fileURLToPath(new URL('../stubs/lod-client-stub.mjs', import.meta.url));
 plugin({ name: 'governor-xr-stub', setup(b) {
   // the same cone lod-client-test stubs: governor.js and the REAL realize/models.js it imports stay real
-  for (const f of ['^\\./core\\.js$', '^\\./warmqueue\\.js$', '^\\./loadwork\\.js$', '^\\./lightrig\\.js$', '^\\./realize/emitters\\.js$',
-    '^\\./terrain\\.js$', '^\\./breadcrumbs\\.js$', '^\\./frameloop\\.js$', '^\\./remotes\\.js$', '^\\./frame\\.js$', '^\\./ui\\.js$', '^\\./statuschips\\.js$',
+  for (const f of ['^\\./core\\.js$', '^\\./lightrig\\.js$', '^\\./realize/emitters\\.js$',
+    '^\\./terrain\\.js$', '^\\./frameloop\\.js$', '^\\./remotes\\.js$', '^\\./ui\\.js$', '^\\./statuschips\\.js$',
     '^\\.\\./core\\.js$', '^\\.\\./assets\\.js$', '^\\.\\./colliders\\.js$', '^\\.\\./lightrig\\.js$', '^\\.\\./lightgizmo\\.js$', '^\\.\\./world\\.js$', '^\\.\\./materials\\.js$'])
-    b.onResolve({ filter: new RegExp(f) }, () => ({ path: STUB }));
+    stubResolve(b, new RegExp(f), () => ({ path: STUB }));
 } });
 const mem = new Map<string, string>();
 (globalThis as any).localStorage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => mem.set(k, String(v)), removeItem: (k: string) => mem.delete(k) };

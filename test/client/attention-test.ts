@@ -2,6 +2,7 @@
 import { createAttentionGate, ATTENTION_COOLDOWN_MS } from '../../client/lib/attention_policy.js';
 import { mkCheck } from '../harness/harness.ts';
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 const { check, tally } = mkCheck();
 let now = 0, me = 'tester', world = 'a';
@@ -86,8 +87,8 @@ check('new utterance immediately eligible after silent notice', silentGate.say(s
 
 // Execute the actual chat and audio UI; only the renderer/wire are replaced.
 plugin({ name: 'attention-chat-stubs', setup(b) {
-  for (const name of ['core', 'base', 'frames', 'net'])
-    b.onResolve({ filter: new RegExp('^\\./' + name + '\\.js$') },
+  for (const name of ['base', 'net'])
+    stubResolve(b, new RegExp('^\\./' + name + '\\.js$'),
       () => ({ path: fileURLToPath(new URL('../stubs/chat-' + name + '-stub.mjs', import.meta.url)) }));
 } });
 const { GlobalRegistrator } = await import('@happy-dom/global-registrator');

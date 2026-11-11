@@ -15,6 +15,7 @@
 //   5. an echo that AGREES keeps it — the hang's own echo, a repeat of it, or
 //      the null echo after `take down`.
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { suite } from '../gate/suite.ts';
@@ -24,8 +25,8 @@ const S = suite("picture-note");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 
 plugin({ name: 'picture-note-stubs', setup(b) {
-  for (const m of ['core', 'base', 'assets', 'world', 'edit/inspect', 'ui', 'net'])
-    b.onResolve({ filter: new RegExp(`^\\.\\.?/${m}\\.js$`) }, () => ({ path: here('../stubs/guard-label-stub.mjs') }));
+  for (const m of ['core', 'base', 'assets', 'world', 'edit/inspect', 'ui'])
+    stubResolve(b, new RegExp(`^\\.\\.?/${m}\\.js$`), () => ({ path: here('../stubs/guard-label-stub.mjs') }));
 } });
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';

@@ -20,6 +20,7 @@
 //  - controls beside each: the same thing with collision on has its collider, and a walker stepping into it is pushed out.
 import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -31,7 +32,7 @@ plugin({
   name: 'collider-off-stub',
   setup(b) {
     for (const f of ['^\\.\\./(core|assets|lightrig|lightgizmo|world|materials|defs)\\.js$', '^\\./(core|world|remotes)\\.js$']) {
-      b.onResolve({ filter: new RegExp(f) }, () => ({ path: STUB }));
+      stubResolve(b, new RegExp(f), () => ({ path: STUB }));
     }
   },
 });

@@ -7,6 +7,7 @@
 // The realizer is the real client/lib/realize/models.js over test/stubs/lod-client-stub.mjs (as components-wire-test runs it).
 import "../protocol/fixture-ids.ts";
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 import { fileURLToPath } from "node:url";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,8 +18,8 @@ const SPY = fileURLToPath(new URL("../stubs/unknown-comp-report-spy.mjs", import
 plugin({
   name: "compose-stub",
   setup(b) {
-    for (const f of ["^\\.\\./(core|assets|colliders|lightrig|lightgizmo|world|materials)\\.js$", "^\\./(core|world|colliders|remotes)\\.js$"]) b.onResolve({ filter: new RegExp(f) }, () => ({ path: STUB }));
-    b.onResolve({ filter: /^\.\.\/base\.js$/ }, (args) => (args.importer.replace(/\\/g, "/").endsWith("realize/models.js") ? { path: SPY } : undefined));
+    for (const f of ["^\\.\\./(core|assets|colliders|lightrig|lightgizmo|world|materials)\\.js$"]) stubResolve(b, new RegExp(f), () => ({ path: STUB }));
+    stubResolve(b, /^\.\.\/base\.js$/, (args) => (args.importer.replace(/\\/g, "/").endsWith("realize/models.js") ? { path: SPY } : undefined));
   },
 });
 process.env.WORLDS_DIR = join(mkdtempSync(join(tmpdir(), "ew-compose-")), "worlds");

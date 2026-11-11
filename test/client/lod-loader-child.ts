@@ -18,6 +18,7 @@
 // the glbKey, the tierAsked / tierServed stamps — must FAIL the gate, so the
 // gate has to run the real seam. Output: one line, `PROBE {json}`.
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 
 const BASE = process.env.LODC_BASE!;
@@ -62,7 +63,7 @@ plugin({
   name: 'lod-loader-stub',
   setup(b) {
     for (const f of ['^\\./core\\.js$', '^\\./loadwork\\.js$', '^\\./warmqueue\\.js$', '^\\./materials\\.js$', '^\\./draw_batches\\.js$']) {
-      b.onResolve({ filter: new RegExp(f) }, () => ({ path: STUB }));
+      stubResolve(b, new RegExp(f), () => ({ path: STUB }));
     }
   },
 });

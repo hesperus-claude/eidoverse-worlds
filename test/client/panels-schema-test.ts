@@ -5,13 +5,6 @@
 // The product lines that would silence each block:
 //   hitRegion returning the unsnapped slider value   → "slider hit snaps to step" goes red
 //   check region payload no longer !value            → "check region payload is the flipped value" goes red
-import { fileURLToPath } from "node:url";
-import { plugin } from 'bun';
-const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
-plugin({
-  name: 'panels-stubs',
-  setup(b) { b.onResolve({ filter: /^\.\/windows\.js$/ }, () => ({ path: here('../stubs/chat-frames-stub.mjs') })); },
-});
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { tryUntil } from "../gate/wait.ts";
 import { suite } from "../gate/suite.ts";

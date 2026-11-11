@@ -13,12 +13,13 @@
 //   updateMe's seatedClip losing the chair branch    → "a chair sit renders the sitchair clip" goes red
 import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({
   name: 'posture-tiles-stubs',
   setup(b) {
     for (const m of ['core', 'base', 'terrain', 'colliders', 'chat', 'ui']) {
-      b.onResolve({ filter: new RegExp(`^\\.\\.?/${m}\\.js$`) }, () => ({ path: here('../stubs/posture-tiles-stub.mjs') }));
+      stubResolve(b, new RegExp(`^\\.\\.?/${m}\\.js$`), () => ({ path: here('../stubs/posture-tiles-stub.mjs') }));
     }
   },
 });

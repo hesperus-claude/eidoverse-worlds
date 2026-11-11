@@ -19,13 +19,14 @@
 // So: keep the synthetic cases (they isolate the solver), and add the fleet.
 
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 
 const STUB = fileURLToPath(new URL('../stubs/core-stub.mjs', import.meta.url));
 plugin({
   name: 'core-stub',
   setup(build) {
-    build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB }));
+    stubResolve(build, /^\.\/core\.js$/, () => ({ path: STUB }));
   },
 });
 

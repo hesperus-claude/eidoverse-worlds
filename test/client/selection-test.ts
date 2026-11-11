@@ -9,11 +9,12 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/selection-test.ts
 import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({ name: 'selection-test-stubs', setup(b) {
   for (const m of ['core', 'writes', 'ui'])
-    b.onResolve({ filter: new RegExp(`^\\.\\.?/${m}\\.js$`) }, () => ({ path: here('../stubs/selection-test-stub.mjs') }));
-  b.onResolve({ filter: /^\.\.?\/realize\/structure\.js$/ }, () => ({ path: here('../stubs/selection-test-stub.mjs') }));
+    stubResolve(b, new RegExp(`^\\.\\.?/${m}\\.js$`), () => ({ path: here('../stubs/selection-test-stub.mjs') }));
+  stubResolve(b, /^\.\.?\/realize\/structure\.js$/, () => ({ path: here('../stubs/selection-test-stub.mjs') }));
 } });
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';

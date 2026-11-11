@@ -8,6 +8,7 @@
 //   mybody.js: restore the unconditional same-path early return in wireAvatarSwitch (red in test/client/wiring-check.ts)
 //   bodies.js: flushBodyPrefs drops the captured name (`setMyBodyPref(p.patch)`)
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 import { pause } from "../gate/wait.ts";
 import { suite } from "../gate/suite.ts";
@@ -27,12 +28,11 @@ globalThis.localStorage = {
 plugin({
   name: 'bodies-stubs',
   setup(b) {
-    b.onResolve({ filter: /^\.\.?\/(edit\/)?mybody\.js$/ }, () => ({ path: here('../stubs/bodies-mybody-stub.mjs') }));
-    b.onResolve({ filter: /^\.\.?\/(edit\/)?catalog\.js$/ }, () => ({ path: here('../stubs/bodies-inert-stub.mjs') }));
-    b.onResolve({ filter: /^\.\.?\/(edit\/)?net\.js$/ }, () => ({ path: here('../stubs/bodies-net-stub.mjs') }));
-    b.onResolve({ filter: /^\.\.?\/(edit\/)?core\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
-    b.onResolve({ filter: /^\.\.?\/(edit\/)?base\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
-    b.onResolve({ filter: /^\.\.?\/(edit\/)?fieldpanels\.js$/ }, () => ({ path: here('../stubs/bodies-inert-stub.mjs') }));
+    stubResolve(b, /^\.\.?\/(edit\/)?mybody\.js$/, () => ({ path: here('../stubs/bodies-mybody-stub.mjs') }));
+    stubResolve(b, /^\.\.?\/(edit\/)?catalog\.js$/, () => ({ path: here('../stubs/bodies-inert-stub.mjs') }));
+    stubResolve(b, /^\.\.?\/(edit\/)?net\.js$/, () => ({ path: here('../stubs/bodies-net-stub.mjs') }));
+    stubResolve(b, /^\.\.?\/(edit\/)?base\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
+    stubResolve(b, /^\.\.?\/(edit\/)?fieldpanels\.js$/, () => ({ path: here('../stubs/bodies-inert-stub.mjs') }));
   },
 });
 

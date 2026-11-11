@@ -5,9 +5,10 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/scriptcard-expect-test.ts
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({ name: "scriptcard-expect-stubs", setup(b) {
-  for (const m of ["writes", "net"]) b.onResolve({ filter: new RegExp(`^\\.\\.?/${m}\\.js$`) }, () => ({ path: here("../stubs/scriptcard-expect-stub.mjs") }));
+  for (const m of ["writes", "net"]) stubResolve(b, new RegExp(`^\\.\\.?/${m}\\.js$`), () => ({ path: here("../stubs/scriptcard-expect-stub.mjs") }));
 } });
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 GlobalRegistrator.register();

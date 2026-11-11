@@ -10,6 +10,7 @@
 // Run: bun run test/client/parts-test.ts   (no servers, no GPU)
 
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 import { suite } from "../gate/suite.ts";
 
@@ -35,7 +36,6 @@ if (process.env.__EIDO_TEST_CACHE_OFF !== '1') {
 const CORE = fileURLToPath(new URL('../stubs/core-stub.mjs', import.meta.url));
 const PARTS = fileURLToPath(new URL('../stubs/parts-stub.mjs', import.meta.url));
 const COLLIDERS = fileURLToPath(new URL('../stubs/colliders-stub.mjs', import.meta.url));
-const LOADWORK = fileURLToPath(new URL('../stubs/loadwork-stub.mjs', import.meta.url));
 const REMOTES = fileURLToPath(new URL('../stubs/remotes-stub.mjs', import.meta.url));
 plugin({
   name: 'parts-stub',
@@ -44,15 +44,11 @@ plugin({
     // shim over parts-stub rather than to parts-stub itself. Two specifiers
     // resolving to one plugin-returned path is the configuration that breaks
     // on macOS Bun 1.3.14 (see colliders-stub.mjs for the evidence).
-    build.onResolve({ filter: /^\.\.?\/core\.js$/ }, () => ({ path: CORE }));
-    build.onResolve({ filter: /^\.\.?\/world\.js$/ }, () => ({ path: PARTS }));
-    build.onResolve({ filter: /^\.\.?\/colliders\.js$/ }, () => ({ path: COLLIDERS }));
-    // motion.js's cone reaches remotes.js → loadwork.js, which schedules on
-    // requestAnimationFrame at module scope and dies headless. avatar-test
-    // already carries a stub for exactly this; share it.
-    build.onResolve({ filter: /^\.\/loadwork\.js$/ }, () => ({ path: LOADWORK }));
+    stubResolve(build, /^\.\.?\/core\.js$/, () => ({ path: CORE }));
+    stubResolve(build, /^\.\.?\/world\.js$/, () => ({ path: PARTS }));
+    stubResolve(build, /^\.\.?\/colliders\.js$/, () => ({ path: COLLIDERS }));
     // motion.js reads one clock from remotes.js, whose own cone is every remote body (avatar.js, the renderer)
-    build.onResolve({ filter: /^\.\/remotes\.js$/ }, () => ({ path: REMOTES }));
+    stubResolve(build, /^\.\/remotes\.js$/, () => ({ path: REMOTES }));
   },
 });
 

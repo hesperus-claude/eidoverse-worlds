@@ -12,6 +12,7 @@
 //  `collide`, light-verb lights, a re-spawn over an id as a wholesale replace, and cargo mount/dismount verbs.)
 import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -27,11 +28,11 @@ const SPY = fileURLToPath(new URL('../stubs/unknown-comp-report-spy.mjs', import
 plugin({
   name: 'components-wire-stub',
   setup(b) {
-    for (const f of ['^\\.\\./(core|assets|colliders|lightrig|lightgizmo|world|materials)\\.js$', '^\\./(core|world|colliders|remotes)\\.js$']) {
-      b.onResolve({ filter: new RegExp(f) }, () => ({ path: STUB }));
+    for (const f of ['^\\.\\./(core|assets|colliders|lightrig|lightgizmo|world|materials)\\.js$']) {
+      stubResolve(b, new RegExp(f), () => ({ path: STUB }));
     }
     // the realizer's report(), recorded; everyone else gets the real base.js (the real bus)
-    b.onResolve({ filter: /^\.\.\/base\.js$/ }, (args) => (args.importer.replace(/\\/g, '/').endsWith('realize/models.js') ? { path: SPY } : undefined));
+    stubResolve(b, /^\.\.\/base\.js$/, (args) => (args.importer.replace(/\\/g, '/').endsWith('realize/models.js') ? { path: SPY } : undefined));
   },
 });
 

@@ -15,6 +15,7 @@
 //   F. Text colours on their surfaces meet 4.5:1.
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 import { readFileSync } from "node:fs";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { suite } from "../gate/suite.ts";
@@ -22,13 +23,13 @@ const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 plugin({
   name: "edittheme-stubs",
   setup(b) {
-    b.onResolve({ filter: /^\.\.?\/core\.js$/ }, () => ({ path: here("../stubs/core-stub.mjs") }));
-    b.onResolve({ filter: /^\.\.?\/base\.js$/ }, () => ({ path: here("../stubs/core-stub.mjs") }));
-    b.onResolve({ filter: /^\.\.?\/domquad\.js$/ }, () => ({ path: here("../stubs/xrpanels-domquad-stub.mjs") }));
+    stubResolve(b, /^\.\.?\/core\.js$/, () => ({ path: here("../stubs/core-stub.mjs") }));
+    stubResolve(b, /^\.\.?\/base\.js$/, () => ({ path: here("../stubs/core-stub.mjs") }));
+    stubResolve(b, /^\.\.?\/domquad\.js$/, () => ({ path: here("../stubs/xrpanels-domquad-stub.mjs") }));
     // main's makePanel swaps the quad's material through quadcolour.js (a MeshBasicNodeMaterial: three's WebGPU
     // build only, absent from the headless three.module.js). D asks about the texture, which the swap keeps as
     // its map — so the swap is an identity here; its own colour is test/client/xr-quad-colour-probe.mjs's to measure.
-    b.onResolve({ filter: /^\.\.?\/quadcolour\.js$/ }, () => ({ path: "quadcolour", namespace: "edittheme-stub" }));
+    stubResolve(b, /^\.\.?\/quadcolour\.js$/, () => ({ path: "quadcolour", namespace: "edittheme-stub" }));
     b.onLoad({ filter: /.*/, namespace: "edittheme-stub" }, () => ({ contents: "export const quadMaterial = () => {};", loader: "js" }));
   },
 });
