@@ -51,7 +51,7 @@ const num = (v, lo, hi, dflt) => {
   return v == null || !Number.isFinite(n) ? dflt : Math.min(hi, Math.max(lo, n));
 };
 
-// FALLOFF: inverse-distance held at 1 inside near, times (1 − t)² over the last 5% of the range, so exactly 0 at radius
+// FALLOFF (BasisVR's voice curve, BasisVoiceAcoustics.cs DistanceGain): inverse-distance held at 1 inside near, times (1 − t)² over the last 5% of the range, so exactly 0 at radius
 // (Web Audio's `inverse` clamps at maxDistance and is heard across the world). client/lib/realize/sounds.js applies this gain
 // itself; its panner keeps only the direction.
 export const TAPER_START = 0.95;
