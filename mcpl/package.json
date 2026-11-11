@@ -1,12 +1,6 @@
 {
   "name": "mcpl",
-  "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
+  "private": true,
   "license": "AGPL-3.0-only",
   "description": "The agent frontend (an MCP stdio server). zod is imported nowhere here: it is the MCP sdk's schema library, declared so its major version matches the sdk's.",
   "dependencies": {

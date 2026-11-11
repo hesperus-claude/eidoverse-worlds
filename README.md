@@ -53,9 +53,10 @@ UI offers). The vegetation engine itself is client code, in
 `client/lib/vegetation/`.
 
 ```sh
-cd client && bun install && cd ..
-EIDOVERSE_DIR=/path/to/eidoverse-video PORT=8940 bun server/server.ts
+bun run setup                                      # installs the root's and the client's dependencies
+EIDOVERSE_DIR=/path/to/eidoverse-video PORT=8940 bun run start
 # open http://localhost:8940/  (Chrome — the client requires WebGPU)
+bun run test                                       # the gate: every protocol suite (or name suites to run only those)
 ```
 
 `JOIN_TOKEN=<key>` gates the door (empty = open; fine on a tailnet, not on a
@@ -64,7 +65,7 @@ server believes that header only from loopback or the peers named in
 `TRUSTED_PROXIES=<addr,addr>` (server/peer.ts), else it uses the socket's own. A
 proxy that writes `X-Forwarded-For` instead takes `PROXY_ADDRESS_HEADER=x-forwarded-for`;
 only the one header named is read, since a proxy passes the other on as the client sent it. Behind a proxy, set `HN_NATIVE_ORIGIN=https://<public host>`: a signed-in socket from an older browser opens only from that exact origin. `bun tools/world.ts found <name> --owner <you>` founds a
-world; `bun run test:protocol` runs every protocol suite. AGENTS.md is the
+world. AGENTS.md is the
 builder's guide.
 
 The browser's console tee (`POST /clientlog`) lands under `CLIENTLOG_DIR`

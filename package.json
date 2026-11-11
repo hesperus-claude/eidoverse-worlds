@@ -28,11 +28,9 @@
     "playwright": "^1.62.1"
   },
   "scripts": {
-    "typecheck:flight": "bunx tsc -p tsconfig.flight.json",
-    "test:flight": "bun test/client/flight-test.ts",
-    "test:flight:headless": "bun test/shared/flight-headless-test.ts",
-    "test:namedpose": "bun test/client/named-pose-test.ts",
-    "test:protocol": "BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/gate/run.ts",
-    "test:shadows": "bun test/client/shadow-fade-test.mjs && bun test/client/shadow-fade-test.mjs --mutants && bun test/client/xrshadow-test.mjs && bun test/client/lamp-skin-test.mjs && bun test/client/body-shadow-gate-test.mjs && bun test/client/lamp-slot-policy-test.mjs"
+    "setup": "bun install && cd client && bun install",
+    "start": "bun server/server.ts",
+    "test": "bun run test:protocol",
+    "test:protocol": "BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/gate/run.ts"
   }
 }
