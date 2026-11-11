@@ -4,11 +4,12 @@
 
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({
   name: "frames-stubs",
   setup(b) {
-    b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here("../stubs/chat-core-stub.mjs") }));
+    stubResolve(b, /^\.\/core\.js$/, () => ({ path: here("../stubs/chat-core-stub.mjs") }));
   },
 });
 

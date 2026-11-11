@@ -6,17 +6,18 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/firstperson-plate-test.ts
 import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({
   name: 'fp-plate-stubs',
   setup(b) {
     // controller.js gets the posture-tiles world; avatar.js (and what it pulls in) the core stub the plate tests use
-    b.onResolve({ filter: /^\.\.?\/core\.js$/ }, (a) => ({ path: here(a.importer.replace(/\\/g, '/').endsWith('/controller.js') ? '../stubs/posture-tiles-stub.mjs' : '../stubs/core-stub.mjs') }));
+    stubResolve(b, /^\.\.?\/core\.js$/, (a) => ({ path: here(a.importer.replace(/\\/g, '/').endsWith('/controller.js') ? '../stubs/posture-tiles-stub.mjs' : '../stubs/core-stub.mjs') }));
     for (const m of ['base', 'terrain', 'colliders', 'chat', 'ui']) {
-      b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, (a) => (a.importer.replace(/\\/g, '/').endsWith('/controller.js') ? { path: here('../stubs/posture-tiles-stub.mjs') } : undefined));
+      stubResolve(b, new RegExp(`^\\./${m}\\.js$`), (a) => (a.importer.replace(/\\/g, '/').endsWith('/controller.js') ? { path: here('../stubs/posture-tiles-stub.mjs') } : undefined));
     }
-    b.onResolve({ filter: /^\.\/assets\.js$/ }, () => ({ path: here('../stubs/assets-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/loadwork\.js$/ }, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
+    stubResolve(b, /^\.\/assets\.js$/, () => ({ path: here('../stubs/assets-stub.mjs') }));
+    stubResolve(b, /^\.\/loadwork\.js$/, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
   },
 });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';

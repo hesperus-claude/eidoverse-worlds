@@ -8,6 +8,7 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/helm-leave-test.ts
 // Mutation (must go red): drop vehicles.js's bus.on('mount', …) line (rows HL1, HL2).
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 import { suite } from '../gate/suite.ts';
 const THREE_PATH = fileURLToPath(new URL('../../client/node_modules/three/build/three.module.js', import.meta.url));
@@ -25,7 +26,7 @@ const STUBS: Record<string, string> = {
 plugin({
   name: 'helm-leave-stubs',
   setup(b) {
-    b.onResolve({ filter: new RegExp(`^\\./(${Object.keys(STUBS).join('|')})\\.js$`) }, (a) => (a.importer.endsWith('vehicles.js') ? { path: a.path.slice(2, -3), namespace: 'hl-stub' } : undefined));
+    stubResolve(b, new RegExp(`^\\./(${Object.keys(STUBS).join('|')})\\.js$`), (a) => (a.importer.endsWith('vehicles.js') ? { path: a.path.slice(2, -3), namespace: 'hl-stub' } : undefined));
     b.onLoad({ filter: /.*/, namespace: 'hl-stub' }, (a) => ({ contents: STUBS[a.path], loader: 'js' }));
   },
 });

@@ -7,6 +7,7 @@
 // Play sends no `t0`: the authority stamps it (shared/sound.js THE CLOCK). test/protocol/soundclock-check.ts holds
 // the playhead arithmetic.
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 const here = (p: string) => join(dirname(fileURLToPath(import.meta.url)), p);
@@ -17,9 +18,9 @@ const check = (name: string, ok: unknown, detail = '') => {
 };
 plugin({ name: 'sound-editor-stubs', setup(b) {
   for (const m of ['core', 'base', 'world', 'net'])
-    b.onResolve({ filter: new RegExp(`^\\.\\.?/${m}\\.js$`) }, () => ({ path: here('../stubs/guard-label-stub.mjs') }));
+    stubResolve(b, new RegExp(`^\\.\\.?/${m}\\.js$`), () => ({ path: here('../stubs/guard-label-stub.mjs') }));
   for (const m of ['edit/inspect', 'ui', 'audioctx', 'audiounlock', 'voiceconsent', 'serverclock'])
-    b.onResolve({ filter: new RegExp(`^\\.\\.?/${m}\\.js$`) }, () => ({ path: here('../stubs/sound-clock-stub.mjs') }));
+    stubResolve(b, new RegExp(`^\\.\\.?/${m}\\.js$`), () => ({ path: here('../stubs/sound-clock-stub.mjs') }));
 } });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();

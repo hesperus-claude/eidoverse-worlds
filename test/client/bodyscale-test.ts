@@ -16,16 +16,17 @@
 //     a pooled VRM is reset on construction, and the plate hangs at crown·u + gap + lift·u.
 
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 import { suite } from "../gate/suite.ts";
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({
   name: 'client-stubs',
   setup(b) {
-    b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/assets\.js$/ }, () => ({ path: here('../stubs/assets-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/loadwork\.js$/ }, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/world\.js$/ }, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));   // occupybody.js imports seatSocket from world.js since sockets (10-14); world.js wants a DOM this unit test never had
+    stubResolve(b, /^\.\/core\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
+    stubResolve(b, /^\.\/assets\.js$/, () => ({ path: here('../stubs/assets-stub.mjs') }));
+    stubResolve(b, /^\.\/loadwork\.js$/, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
+    stubResolve(b, /^\.\/world\.js$/, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));   // occupybody.js imports seatSocket from world.js since sockets (10-14); world.js wants a DOM this unit test never had
   },
 });
 

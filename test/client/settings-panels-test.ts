@@ -9,10 +9,11 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/settings-panels-test.ts
 import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({ name: 'settings-stubs', setup(b) {
   for (const m of ['core', 'base', 'governor', 'lightrig', 'materials', 'xrpanels', 'net', 'edit/catalog', 'avatar', 'controller', 'capnotice', 'assets', 'mictoggle'])
-    b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: here('../stubs/settings-panels-stub.mjs') }));
+    stubResolve(b, new RegExp(`^\\./${m}\\.js$`), () => ({ path: here('../stubs/settings-panels-stub.mjs') }));
 } });
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';

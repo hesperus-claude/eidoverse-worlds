@@ -14,11 +14,12 @@
 
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({
   name: "frames-layout-stubs",
   setup(b) {
-    b.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here("../stubs/chat-core-stub.mjs") }));
+    stubResolve(b, /^\.\/base\.js$/, () => ({ path: here("../stubs/chat-core-stub.mjs") }));
   },
 });
 

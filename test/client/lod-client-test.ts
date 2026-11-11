@@ -36,6 +36,7 @@
 // extra read as a served lod, a governor lever overriding the resident's
 // "full detail".
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 import { existsSync, mkdtempSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { spawn as spawnProc, type ChildProcess } from 'node:child_process';
@@ -53,7 +54,7 @@ plugin({
       '^\\.\\./lightrig\\.js$', '^\\.\\./lightgizmo\\.js$', '^\\.\\./world\\.js$', '^\\.\\./materials\\.js$',
       '^\\./core\\.js$', '^\\./warmqueue\\.js$', '^\\./loadwork\\.js$', '^\\./lightrig\\.js$',
       '^\\./realize/emitters\\.js$', '^\\./terrain\\.js$', '^\\./breadcrumbs\\.js$', '^\\./frameloop\\.js$', '^\\./remotes\\.js$', '^\\./frame\\.js$', '^\\./ui\\.js$', '^\\./statuschips\\.js$']) {
-      b.onResolve({ filter: new RegExp(f) }, () => ({ path: STUB }));
+      stubResolve(b, new RegExp(f), () => ({ path: STUB }));
     }
   },
 });

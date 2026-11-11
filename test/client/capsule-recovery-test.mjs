@@ -23,6 +23,7 @@
 //     ~15 s test; the cap's observable (counter stops, further announces arm nothing) is bound
 //     instead, which is what the product promises.
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 import { tryUntil, pause } from '../gate/wait.ts';
 const here = (f) => fileURLToPath(new URL(f, import.meta.url));
@@ -35,16 +36,16 @@ probe.reset = () => { probe.failing = true; probe.attempts = 0; probe.made = [];
 plugin({
   name: 'recovery-stubs',
   setup(b) {
-    b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/avatar\.js$/ }, () => ({ path: here('../stubs/recovery-avatar-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/world\.js$/ }, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/occupants\.js$/ }, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/reachnet\.js$/ }, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/poseclips\.js$/ }, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
-    b.onResolve({ filter: /wingpresence\.js$/ }, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/xrbody\.js$/ }, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
-    b.onResolve({ filter: /presencewire\.js$/ }, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
-    b.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
+    stubResolve(b, /^\.\/core\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
+    stubResolve(b, /^\.\/avatar\.js$/, () => ({ path: here('../stubs/recovery-avatar-stub.mjs') }));
+    stubResolve(b, /^\.\/world\.js$/, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
+    stubResolve(b, /^\.\/occupants\.js$/, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
+    stubResolve(b, /^\.\/reachnet\.js$/, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
+    stubResolve(b, /^\.\/poseclips\.js$/, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
+    stubResolve(b, /wingpresence\.js$/, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
+    stubResolve(b, /^\.\/xrbody\.js$/, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
+    stubResolve(b, /presencewire\.js$/, () => ({ path: here('../stubs/recovery-empty-stub.mjs') }));
+    stubResolve(b, /^\.\/base\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
   },
 });
 

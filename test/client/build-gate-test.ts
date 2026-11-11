@@ -6,12 +6,13 @@
 import * as R from '../../shared/protocol/roles.js';
 import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({ name: 'build-gate-stubs', setup(b) {
   for (const m of ['core', 'base', 'assets', 'lightgizmo', 'world', 'colliders', 'terrain', 'net', 'controller', 'ui', 'scenegraph', 'windows', 'socketedit', 'xrask'])
-    b.onResolve({ filter: new RegExp(`^\\.\\.?/${m}\\.js$`) }, () => ({ path: here('../stubs/build-gate-stub.mjs') }));
+    stubResolve(b, new RegExp(`^\\.\\.?/${m}\\.js$`), () => ({ path: here('../stubs/build-gate-stub.mjs') }));
   // the building realizer (three.js materials and the GPU) behind structure_ui.js is not under test
-  b.onResolve({ filter: /^\.\.?\/realize\/structure\.js$/ }, () => ({ path: here('../stubs/build-gate-stub.mjs') }));
+  stubResolve(b, /^\.\.?\/realize\/structure\.js$/, () => ({ path: here('../stubs/build-gate-stub.mjs') }));
 } });
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';

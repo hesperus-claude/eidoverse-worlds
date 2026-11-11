@@ -10,10 +10,11 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/perfscope-test.ts
 import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({ name: 'perfscope-stubs', setup(b) {
-  for (const m of ['core', 'base', 'world']) b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: here('../stubs/perfscope-stub.mjs') }));
-  b.onResolve({ filter: /^\.\/loadwork\.js$/ }, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
+  for (const m of ['core', 'base', 'world']) stubResolve(b, new RegExp(`^\\./${m}\\.js$`), () => ({ path: here('../stubs/perfscope-stub.mjs') }));
+  stubResolve(b, /^\.\/loadwork\.js$/, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
 } });
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { suite } from "../gate/suite.ts";

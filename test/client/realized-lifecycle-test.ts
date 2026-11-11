@@ -12,6 +12,7 @@
 // open and releases by hand; colliders and casters recorded, never built).
 import "../protocol/fixture-ids.ts";   // fixtures seed the ids they read (R 10-17: writers never choose ids)
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 
 const STUB = fileURLToPath(new URL('../stubs/lod-client-stub.mjs', import.meta.url));
@@ -20,7 +21,7 @@ plugin({
   setup(b) {
     for (const f of ['^\\.\\./core\\.js$', '^\\.\\./assets\\.js$', '^\\.\\./colliders\\.js$',
       '^\\.\\./lightrig\\.js$', '^\\.\\./lightgizmo\\.js$', '^\\.\\./world\\.js$', '^\\.\\./materials\\.js$']) {
-      b.onResolve({ filter: new RegExp(f) }, () => ({ path: STUB }));
+      stubResolve(b, new RegExp(f), () => ({ path: STUB }));
     }
   },
 });

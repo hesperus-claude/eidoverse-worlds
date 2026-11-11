@@ -8,6 +8,7 @@
 // is a Set of the keys that hold a slot.
 // @ts-nocheck
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 import { fileURLToPath } from "node:url";
 import { inspectHarness } from "../protocol/inspectharness.ts";
 
@@ -18,9 +19,9 @@ plugin({
   name: "light-readers",
   setup(b) {
     for (const f of ["^\\.\\./core\\.js$", "^\\.\\./assets\\.js$", "^\\.\\./colliders\\.js$", "^\\.\\./lightrig\\.js$", "^\\.\\./lightgizmo\\.js$", "^\\.\\./world\\.js$", "^\\.\\./materials\\.js$"]) {
-      b.onResolve({ filter: new RegExp(f) }, (a) => (a.importer.replace(/\\/g, "/").includes("/client/lib/realize/") ? { path: LOD } : undefined));
+      stubResolve(b, new RegExp(f), (a) => (a.importer.replace(/\\/g, "/").includes("/client/lib/realize/") ? { path: LOD } : undefined));
     }
-    b.onResolve({ filter: /^\.\/(lightrig|materials)\.js$/ }, (a) =>
+    stubResolve(b, /^\.\/(lightrig|materials)\.js$/, (a) =>
       (/\/client\/lib\/(lightgizmo|realize\/material_draft)\.js$/.test(a.importer.replace(/\\/g, "/")) ? { path: a.path, namespace: "light-readers" } : undefined));
     b.onLoad({ filter: /.*/, namespace: "light-readers" }, (a) => ({
       loader: "js",

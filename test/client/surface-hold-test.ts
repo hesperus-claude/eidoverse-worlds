@@ -12,6 +12,7 @@
 // gone (TEL0S_NOTES §11). Same six pinned behaviors, same real bus, driven
 // through handleLiveCause exactly as net.js's 'live-entry' does.
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 import { fileURLToPath } from "node:url";
 import { tryUntil, pause } from "../gate/wait.ts";
 
@@ -23,7 +24,7 @@ plugin({
     // comes from ../base.js, left REAL so it is the same bus the test drives below (#260 house I394/I240: two repairs of
     // this one fault met in a merge; one bus, not both fixes)
     for (const f of ["^\\.\\./core\\.js$", "^\\.\\./chat\\.js$", "^\\./models\\.js$"]) {
-      build.onResolve({ filter: new RegExp(f) }, () => ({ path: STUB }));
+      stubResolve(build, new RegExp(f), () => ({ path: STUB }));
     }
   },
 });

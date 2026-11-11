@@ -1,7 +1,7 @@
 // test/harness/stub.ts: a Bun plugin resolver stub that must apply. One that never applied FAILs its suite at exit, naming
 // the filter and where it was registered (nock's scope.done(): a stub whose file moved would otherwise pass vacuously).
-//   stub(b, /^\.\/core\.js$/, () => ({ path: STUB }))     in place of b.onResolve({ filter }, cb), inside plugin({ setup(b) {…} })
-//   stub(b, re, cb, { optional: "why" })                  a stub that may not apply in every run; the why is the one-line reason
+//   stubResolve(b, /^\.\/core\.js$/, () => ({ path: STUB }))     in place of b.onResolve({ filter }, cb), inside plugin({ setup(b) {…} })
+//   stubResolve(b, re, cb, { optional: "why" })                  a stub that may not apply in every run; the why is the one-line reason
 // "Applied" = the resolver returned a result (an importer-conditional resolver that returned undefined did not apply).
 import type { OnResolveArgs, OnResolveResult, PluginBuilder } from "bun";
 import path from "node:path";
@@ -10,7 +10,7 @@ type Resolve = (args: OnResolveArgs) => OnResolveResult | undefined | null | Pro
 const ROOT = path.resolve(import.meta.dir, "../..");
 const stubs: { filter: RegExp; where: string; hits: number; optional?: string }[] = [];
 
-export function stub(build: PluginBuilder, filter: RegExp, resolve: Resolve, o: { optional?: string } = {}): void {
+export function stubResolve(build: PluginBuilder, filter: RegExp, resolve: Resolve, o: { optional?: string } = {}): void {
   const frame = (new Error().stack ?? "").split("\n").slice(1).find((l) => !/[\\/]harness[\\/]stub\.ts:/.test(l)) ?? "";
   const at = frame.match(/\(?((?:[A-Za-z]:)?[^():]+):(\d+):\d+\)?\s*$/);
   const s = { filter, where: at ? `${path.relative(ROOT, at[1]).split(path.sep).join("/")}:${at[2]}` : "?", hits: 0, optional: o.optional };

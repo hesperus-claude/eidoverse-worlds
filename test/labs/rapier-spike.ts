@@ -14,8 +14,9 @@
 
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 const STUB = fileURLToPath(new URL("../stubs/core-stub.mjs", import.meta.url));
-plugin({ name: "core-stub", setup(b) { b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB })); } });
+plugin({ name: "core-stub", setup(b) { stubResolve(b, /^\.\/core\.js$/, () => ({ path: STUB })); } });
 
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "../../client/node_modules/three/build/three.module.js";

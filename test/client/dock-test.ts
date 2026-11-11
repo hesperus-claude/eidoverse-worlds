@@ -12,12 +12,13 @@
 
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({
   name: "dock-stubs",
   setup(b) {
     for (const m of ["base", "mictoggle", "xrpanels", "assets", "defs", "profile", "stylepanel", "videopanel", "capnotice"])
-      b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: here("../stubs/dock-stub.mjs") }));
+      stubResolve(b, new RegExp(`^\\./${m}\\.js$`), () => ({ path: here("../stubs/dock-stub.mjs") }));
   },
 });
 

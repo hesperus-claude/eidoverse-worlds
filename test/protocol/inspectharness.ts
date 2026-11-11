@@ -16,6 +16,7 @@
 // @ts-nocheck
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 import path from "node:path";
 import { scratchWorld } from "./scratchworld.ts";
 import { viewState } from "../../shared/protocol/view.js";
@@ -41,10 +42,10 @@ export function inspectHarness(tag = "inspect", { actor = "olive" } = {}) {
       // importers compared with forward slashes: on Windows they arrive with backslashes, and "/realize/" never matched, so the
       // realizer's own modules were handed the stub core.js (no grid)
       const fwd = (p: string) => p.replace(/\\/g, "/"), LIB = fwd(path.join(ROOT, "client/lib/"));
-      b.onResolve({ filter: /^\.\.?\/(?:edit\/|realize\/)?(world|state|net|fieldpanels|ui|confirmcenter|xrask|core|emitters|material_draft)\.js$/ }, (a) =>
+      stubResolve(b, /^\.\.?\/(?:edit\/|realize\/)?(world|state|net|fieldpanels|ui|confirmcenter|xrask|core|emitters|material_draft)\.js$/, (a) =>
         (fwd(a.importer).startsWith(LIB) && !fwd(a.importer).includes("/realize/") ? { path: a.path, namespace: "inspect-harness" } : undefined));
       // the realizer (three.js, the GPU paths) is not under test: inspect.js asks it only for a model's box
-      b.onResolve({ filter: /^\.\.\/realize\/models\.js$/ }, (a) => (fwd(a.importer).endsWith("/client/lib/edit/inspect.js") ? { path: "realize-models", namespace: "inspect-harness" } : undefined));
+      stubResolve(b, /^\.\.\/realize\/models\.js$/, (a) => (fwd(a.importer).endsWith("/client/lib/edit/inspect.js") ? { path: "realize-models", namespace: "inspect-harness" } : undefined));
       b.onLoad({ filter: /.*/, namespace: "inspect-harness" }, (a) => {
         if (a.path === "realize-models") return { contents: "export const boxOf = () => null; export const previewMesh = () => false; export const previewLight = (...a) => globalThis.__previewLight?.(...a) ?? false;", loader: "js" };
         const m = a.path.match(/(world|state|net|panels|ui|confirmcenter|xrask|core|emitters|material_draft)/)[1];

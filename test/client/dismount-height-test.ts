@@ -9,6 +9,7 @@
 // Mutation (must go red): in dismountMe, `myState.pos.set(off.x, off.y, off.z)` back to `(off.x, 0, off.z)` (rows D1, D2);
 // in stepLeaving, put back `myState.pos.y = 0;` (row D3).
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 const THREE_PATH = fileURLToPath(new URL('../../client/node_modules/three/build/three.module.js', import.meta.url));
 const STUBS: Record<string, string> = {
@@ -44,7 +45,7 @@ const STUBS: Record<string, string> = {
 plugin({
   name: 'dismount-stubs',
   setup(b) {
-    b.onResolve({ filter: new RegExp(`^\\./(${Object.keys(STUBS).join('|')})\\.js$`) }, (a) => (a.importer.endsWith('localbody.js') ? { path: a.path.slice(2, -3), namespace: 'dm-stub' } : undefined));
+    stubResolve(b, new RegExp(`^\\./(${Object.keys(STUBS).join('|')})\\.js$`), (a) => (a.importer.endsWith('localbody.js') ? { path: a.path.slice(2, -3), namespace: 'dm-stub' } : undefined));
     b.onLoad({ filter: /.*/, namespace: 'dm-stub' }, (a) => ({ contents: STUBS[a.path], loader: 'js' }));
   },
 });

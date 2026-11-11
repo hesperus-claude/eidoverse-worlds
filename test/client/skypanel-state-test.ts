@@ -8,11 +8,12 @@
 import { fileURLToPath } from "node:url";
 import { tryUntil } from "../gate/wait.ts";
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 const stub = fileURLToPath(new URL("../stubs/skypanel-stub.mjs", import.meta.url));
 plugin({
   name: "skypanel-stubs",
   setup(b) {
-    b.onResolve({ filter: /^\.\.?\/(base|defs|net|ui|sky|terrain|lod_policy|realize\/models|writes)\.js$/ }, () => ({ path: stub }));
+    stubResolve(b, /^\.\.?\/(base|defs|net|ui|sky|terrain|lod_policy|realize\/models|writes)\.js$/, () => ({ path: stub }));
   },
 });
 

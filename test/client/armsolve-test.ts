@@ -8,15 +8,16 @@
 // Recipe: `bun test/client/armsolve-test.ts`
 import { fileURLToPath } from "node:url";
 import { plugin } from "bun";
+import { stubResolve } from "../harness/stub.ts";
 import { suite } from "../gate/suite.ts";
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 plugin({
   name: "armsolve-stubs",
   setup(b) {
-    b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here("../stubs/core-stub.mjs") }));
-    b.onResolve({ filter: /^\.\/base\.js$/ }, () => ({ path: here("../stubs/core-stub.mjs") }));
-    b.onResolve({ filter: /^\.\/controller\.js$/ }, () => ({ path: here("../stubs/armsolve-xr-stub.mjs") }));
-    b.onResolve({ filter: /^\.\/xr\.js$/ }, () => ({ path: here("../stubs/armsolve-xr-stub.mjs") }));
+    stubResolve(b, /^\.\/core\.js$/, () => ({ path: here("../stubs/core-stub.mjs") }));
+    stubResolve(b, /^\.\/base\.js$/, () => ({ path: here("../stubs/core-stub.mjs") }));
+    stubResolve(b, /^\.\/controller\.js$/, () => ({ path: here("../stubs/armsolve-xr-stub.mjs") }));
+    stubResolve(b, /^\.\/xr\.js$/, () => ({ path: here("../stubs/armsolve-xr-stub.mjs") }));
   },
 });
 globalThis.location ??= { search: "" } as any;   // xrbody reads ?torsoplay at import

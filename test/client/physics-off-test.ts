@@ -4,15 +4,16 @@
 // presentation copy (one body in the air) for the replica's sim.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/physics-off-test.ts
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 const STUB = here('../stubs/put-settle-stub.mjs');
 plugin({
   name: 'physics-off-stubs',
   setup(b) {
-    b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: here('../stubs/core-stub.mjs') }));
+    stubResolve(b, /^\.\/core\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
     for (const m of ['world', 'remotes', 'colliders', 'autohooks', 'bodyscale', 'net', 'ui', 'chat', 'actions', 'realize/emitters', 'serverclock', 'plainwords', 'markup', 'xrask'])
-      b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: STUB }));
+      stubResolve(b, new RegExp(`^\\./${m}\\.js$`), () => ({ path: STUB }));
   },
 });
 const store = new Map<string, string>();

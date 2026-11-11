@@ -10,6 +10,7 @@
 //   lit tile following only myState.anim (old code)  → "fired tile stays lit after net.js clears" goes red
 import { fileURLToPath } from "node:url";
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 const RESTORE = process.argv.includes('--restore');
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({
@@ -17,7 +18,7 @@ plugin({
   setup(b) {
     for (const m of ['windows', 'avatar', 'animnames', 'controller', 'mybody', 'xrpanels', 'base']) {
       if (RESTORE && m === 'windows') continue;
-      b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: here('../stubs/actionbar-stub.mjs') }));
+      stubResolve(b, new RegExp(`^\\./${m}\\.js$`), () => ({ path: here('../stubs/actionbar-stub.mjs') }));
     }
   },
 });

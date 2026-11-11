@@ -15,6 +15,7 @@
 // physics.ts drives; the live-server agent plumbing rides knockdown-test.
 
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 import { suite } from "../gate/suite.ts";
 
@@ -41,7 +42,7 @@ const STUB = fileURLToPath(new URL('../stubs/core-stub.mjs', import.meta.url));
 plugin({
   name: 'core-stub',
   setup(build) {
-    build.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB }));
+    stubResolve(build, /^\.\/core\.js$/, () => ({ path: STUB }));
   },
 });
 

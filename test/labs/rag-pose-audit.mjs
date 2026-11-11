@@ -15,9 +15,10 @@
 // usual clinical figures for a relaxed (not stretched, not athletic) body.
 
 import { plugin } from 'bun';
+import { stubResolve } from '../harness/stub.ts';
 import { fileURLToPath } from 'node:url';
 const STUB = fileURLToPath(new URL('../stubs/core-stub.mjs', import.meta.url));
-plugin({ name: 'core-stub', setup(b) { b.onResolve({ filter: /^\.\/core\.js$/ }, () => ({ path: STUB })); } });
+plugin({ name: 'core-stub', setup(b) { stubResolve(b, /^\.\/core\.js$/, () => ({ path: STUB })); } });
 const { THREE } = await import('../stubs/core-stub.mjs');
 const { Ragdoll } = await import('../../client/lib/ragdoll.js');
 const { rigs, makeAvatar, toppleLean } = await import('../../tools/assets/rig-load.mjs');
