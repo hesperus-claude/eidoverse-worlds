@@ -1,7 +1,7 @@
 // Generates shared/conformance/motion.json: reference outputs of
 // client/lib/motioneval.js for native ports (Unreal) to reproduce.
-//   bun tools/assets/motion-vectors.ts          write the file
-//   bun tools/assets/motion-vectors.ts --check  fail if the file is stale
+//   bun tools/vectors/motion.ts          write the file
+//   bun tools/vectors/motion.ts --check  fail if the file is stale
 import { evalWholeMotion } from "../../client/lib/motioneval.js";
 import { readFileSync, writeFileSync } from "node:fs";
 
@@ -34,6 +34,6 @@ const cases = motions.flatMap(([name, b, m]) => times.map(dt => {
 const out = JSON.stringify({ source: "client/lib/motioneval.js", tolerance: 1e-6, cases }, null, 1) + "\n";
 const path = new URL("../../shared/conformance/motion.json", import.meta.url);
 if (process.argv.includes("--check")) {
-  if (readFileSync(path, "utf8") !== out) { console.error("motion.json is stale: run bun tools/assets/motion-vectors.ts"); process.exit(1); }
+  if (readFileSync(path, "utf8") !== out) { console.error("motion.json is stale: run bun tools/vectors/motion.ts"); process.exit(1); }
   console.log(`MOTION_VECTORS_CURRENT ${cases.length} cases`);
 } else { writeFileSync(path, out); console.log(`wrote ${cases.length} cases`); }

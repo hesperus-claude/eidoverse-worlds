@@ -1,8 +1,8 @@
 // Generates shared/conformance/water.json: reference outputs of shared/water.js
 // (waterParams, waveHeight, swimStep) for native ports (Unreal) to reproduce.
-//   bun tools/water-vectors.ts          write the file
-//   bun tools/water-vectors.ts --check  fail if the file is stale
-import { waterParams, waveHeight, swimStep } from "../shared/water.js";
+//   bun tools/vectors/water.ts          write the file
+//   bun tools/vectors/water.ts --check  fail if the file is stale
+import { waterParams, waveHeight, swimStep } from "../../shared/water.js";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const round = (v: any): any => typeof v === "number" ? Number(v.toPrecision(12))
@@ -50,8 +50,8 @@ for (const [name, input] of inputs) for (const start of [[10, -6, 4], [0, -1.2, 
 }
 
 const out = JSON.stringify({ source: "shared/water.js", tolerance: 1e-6, params, heights, swims }, null, 1) + "\n";
-const path = new URL("../shared/conformance/water.json", import.meta.url);
+const path = new URL("../../shared/conformance/water.json", import.meta.url);
 if (process.argv.includes("--check")) {
-  if (readFileSync(path, "utf8") !== out) { console.error("water.json is stale: run bun tools/water-vectors.ts"); process.exit(1); }
+  if (readFileSync(path, "utf8") !== out) { console.error("water.json is stale: run bun tools/vectors/water.ts"); process.exit(1); }
   console.log(`WATER_VECTORS_CURRENT ${params.length}/${heights.length}/${swims.length}`);
 } else { writeFileSync(path, out); console.log(`wrote ${params.length} params, ${heights.length} heights, ${swims.length} swim sequences`); }
