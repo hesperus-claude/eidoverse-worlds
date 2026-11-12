@@ -88,14 +88,14 @@ const comp = (id: string, c: string) => (w: any) => w.state().entities[id]?.c?.[
   call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50, -50, -50], max: [50, 50, 50] } });
   const box = (id: string, size: number[], pos: number[]) => ok(call("olive", "create", { id, components: { mesh: { shape: "box", size }, transform: { pos } } }).ok, `setup: ${id}`);
   box("crate", [0.5, 0.5, 0.5], [1, 0, 1]); box("wall", [4, 2, 0.2], [5, 0, 5]); box("box2", [0.5, 0.5, 0.5], [-5, 0, -5]);
-  const posOf = (r: any) => okd(r) ? J((r.would ?? []).filter((o: any) => o.comp === "transform").at(-1)?.value?.pos) : null;
+  const posOf = (r: any) => r?.ok === true || r?.dry === true ? J((r.would ?? []).filter((o: any) => o.comp === "transform").at(-1)?.value?.pos) : null;
   const dry = (a: any) => attempt(N, "olive", "place", { id: "crate", ...a, dry: true }, comp("crate", "transform"));
   const A1p = posOf(dry({ against: "wall", side: 1 }).r), Am1 = posOf(dry({ against: "wall", side: -1 }).r);
   const Bl = posOf(dry({ beside: "box2", side: "left" }).r), Br = posOf(dry({ beside: "box2", side: "right" }).r);
   ok(A1p && Am1 && A1p !== Am1 && Bl && Br && Bl !== Br, "control: against side 1 / -1, and beside left / right, are each two different spots", { A1p, Am1, Bl, Br });
   for (const [mode, side, same] of [["against", "left", Am1], ["against", "right", Am1], ["beside", 1, Br], ["beside", -1, Br]] as const) {
     const x = dry({ [mode]: mode === "against" ? "wall" : "box2", side });
-    row("A3", `place {${mode}, side: ${J(side)}} (the other mode's word) is refused`, { right: clean(x, ["shape", "doesnt-apply"]), wrong: okd(x.r) && posOf(x.r) === same, saw: { ...saw(x), pos: posOf(x.r) } }); }
+    row("A3", `place {${mode}, side: ${J(side)}} (the other mode's word) is refused`, { right: clean(x, ["shape", "doesnt-apply"]), wrong: okd(x) && posOf(x.r) === same, saw: { ...saw(x), pos: posOf(x.r) } }); }
 }
 
 // ---------------- body verbs: A4, A5, A13, A14 ----------------
@@ -122,7 +122,7 @@ const comp = (id: string, c: string) => (w: any) => w.state().entities[id]?.c?.[
     row("A13", "use {args: {held: 'yes'}} (not a boolean) is refused as shape, nothing toggled", { right: clean(x), wrong: x.r?.ok === true, saw: saw(x) }); }
   ok(call("olive", "drop", { id: "crate" }).ok !== undefined && call("olive", "grab", { id: "tap" }).ok, "setup: olive holds the tap");
   { const x = attempt(N, "olive", "use", { id: "tap", action: "open", args: { phase: "upp" } }, comp("tap", "openable"));
-    row("A13", "use {args: {phase: 'upp'}} while holding is refused as shape (not read as down)", { right: clean(x), wrong: x.r?.ok === true && x.r.held?.phase === "down", saw: { ...saw(x), held: x.r?.held } }); }
+    row("A13", "use {args: {phase: 'upp'}} while holding is refused as shape (not read as down)", { right: clean(x), wrong: x.r?.ok === true && J(x.added).includes(`"phase":"down"`), saw: { ...saw(x), act: x.added[0]?.body } }); }
   // A14: a reach at your own body (no consent needed), with a junk `at`
   { const x = attempt(N, "olive", "reach", { who: "olive", point: "shoulder_l", at: "junk" }, (w) => w.presence.reaches ?? null);
     row("A14", "reach {who, point, at: 'junk'} is refused as shape (at is [x, y, z] when present)", { right: clean(x), wrong: x.r?.ok === true, saw: saw(x) }); }
@@ -139,7 +139,7 @@ for (const [k, tag] of [["title", "title"], ["text", "text"]] as const) {
 { const N = "talk", call = callIn(N);
   call("olive", "create-world", { title: "talk" });
   ok(call("olive", "create", { id: "screen", components: { mesh: { shape: "box", size: [2, 1, 0.1] }, transform: { pos: [0, 1, 3] } } }).ok, "setup: a screen");
-  const lastSay = (x: any) => x.added.find((e: any) => e.kind === "request" && e.verb === "say")?.body;
+  const lastSay = (x: any) => x.added.find((e: any) => e.kind === "say")?.body;
   { const x = attempt(N, "olive", "say", { text: "hi", spoken: true, utt: 1 });
     ok(x.r.ok && lastSay(x)?.spoken === true && lastSay(x)?.utt === 1, "control: a well-formed spoken say keeps spoken and utt", saw(x)); }
   for (const [tag, a] of [["spoken: 'yes'", { spoken: "yes", utt: 2 }], ["utt: '1'", { spoken: true, utt: "1" }], ["t0: '5'", { spoken: true, utt: 3, t0: "5" }]] as const) {
@@ -199,13 +199,13 @@ for (const [k, tag] of [["title", "title"], ["text", "text"]] as const) {
   call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50, -50, -50], max: [50, 50, 50] } });
   ok(call("olive", "create", { id: "bell1", model: "bell", place: { at: [0, 0] } }).ok, "setup: a bell");
   const up = call("olive", "upload", { text: `world.on("use", (e) => { world.say("ding"); });\n` });
-  ok(up.ok && call("olive", "set", { id: "bell1", component: "script:bell", value: { src: up.src, scope: { say: true }, on: ["use"] } }).ok, "setup: script:bell installed on it", up);
+  ok(up.ok && call("olive", "set", { id: "bell1", component: "script:bell", value: { src: up.src, scope: { ids: "self", comps: [], say: true }, on: ["use"] } }).ok, "setup: script:bell installed on it", up);
   { const x = attempt(N, "olive", "adopt", { id: "bell1", script: "bell", dry: true });
-    ok(okd(x.r), "control: adopt {script: 'bell', dry} is accepted", saw(x)); }
+    ok(okd(x), "control: adopt {script: 'bell', dry} is accepted", saw(x)); }
   { const x = attempt(N, "olive", "adopt", { id: "bell1", script: ["bell"], dry: true });
-    row("A15", "adopt {script: ['bell']} (a list) is refused as shape, not read as 'bell'", { right: clean(x), wrong: okd(x.r), saw: saw(x) }); }
+    row("A15", "adopt {script: ['bell']} (a list) is refused as shape, not read as 'bell'", { right: clean(x), wrong: okd(x), saw: saw(x) }); }
   { const x = attempt(N, "olive", "scripts", { id: "bell1", script: ["bell"], test: { on: "use" } });
-    row("A15", "scripts {script: ['bell'], test} (a list) is refused as shape, not run as script:bell", { right: clean(x), wrong: okd(x.r), saw: saw(x) }); }
+    row("A15", "scripts {script: ['bell'], test} (a list) is refused as shape, not run as script:bell", { right: clean(x), wrong: okd(x), saw: saw(x) }); }
   { const x = attempt(N, "olive", "find", { kind: "banana" });
     row("A16", "find {kind: 'banana'} is refused as shape (model | blueprint)", { right: clean(x), wrong: x.r?.ok === true && Array.isArray(x.r.models), saw: saw(x) }); }
   const bps = (w: any) => Object.entries(w.state().entities["@world"].c).filter(([k]) => k.startsWith("blueprints:")).map(([, v]) => v);
@@ -220,10 +220,10 @@ for (const [k, tag] of [["title", "title"], ["text", "text"]] as const) {
   call("olive", "set", { id: "a", component: "label", value: "lamp v2" });
   const v2 = call("olive", "publish", { from: "a", name: "lamp" }).notes?.find((n: any) => n.record)?.record;
   { const x = attempt(N, "olive", "update", { copy: "b", to: v2, dry: true });
-    ok(okd(x.r), "control: update {copy: b, to: v2, dry} (no conflicts) is accepted", saw(x)); }
+    ok(okd(x), "control: update {copy: b, to: v2, dry} (no conflicts) is accepted", saw(x)); }
   for (const [tag, resolve] of [["null", null], ["false", false], ["0", 0], ["''", ""]] as const) {
     const x = attempt(N, "olive", "update", { copy: "b", to: v2, resolve, dry: true });
-    row("A18", `update {resolve: ${tag}} is refused as shape (resolve is an object), not read as no resolve`, { right: clean(x), wrong: okd(x.r), saw: saw(x) }); }
+    row("A18", `update {resolve: ${tag}} is refused as shape (resolve is an object), not read as no resolve`, { right: clean(x), wrong: okd(x), saw: saw(x) }); }
   for (const [tag, requests] of [["'abc'", "abc"], ["{}", {}]] as const) {
     const x = attempt(N, "olive", "batch", { requests });
     row("T2", `batch {requests: ${tag}} is refused as shape (not a server error)`, { right: clean(x), wrong: crashed(x), saw: saw(x) }); }
