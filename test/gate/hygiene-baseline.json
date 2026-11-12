@@ -224,7 +224,7 @@
   "own-ok": 1
  },
  "test/protocol/identity-check.ts": {
-  "bare-wait": 46
+  "bare-wait": 44
  },
  "tools/import-v1/snapshot-oracle.ts": {
   "raw-symlink": 2
