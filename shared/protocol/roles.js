@@ -14,7 +14,7 @@
 // so no gate can meet a sub-floor role.
 import { isObj } from "./is.js";
 
-// ---------------- five open defaults (one value each: flip it here) ----------------
+// ---------------- four defaults (ruled by R 11-12; OWNERS_FLY is to flip off once owners get a button for it) ----------------
 /** Q1: caption is a property of the SCREEN it captions, not a role switch (true = off the role list). */
 export const CAPTION_ON_SCREENS = true;
 /** Q2: owners fly by default (the old protocol had flight off even for owners). */

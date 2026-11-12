@@ -572,7 +572,8 @@ export const supersedes = (comp) => defOf(comp)?.supersedes ?? null;
 /** The ONE reader of a versioned name (§4). For a base name on a record's components `c`:
  *  the newest registered `<name>@<n>` that is WRITTEN on c wins; else a written `<name>` keeps its own meaning; else the
  *  newest registered definition's defaults. Returns {name, value, def}: `value` is what's written (or null), `def` the
- *  definition whose defaults fill the gaps. Readers never hand-code `c["x@2"] ?? c.x`: a second @n would copy the chain. */
+ *  definition whose defaults fill the gaps. Readers never hand-code `c["x@2"] ?? c.x`: a second @n would copy the chain.
+ *  No @n is registered yet; the first one also implements carry-forward on write (spec/PROTOCOL.md §4, R 11-12). */
 export function resolveVersioned(c, base) {
   const versions = Object.keys(COMPONENTS).filter((k) => k === base || k.startsWith(base + "@"))
     .sort((a, b) => (Number(a.split("@")[1] ?? 0)) - (Number(b.split("@")[1] ?? 0)));   // base, @2, @3 …

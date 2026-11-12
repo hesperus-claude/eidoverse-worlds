@@ -400,6 +400,10 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
 - **A changed meaning is a new name**, `<name>@<n>` (e.g. a hypothetical
   `light@2`), registered before anyone writes it, whose definition says what it `supersedes`. Old
   names are read forever. No component may change how another is read.
+  A new version carries its predecessor forward: on a record that holds the
+  old name, the first write of `<name>@<n>` starts from the old name's
+  effective values, with the new fields at their defaults, so superseding
+  never silently resets what someone set.
 - **Every registered name has a status.** `trial`: admitted, but its shape
   may change during the alpha (above), with stored values translated where
   they can be; `reserved`: the name is held and every write
