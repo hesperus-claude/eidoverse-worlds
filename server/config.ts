@@ -80,11 +80,7 @@ const RATE_KIB = envNumber("RATE_KIB", 256, (n) => n > 0);
 const ANON_RATE_KIB = envNumber("ANON_RATE_KIB", 32, (n) => n > 0);
 /** The act rate as the authority takes it (injected: the authority is shared code, livehost opts.rate). */
 export const RATE_POLICY = { n: ACT_RATE, says: SAY_RATE, ms: RATE_WINDOW_SEC * 1000, bytes: RATE_KIB * 1024, anonBytes: ANON_RATE_KIB * 1024 };
-/** Seconds between two copies of one world (world-fork copies on the shared thread); 0 = no limit. */
-export const FORK_GAP_SEC = envNumber("FORK_GAP_SEC", 60, (n) => n >= 0);
-/** Copies one person may make per hour; 0 = no limit. */
-export const FORK_PER_HOUR = envNumber("FORK_PER_HOUR", 5, (n) => n >= 0);
-// Founding a world: no limits yet (server/worldlog.ts foundRefusal).
+// Founding and copying a world: no limits (a copy is one synchronous call; long copies off the shared thread are wishlisted).
 /** All messages per client per second: 15 Hz of pose plus verbs plus slack; a token bucket with two seconds of burst (server/msgrate.ts). */
 export const MSG_RATE = envNumber("MSG_RATE", 60, (n) => n > 0);
 
