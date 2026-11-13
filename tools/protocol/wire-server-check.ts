@@ -98,13 +98,14 @@ try {
   // ---- S5: world-reset's typed confirmation ----
   { const wa = await client(WIPE, "Ann");
     ok((await wa.req("create", { model: "test/none.glb", components: { label: "keep me" } })).ok !== undefined, "setup: something in the world to erase");
-    const n0 = logOf(WIPE).length, k = wa.msgs.length; wa.raw({ type: "world-reset", name: [WIPE] });
-    await tryUntil("the reset is answered", () => wa.after(k).some((m: any) => m.type === "error" || /reset/.test(m.type)) || logOf(WIPE).length < n0, { ms: 8000, step: 50 });
-    const err = errorsAfter(wa, k).find((m: any) => /confirmation/.test(m.error ?? "")), n1 = logOf(WIPE).length;
-    row("S5", "world-reset {name: ['wipe']} (a list) fails the typed confirmation: nothing erased", { right: !!err && n1 >= n0, wrong: !err && n1 < n0,
-      saw: { err: errorsAfter(wa, k), types: wa.after(k).map((m: any) => m.type), log: [n0, n1] } }); }
+    const g0 = J(logOf(WIPE)[0]), k = wa.msgs.length; wa.raw({ type: "world-reset", name: [WIPE] });
+    await tryUntil("the reset is answered", () => wa.after(k).some((m: any) => m.type === "error" || m.type === "world-reset"), { ms: 8000, step: 50 });
+    const err = errorsAfter(wa, k).find((m: any) => /confirmation/.test(m.error ?? "")), reset = wa.after(k).some((m: any) => m.type === "world-reset"), fresh = J(logOf(WIPE)[0]) !== g0;
+    row("S5", "world-reset {name: ['wipe']} (a list) fails the typed confirmation: nothing erased", { right: !!err && !reset && !fresh, wrong: !err && reset && fresh,
+      saw: { err: errorsAfter(wa, k), types: wa.after(k).map((m: any) => m.type), newGenesis: fresh } }); }
 
   // ---- S6: history and debug paging ----
+  for (const t of ["one", "two", "three"]) ok((await ann.req("say", { text: t })).ok, `setup: Ann says '${t}' (history pages chat lines)`);
   for (const [tag, msg, wrong] of [["history {limit: true}", { type: "history", limit: true }, (m: any) => m?.type === "history" && (m.entries ?? []).length === 1],
     ["history {before: 'abc'}", { type: "history", before: "abc" }, (m: any) => m?.type === "history"],
     ["debug {limit: true}", { type: "debug", limit: true }, (m: any) => m?.type === "debug"]] as const) {
@@ -151,20 +152,22 @@ try {
     opal.close(); }
 
   // ---- S14: join fields ----
-  { const s = await client(W, "Sue", { spectate: "false" });
+  { const s = await client(W, "Sue", { spectate: "false" }); const sw = s.snapshot ? await s.req("say", { text: "am I a spectator?" }) : null;   // a spectator may read, not write
     row("S14", "join {spectate: 'false'} (a string) is refused with an error, not joined as a spectator", { right: !s.snapshot && errorsAfter(s, 0).length > 0,
-      wrong: !!s.snapshot && (s.snapshot.spectator === true || s.snapshot.yourRights?.spectator === true || JSON.stringify(s.snapshot).includes('"spectating":true')), saw: { err: errorsAfter(s, 0), snap: s.snapshot ? Object.keys(s.snapshot) : null } }); s.close(); }
+      wrong: !!s.snapshot && sw?.refused?.code === "spectator", saw: { err: errorsAfter(s, 0), write: sw?.refused ?? sw?.ok } }); s.close(); }
   { const k = bob.msgs.length; const t = await client(W, "Tam", { avatar: "no-such-avatar-name" });
     await tryUntil("Bob sees Tam arrive", () => bob.after(k).some((m: any) => m.type === "arrive" && m.id === "Tam"), { ms: 3000, step: 50 });
     const arr = bob.after(k).find((m: any) => m.type === "arrive" && m.id === "Tam");
     row("S14", "join {avatar: 'no-such-avatar-name'} is refused with an error (not the default body)", { right: !t.snapshot && errorsAfter(t, 0).length > 0, wrong: !!t.snapshot && /claude\.vrm/.test(J(arr)), saw: { err: errorsAfter(t, 0), arrive: arr } }); t.close(); }
-  { const long = "L" + "o".repeat(69); const u = await client(W, long);
-    row("S14", "join {id: a 70-character name} is refused with an error (not cut to 64)", { right: !u.snapshot && errorsAfter(u, 0).length > 0, wrong: !!u.snapshot && J(u.msgs).includes(`"${long.slice(0, 64)}"`), saw: { err: errorsAfter(u, 0), joined: !!u.snapshot } }); u.close(); }
+  { const long = "L" + "o".repeat(69), kb = bob.msgs.length; const u = await client(W, long);
+    await tryUntil("Bob sees the long name arrive", () => bob.after(kb).some((m: any) => m.type === "arrive"), { ms: 3000, step: 50 });
+    const arr = bob.after(kb).find((m: any) => m.type === "arrive");
+    row("S14", "join {id: a 70-character name} is refused with an error (not cut to 64)", { right: !u.snapshot && errorsAfter(u, 0).length > 0, wrong: !!u.snapshot && arr?.id === long.slice(0, 64), saw: { err: errorsAfter(u, 0), arrive: arr?.id } }); u.close(); }
 
   // ---- S16: voice-moderate ----
   { const k = ann.msgs.length, kb = bob.msgs.length; ann.raw({ type: "voice-moderate", actorId: BOB, muted: "true" });
     await pause("a voice-moderate has had its chance to be answered", 400);
-    row("S16", "voice-moderate {muted: 'true'} (a string) is refused with an error (not read as unmute)", { right: errorsAfter(ann, k).length > 0, wrong: !errorsAfter(ann, k).length && !bob.after(kb).some((m: any) => m.type === "moderated"),
+    row("S16", "voice-moderate {muted: 'true'} (a string) is refused with an error (not read as unmute)", { right: errorsAfter(ann, k).length > 0, wrong: !errorsAfter(ann, k).length && bob.after(kb).some((m: any) => m.type === "voice-moderated" && m.muted === false),
       saw: { ann: ann.after(k), bob: bob.after(kb).map((m: any) => m.type) } }); }
   { const k = ann.msgs.length, kb = bob.msgs.length, t0 = Date.now(); ann.raw({ type: "voice-moderate", actorId: BOB, muted: true, minutes: "5" });
     await tryUntil("the mute is answered", () => errorsAfter(ann, k).length || bob.after(kb).some((m: any) => m.type === "moderated"), { ms: 5000, step: 50 });
