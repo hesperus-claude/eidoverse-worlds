@@ -34,6 +34,9 @@
     "max": 1000
    }
   },
+  "required": [
+   "pos"
+  ],
   "docs": {
    "pos": "where it stands, [x, y, z] in metres, in its parent's frame (the world's when it has no parent)",
    "q": "its orientation, a unit quaternion [x, y, z, w] (glTF order), in its parent's frame; normalized on write",

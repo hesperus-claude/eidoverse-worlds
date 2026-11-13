@@ -189,10 +189,13 @@ const MOTION_AXES = AXES;   // shared/axes.js: all six letters
 function resolve(ctx, id, comp, value, prev) {
   const def = !comp.includes(":") || comp.startsWith("look-at:") ? defOf(comp) : undefined;   // an alias has its registered name's defaults; a part's look-at the whole one's
   if (comp === "transform") {
-    const v = { ...COMPONENTS.transform.defaults, ...(prev ?? {}), ...(value ?? {}) };
-    if (value && "yaw" in value) { v.q = yawQ(value.yaw).map((n) => r3(n)); delete v.yaw; ctx.notes.push({ id, component: "transform", field: "yaw", sent: value.yaw, kept: v.q, why: "yaw is a convenience; the log stores q" }); }
-    if (typeof v.scale === "number") v.scale = [v.scale, v.scale, v.scale];
-    for (const k of ["pos", "q", "scale"]) if (!Array.isArray(v[k]) || v[k].some((n) => !Number.isFinite(n))) refuse("shape", `transform.${k} must be numbers`, "pos [x,y,z], q [x,y,z,w], scale [x,y,z] or a number");
+    // converts, never repairs (WEFT 11-13 §2): a non-object, a missing pos or a wrong-typed field is left for the gate
+    if (!(value && typeof value === "object" && !Array.isArray(value))) return value;
+    const v = { ...(prev ?? {}), ...value };
+    if (Number.isFinite(value.yaw)) { v.q = yawQ(value.yaw).map((n) => r3(n)); delete v.yaw; ctx.notes.push({ id, component: "transform", field: "yaw", sent: value.yaw, kept: v.q, why: "yaw is a convenience; the log stores q" }); }
+    if (Number.isFinite(v.scale)) { const s = v.scale; v.scale = [s, s, s]; ctx.notes.push({ id, component: "transform", field: "scale", sent: s, kept: v.scale, why: "a number is that scale on every axis" }); }
+    for (const k of ["q", "scale"]) if (v[k] === undefined) v[k] = clone(COMPONENTS.transform.defaults[k]);   // absent: unturned, as made
+    if (["pos", "q", "scale"].some((k) => !Array.isArray(v[k]) || !v[k].every(Number.isFinite))) return v;
     v.pos = v.pos.map(r3);
     // stored as a unit quaternion: a rounded yaw or a hand-typed [0,0,0,0.5] otherwise disagrees with the renderer
     return unitTransform(v);
@@ -269,7 +272,7 @@ function buildCreate(ctx, a) {
   for (const k of Object.keys(comps)) handWrite(ctx, id, k);
   const out = {};
   for (const [k, v] of Object.entries(comps)) out[k] = resolve(ctx, id, k, v);
-  if (!out.transform) out.transform = resolve(ctx, id, "transform", {});
+  if (comps.transform === undefined) out.transform = resolve(ctx, id, "transform", { pos: [0, 0, 0] });   // given nowhere: the origin
   ctx.refs.add(id); // who made it is the create entry's actor: a view, never a stored `placer` (L2)
   const made = createOps(id, out);
   const place = placeAt ? { at: placeAt } : a.place;

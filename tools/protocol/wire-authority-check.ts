@@ -9,12 +9,11 @@ import { request, fixtureIds } from "../../shared/protocol/authority.js";
 import { openWorld } from "../../server/filehost.ts";
 import { labClock } from "./clock.ts";
 import { pendingRows } from "./pending.ts";
+import { COMPONENTS } from "../../shared/protocol/componentspec.js";
 fixtureIds(true);   // the fixtures name their things (R 10-17: a writer never chooses an id; ids-check covers the refusal)
 
 // the audit ids red on main today; a fix takes its id off this list in the same commit that turns it green
 const PENDING: Record<string, string> = {
-  A1: "transform.yaw shorthand coerced (null → no turn, '30' → 30 rad, true/[1] → 1 rad); bareYaw on hep/nissa-names",
-  A2: "a transform value that is not an object (null, 0, false, absent, merge {pos: null}) → the default transform",
   A3: "place.side: the other mode's words are read as a side",
   A4: "put.q: null → the hold's orientation",
   A5: "move.height / move.scale clamped with no note",
@@ -31,9 +30,10 @@ const PENDING: Record<string, string> = {
   A16: "find.kind: any kind but 'blueprint' lists models",
   A17: "publish.name: null → the id; an object stored as the name",
   A18: "update.resolve: null reads as no resolve",
-  T1: "set transform value 5 / 'abc' throws (\"yaw\" in value)",
   T2: "batch.requests not an array throws (forEach)",
   T3: "use.args.impulse: 5 throws (spread of a non-iterable)",
+  U1: "@world.blueprints:<key> has no fields, type or map: any value is stored (§4.3)",
+  U7: "imported:<key>, imported-roles:<key>, imported-bans:<key> store any value an owner sends (found by the sweep; not in the audit)",
 };
 const { ok, row, finish } = pendingRows("wire-authority-check", PENDING);
 
@@ -98,6 +98,27 @@ const comp = (id: string, c: string) => (w: any) => w.state().entities[id]?.c?.[
   for (const [tag, value] of [["5", 5], ["'abc'", "abc"]] as const) { reset();
     const x = attempt(N, "olive", "set", { id: "crate", component: "transform", value }, tf);
     row("T1", `set transform {value: ${tag}} is refused as shape (not a server error)`, { right: clean(x), wrong: crashed(x), saw: saw(x) }); }
+}
+
+// ---------------- every component × six junk values (WEFT 11-13 §3: "the sweep kept as a permanent test") ----------------
+// set {value: junk} on each catalogue name is refused (never ok, never a server error) and leaves that component as it was;
+// a value of the component's own declared type (a string label, a false flag) isn't junk, so it is skipped
+{ const N = "sweep", call = callIn(N);
+  call("olive", "create-world", { title: "sweep" });
+  call("olive", "set", { id: "@world", component: "bounds", value: { min: [-50, -50, -50], max: [50, 50, 50] } });
+  ok(call("olive", "create", { id: "crate", components: { mesh: { shape: "box", size: [0.5, 0.5, 0.5] }, transform: { pos: [1, 0, 1] } } }).ok, "setup: a crate at [1, 0, 1]");
+  const JUNK: [string, any][] = [["0", 0], ["null", null], ["false", false], ["[]", []], ["no value", undefined], ["'x'", "x"]];
+  const own = (def: any, v: any) => (def.type === "string" && typeof v === "string") || (def.type === "bool" && typeof v === "boolean");
+  let n = 0;
+  for (const [name, def] of Object.entries(COMPONENTS) as [string, any][]) {
+    const id = def.on === "world" ? "@world" : "crate", component = def.keyed ? `${name}:k1` : name;
+    for (const [tag, value] of JUNK) { if (own(def, value)) continue; n++;
+      const x = attempt(N, "olive", "set", value === undefined ? { id, component } : { id, component, value }, comp(id, component));
+      const right = x.r?.ok === false && !crashed(x) && x.before === x.after;
+      const hole = name === "blueprints" ? "U1" : name.startsWith("imported") ? "U7" : null;   // no fields, type or map in the catalogue
+      if (!right && hole) row(hole, `set ${id}.${component} {value: ${tag}} is refused`, { right, wrong: x.r?.ok === true, saw: saw(x) });
+      else ok(right, `sweep: set ${id}.${component} {value: ${tag}} is refused, the component unchanged`, saw(x)); } }
+  ok(n > 400, `sweep: ${n} (component, junk) pairs ran (84 names × 6 values, less each name's own type)`, n);
 }
 
 // ---------------- place.side by mode: A3 ----------------

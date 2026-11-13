@@ -22,7 +22,7 @@ export const COMPONENTS = {
   // glTF's node TRS (shape audit 10-16, physics-motion §1): local matrix = T · R · S, world = parent's world × local, down the
   // tree (PROTOCOL §9.3 writes the rule down). The door's limits, pinned: pos within ±1e5 m, each scale within ±1e3 and at
   // least 1e-4 from zero (a negative one mirrors; physics reads |scale|, KHR_physics_rigid_bodies' rule)
-  transform: { status: "trial", on: "thing", fields: { pos: "vec3", q: "array", scale: "vec3" }, defaults: { pos: [0, 0, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] }, units: { pos: "m", scale: "×" },
+  transform: { status: "trial", on: "thing", fields: { pos: "vec3", q: "array", scale: "vec3" }, required: ["pos"], defaults: { pos: [0, 0, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] }, units: { pos: "m", scale: "×" },
     ranges: { pos: { min: -1e5, max: 1e5 }, scale: { min: -1e3, max: 1e3 } },
     docs: { pos: "where it stands, [x, y, z] in metres, in its parent's frame (the world's when it has no parent)", q: "its orientation, a unit quaternion [x, y, z, w] (glTF order), in its parent's frame; normalized on write", scale: "its size per axis, [x, y, z] (1 = as made), each within ±1000 and never within 1e-4 of zero; a negative one mirrors (physics reads its size, |scale|)" },
     help: "where it is, glTF's node TRS: pos (m), q (unit quaternion [x, y, z, w]), scale [x, y, z], all in its parent's frame. Composed as glTF composes a node: local = T · R · S, world = parent's world × local (PROTOCOL §9.3)" },
