@@ -149,6 +149,11 @@ try {
       await tryUntil("server-bans is answered", () => opal.after(k2).some((m: any) => m.type === "mod"), { ms: 5000, step: 50 });
       const list = opal.after(k2).find((m: any) => m.type === "mod")?.text ?? "";
       row("S13", "server-ban {reason: {a: 1}} is refused with an error, no ban filed", { right: !!err && !/Zed/.test(list), wrong: list.includes("[object Object]"), saw: { err, list: list.slice(0, 200) } }); }
+    { const k = opal.msgs.length; opal.raw({ type: "operator-repair", id: "or-1", verb: "unban", args: JSON.stringify({ who: "Mal" }) });
+      await tryUntil("the repair is answered", () => opal.after(k).some((m: any) => m.type === "reply" && m.id === "or-1"), { ms: 5000, step: 50 });
+      const m = opal.after(k).find((m: any) => m.type === "reply" && m.id === "or-1");
+      row("S1", "operator-repair {verb: 'unban', args: a string} is refused as shape (not run bare)", { right: m?.ok === false && m.reply?.refused?.code === "shape",
+        wrong: m?.ok === false && m.reply?.refused?.code === "missing-arg", saw: m?.reply?.refused ?? m }); }
     opal.close(); }
 
   // ---- S14: join fields ----

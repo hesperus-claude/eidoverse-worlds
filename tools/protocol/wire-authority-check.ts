@@ -34,6 +34,8 @@ const PENDING: Record<string, string> = {
   T1: "set transform value 5 / 'abc' throws (\"yaw\" in value)",
   T2: "batch.requests not an array throws (forEach)",
   T3: "use.args.impulse: 5 throws (spread of a non-iterable)",
+  E1: "request() envelope (Weft 11-13 §1a): a non-string verb is looked up as its String(); args [] runs bare, 'abc' refused by its character indices",
+  E2: "a batch child's verb (Weft 11-13 §1a): ['sky'] is looked up and built as 'sky'",
 };
 const { ok, row, finish } = pendingRows("wire-authority-check", PENDING);
 
@@ -58,6 +60,21 @@ const crashed = (x: any) => !!x.r?.crashed;
 const okd = (x: any) => x.r?.ok === true || x.r?.dry === true;
 const comp = (id: string, c: string) => (w: any) => w.state().entities[id]?.c?.[c];
 
+// ---------------- the request envelope {verb: string, args?: plain object}: E1, E2 ----------------
+{ const N = "env", call = callIn(N);
+  call("olive", "create-world", { title: "env" });
+  const sky = comp("@world", "sky");
+  ok(call("olive", "sky", { hours: 9 }).ok, "setup: a sky at 9 h");
+  for (const [tag, verb, args, wrong] of [["undo, args: [] (a list)", "undo", [], (x: any) => x.r?.ok === true && x.before !== x.after],
+    ["args: 'abc' (a string)", "sky", "abc", (x: any) => x.r?.refused?.code === "unknown-arg"],
+    ["args: null", "sky", null, (x: any) => x.r?.ok === true || x.r?.refused?.code !== "shape"],
+    ["verb: ['sky'] (a list)", ["sky"], { hours: 3 }, (x: any) => x.r?.ok === true && x.before !== x.after]] as const) {
+    const x = attempt(N, "olive", verb as any, args, sky);
+    row("E1", `request {${tag}} is refused as shape, the sky unchanged (a bare undo would take back the last sky)`, { right: clean(x), wrong: wrong(x), saw: saw(x) }); }
+  { const x = attempt(N, "olive", "batch", { requests: [{ verb: ["sky"], args: { hours: 3 } }] }, sky);
+    row("E2", "batch {requests: [{verb: ['sky']}]} (a list verb) is refused as shape, the sky unchanged", { right: clean(x), wrong: x.r?.ok === true && x.before !== x.after, saw: saw(x) }); }
+}
+
 // ---------------- transform: A1, A2, T1 ----------------
 { const N = "tf", call = callIn(N);
   call("olive", "create-world", { title: "tf" });
@@ -75,6 +92,9 @@ const comp = (id: string, c: string) => (w: any) => w.state().entities[id]?.c?.[
     ["merge, value: null", { value: null, merge: true }], ["merge, no value", { merge: true }], ["merge, value: {pos: null}", { value: { pos: null }, merge: true }]] as const) { reset();
     const x = attempt(N, "olive", "set", { id: "crate", component: "transform", ...args }, tf);
     row("A2", `set transform {${tag}} is refused, the thing left where it was`, { right: clean(x, ["shape", "missing-arg"]), wrong: x.r?.ok === true && atOrigin(x), saw: saw(x) }); }
+  for (const [tag, args] of [["value: null", { value: null }], ["merge, value: {pos: null}", { value: { pos: null }, merge: true }]] as const) { reset();
+    const x = attempt(N, "olive", "batch", { requests: [{ verb: "set", args: { id: "crate", component: "transform", ...args } }] }, tf);
+    row("A2", `batch {requests: [set transform {${tag}}]} is refused, the thing left where it was`, { right: clean(x, ["shape", "missing-arg"]), wrong: x.r?.ok === true && atOrigin(x), saw: saw(x) }); }
   { const x = attempt(N, "olive", "create", { id: "t2", components: { transform: null, mesh: {} } }, (w) => Object.keys(w.state().entities).sort());
     row("A2", "create {components: {transform: null}} is refused as shape, nothing made", { right: clean(x), wrong: x.r?.ok === true && J(x.w.state().entities.t2?.c.transform?.pos) === "[0,0,0]", saw: saw(x) }); }
   for (const [tag, value] of [["5", 5], ["'abc'", "abc"]] as const) { reset();
