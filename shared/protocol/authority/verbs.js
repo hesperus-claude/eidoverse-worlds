@@ -9,7 +9,7 @@ import { COMPONENTS, STATUSES, defOf } from "../componentspec.js";
 import { normalizeCaptionArgs, captionRefusal, foldCaption } from "../../captions.js";
 import { effectFor, ESSENTIAL_NAMES } from "../../particle_effects.js";
 import { CTX, UP } from "./ctx.js";
-import { BATCH_OPS, validate } from "../verbspec.js";
+import { BATCH_OPS, envelopeRefusal, validate } from "../verbspec.js";
 import { Refusal, refuse } from "./refuse.js";
 import { VOLATILE, delOp, nonce16, setOp } from "./storage.js";
 import { SPATIAL, clockMs, spend } from "./spatial.js";
@@ -133,7 +133,7 @@ function buildBatch(ctx, a, w) { {
       if ("ops" in a) refuse("shape", "batch {ops} is now batch {requests}: nothing ran", "send {verb: 'batch', args: {requests: [{verb, args}, …]}}");
       (a.requests ?? []).forEach((o, i) => {
         if (!o || typeof o !== "object" || Array.isArray(o)) refuse("shape", `batch request ${i} is {verb, args}, got ${JSON.stringify(o)}`, "batch takes requests [{verb, args}, …]", { index: i });
-        if (o.args !== undefined && (!o.args || typeof o.args !== "object" || Array.isArray(o.args))) refuse("shape", `batch request ${i}: args is an object, got ${JSON.stringify(o.args)}`, "batch takes requests [{verb, args}, …]", { index: i });
+        { const no = envelopeRefusal(o.verb, o.args); if (no) refuse("shape", `batch request ${i}: ${no.reason}`, "batch takes requests [{verb, args}, …]", { index: i }); }
         const bad = validate(o.verb, o.args ?? {}) ?? (o.verb === "create" && o.args?.place ? validate("place", { ...o.args.place, id: "x" }) : null);
         if (bad) { const { code, reason, fix, ...rest } = bad; refuse(code, `batch request ${i}${o.verb === "create" && o.args?.place && !validate(o.verb, o.args ?? {}) ? " place" : ""}: ${reason}`, fix, { ...rest, index: i }); }
       });

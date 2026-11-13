@@ -26,6 +26,7 @@ import { describeBody, socketRole } from "../shared/sockbody.js";
 import { dec as decName, enc as encId } from "../shared/protocol/names.js";
 import { actorName } from "../shared/protocol/names.js";
 import { refusalText, warningText, touchWords } from "../shared/protocol/refusal.js";
+import { envelopeRefusal } from "../shared/protocol/verbspec.js";
 import { readdirSync } from "node:fs";
 import sharp from "sharp";
 import { validatePose, validateTracks, tracksSpan, poseReport, HUMANOID_BONES, mergePose, puppetPose } from "../shared/humanoid.js";
@@ -1177,7 +1178,8 @@ export const HANDLERS: Record<string, ToolHandler> = {
 
   },
   act: async (ag, a, ctx) => {
-      const verb = String(a.verb ?? ""), args = (a.args && typeof a.args === "object" ? a.args : {}) as Record<string, any>;
+      { const no = envelopeRefusal(a.verb, a.args); if (no) return { content: [{ type: "text", text: `act: ${no.reason}; nothing was sent. ${no.fix}` }], isError: true }; }
+      const verb: string = a.verb, args = (a.args ?? {}) as Record<string, any>;
       { const bad = grantsFor(ag, verb, args); if (bad) return { content: [{ type: "text", text: bad }], isError: true }; }   // main's for: "2h" (decision table row 14)
       if (Object.hasOwn(BODY_VERBS, verb)) return BODY_VERBS[verb](ag, args, ctx, verb);   // answered by this body, or moderation by name
       if (typeof args.who === "string") { const rw = await resolveWho(ag, args.who, verb); if ("err" in rw) return rw.err; args.who = rw.who; }   // warn/mute/…: a name works here too

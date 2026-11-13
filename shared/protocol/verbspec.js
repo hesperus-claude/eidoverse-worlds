@@ -179,6 +179,13 @@ const okType = (spec, v) => {
     case "enum": return spec.values.includes(v); default: return true;
   }
 };
+const shown = (v) => (JSON.stringify(v) ?? String(v)).slice(0, 120);
+/** The request envelope {verb: string, args?: plain object}: null, or a shape refusal; absent args are none, nothing is emptied (WEFT 11-13 §1a). */
+export function envelopeRefusal(verb, args) {
+  if (typeof verb !== "string") return { code: "shape", reason: `a request's verb is a string, got ${shown(verb)}`, fix: "send {verb: '<name>', args: {…}}" };
+  if (args !== undefined && (!args || typeof args !== "object" || Array.isArray(args))) return { code: "shape", reason: `${verb}'s args is an object, got ${shown(args)}`, fix: `send {verb: '${verb}', args: {…}} (a string args is JSON encoded twice)` };
+  return null;
+}
 /** Is k one of a verb's OWN argument names? (`k in args` finds `toString`/`constructor` too: review of #260, #522/#538.) */
 export const ownArg = (args, k) => Object.hasOwn(args, k);
 export function validate(verb, a) {

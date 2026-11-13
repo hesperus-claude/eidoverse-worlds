@@ -13,7 +13,6 @@ import { WorldAgent } from "../../mcpl/agent.ts";
 import { pendingRows } from "./pending.ts";
 
 const PENDING: Record<string, string> = {
-  M1: "act: String(verb); a non-object args becomes {}, an array is spread into {0: …}",
   M2: "act shove: strength through Number() || 2.2, clamped 0.5–4 with no word",
   M3: "act kick/ban/unban: days through Number(), reason through String(), global by truthiness",
   M4: "library: page through Number() || 1",

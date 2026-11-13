@@ -34,8 +34,6 @@ const PENDING: Record<string, string> = {
   T1: "set transform value 5 / 'abc' throws (\"yaw\" in value)",
   T2: "batch.requests not an array throws (forEach)",
   T3: "use.args.impulse: 5 throws (spread of a non-iterable)",
-  E1: "request() envelope (Weft 11-13 §1a): a non-string verb is looked up as its String(); args [] runs bare, 'abc' refused by its character indices",
-  E2: "a batch child's verb (Weft 11-13 §1a): ['sky'] is looked up and built as 'sky'",
 };
 const { ok, row, finish } = pendingRows("wire-authority-check", PENDING);
 

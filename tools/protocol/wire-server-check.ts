@@ -17,8 +17,6 @@ import { helloOf } from "../../shared/protocol/hello.js";
 import { pendingRows } from "./pending.ts";
 
 const PENDING: Record<string, string> = {
-  S1: "request.args not a plain object becomes {}: the verb runs bare",
-  S2: "request.verb through String(): ['sky'] runs sky",
   S3: "world-fork.to through String() and cut to 64",
   S4: "world-found.name through String(); a non-string title dropped",
   S5: "world-reset.name through String(): ['<name>'] passes the typed confirmation",

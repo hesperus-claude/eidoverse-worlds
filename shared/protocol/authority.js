@@ -14,7 +14,7 @@ import { DEFAULT_WHO, grabOf, homeOf, checkGrabbable, wantsHome, fitsSocket, soc
 import { fold, opsOf, applyOps, cowState, applyCow, checkIJSON, isEntityId, isComponent, isIdentity, jcs, sha256, REDACTED, DIALECT, VERSION, keyOk } from "./fold.js";
 import { mintId, PERSON_ID, isPlaceholder } from "./ids.js";
 import { COMPONENTS, PENDULUM, defOf, registered, baseOf, isNamespaced, materialize, mapRefs, refsOf, refFields, outOfRange, rangeWords, resolveVersioned, statusOf, canonicalName, STATUSES } from "./componentspec.js";
-import { validate, verbHelp, ownArg, VERBSPEC, RESERVED_VERBS, REMOVED_VERBS } from "./verbspec.js";
+import { validate, verbHelp, ownArg, envelopeRefusal, VERBSPEC, RESERVED_VERBS, REMOVED_VERBS } from "./verbspec.js";
 import { dec, partSlot } from "./names.js";
 import { READ_ONLY } from "./verbclasses.js";
 import { isRefusalCode } from "./refusalcodes.js";
@@ -110,6 +110,7 @@ function enter(w, actor) {
   return () => { Object.assign(CTX, outer); w.changedQ = wq.changedQ; w.sayQ = wq.sayQ; w.heldQ = wq.heldQ; w.now = wq.now; w.pinTs = wq.pinTs; };
 }
 export function request(w, actor, verb, args = {}) {
+  { const bad = envelopeRefusal(verb, args); if (bad) { noteCode(bad.code); return { ok: false, refused: bad }; } }   // not an act, so not recorded
   const exit = enter(w, actor);
   // ONE clock per request (§2.1: ts is the authority's admission time). A wall clock read twice in one request could put a
   // rest's digest (computed where the engine stood at the first read) under a later ts, across a tick boundary, and every

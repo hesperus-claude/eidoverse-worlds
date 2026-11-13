@@ -21,6 +21,7 @@ import { WORLDS_DIR, FORK_GAP_SEC, FORK_PER_HOUR } from "./config.ts";
 import { isBanned, inForceOf } from "../shared/protocol/authority.js";
 import { txnRefusal } from "../shared/protocol/authority/storage.js";
 import { WIRE_READS, PERSON_ACTS } from "../shared/protocol/verbclasses.js";
+import { envelopeRefusal } from "../shared/protocol/verbspec.js";
 import { METER_SCALE, readMeter, authorityTime } from "./readmeter.ts";
 import { isOperator } from "./operators.ts";
 import { capture, recheck, type ReqCap } from "./reqcap.ts";
@@ -150,12 +151,14 @@ export const REQUEST_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
     // {verb, args}: one request to the world's authority
     const w = c.world; if (!w) return;
     const rid = msg.id ?? null;
-    const args = msg.args && typeof msg.args === "object" && !Array.isArray(msg.args) ? msg.args : {};
-    const verb = String(msg.verb ?? "");
+    // refused before anything reads args: args.dry meters, consent's listing and a caption's gen read it here
+    const malformed = envelopeRefusal(msg.verb, msg.args);
+    const verb: string = typeof msg.verb === "string" ? msg.verb : "", args = msg.args ?? {};
     // the envelope carries the transaction outcome too, as `txn` (PROTOCOL §7: committed | rolled-back | ambiguous; ok only
     // when committed). Never `outcome`: the body verbs' replies already use that word for asked | allowed
     let answered = false;
     const reply = (r: Any) => { answered = true; ws.send(JSON.stringify({ type: "reply", id: rid, verb, ok: r.ok === true, ...(typeof r?.txn === "string" ? { txn: r.txn } : {}), reply: r })); };
+    if (malformed) { reply({ ok: false, refused: malformed }); return; }
     if (c.spectator && !READS.has(verb)) { reply({ ok: false, refused: { code: "spectator", reason: "spectators may read, not write", fix: "join embodied" } }); return; }
     const metered = READS.has(verb) || args.dry === true;
     // reads are counted as they arrive (a burst is counted before any of it runs); time is checked when each request is
@@ -245,10 +248,11 @@ export const REQUEST_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
   // the payload; the world's own rights don't gate it, its shape/value/roles/last-owner checks still do.
   "operator-repair": ({ c, ws, sweep }, msg) => {
     const w = c.world; if (!w) return;
-    const rid = msg.id ?? null; const verb = String(msg.verb ?? "");
-    const args = msg.args && typeof msg.args === "object" && !Array.isArray(msg.args) ? msg.args : {};
+    const rid = msg.id ?? null; const malformed = envelopeRefusal(msg.verb, msg.args);
+    const verb: string = typeof msg.verb === "string" ? msg.verb : "", args = msg.args ?? {};
     let answered = false;
     const reply = (r: Any) => { answered = true; ws.send(JSON.stringify({ type: "reply", id: rid, verb, ok: r.ok === true, operator: true, ...(typeof r?.txn === "string" ? { txn: r.txn } : {}), reply: r })); };
+    if (malformed) { reply({ ok: false, refused: malformed }); return; }
     if (!isOperator(c.account)) { reply({ ok: false, refused: { code: "rights", reason: "operator-repair needs a server operator's account (SERVER_OPERATORS)", fix: "ask whoever runs this server" } }); return; }   // an owner can't repair what only an operator may (an operator's ban, a shape repair)
     if (!c.actorId) { reply({ ok: false, refused: { code: "identity", reason: "this connection has no identity here", fix: "join the world first" } }); return; }
     // the same one capability as request (server/reqcap.ts), and it must still be an operator's when the queue reaches it:
