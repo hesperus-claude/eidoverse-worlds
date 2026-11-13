@@ -111,6 +111,9 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["hello-refused", "hello-refused-check.ts", 1], // §F F-3: a hello the server refuses (update-required, unsupported-feature) is said in words by every client, never a join timeout
   ["refusedjoin", "refusedjoin-check.ts", 1], // R 10-16 00:02: a refused join (old-format world, no such world) stays on the splash in the server's words — the early socket's refusal is honoured, no redial, no empty world
   ["server", "server-check.ts", 1],     // the server: real processes, real WebSockets, scratch ports
+  ["wire-authority", "wire-authority-check.ts", 1], // wire-values audit 11-12 §4.1-4.2 (A1-A18, T1-T3): a wrong-typed value is refused as shape, nothing written; red rows held on PENDING (pending.ts)
+  ["wire-server", "wire-server-check.ts", 1], // …§4.6 (S1-S17) at the server's door, a real server and sockets: refused with a reason, nothing written or relayed
+  ["wire-tools", "wire-tools-check.ts", 1], // …§4.7 (M1-M10) at the agent's tools (a stub body): refused in the tool's words, nothing sent
   ["identity", "identity-check.ts", 1], // who a joiner is: C1-C3, H1, H3-H5 (security review 10-06), one identity per account
   ["fork-reset", "fork-reset-check.ts", 1],
   ["simckpt", "simckpt-check.ts", 1],   // periodic sim checkpoints (SIM_CHECKPOINT_EVERY): a physics world without launches still bounds its boot's engine replay; purges and audits as before
