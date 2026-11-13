@@ -8,7 +8,7 @@
 // PROTOCOL_STRICT_PENDING=1 prints every pending row as FAIL: the fix's red → green, run on its base and its head.
 export function pendingRows(suite: string, PENDING: Record<string, string>) {
   const strict = process.env.PROTOCOL_STRICT_PENDING === "1";
-  let pass = 0, fail = 0, held = 0;
+  let pass = 0, fail = 0, held = 0; const heldIds = new Set<string>();
   const ran = new Map<string, { red: number; green: number }>();
   const j = (d: any) => { try { return JSON.stringify(d)?.slice(0, 500); } catch { return String(d); } };
   const failed = (what: string, d?: any) => { fail++; console.log(`  FAIL ${what}${d !== undefined ? ` — ${j(d)}` : ""}`); };
@@ -22,7 +22,7 @@ export function pendingRows(suite: string, PENDING: Record<string, string>) {
     if (!Object.hasOwn(PENDING, id)) return failed(`${id} ${what}`, o.saw);
     if (!o.wrong) return failed(`${id} ${what} (red, but not the documented coercion: check the probe)`, o.saw);
     if (strict) return failed(`${id} ${what} [pending]`, o.saw);
-    held++; console.log(`  PENDING ${id} ${what} — ${j(o.saw)}`);
+    held++; heldIds.add(id); console.log(`  PENDING ${id} ${what}${o.saw !== undefined ? ` — ${j(o.saw)}` : ""}`);
   };
   const finish = () => {
     for (const id of Object.keys(PENDING)) {
@@ -30,8 +30,7 @@ export function pendingRows(suite: string, PENDING: Record<string, string>) {
       if (!r) failed(`${id} is on PENDING but no row ran for it`);
       else if (!r.red) failed(`${id} is green now (${r.green} row(s)): take it off PENDING in ${suite}`);
     }
-    const ids = [...ran.keys()].filter((id) => Object.hasOwn(PENDING, id) && ran.get(id)!.red);
-    console.log(`${suite}: ${pass} passed, ${fail} failed, ${held} pending (red today, each the documented coercion: ${ids.join(" ") || "none"})${strict ? " [PROTOCOL_STRICT_PENDING]" : ""}`);
+    console.log(`${suite}: ${pass} passed, ${fail} failed, ${held} pending (red today, each the documented coercion: ${[...heldIds].join(" ") || "none"})${strict ? " [PROTOCOL_STRICT_PENDING]" : ""}`);
     process.exit(fail ? 1 : 0);
   };
   return { ok, row, finish };
