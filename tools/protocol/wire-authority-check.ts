@@ -15,23 +15,13 @@ fixtureIds(true);   // the fixtures name their things (R 10-17: a writer never c
 // the audit ids red on main today; a fix takes its id off this list in the same commit that turns it green
 const PENDING: Record<string, string> = {
   A3: "place.side: the other mode's words are read as a side",
-  A4: "put.q: null → the hold's orientation",
   A5: "move.height / move.scale clamped with no note",
-  A6: "create-world title/text: null → the world's name / ''",
-  A7: "say's spoken trio: a malformed one is dropped, the say logged as ordinary; t0 clamped with no note",
-  A8: "caption n/t0/t1/text/speaker/title converted with Number()/String()",
-  A9: "mute.channels: null → both",
+  A7: "say's t0 clamped with no note (the trio's types are VERBSPEC's now)",
   A10: "sky.forecast/ts/override: dropped or overwritten",
-  A11: "weather.keepSky: anything but false keeps the sky",
   A12: "use.args.impulse: null → the default push; strings multiplied; extra elements counted",
   A13: "use.args.phase / held: any phase but 'up' is down; a non-boolean held ignored",
-  A14: "reach.at: a non-array at is ignored and relayed",
-  A15: "adopt/scripts .script built into a key by template string",
-  A16: "find.kind: any kind but 'blueprint' lists models",
-  A17: "publish.name: null → the id; an object stored as the name",
-  A18: "update.resolve: null reads as no resolve",
-  T2: "batch.requests not an array throws (forEach)",
   T3: "use.args.impulse: 5 throws (spread of a non-iterable)",
+  A18: "update.resolve: null reads as no resolve (build-check U4 pins null as no resolve: a design question, not typed yet)",
   U1: "@world.blueprints:<key> has no fields, type or map: any value is stored (§4.3)",
   U7: "imported:<key>, imported-roles:<key>, imported-bans:<key> store any value an owner sends (found by the sweep; not in the audit)",
 };
@@ -171,7 +161,7 @@ const comp = (id: string, c: string) => (w: any) => w.state().entities[id]?.c?.[
 for (const [k, tag] of [["title", "title"], ["text", "text"]] as const) {
   const N = `found-${k}`;
   const x = attempt(N, "olive", "create-world", { title: "t", [k]: null }, (w) => w.exists);
-  row("A6", `create-world {${tag}: null} is refused as shape, no world founded`, { right: clean(x), wrong: x.r?.ok === true, saw: { ...saw(x), about: x.w.state().entities["@world"]?.c.about } });
+  row("A6", `create-world {${tag}: null} is refused as shape, no world founded`, { right: clean(x), wrong: x.r?.ok === true, saw: { ...saw(x), about: x.w.state()?.entities?.["@world"]?.c.about } });
 }
 
 // ---------------- say and caption: A7, A8 ----------------
