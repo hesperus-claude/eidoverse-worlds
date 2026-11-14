@@ -136,6 +136,8 @@ import { physicsVolumesOf, speedFactorAt, foldOfView, zonesOf, waterVolumes, wor
 import { fallBackOf, belowWorld, FELL } from "../shared/spawn.js";
 /** A record (components flat, view.js) a body doesn't meet: componentspec collider.enabled or .blocks, the authority's own reading. */
 const solidOffRecord = (e: any) => solidOff(e, "bodies");
+// a structure's model is only its anchor: the structure planner owns its walls and floors (the browser fits it no collider)
+const collisionElsewhere = (e: any) => solidOffRecord(e) || !!recordComponents(e).structure;
 import { colliderFor } from "../client/lib/bodyscale.js";
 
 import { recordComponents } from "../shared/protocol/view.js";
@@ -1894,7 +1896,7 @@ export class WorldAgent {
           else this.noteEffGap(id, fx.why);
         }
         // a motion moves its support, and a collider override changes the policy its walking collider was fitted with
-        if (comp === "motion" || comp?.startsWith("motion:") || comp === "collider") this.trackSupport(this.syncSupport(id));
+        if (comp === "motion" || comp?.startsWith("motion:") || comp === "collider" || comp === "structure") this.trackSupport(this.syncSupport(id));
         break;
     }
   }
@@ -2422,7 +2424,7 @@ export class WorldAgent {
   private async syncSupport(id: string) {
     const before = this.entities.get(id);
     if (!before?.model) return;  // only a model carries a collider
-    if (solidOffRecord(before)) { this.dropSupport(id); return; }   // collision off (collider.enabled): nothing to stand on
+    if (collisionElsewhere(before)) { this.dropSupport(id); return; }   // collision off (collider.enabled), or a structure's anchor: nothing to stand on
     // A moving thing supports nothing here — and stops supporting the moment
     // it starts moving, so this is the drop path as well as the skip path.
     // Mounted cargo is the same story told by a different verb: it rides a
@@ -2438,7 +2440,7 @@ export class WorldAgent {
     if ((!g && !mesh) || !e || e.model !== before.model) return;
     // started moving, or got mounted, while its geometry was in flight —
     // replay folds a mount right behind the spawn that triggered this fetch
-    if (this.hasActiveMotion(e) || this.mounts.has(id) || solidOffRecord(e)) { this.dropSupport(id); return; }
+    if (this.hasActiveMotion(e) || this.mounts.has(id) || collisionElsewhere(e)) { this.dropSupport(id); return; }
     const s = e.scale ?? 1;
     // a stretched thing's per-axis scale (scale3), beside the one number decide() reads, as the browser's applyScale
     const s3 = Array.isArray(e.scale3) && e.scale3.length === 3 && e.scale3.every(Number.isFinite) ? e.scale3 as number[] : [s, s, s];
