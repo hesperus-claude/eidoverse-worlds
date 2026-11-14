@@ -10,6 +10,8 @@ const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({ name: 'build-gate-stubs', setup(b) {
   for (const m of ['core', 'base', 'assets', 'lights', 'world', 'colliders', 'terrain', 'net', 'controller', 'ui', 'scenegraph', 'windows', 'socketedit', 'xrask'])
     b.onResolve({ filter: new RegExp(`^\\./${m}\\.js$`) }, () => ({ path: here('./build-gate-stub.mjs') }));
+  // edit/multimove.js reaches the same hosted modules from one level down
+  b.onResolve({ filter: /^\.\.\/(core|base|world|colliders|net)\.js$/ }, () => ({ path: here('./build-gate-stub.mjs') }));
   // the building realizer (three.js materials and the GPU) behind structure_ui.js is not under test
   b.onResolve({ filter: /^\.\/realize\/structure\.js$/ }, () => ({ path: here('./build-gate-stub.mjs') }));
 } });
