@@ -326,8 +326,8 @@ function decide(entry, s, fresh = false) {
 /** `lib` opts in to the per-lib shared derivations — pass it ONLY for a
  *  pristine clone (see the lib-cache header; models.js's promote tail is the
  *  one caller). `localFrame` computes the box in the root-local frame at any
- *  current transform — required when fitting after the spawn transform landed
- *  (the promote tail); legacy callers fit at identity and keep setFromObject. */
+ *  current transform — required when fitting after the transform landed
+ *  (the promote tail, a dismount); legacy callers fit at identity and keep setFromObject. */
 export function fitCollider(id, obj, { collide, scale = 1, lib = null, localFrame = false } = {}) {
   const box = localFrame ? localBox(obj) : new THREE.Box3().setFromObject(obj);
   if (box.isEmpty()) return;
