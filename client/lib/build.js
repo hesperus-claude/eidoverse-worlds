@@ -716,6 +716,8 @@ canvas.addEventListener('mousedown', (e) => {
     vertical: e.shiftKey,   // keys: meshMove
     shiftPick,
     keepMany,
+    // a Shift-travel on one of several selected things is a vertical drag of the lot, led by it (a Shift click still toggles it)
+    many: s0.kind === 'things' && s0.ids.length > 1 && s0.ids.includes(id) ? s0.ids : null,
     multi: null,   // edit/multimove.js: the other selected things, once it arms
     clientX: e.clientX,
     startYaw: root.rotation.y,
@@ -741,7 +743,11 @@ addEventListener('mousemove', (e) => {
     // the press selected it; travel is where a move would begin — a locked
     // thing refuses here, before any preview exists to snap back
     dragging.armed = true;
-    if (dragging.shiftPick) { select(dragging.id); dragging.shiftPick = false; }
+    if (dragging.shiftPick) {
+      if (dragging.many) { Sel.set([dragging.id, ...dragging.many.filter((x) => x !== dragging.id)], 'things', Sel.active()); showInspector(dragging.id); }
+      else select(dragging.id);
+      dragging.shiftPick = false;
+    }
     if (tool !== 'select') dragging.multi = MM.begin(dragging.id, MM.followersOf(dragging.id).ids);
     engage('meshMove');
   }
