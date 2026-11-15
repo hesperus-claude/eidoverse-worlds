@@ -26,7 +26,9 @@ const check = (label: string, ok: boolean, detail?: string) => {
   console.log(ok ? `  \x1b[32m✓\x1b[0m ${label}` : `  \x1b[31m✗ ${label}${detail ? ` — ${detail}` : ""}\x1b[0m`);
   if (!ok) failures++;
 };
-const settle = () => new Promise((r) => setTimeout(r, 10));
+const { pause } = await import("./protocol/wait.ts");
+// every load here resolves at once or is held by the test, so one macrotask lets the queued continuations run
+const settle = () => pause("queued loads and their continuations have run", 10);
 
 const stubs = await import("./remotes-stubs.mjs");
 const { mock } = await import("bun:test");
@@ -37,6 +39,10 @@ const remotesMod = await import("../client/lib/remotes.js");
 const netMod = await import("../client/lib/net.js");
 const { remotes, dropRemote, ensureRemote, pushPose } = remotesMod as any;
 const { _dispatch, teardownParticipant, stalePresenceCount } = netMod as any;
+// net.js takes its participant registry by injection since lite mode (668cc8f4e); unwired, arrive is inert. Wire it as main.js does.
+(netMod as any).wireNet?.({ participants: remotesMod });
+// net.js emits on base.js's real bus (base.js split from core.js), not the stub's: listen where the events go.
+const { bus } = await import("../client/lib/base.js") as any;
 
 // ---- pre-#95 head: net exports no dispatch seam. Fail by name, with the
 // ghost visible in each detail — the control stays a control (assert the
@@ -161,7 +167,7 @@ console.log("\n━━ takeover: a successor inherits nothing, and outlives its p
   // generation-end event a leave emits (custody + voice listen to it),
   // fired while the id is STILL PRESENT — the roster sweep cannot do this
   const retire: string[] = [];
-  stubs.bus.on("participant-teardown", (id: string) => retire.push(id));
+  bus.on("participant-teardown", (id: string) => retire.push(id));
   // same avatar re-announced = server-suppressed-leave takeover
   await _dispatch({ type: "arrive", id: "helen", avatar: "vrms/helen.vrm" });
   await settle();
@@ -181,7 +187,7 @@ console.log("\n━━ takeover: a successor inherits nothing, and outlives its p
   // predecessor cleanup — holding the REAL predecessor record — is a
   // COMPLETE no-op: no drop, no custody event, no side effect at all
   const events: string[] = [];
-  stubs.bus.on("participant-teardown", (id: string) => events.push(id));
+  bus.on("participant-teardown", (id: string) => events.push(id));
   const dropped = dropRemote("helen", pre);
   check("the predecessor's own record cannot drop the successor", dropped === null && remotes.has("helen"));
   const dropped2 = teardownParticipant("helen", pre);
@@ -221,10 +227,13 @@ console.log("\n━━ reconnect roster seed: the snapshot prunes through the fun
   await _dispatch({ type: "arrive", id: "ghost", avatar: "vrms/ghost.vrm" });
   await settle();
   const torn: string[] = [];
-  stubs.bus.on("participant-teardown", (id: string) => torn.push(id));
+  bus.on("participant-teardown", (id: string) => torn.push(id));
   const disposedBefore = stubs.disposeCount;
-  await _dispatch({ type: "snapshot", you: "tester", yourRights: { role: "member" },
-    present: [{ id: "stays", avatar: "vrms/stays.vrm" }], state: null, entries: [], throughSeq: 0 });
+  // a real fold's snapshot: since 11-04 the client refuses a snapshot with no state before it reads the roster
+  const { emptyState, DIALECT, VERSION } = await import("../shared/protocol/fold.js") as any;
+  const { wireState } = await import("../shared/protocol/replica.js") as any;
+  await _dispatch({ type: "snapshot", you: "tester", yourRights: { role: "member" }, dialect: DIALECT, v: VERSION,
+    world: "testworld", seq: 0, present: [{ id: "stays", avatar: "vrms/stays.vrm" }], state: wireState(emptyState()), entries: [], throughSeq: 0 });
   await settle();
   check("the absent id is torn down THROUGH the funnel", torn.includes("ghost"),
     `teardown events: ${JSON.stringify(torn)} (on main: raw dropRemote, no event)`);
@@ -240,7 +249,7 @@ console.log("\n━━ kick/ban: the expel's leave broadcast walks the same funne
   // (server.ts ~1109, verified in the #95 inventory) — so moderation removal
   // IS the leave path; this pins that the funnel treats it as such
   const torn: string[] = [];
-  stubs.bus.on("participant-teardown", (id: string) => torn.push(id));
+  bus.on("participant-teardown", (id: string) => torn.push(id));
   await _dispatch({ type: "arrive", id: "banned", avatar: "vrms/banned.vrm" });
   await settle();
   await _dispatch({ type: "leave", id: "banned" });
