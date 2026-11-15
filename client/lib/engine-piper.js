@@ -1,7 +1,7 @@
 /** Piper as a voice-engine plugin — the first user of the slot, and the proof
  *  it fits an engine that was NOT designed for it.
  *
- *  🔴 IF YOU ARE HERE ABOUT LATENCY, READ `docs/VOICE-LATENCY-PLAN.md` FIRST.
+ *  🔴 IF YOU ARE HERE ABOUT LATENCY, read this first; it was measured, don't re-derive it.
  *  Measured 2026-08-09: 133ms native vs ~550ms in WASM, and the 4x gap is the
  *  HiFi-GAN vocoder (stacked transposed convolutions — what WASM does worst).
  *  Already measured and ruled out, do not re-derive: INT8 quantization is 4.6x

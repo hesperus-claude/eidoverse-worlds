@@ -1,6 +1,6 @@
 // tts-acceptance — REAL Piper, real browser, real RTP (#91 r3 B4).
 //
-// HONESTY CONTRACT (same as voice-matrix.mjs): NOT part of the merge receipt
+// HONESTY CONTRACT: NOT part of the merge receipt
 // and not CI — the traveling regressions are tts-test.ts / tts-fault-test.ts
 // (fake engine, run with bun anywhere). This harness is the one-time
 // dev/staging acceptance the r3 review asked for: actual Piper + worker +
