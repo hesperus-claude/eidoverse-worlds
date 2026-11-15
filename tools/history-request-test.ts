@@ -84,8 +84,12 @@ console.log("a joined socket that never answers");
 
 console.log("an old server's snapshot (no world cut): not joined, not live (#470)");
 {
-  net.ws = null;
+  // only the cut-less refusal hangs up with 4000 (a dialect refusal further on also ends 'rejected'): that is the witness
+  const closes: number[] = [];
+  net.ws = { readyState: 1, send() {}, close(code: number) { closes.push(code); } };
   await _dispatch({ type: "snapshot", you: "tester", yourRights: { role: "member" }, present: [], state: null, entries: [], throughSeq: 0 });
+  check("refused as cut-less before anything else is read: the socket is closed with 4000", closes.includes(4000), JSON.stringify(closes));
+  net.ws = null;
   check("the client is not joined after a cut-less snapshot", net.joined === false, `joined=${net.joined}`);
   check("…and says so: status 'rejected', not 'live'", net.status === "rejected", `status=${net.status}`);
 }

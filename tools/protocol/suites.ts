@@ -198,6 +198,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["door-is-error", "../door-is-error-test.ts", 1], // #269 (main, merged into #260 10-20): a door call that didn't do what it asked answers isError; flight acts answer {ok, text}
   ["door-wording", "../door-wording-test.ts", 1],   // #270 (main, merged into #260 10-21): the door's refusals say what wasn't done and why; deleted here once by mistake (3440e655), restored
   ["consent-replay", "../consent-replay-test.ts", 0.1],   // an agent's gates and lists, replayed on arrival, are what it holds when the read returns (house 6340433633; R 10-28)
+  ["chat-resync-wire", "../chat-resync-wire-test.ts", 1], // a re-join resyncs chat from the last delivered seq (net.js onSnapshot); was ungated and red since the cut-less refusal (11-04)
   ["remotes-lifecycle", "../remotes-lifecycle-test.ts", 1], // #95: only an authority (arrive, roster) brings a body into being; was ungated, and red on main for a month (unwired net, stub bus, state:null)
   ["history-request", "../history-request-test.ts", 1], // #267 (main): a history request with no answer rejects, so scrolling up can reach what a long disconnect missed
   ["wing-fold-presence", "../wing-fold-presence-test.ts", 1], // #159: a held posture rides the presence wire (absence is not release; survives late join, reconnect, swap)

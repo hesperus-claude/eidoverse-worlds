@@ -24,8 +24,11 @@ for (const m of ["core", "assets", "world", "chat", "fp_view", "boot", "ui", "av
 }
 const { _dispatch } = (await import("../client/lib/net.js")) as any;
 const say = (seq: number) => ({ seq, ts: Date.now(), actor: "cairn", verb: "say", args: { text: `#${seq}` } });
-const snapshot = (throughSeq: number, entries: any[]) => ({ type: "snapshot", you: "tester",
-  yourRights: { role: "member" }, present: [], state: null, entries, throughSeq });
+// a real (empty) fold's cut: since 11-04 the client refuses a snapshot with no state, before it reaches the resync
+const { emptyState, DIALECT, VERSION } = (await import("../shared/protocol/fold.js")) as any;
+const { wireState } = (await import("../shared/protocol/replica.js")) as any;
+const snapshot = (throughSeq: number, entries: any[]) => ({ type: "snapshot", you: "tester", dialect: DIALECT, v: VERSION,
+  world: "testworld", seq: throughSeq, yourRights: { role: "member" }, present: [], state: wireState(emptyState()), entries, throughSeq });
 
 console.log("a re-join's snapshot resyncs chat from the last delivered seq");
 await _dispatch(snapshot(100, [say(101), say(102)]));
