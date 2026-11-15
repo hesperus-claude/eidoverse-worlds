@@ -35,8 +35,12 @@ const inside = (base: string, rel: string) => { const p = path.normalize(path.jo
 /** The original file a library-style path names on this host (the store's blob, or the library's own file), or null. */
 export function originalOf(rel: string): string | null {
   if (typeof rel !== "string" || rel.includes("..") || !/\.(glb|vrm)$/i.test(rel)) return null;
-  const p = rel.startsWith("store/") ? inside(OPT_DIR, rel) : inside(LIBRARY_DIR, rel);
-  return p && fs.existsSync(p) ? p : null;
+  // store/ blobs are originals on both rungs /library serves them from (the upload overlay, then the asset library's own
+  // store/); the patch rung holds modified copies, never originals. Elsewhere the overlay holds optimized copies.
+  for (const base of rel.startsWith("store/") ? [OPT_DIR, LIBRARY_DIR] : [LIBRARY_DIR]) {
+    const p = inside(base, rel); if (p && fs.existsSync(p)) return p;
+  }
+  return null;
 }
 /** The full sha256 of the original bytes a path names on this host, or null (no such file). */
 export function contentAddressOf(rel: string): string | null {
