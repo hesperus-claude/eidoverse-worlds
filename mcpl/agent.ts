@@ -2800,8 +2800,13 @@ export class WorldAgent {
     } else if (colliding) {
       groundY = this.stepFeet(moveX, moveZ, dt, terrainG);
       // land on the validated point exactly when nothing deflected the step, rather than let a residual cut the next corner
-      if (snap && target && Math.hypot(this.pos.x - target.x, this.pos.z - target.z) < 1e-6) { this.pos.x = target.x; this.pos.z = target.z; }
-      if (target && distBefore > 0) this.noteWalkProgress(distBefore, Math.hypot(moveX, moveZ));
+      const off = snap && target ? Math.hypot(this.pos.x - target.x, this.pos.z - target.z) : Infinity;
+      if (off < 1e-6) { this.pos.x = target!.x; this.pos.z = target!.z; }
+      // a routed walk's end, aimed at exactly and nudged off by a hair: arrived where the nudge left it
+      if (off >= 1e-6 && off <= this.legTolerance && !this.legs.length) {
+        this.target = null; this.walkHeightAt = null; this.walkGate = null; this.speed = 0; this.clip = "idle";
+        this.walkDone?.(true); this.walkDone = null;
+      } else if (target && distBefore > 0) this.noteWalkProgress(distBefore, Math.hypot(moveX, moveZ));
     } else {
       if (snap && target) { this.pos.x = target.x; this.pos.z = target.z; }
       else { this.pos.x += moveX; this.pos.z += moveZ; }
@@ -4059,9 +4064,10 @@ export class WorldAgent {
     this.pos.y = inWorld(this.world, () => (collidersReady() ? standOn(standFrom, supportAt) : null)) ?? support.height;
     this.vy = 0; this.grounded = true; this.stallTicks = 0; this.walkStall = null;
     // A structure route's corners are reached exactly (its doorways are planned to the centimetre); a routed walk's
-    // (#236) may sit where something nudges the body a little, so they — and its end — count within that.
+    // (#236) may sit where something nudges the body a little, so they count within that; its end is the caller's
+    // tolerance, and only a body aimed at it and nudged off settles for NAV_NUDGE (the tick, after stepFeet)
     this.legTolerance = routed ? NAV_NUDGE : 0;
-    this.walkTolerance = routed ? Math.max(tolerance, NAV_NUDGE) : tolerance;
+    this.walkTolerance = tolerance;
     // A terrain walk reads the live terrain each tick, as the planner read it;
     // a floor walk keeps the floor that admitted the route through its last tick.
     this.walkHeightAt = support.kind === "terrain" ? (wx, wz) => this.heightAt(wx, wz) : () => support.height;

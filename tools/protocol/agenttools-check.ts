@@ -384,6 +384,10 @@ const call = (name, a = {}) => handleToolDoor({ agent: ag, canPush: () => false,
   ok(w0.isError && T(w0) === `there's no tool named "walk_to" on this server, so nothing ran; your tool list has the ones it serves` && Math.abs(ag.pos.x - x0) < 0.05, "AT9 walk_to is refused as an unknown tool and the body stays put (Mica 11-05)", { text: T(w0).slice(0, 160), x: ag.pos.x, x0 });
   const w = await handleTool(ctx as any, "move", { to: [x0 + 1.5, z0], tolerance: 0.2 });
   ok(!w.isError && Math.abs(ag.pos.x - (x0 + 1.5)) < 0.25, "AT9 move {to: [x, z], tolerance} walks the body", { text: T(w).slice(0, 160), x: ag.pos.x, x0 });
+  // with no tolerance the end is the documented 0.01 m, routed or not: a short step each way after a loose walk (it
+  // was where a routed end settled 0.045 m short, inside the corners' NAV_NUDGE)
+  for (const d of [0.2, -0.2]) { const want = [ag.pos.x + d, z0], wd = await handleTool(ctx as any, "move", { to: want });
+    ok(!wd.isError && Math.hypot(ag.pos.x - want[0], ag.pos.z - want[1]) <= 0.011, `AT9 move {to: [x, z]} with no tolerance lands within 1.1 cm (the 0.01 m default), ${d} m`, { text: T(wd).slice(0, 160), x: ag.pos.x, want }); }
   const n0 = ag.entities.size;
   // what the old spawn {lib, x, y?, z, yaw?, id} became (its alias's translation, kept here as the shapes create takes)
   const oldSpawn = (a: any) => { const id = a.id !== undefined ? { components: { label: String(a.id) } } : {};
