@@ -1,0 +1,1697 @@
+status	old_path	new_path	old_lines_kept_pct	new_lines_from_old_pct	evidence	commits	note	content_lookalike_info_only
+rename	NOTE-token-tap.md	docs/history/NOTE-token-tap.md	100	100	history	1f5e24ad9		
+rename	SCALING_AND_SNAPSHOT_PLAN.md	docs/history/SCALING_AND_SNAPSHOT_PLAN.md	100	100	history	1f5e24ad9		
+rename	assets/opt/props/ball.glb	test/fixtures/props/ball.glb	bin	bin	history	00bc84fea		
+rename	client/lib/bodyruntimes/claude_robot_joints.js	client/lib/avatar/bodyruntimes/claude_robot_joints.js	100	100	history	a98cad0fe		
+rename	client/lib/groundstep.js	client/lib/player/groundstep.js	100	100	history	d5c87300d		
+rename	client/lib/poseclips.js	client/lib/avatar/poseclips.js	100	100	history	a98cad0fe		
+rename	client/lib/statelines.js	client/lib/ui/statelines.js	100	100	history	d26e5c3d6		
+rename	client/lib/vendor/LICENSE-three-MIT.txt	client/vendor/three-addons/LICENSE-three-MIT.txt	100	100	history	4399e1c22		
+rename	docs/AVATAR-DIRECTION.md	docs/design/AVATAR-DIRECTION.md	100	100	history	f8e34ff30		
+rename	docs/RESERVED-SHAPES.md	docs/reference/RESERVED-SHAPES.md	100	100	history	f8e34ff30		
+rename	docs/SEATS.md	docs/reference/SEATS.md	100	100	history	f8e34ff30		
+rename	docs/body-state-corpus-20260910.json	docs/history/evidence/body-state-corpus-20260910.json	100	100	history	f8e34ff30		
+rename	docs/overhaul-charter.md	docs/design/OVERHAUL-CHARTER.md	100	100	history	f8e34ff30		
+rename	docs/upstream-wrap-once.md	docs/history/UPSTREAM-WRAP-ONCE.md	100	100	history	f8e34ff30		
+rename	spec/fixtures/01-build/folded.json	test/fixtures/v1-worlds/01-build/folded.json	100	100	history	61839f1d5		
+rename	spec/fixtures/01-build/log.jsonl	test/fixtures/v1-worlds/01-build/log.jsonl	100	100	history	61839f1d5		
+rename	spec/fixtures/02-swing/folded.json	test/fixtures/v1-worlds/02-swing/folded.json	100	100	history	61839f1d5		
+rename	spec/fixtures/02-swing/log.jsonl	test/fixtures/v1-worlds/02-swing/log.jsonl	100	100	history	61839f1d5		
+rename	spec/fixtures/03-authority/folded.json	test/fixtures/v1-worlds/03-authority/folded.json	100	100	history	61839f1d5		
+rename	spec/fixtures/03-authority/log.jsonl	test/fixtures/v1-worlds/03-authority/log.jsonl	100	100	history	61839f1d5		
+rename	spec/fixtures/04-overwrite/folded.json	test/fixtures/v1-worlds/04-overwrite/folded.json	100	100	history	61839f1d5		
+rename	spec/fixtures/04-overwrite/log.jsonl	test/fixtures/v1-worlds/04-overwrite/log.jsonl	100	100	history	61839f1d5		
+rename	spec/fixtures/05-lightpolicy/folded.json	test/fixtures/v1-worlds/05-lightpolicy/folded.json	100	100	history	61839f1d5		
+rename	spec/fixtures/05-lightpolicy/log.jsonl	test/fixtures/v1-worlds/05-lightpolicy/log.jsonl	100	100	history	61839f1d5		
+rename	spec/fixtures/06-components/folded.json	test/fixtures/v1-worlds/06-components/folded.json	100	100	history	61839f1d5		
+rename	spec/fixtures/06-components/log.jsonl	test/fixtures/v1-worlds/06-components/log.jsonl	100	100	history	61839f1d5		
+rename	spec/fixtures/ammodoll-rig.json	test/fixtures/ammodoll-rig.json	100	100	history	61839f1d5		
+rename	spec/fixtures/claude_suit-rig.json	test/fixtures/claude_suit-rig.json	100	100	history	61839f1d5		
+rename	spec/fixtures/mythos-wings-rig.json	test/fixtures/mythos-wings-rig.json	100	100	history	61839f1d5		
+rename	spec/fixtures/sim-ground-assets.json	test/fixtures/sim-ground-assets.json	100	100	history	61839f1d5		
+rename	tools/armsolve-xr-stub.mjs	test/stubs/armsolve-xr-stub.mjs	100	100	history	04d041c07		
+rename	tools/bodies-inert-stub.mjs	test/stubs/bodies-inert-stub.mjs	100	100	history	04d041c07		
+rename	tools/bodies-mybody-stub.mjs	test/stubs/bodies-mybody-stub.mjs	100	100	history	04d041c07		
+rename	tools/bodies-net-stub.mjs	test/stubs/bodies-net-stub.mjs	100	100	history	04d041c07		
+rename	tools/body-fixture.ts	test/fixtures/body-fixture.ts	100	100	history	04d041c07		
+rename	tools/chat-base-stub.mjs	test/stubs/chat-base-stub.mjs	100	100	history	04d041c07		
+rename	tools/chat-core-stub.mjs	test/stubs/chat-core-stub.mjs	100	100	history	04d041c07		
+rename	tools/chat-net-stub.mjs	test/stubs/chat-net-stub.mjs	100	100	history	04d041c07		
+rename	tools/chatbridge/bun.lock	services/chatbridge/bun.lock	100	100	history	51fa7599e		
+rename	tools/gputime-lightrig-stub.mjs	test/stubs/gputime-lightrig-stub.mjs	100	100	history	04d041c07		
+rename	tools/originof-stub.mjs	test/stubs/originof-stub.mjs	100	100	history	04d041c07		
+rename	tools/protocol/fixtures/dims-1024x512.jpg	test/fixtures/dims-1024x512.jpg	bin	bin	history	7339f6fa8		
+rename	tools/protocol/fixtures/v1-commons-shape.jsonl	test/fixtures/v1-commons-shape.jsonl	100	100	history	7339f6fa8		
+rename	tools/protocol/fixtures/water-old-v1/log.jsonl	test/fixtures/water-old-v1/log.jsonl	100	100	history	7339f6fa8		
+rename	tools/protocol/fixtures/water-old-v1/snapshot.json	test/fixtures/water-old-v1/snapshot.json	100	100	history	7339f6fa8		
+rename	tools/protocol/import-v1/fold.js	tools/import-v1/fold.js	100	100	history	7339f6fa8		
+rename	tools/protocol/import-v1/frozen/blueprint.js	tools/import-v1/frozen/blueprint.js	100	100	history	7339f6fa8		
+rename	tools/protocol/import-v1/frozen/captions.js	tools/import-v1/frozen/captions.js	100	100	history	7339f6fa8		
+rename	tools/protocol/import-v1/frozen/chatwindow.js	tools/import-v1/frozen/chatwindow.js	100	100	history	7339f6fa8		
+rename	tools/protocol/import-v1/frozen/components.js	tools/import-v1/frozen/components.js	100	100	history	7339f6fa8		
+rename	tools/protocol/import-v1/frozen/euler.js	tools/import-v1/frozen/euler.js	100	100	history	7339f6fa8		
+rename	tools/protocol/import-v1/frozen/forecast.js	tools/import-v1/frozen/forecast.js	100	100	history	7339f6fa8		
+rename	tools/protocol/import-v1/frozen/hierarchy.js	tools/import-v1/frozen/hierarchy.js	100	100	history	7339f6fa8		
+rename	tools/protocol/import-v1/frozen/rot.js	tools/import-v1/frozen/rot.js	100	100	history	7339f6fa8		
+rename	tools/protocol/import-v1/frozen/scale3.js	tools/import-v1/frozen/scale3.js	100	100	history	7339f6fa8		
+rename	tools/protocol/import-v1/frozen/simmath.js	tools/import-v1/frozen/simmath.js	100	100	history	7339f6fa8		
+rename	tools/protocol/import-v1/translate-d3.js	tools/import-v1/translate-d3.js	100	100	history	7339f6fa8		
+rename	tools/recovery-empty-stub.mjs	test/stubs/recovery-empty-stub.mjs	100	100	history	04d041c07		
+rename	tools/shadow-fade-core-stub.mjs	test/stubs/shadow-fade-core-stub.mjs	100	100	history	04d041c07		
+rename	tools/state-stub.mjs	test/stubs/state-stub.mjs	100	100	history	04d041c07		
+rename	tools/voice-stubs.mjs	test/stubs/voice-stubs.mjs	100	100	history	04d041c07		
+rename	tools/voicebot/voices.example.json	services/voicebot/voices.example.json	100	100	history	51fa7599e		
+rename	tools/wav-fixture.ts	test/fixtures/wav-fixture.ts	100	100	history	04d041c07		
+rename	world-data/water/manifest.json	tools/water/data/manifest.json	100	100	history	aa9c46518		
+rename	world-data/water/vessels.json	tools/water/data/vessels.json	100	100	history	aa9c46518		
+rename+edit	PROPOSAL-sensory-channel.md	docs/history/PROPOSAL-sensory-channel.md	99	99	history	1f5e24ad9		
+rename+edit	TEL0S_NOTES.md	docs/history/TEL0S_NOTES.md	99	99	history	1f5e24ad9		
+rename+edit	client/lib/accesspanel.js	client/lib/ui/accesspanel.js	82	82	history	d26e5c3d6		
+rename+edit	client/lib/actionbar.js	client/lib/ui/actionbar.js	36	67	history	d26e5c3d6		
+rename+edit	client/lib/actionbar_lite.js	client/lib/ui/actionbar_lite.js	72	90	history	d26e5c3d6		
+rename+edit	client/lib/actions.js	client/lib/ui/actions.js	94	95	history	d26e5c3d6		
+rename+edit	client/lib/ammodoll.js	client/lib/ragdoll/ammodoll.js	40	86	history	0054eb467		
+rename+edit	client/lib/animnames.js	client/lib/ui/animnames.js	51	71	history	d26e5c3d6		
+rename+edit	client/lib/attention-policy.js	client/lib/ui/attention-policy.js	89	94	history	5442bfbf7,d26e5c3d6,ded52c8fb		
+rename+edit	client/lib/attention.js	client/lib/ui/attention.js	98	99	history	d26e5c3d6		
+rename+edit	client/lib/audioctx.js	client/lib/audio/audioctx.js	21	69	history	5d981e0b6		
+rename+edit	client/lib/audiopanel.js	client/lib/audio/audiopanel.js	37	73	history	5d981e0b6		
+rename+edit	client/lib/audiounlock.js	client/lib/audio/audiounlock.js	52	82	history	5d981e0b6		
+rename+edit	client/lib/autohooks.js	client/lib/render/autohooks.js	53	74	history	4bf6d206f		
+rename+edit	client/lib/avatar.js	client/lib/avatar/avatar.js	33	79	history	a98cad0fe		
+rename+edit	client/lib/backend_choice.js	client/lib/render/backend_choice.js	83	80	history	4bf6d206f		
+rename+edit	client/lib/bodies.js	client/lib/ui/bodies.js	72	80	history	d26e5c3d6		
+rename+edit	client/lib/bodyact.js	client/lib/player/bodyact.js	92	92	history	d5c87300d		
+rename+edit	client/lib/bodydrag.js	client/lib/ragdoll/bodydrag.js	80	88	history	0054eb467		
+rename+edit	client/lib/bodyengine.js	client/lib/ragdoll/bodyengine.js	56	78	history	0054eb467		
+rename+edit	client/lib/bodygate.js	client/lib/render/bodygate.js	57	77	history	4bf6d206f		
+rename+edit	client/lib/bodyruntime.js	client/lib/avatar/bodyruntime.js	85	87	history	a98cad0fe		
+rename+edit	client/lib/bodyruntime_core.js	client/lib/avatar/bodyruntime_core.js	88	88	history	a98cad0fe		
+rename+edit	client/lib/bodyruntimes/claude_robot_dof.js	client/lib/avatar/bodyruntimes/claude_robot_dof.js	98	98	history	a98cad0fe		
+rename+edit	client/lib/bodyscale.js	shared/bodyscale.js	81	84	history	8d0afcd16		
+rename+edit	client/lib/bodysim.js	client/lib/ragdoll/bodysim.js	59	74	history	0054eb467		
+rename+edit	client/lib/breadcrumbs.js	client/lib/debug/breadcrumbs.js	38	50	history	61ea8a3c7		
+rename+edit	client/lib/browservoice.js	client/lib/audio/browservoice.js	60	80	history	5d981e0b6		
+rename+edit	client/lib/build.js	client/lib/edit/build.js	64	82	history	58776ec29		
+rename+edit	client/lib/capnotice.js	client/lib/ui/capnotice.js	82	88	history	d26e5c3d6		
+rename+edit	client/lib/capsulebody.js	client/lib/avatar/capsulebody.js	88	89	history	a98cad0fe		
+rename+edit	client/lib/capture.js	client/lib/render/capture.js	43	60	history	4bf6d206f		
+rename+edit	client/lib/catalog.js	client/lib/edit/catalog.js	80	85	history	58776ec29		
+rename+edit	client/lib/chat.js	client/lib/ui/chat.js	70	85	history	d26e5c3d6		
+rename+edit	client/lib/clickuse.js	client/lib/player/clickuse.js	76	76	history	d5c87300d		
+rename+edit	client/lib/climb.js	client/lib/player/climb.js	85	85	history	d5c87300d		
+rename+edit	client/lib/commandbar.js	client/lib/ui/commandbar.js	91	93	history	d26e5c3d6		
+rename+edit	client/lib/commands/handlers.js	client/lib/ui/commands/handlers.js	82	85	history	d26e5c3d6		
+rename+edit	client/lib/commands/registry.js	client/lib/ui/commands/registry.js	74	85	history	d26e5c3d6		
+rename+edit	client/lib/confirmcenter.js	client/lib/edit/confirmcenter.js	91	93	history	58776ec29		
+rename+edit	client/lib/consent.js	client/lib/player/consent.js	84	88	history	d5c87300d		
+rename+edit	client/lib/consentpanel.js	client/lib/ui/consentpanel.js	90	90	history	d26e5c3d6		
+rename+edit	client/lib/consentsync.js	client/lib/player/consentsync.js	74	73	history	d5c87300d		
+rename+edit	client/lib/controller.js	client/lib/player/controller.js	61	81	history	d5c87300d		
+rename+edit	client/lib/debug.js	client/lib/debug/debug.js	75	88	history	61ea8a3c7		
+rename+edit	client/lib/domquad.js	client/lib/xr/domquad.js	78	87	history	cb672da62		
+rename+edit	client/lib/draw_batches.js	client/lib/render/draw_batches.js	98	98	history	4bf6d206f		
+rename+edit	client/lib/dropdown.js	client/lib/edit/dropdown.js	83	88	history	58776ec29		
+rename+edit	client/lib/dwell.js	client/lib/ui/dwell.js	83	83	history	d26e5c3d6		
+rename+edit	client/lib/editlayout.js	client/lib/edit/layout.js	81	86	history	58776ec29		
+rename+edit	client/lib/editpaint.js	client/lib/edit/paint.js	83	87	history	58776ec29		
+rename+edit	client/lib/editpanels.js	client/lib/edit/panels.js	78	85	history	58776ec29		
+rename+edit	client/lib/edittabs.js	client/lib/edit/tabs.js	60	80	history	58776ec29		
+rename+edit	client/lib/edittheme.js	client/lib/edit/theme.js	70	78	history	58776ec29		
+rename+edit	client/lib/editwrites.js	client/lib/edit/writes.js	75	80	history	58776ec29		
+rename+edit	client/lib/emitter_field.js	client/lib/realize/emitter_field.js	60	80	history	2087fab6c		
+rename+edit	client/lib/emitters.js	client/lib/realize/emitters.js	77	84	history	2087fab6c		
+rename+edit	client/lib/engine-piper.js	client/lib/audio/engine-piper.js	38	78	history	5442bfbf7,5d981e0b6,ded52c8fb		
+rename+edit	client/lib/engines.js	client/lib/audio/engines.js	25	50	history	5d981e0b6		
+rename+edit	client/lib/flora.js	client/lib/vegetation/flora.js	61	83	history	cef16398d		
+rename+edit	client/lib/flora_field.js	client/lib/vegetation/flora_field.js	81	87	history	cef16398d		
+rename+edit	client/lib/flora_lod.js	client/lib/vegetation/flora_lod.js	68	82	history	cef16398d		
+rename+edit	client/lib/foliage.js	client/lib/vegetation/foliage.js	82	87	history	cef16398d		
+rename+edit	client/lib/fp_view.js	client/lib/avatar/fp_view.js	73	85	history	a98cad0fe		
+rename+edit	client/lib/framebudget.js	client/lib/render/framebudget.js	88	92	history	4bf6d206f		
+rename+edit	client/lib/frameloop.js	client/lib/render/frameloop.js	57	73	history	4bf6d206f		
+rename+edit	client/lib/generate.js	client/lib/edit/generate.js	77	88	history	58776ec29		
+rename+edit	client/lib/gizmo.js	client/lib/edit/gizmo.js	74	81	history	58776ec29		
+rename+edit	client/lib/governor.js	client/lib/render/governor.js	64	78	history	4bf6d206f		
+rename+edit	client/lib/gpulost.js	client/lib/render/gpulost.js	72	78	history	4bf6d206f		
+rename+edit	client/lib/gputime.js	client/lib/debug/gputime.js	95	95	history	61ea8a3c7		
+rename+edit	client/lib/grass_quality.js	client/lib/vegetation/grass_quality.js	71	90	history	cef16398d		
+rename+edit	client/lib/grassdiag.js	client/lib/debug/grassdiag.js	80	83	history	61ea8a3c7		
+rename+edit	client/lib/gripedit.js	client/lib/edit/gripedit.js	87	88	history	58776ec29		
+rename+edit	client/lib/groundpanel.js	client/lib/edit/groundpanel.js	73	81	history	58776ec29		
+rename+edit	client/lib/headset_seen.js	client/lib/xr/headset_seen.js	62	72	history	cb672da62		
+rename+edit	client/lib/hiddenbump.js	client/lib/player/hiddenbump.js	84	86	history	d5c87300d		
+rename+edit	client/lib/historyrows.js	client/lib/edit/historyrows.js	72	80	history	58776ec29		
+rename+edit	client/lib/icons.js	client/lib/ui/icons.js	85	88	history	d26e5c3d6		
+rename+edit	client/lib/inspect.js	client/lib/edit/inspect.js	62	71	history	58776ec29		
+rename+edit	client/lib/interpdelay.js	client/lib/player/interpdelay.js	68	71	history	d5c87300d		
+rename+edit	client/lib/keyhints.js	client/lib/edit/keyhints.js	68	70	history	58776ec29		
+rename+edit	client/lib/landmarks.js	client/lib/avatar/landmarks.js	71	88	history	a98cad0fe		
+rename+edit	client/lib/lightrig.js	client/lib/render/lightrig.js	51	82	history	4bf6d206f		
+rename+edit	client/lib/lights.js	client/lib/render/lightgizmo.js	79	90	history	76a0701e4,4bf6d206f		
+rename+edit	client/lib/litechoice.js	client/lib/ui/litechoice.js	81	84	history	d26e5c3d6		
+rename+edit	client/lib/loadwork.js	client/lib/render/loadwork.js	72	87	history	4bf6d206f		
+rename+edit	client/lib/localbody.js	client/lib/player/localbody.js	72	80	history	d5c87300d		
+rename+edit	client/lib/locomotion_clip.js	client/lib/avatar/locomotion_clip.js	86	89	history	a98cad0fe		
+rename+edit	client/lib/lod_policy.js	client/lib/render/lod_policy.js	73	78	history	4bf6d206f		
+rename+edit	client/lib/lookats.js	client/lib/realize/lookats.js	71	69	history	2087fab6c		
+rename+edit	client/lib/markup.js	client/lib/ui/markup.js	93	93	history	d26e5c3d6		
+rename+edit	client/lib/materialcomp.js	client/lib/realize/material.js	84	83	history	2087fab6c		
+rename+edit	client/lib/materials.js	client/lib/render/materials.js	50	75	history	4bf6d206f		
+rename+edit	client/lib/matoverride.js	client/lib/realize/material_draft.js	82	82	history	2087fab6c		
+rename+edit	client/lib/mention-rx.js	client/lib/ui/mention-rx.js	76	65	history	d26e5c3d6		
+rename+edit	client/lib/meshghost.js	client/lib/meshdefaults.js	83	71	history	e77c8223d		
+rename+edit	client/lib/micgate.js	client/lib/audio/micgate.js	45	72	history	5d981e0b6		
+rename+edit	client/lib/micstate.js	client/lib/audio/micstate.js	38	64	history	5d981e0b6		
+rename+edit	client/lib/mictoggle.js	client/lib/audio/mictoggle.js	55	81	history	5d981e0b6		
+rename+edit	client/lib/motioneval.js	shared/motioneval.js	83	87	history	8d0afcd16		
+rename+edit	client/lib/mounts.js	client/lib/player/mounts.js	80	80	history	d5c87300d		
+rename+edit	client/lib/mybody.js	client/lib/player/mybody.js	69	75	history	d5c87300d		
+rename+edit	client/lib/myview.js	client/lib/edit/myview.js	76	81	history	58776ec29		
+rename+edit	client/lib/namereveal.js	client/lib/avatar/namereveal.js	84	87	history	a98cad0fe		
+rename+edit	client/lib/net_capture.js	client/lib/render/net_capture.js	80	82	history	4bf6d206f		
+rename+edit	client/lib/newscript.js	client/lib/edit/scriptplan.js	85	88	history	628f253d2,58776ec29		
+rename+edit	client/lib/occupants.js	client/lib/player/occupants.js	75	79	history	d5c87300d		
+rename+edit	client/lib/occupybody.js	client/lib/avatar/occupybody.js	96	96	history	a98cad0fe		
+rename+edit	client/lib/openable.js	client/lib/realize/openable.js	75	77	history	2087fab6c		
+rename+edit	client/lib/overdraw.js	client/lib/debug/overdraw.js	79	85	history	61ea8a3c7		
+rename+edit	client/lib/panels.js	client/lib/edit/fieldpanels.js	81	88	history	58776ec29		
+rename+edit	client/lib/parity.js	client/lib/debug/parity.js	44	49	history	61ea8a3c7		
+rename+edit	client/lib/participants_lite.js	client/lib/ui/participants_lite.js	54	74	history	d26e5c3d6		
+rename+edit	client/lib/particlefx.js	client/lib/realize/particlefx.js	89	91	history	2087fab6c		
+rename+edit	client/lib/people.js	client/lib/ui/people.js	84	87	history	d26e5c3d6		
+rename+edit	client/lib/perf.js	client/lib/render/perf.js	7	12	history	4bf6d206f	move then rewrite: <20% of lines in common; read both	
+rename+edit	client/lib/perfscope.js	client/lib/debug/perfscope.js	78	88	history	61ea8a3c7		
+rename+edit	client/lib/phon.worker.js	client/lib/audio/phon.worker.js	58	82	history	5d981e0b6		
+rename+edit	client/lib/pictures.js	client/lib/realize/pictures.js	63	75	history	2087fab6c		
+rename+edit	client/lib/piperbridge.js	client/lib/audio/piperbridge.js	68	82	history	5d981e0b6		
+rename+edit	client/lib/piperphon.js	client/lib/audio/piperphon.js	57	84	history	5d981e0b6		
+rename+edit	client/lib/plainwords.js	client/lib/ui/plainwords.js	72	72	history	d26e5c3d6		
+rename+edit	client/lib/plateanchor.js	client/lib/avatar/plateanchor.js	62	74	history	a98cad0fe		
+rename+edit	client/lib/platecard.js	client/lib/avatar/platecard.js	84	90	history	a98cad0fe		
+rename+edit	client/lib/platesize.js	client/lib/avatar/platesize.js	59	67	history	a98cad0fe		
+rename+edit	client/lib/pointer.js	client/lib/xr/pointer.js	76	87	history	cb672da62		
+rename+edit	client/lib/portraits.js	client/lib/debug/portraits.js	50	61	history	61ea8a3c7		
+rename+edit	client/lib/posecommands.js	client/lib/debug/posecommands.js	78	88	history	61ea8a3c7		
+rename+edit	client/lib/presence.js	client/lib/ui/presence.js	58	71	history	d26e5c3d6		
+rename+edit	client/lib/profile.js	client/lib/ui/profile.js	79	88	history	d26e5c3d6		
+rename+edit	client/lib/quadcolour.js	client/lib/xr/quadcolour.js	67	79	history	cb672da62		
+rename+edit	client/lib/quadgrade.js	client/lib/xr/quadgrade.js	82	82	history	cb672da62		
+rename+edit	client/lib/ragdoll.js	client/lib/ragdoll/ragdoll.js	60	84	history	0054eb467		
+rename+edit	client/lib/reachbone.js	client/lib/avatar/reachbone.js	65	87	history	a98cad0fe		
+rename+edit	client/lib/reachnet.js	client/lib/player/reachnet.js	66	81	history	d5c87300d		
+rename+edit	client/lib/remotes.js	client/lib/player/remotes.js	62	80	history	d5c87300d		
+rename+edit	client/lib/render.js	client/lib/render/render.js	73	80	history	4bf6d206f		
+rename+edit	client/lib/rigmeasure.js	client/lib/ragdoll/rigmeasure.js	56	84	history	0054eb467		
+rename+edit	client/lib/rolespanels.js	client/lib/ui/rolespanels.js	82	86	history	d26e5c3d6		
+rename+edit	client/lib/rows.js	client/lib/edit/rows.js	85	93	history	58776ec29		
+rename+edit	client/lib/scheduler.js	client/lib/render/scheduler.js	75	87	history	4bf6d206f		
+rename+edit	client/lib/scriptnew.js	client/lib/edit/scriptcard.js	80	85	history	628f253d2,58776ec29		
+rename+edit	client/lib/seatcore.js	shared/seatcore.js	62	68	history	9ada2c9f2		
+rename+edit	client/lib/selectmask.js	client/lib/edit/selectmask.js	60	60	history	58776ec29		
+rename+edit	client/lib/sky.js	client/lib/sky/sky.js	54	74	history	29bd06860		
+rename+edit	client/lib/sky_baked.js	client/lib/sky/sky_baked.js	64	82	history	29bd06860		
+rename+edit	client/lib/sky_bakelock.js	client/lib/sky/sky_bakelock.js	50	75	history	29bd06860		
+rename+edit	client/lib/sky_bands.js	client/lib/sky/sky_bands.js	79	81	history	29bd06860		
+rename+edit	client/lib/sky_interim.js	client/lib/sky/sky_interim.js	81	87	history	29bd06860		
+rename+edit	client/lib/sky_swapchain.js	client/lib/sky/sky_swapchain.js	63	74	history	29bd06860		
+rename+edit	client/lib/skypanel.js	client/lib/edit/skypanel.js	74	86	history	58776ec29		
+rename+edit	client/lib/socketedit.js	client/lib/edit/socketedit.js	78	85	history	58776ec29		
+rename+edit	client/lib/socksignals.js	client/lib/avatar/socksignals.js	87	86	history	a98cad0fe		
+rename+edit	client/lib/sounds.js	client/lib/realize/sounds.js	76	82	history	2087fab6c		
+rename+edit	client/lib/statuschips.js	client/lib/ui/statuschips.js	91	90	history	d26e5c3d6		
+rename+edit	client/lib/structure_ui.js	client/lib/edit/structure_ui.js	82	89	history	58776ec29		
+rename+edit	client/lib/stt.js	client/lib/audio/stt.js	30	66	history	5d981e0b6		
+rename+edit	client/lib/stylepanel.js	client/lib/ui/stylepanel.js	83	87	history	d26e5c3d6		
+rename+edit	client/lib/supportclass.js	shared/supportclass.js	71	77	history	9ada2c9f2		
+rename+edit	client/lib/syncgate.js	client/lib/render/syncgate.js	65	75	history	4bf6d206f		
+rename+edit	client/lib/texts.js	client/lib/realize/texts.js	84	85	history	2087fab6c		
+rename+edit	client/lib/tts-chunk.js	client/lib/audio/tts-chunk.js	71	88	history	5442bfbf7,5d981e0b6,ded52c8fb		
+rename+edit	client/lib/tts.js	client/lib/audio/tts.js	40	79	history	5d981e0b6		
+rename+edit	client/lib/ttslist.js	client/lib/audio/ttslist.js	52	86	history	5d981e0b6		
+rename+edit	client/lib/ttsrow.js	client/lib/audio/ttsrow.js	44	83	history	5d981e0b6		
+rename+edit	client/lib/ui.js	client/lib/ui/ui.js	29	88	history	d26e5c3d6		
+rename+edit	client/lib/upgradeview.js	client/lib/ui/upgradeview.js	92	92	history	d26e5c3d6		
+rename+edit	client/lib/useprompt.js	client/lib/ui/useprompt.js	79	82	history	d26e5c3d6		
+rename+edit	client/lib/vehicles.js	client/lib/player/vehicles.js	70	72	history	d5c87300d		
+rename+edit	client/lib/vendor/htmlmesh.js	client/vendor/three-addons/htmlmesh.js	100	100	history	4399e1c22		
+rename+edit	client/lib/videopanel.js	client/lib/ui/videopanel.js	82	87	history	d26e5c3d6		
+rename+edit	client/lib/viewprefs.js	client/lib/edit/viewprefs.js	70	78	history	58776ec29		
+rename+edit	client/lib/voiceconsent.js	client/lib/audio/voiceconsent.js	36	72	history	5d981e0b6		
+rename+edit	client/lib/voiceengines.js	client/lib/audio/voiceengines.js	49	81	history	5d981e0b6		
+rename+edit	client/lib/voicemouths.js	client/lib/audio/voicemouths.js	49	77	history	5d981e0b6		
+rename+edit	client/lib/voicesfu.js	client/lib/audio/voicesfu.js	38	78	history	5d981e0b6		
+rename+edit	client/lib/voicesfubridge.js	client/lib/audio/voicesfubridge.js	40	73	history	5d981e0b6		
+rename+edit	client/lib/voicesource.js	client/lib/audio/voicesource.js	33	76	history	5d981e0b6		
+rename+edit	client/lib/voicestore.js	client/lib/audio/voicestore.js	61	82	history	5d981e0b6		
+rename+edit	client/lib/vrmic.js	client/lib/xr/vrmic.js	81	84	history	cb672da62		
+rename+edit	client/lib/vrmic_policy.js	client/lib/xr/vrmic_policy.js	77	86	history	cb672da62		
+rename+edit	client/lib/vrpanel.js	client/lib/xr/vrpanel.js	71	82	history	cb672da62		
+rename+edit	client/lib/warmqueue.js	client/lib/render/warmqueue.js	54	79	history	4bf6d206f		
+rename+edit	client/lib/watervolumes.js	client/lib/realize/watervolumes.js	84	86	history	2087fab6c		
+rename+edit	client/lib/wavpcm.js	client/lib/audio/wavpcm.js	60	86	history	5d981e0b6		
+rename+edit	client/lib/widgets.js	client/lib/edit/widgets.js	91	94	history	58776ec29		
+rename+edit	client/lib/windows.js	client/lib/ui/windows.js	56	80	history	d26e5c3d6		
+rename+edit	client/lib/worldquad.js	client/lib/xr/worldquad.js	58	64	history	cb672da62		
+rename+edit	client/lib/xr.js	client/lib/xr/xr.js	56	79	history	cb672da62		
+rename+edit	client/lib/xr_entry_effects.js	client/lib/xr/xr_entry_effects.js	55	84	history	cb672da62		
+rename+edit	client/lib/xr_entry_policy.js	client/lib/xr/xr_entry_policy.js	68	76	history	cb672da62		
+rename+edit	client/lib/xr_frame_clock.js	client/lib/xr/xr_frame_clock.js	50	74	history	cb672da62		
+rename+edit	client/lib/xr_nullfb.js	client/lib/xr/xr_nullfb.js	42	68	history	cb672da62		
+rename+edit	client/lib/xrask.js	client/lib/xr/xrask.js	78	83	history	cb672da62		
+rename+edit	client/lib/xrbody.js	client/lib/xr/xrbody.js	77	86	history	cb672da62		
+rename+edit	client/lib/xrkeyboard.js	client/lib/xr/xrkeyboard.js	82	88	history	cb672da62		
+rename+edit	client/lib/xrmicicon.js	client/lib/xr/xrmicicon.js	68	80	history	cb672da62		
+rename+edit	client/lib/xrmirror.js	client/lib/xr/xrmirror.js	69	82	history	cb672da62		
+rename+edit	client/lib/xrpanels.js	client/lib/xr/xrpanels.js	78	85	history	cb672da62		
+rename+edit	client/lib/xrpass.js	client/lib/xr/xrpass.js	51	70	history	cb672da62		
+rename+edit	client/lib/xrpixelratio.js	client/lib/xr/xrpixelratio.js	41	64	history	cb672da62		
+rename+edit	client/lib/xrpointer.js	client/lib/xr/xrpointer.js	55	67	history	cb672da62		
+rename+edit	client/lib/xrshadow.js	client/lib/xr/xrshadow.js	65	79	history	cb672da62		
+rename+edit	client/lib/xrtip.js	client/lib/xr/xrtip.js	77	86	history	cb672da62		
+rename+edit	client/lib/xrvignette.js	client/lib/xr/xrvignette.js	71	74	history	cb672da62		
+rename+edit	client/lib/xrwarm.js	client/lib/xr/xrwarm.js	53	73	history	cb672da62		
+rename+edit	deploy/SHOW_RUNBOOK.md	docs/operator/SHOW-RUNBOOK.md	91	89	history	f8e34ff30		
+rename+edit	docs/BUILDING.md	docs/guide/BUILDING.md	96	93	history	f8e34ff30		
+rename+edit	docs/COMPONENT-LADDER.md	docs/contributing/COMPONENT-LADDER.md	89	82	history	f8e34ff30		
+rename+edit	docs/CONSENT-TABLE-RECORD.md	docs/decisions/CONSENT-TABLE-RECORD.md	98	98	history	f8e34ff30		
+rename+edit	docs/DESIGN-log-vocabulary.md	docs/decisions/LOG-VOCABULARY.md	97	97	history	36d8a21af		
+rename+edit	docs/DESIGN-txn-capability.md	docs/decisions/TXN-CAPABILITY.md	96	96	history	f8e34ff30		
+rename+edit	docs/DESIGN-world-access.md	docs/decisions/WORLD-ACCESS.md	96	96	history	f8e34ff30		
+rename+edit	docs/GATE-MANIFEST.md	docs/contributing/GATE-MANIFEST.md	29	18	history	f8e34ff30	move then rewrite: <20% of lines in common; read both	
+rename+edit	docs/INCIDENTS.md	docs/history/INCIDENTS.md	99	99	history	f8e34ff30		
+rename+edit	docs/LABS.md	docs/contributing/LABS.md	78	75	history	f8e34ff30		
+rename+edit	docs/MODDING-UI.md	docs/guide/MODDING-UI.md	94	91	history	f8e34ff30		
+rename+edit	docs/NATIVE-LOGIN.md	docs/operator/NATIVE-LOGIN.md	81	86	history	f8e34ff30		
+rename+edit	docs/NATIVE-WORLD-RENDERING.md	docs/history/NATIVE-WORLD-RENDERING.md	83	87	history	f8e34ff30,37f18d2eb		
+rename+edit	docs/PATHFINDING-ACCEPTANCE.md	docs/decisions/PATHFINDING-ACCEPTANCE.md	72	72	history	f8e34ff30		
+rename+edit	docs/PHYSICS-DIRECTION.md	docs/design/PHYSICS-DIRECTION.md	99	99	history	f8e34ff30		
+rename+edit	docs/REMOTE-SCREENSHOTS.md	docs/operator/REMOTE-SCREENSHOTS.md	88	86	history	f8e34ff30		
+rename+edit	docs/RENDERER-SEAM.md	docs/design/RENDERER-SEAM.md	92	91	history	f8e34ff30		
+rename+edit	docs/SCHOOLS.md	docs/design/SCHOOLS.md	99	98	history	f8e34ff30		
+rename+edit	docs/SCRIPTS.md	docs/guide/SCRIPTS.md	93	95	history	f8e34ff30		
+rename+edit	docs/TOOL-LADDER.md	docs/contributing/TOOL-LADDER.md	80	78	history	f8e34ff30		
+rename+edit	docs/TRANSLATING-OLD-WORLDS.md	docs/operator/TRANSLATING-OLD-WORLDS.md	95	91	history	f8e34ff30		
+rename+edit	docs/UNDERWATER-PRESENCE.md	docs/reference/UNDERWATER-PRESENCE.md	91	88	history	f8e34ff30		
+rename+edit	docs/UPSTREAM-FLAGS.md	docs/history/UPSTREAM-FLAGS.md	93	93	history	f8e34ff30		
+rename+edit	docs/WIRE.md	docs/reference/WIRE.md	93	92	history	f8e34ff30		
+rename+edit	docs/body-state.md	docs/guide/BODY-STATE.md	98	98	history	f8e34ff30		
+rename+edit	docs/draw-calls.md	docs/reference/DRAW-CALLS.md	84	90	history	f8e34ff30		
+rename+edit	docs/ktx2-encoder.md	docs/operator/KTX2-ENCODER.md	94	89	history	f8e34ff30		
+rename+edit	docs/pose-wire.md	docs/reference/POSE-WIRE.md	91	90	history	f8e34ff30		
+rename+edit	mcpl/alias-test.ts	test/mcpl/alias-test.ts	83	77	history	04d041c07		
+rename+edit	mcpl/denoise-test.ts	test/mcpl/denoise-test.ts	69	38	history	04d041c07		
+rename+edit	mcpl/door-body-test.ts	test/mcpl/door-body-test.ts	89	80	history	04d041c07		
+rename+edit	mcpl/door-unit-test.ts	test/mcpl/door-unit-test.ts	92	73	history	04d041c07		
+rename+edit	mcpl/effective-test.ts	test/mcpl/effective-mcpl-test.ts	90	96	history	04d041c07		
+rename+edit	mcpl/manifest-test.ts	test/mcpl/manifest-test.ts	48	58	history	04d041c07		
+rename+edit	mcpl/navgrid.ts	shared/navgrid.js	54	67	history	b4453371e		
+rename+edit	mcpl/places.ts	shared/places.js	51	56	history	b4453371e		
+rename+edit	mcpl/reach-test.ts	test/mcpl/reach-test.ts	88	84	history	04d041c07		
+rename+edit	mcpl/selfpose-test.ts	test/mcpl/selfpose-test.ts	96	95	history	04d041c07		
+rename+edit	mcpl/storey-walk-test.ts	test/mcpl/storey-walk-test.ts	95	95	history	04d041c07		
+rename+edit	mcpl/stretched-places-test.ts	test/mcpl/stretched-places-test.ts	83	82	history	04d041c07		
+rename+edit	mcpl/stretched-support-test.ts	test/mcpl/stretched-support-test.ts	81	76	history	04d041c07		
+rename+edit	mcpl/tool-replies-test.ts	test/mcpl/tool-replies-test.ts	81	80	history	04d041c07		
+rename+edit	notes/AWARENESS-ROADMAP.md	docs/design/AWARENESS-ROADMAP.md	94	93	history	f8e34ff30		
+rename+edit	notes/CUTOVER-ARTIFACTS.md	docs/decisions/CUTOVER-ARTIFACTS.md	93	94	history	f8e34ff30		
+rename+edit	notes/CUTOVER-ROLLBACK.md	docs/history/CUTOVER-ROLLBACK.md	98	94	history	f8e34ff30,88bbf10ac		
+rename+edit	notes/SFU-OPERATOR.md	docs/operator/SFU-OPERATOR.md	83	79	history	f8e34ff30		
+rename+edit	notes/SFU-SPEC.md	docs/design/SFU-SPEC.md	99	98	history	f8e34ff30		
+rename+edit	server/clock.ts	test/harness/hostclock.ts	50	50	history	19da765cf		
+rename+edit	server/filehost.ts	test/harness/filehost.ts	76	76	history	19da765cf		
+rename+edit	server/names.ts	server/display-names.ts	32	55	history	39e3ed381		
+rename+edit	server/reqbody.ts	server/request-body.ts	60	46	history	edb1d4b55		
+rename+edit	server/reqcap.ts	server/request-capability.ts	74	85	history	edb1d4b55		
+rename+edit	server/tend.ts	tools/tend.ts	90	86	history	41049068f		
+rename+edit	shared/flora_presets.js	shared/flora-presets.js	94	94	history	c9cb83285		
+rename+edit	shared/structure_edit.js	shared/structure-edit.js	76	87	history	c9cb83285		
+rename+edit	spec/fixtures/README.md	test/fixtures/v1-worlds/README.md	0	0	history	61839f1d5	move then rewrite: <20% of lines in common; read both	
+rename+edit	tools/actionbar-stub.mjs	test/stubs/actionbar-stub.mjs	95	95	history	04d041c07		
+rename+edit	tools/actionbar-test.ts	test/client/actionbar-test.ts	50	62	history	04d041c07		
+rename+edit	tools/actions-test.mjs	test/client/actions-test.mjs	71	72	history	04d041c07		
+rename+edit	tools/agent-mesh-collision-test.ts	test/mcpl/agent-mesh-collision-test.ts	82	81	history	04d041c07		
+rename+edit	tools/agent-scratch.ts	test/harness/agent-scratch.ts	79	79	history	04d041c07		
+rename+edit	tools/ammodoll-test.ts	test/client/ammodoll-test.ts	94	94	history	04d041c07		
+rename+edit	tools/anim-wire-test.ts	test/mcpl/anim-wire-test.ts	82	85	history	04d041c07		
+rename+edit	tools/animnames-retry-test.ts	test/client/animnames-retry-test.ts	75	71	history	04d041c07		
+rename+edit	tools/armsolve-test.ts	test/client/armsolve-test.ts	94	93	history	04d041c07		
+rename+edit	tools/assets-stub.mjs	test/stubs/assets-stub.mjs	97	97	history	04d041c07		
+rename+edit	tools/attention-test.ts	test/client/attention-test.ts	94	93	history	04d041c07		
+rename+edit	tools/audio-upload-test.ts	test/client/audio-upload-test.ts	94	93	history	04d041c07		
+rename+edit	tools/audioctx-test.ts	test/client/audioctx-test.ts	71	56	history	04d041c07		
+rename+edit	tools/author-wire-test.mjs	test/shared/author-wire-test.mjs	85	83	history	04d041c07		
+rename+edit	tools/authtest.ts	test/server/auth-test.ts	88	82	history	04d041c07,1f41c6cae		
+rename+edit	tools/aux-binding-test.ts	test/server/aux-binding-test.ts	59	64	history	04d041c07		
+rename+edit	tools/avatar-perf-probe.mjs	test/client/avatar-perf-probe.mjs	91	90	history	04d041c07		
+rename+edit	tools/avatar-perf-test.ts	test/server/avatar-perf-test.ts	91	89	history	04d041c07		
+rename+edit	tools/avatar-test.ts	test/client/avatar-test.ts	85	89	history	04d041c07		
+rename+edit	tools/axes-test.ts	test/shared/axes-test.ts	69	69	history	04d041c07		
+rename+edit	tools/backend-choice-test.mjs	test/client/backend-choice-test.mjs	78	78	history	04d041c07		
+rename+edit	tools/bake-seat-clip.ts	tools/assets/bake-seat-clip.ts	37	79	history	ac7c10e4c		
+rename+edit	tools/blank-part-uvs-test.ts	test/server/blank-part-uvs-test.ts	78	80	history	04d041c07		
+rename+edit	tools/blueprint-test.ts	test/shared/blueprint-test.ts	43	84	history	04d041c07		
+rename+edit	tools/bodies-wear-test.mjs	test/client/bodies-wear-test.mjs	60	71	history	04d041c07		
+rename+edit	tools/body-runtime-test.ts	test/client/body-runtime-test.ts	85	85	history	04d041c07		
+rename+edit	tools/body-shadow-gate-test.mjs	test/client/body-shadow-gate-test.mjs	85	88	history	04d041c07		
+rename+edit	tools/body-state-bundle-test.ts	test/mcpl/body-state-bundle-test.ts	94	64	history	04d041c07		
+rename+edit	tools/body-state-mutation-test.ts	test/mcpl/body-state-mutation-test.ts	23	9	history	04d041c07	move then rewrite: <20% of lines in common; read both	
+rename+edit	tools/body-state-rigs-test.ts	test/mcpl/body-state-rigs-test.ts	95	95	history	04d041c07		
+rename+edit	tools/body-state-test.ts	test/mcpl/body-state-test.ts	86	52	history	04d041c07		
+rename+edit	tools/bodygate-test.mjs	test/client/bodygate-test.mjs	50	20	history	04d041c07		
+rename+edit	tools/bodyscale-test.ts	test/client/bodyscale-test.ts	84	83	history	04d041c07		
+rename+edit	tools/bodysim-test.ts	test/client/bodysim-test.ts	80	81	history	04d041c07		
+rename+edit	tools/boot-check.mjs	test/client/boot-check.mjs	50	71	history	04d041c07		
+rename+edit	tools/boot-init-test.ts	test/server/boot-init-test.ts	82	82	history	04d041c07		
+rename+edit	tools/bootbench.ts	bench/bootbench.ts	96	96	history	ac7c10e4c		
+rename+edit	tools/bootjank.ts	bench/bootjank.ts	92	95	history	ac7c10e4c		
+rename+edit	tools/briefing-test.ts	test/server/briefing-test.ts	97	97	history	7d916d6df		
+rename+edit	tools/build-gate-stub.mjs	test/stubs/build-gate-stub.mjs	85	89	history	04d041c07		
+rename+edit	tools/build-gate-test.ts	test/client/build-gate-test.ts	86	86	history	04d041c07		
+rename+edit	tools/buildcheck-queue-test.ts	test/server/buildcheck-queue-test.ts	88	84	history	04d041c07		
+rename+edit	tools/buildcheck-route-test.ts	test/mcpl/buildcheck-route-test.ts	86	80	history	04d041c07		
+rename+edit	tools/buildcheck-test.ts	test/server/buildcheck-test.ts	84	83	history	04d041c07		
+rename+edit	tools/buoyancy-test.ts	test/shared/buoyancy-test.ts	95	95	history	04d041c07		
+rename+edit	tools/camera-world-probe.mjs	test/client/camera-world-probe.mjs	83	85	history	04d041c07		
+rename+edit	tools/capnotice-probe.mjs	test/client/capnotice-probe.mjs	94	91	history	04d041c07		
+rename+edit	tools/capsule-recovery-test.mjs	test/client/capsule-recovery-test.mjs	77	76	history	04d041c07		
+rename+edit	tools/captionbot-cli-test.ts	test/services/captionbot-cli-test.ts	97	97	history	04d041c07,51fa7599e		
+rename+edit	tools/captionbot-test.ts	test/services/captionbot-test.ts	97	96	history	04d041c07,51fa7599e		
+rename+edit	tools/captionbot/bun.lock	services/captionbot/bun.lock	86	86	history	51fa7599e		
+rename+edit	tools/captionbot/captioner.ts	services/captionbot/captioner.ts	81	84	history	51fa7599e		
+rename+edit	tools/captionbot/index.ts	services/captionbot/index.ts	78	87	history	51fa7599e		
+rename+edit	tools/captionbot/package.json	services/captionbot/package.json	78	70	history	51fa7599e		
+rename+edit	tools/captionbot/sources.ts	services/captionbot/sources.ts	97	97	history	51fa7599e		
+rename+edit	tools/captionbot/tap.ts	services/captionbot/tap.ts	79	84	history	51fa7599e		
+rename+edit	tools/captionbot/world.ts	services/captionbot/world.ts	85	90	history	51fa7599e		
+rename+edit	tools/captions-test.ts	test/shared/captions-test.ts	90	93	history	04d041c07		
+rename+edit	tools/channelbox-test.ts	test/shared/channelbox-test.ts	87	88	history	04d041c07		
+rename+edit	tools/chat-frames-stub.mjs	test/stubs/chat-frames-stub.mjs	90	90	history	04d041c07		
+rename+edit	tools/chat-history-stub.mjs	test/stubs/chat-history-stub.mjs	93	90	history	04d041c07		
+rename+edit	tools/chat-log-test.ts	test/client/chat-log-test.ts	87	44	history	04d041c07		
+rename+edit	tools/chat-mention-insert-test.ts	test/client/chat-mention-insert-test.ts	65	70	history	7d916d6df		
+rename+edit	tools/chat-mention-test.mjs	test/client/chat-mention-test.mjs	69	82	history	7d916d6df		
+rename+edit	tools/chat-resync-wire-test.ts	test/client/chat-resync-wire-test.ts	63	63	history	04d041c07		
+rename+edit	tools/chat-scrollback-test.ts	test/client/chat-scrollback-test.ts	96	96	history	04d041c07		
+rename+edit	tools/chatbridge-test.ts	test/services/chatbridge-test.ts	69	65	history	04d041c07,51fa7599e		
+rename+edit	tools/chatbridge/index.ts	services/chatbridge/index.ts	91	94	history	51fa7599e		
+rename+edit	tools/chatbridge/package.json	services/chatbridge/package.json	100	89	history	51fa7599e		
+rename+edit	tools/clickuse-test.ts	test/client/clickuse-test.ts	76	75	history	04d041c07		
+rename+edit	tools/clientlog-test.ts	test/server/clientlog-test.ts	90	90	history	04d041c07		
+rename+edit	tools/collider-off-bodies-test.ts	test/client/collider-off-bodies-test.ts	88	89	history	04d041c07		
+rename+edit	tools/collider-off-stub.mjs	test/stubs/collider-off-stub.mjs	87	87	history	04d041c07		
+rename+edit	tools/collider-survey.ts	tools/assets/collider-survey.ts	79	90	history	ac7c10e4c		
+rename+edit	tools/collider-test.ts	test/client/collider-test.ts	89	90	history	04d041c07		
+rename+edit	tools/colliders-stub.mjs	test/stubs/colliders-stub.mjs	71	71	history	04d041c07		
+rename+edit	tools/colour-picker-bench.ts	test/client/colour-picker-bench.ts	92	92	history	04d041c07		
+rename+edit	tools/component-needs-test.ts	test/shared/component-needs-test.ts	81	81	history	04d041c07		
+rename+edit	tools/components-corpus-test.ts	test/shared/components-corpus-test.ts	81	86	history	04d041c07		
+rename+edit	tools/components-inspector-test.ts	test/shared/components-inspector-test.ts	84	84	history	04d041c07		
+rename+edit	tools/components-wire-test.ts	test/client/components-wire-test.ts	84	85	history	04d041c07		
+rename+edit	tools/compose-test.ts	test/shared/compose-test.ts	84	83	history	04d041c07		
+rename+edit	tools/comps-parity-test.ts	test/client/comps-parity-test.ts	84	84	history	04d041c07		
+rename+edit	tools/config-env-test.ts	test/server/config-env-test.ts	6	5	history	04d041c07	move then rewrite: <20% of lines in common; read both	
+rename+edit	tools/confirmcenter-test.ts	test/client/confirmcenter-test.ts	85	85	history	04d041c07		
+rename+edit	tools/consent-client-test.ts	test/client/consent-client-test.ts	92	93	history	04d041c07		
+rename+edit	tools/consent-replay-test.ts	test/mcpl/consent-replay-test.ts	89	85	history	04d041c07		
+rename+edit	tools/consent-scripts-list-test.ts	test/server/consent-scripts-list-test.ts	83	84	history	04d041c07		
+rename+edit	tools/contact-mutation-preload.ts	test/harness/contact-mutation-preload.ts	86	67	history	04d041c07		
+rename+edit	tools/contact-mutation-test.ts	test/client/contact-mutation-test.ts	50	59	history	04d041c07		
+rename+edit	tools/core-stub.mjs	test/stubs/core-stub.mjs	52	67	history	04d041c07		
+rename+edit	tools/credits-probe.mjs	test/client/credits-probe.mjs	89	89	history	04d041c07		
+rename+edit	tools/csp-test.ts	test/client/csp-test.ts	89	89	history	04d041c07		
+rename+edit	tools/custody-save-test.ts	test/server/custody-save-test.ts	87	89	history	04d041c07		
+rename+edit	tools/debug-stub.mjs	test/stubs/debug-stub.mjs	92	92	history	04d041c07		
+rename+edit	tools/debug-tabs-test.ts	test/client/debug-tabs-test.ts	83	83	history	04d041c07		
+rename+edit	tools/defs-smoke.ts	tools/operator/defs-smoke.ts	90	94	history	ac7c10e4c		
+rename+edit	tools/descriptor-defaults-test.ts	test/shared/descriptor-defaults-test.ts	81	39	history	04d041c07		
+rename+edit	tools/dismount-height-test.ts	test/client/dismount-height-test.ts	80	79	history	04d041c07		
+rename+edit	tools/dock-stub.mjs	test/stubs/dock-stub.mjs	98	98	history	04d041c07		
+rename+edit	tools/dock-test.ts	test/client/dock-test.ts	83	82	history	04d041c07		
+rename+edit	tools/doll-fixture.mjs	test/fixtures/doll-fixture.mjs	89	89	history	04d041c07		
+rename+edit	tools/door-bone-list-test.ts	test/mcpl/door-bone-list-test.ts	81	64	history	04d041c07		
+rename+edit	tools/door-cap-gate-live-test.mjs	test/mcpl/door-cap-gate-live-test.mjs	75	77	history	04d041c07		
+rename+edit	tools/door-frame-test.ts	test/mcpl/door-frame-test.ts	87	91	history	7d916d6df		
+rename+edit	tools/door-is-error-test.ts	test/mcpl/door-is-error-test.ts	92	91	history	04d041c07		
+rename+edit	tools/door-media-whitelist-test.mjs	test/mcpl/door-media-whitelist-test.mjs	68	68	history	04d041c07		
+rename+edit	tools/door-wording-test.ts	test/shared/door-wording-test.ts	92	90	history	04d041c07		
+rename+edit	tools/drag-q-test.ts	test/server/drag-q-test.ts	77	77	history	04d041c07		
+rename+edit	tools/draw-batches-test.ts	test/client/draw-batches-test.ts	98	98	history	04d041c07		
+rename+edit	tools/draw-world-probe.ts	bench/draw-world-measure.ts	94	93	history	0244dc9f0,ac7c10e4c		
+rename+edit	tools/drawbench.ts	bench/drawbench.ts	95	95	history	ac7c10e4c		
+rename+edit	tools/drawbench/bench.html	bench/drawbench/bench.html	89	89	history	ac7c10e4c		
+rename+edit	tools/drawbench/bench.js	bench/drawbench/bench.js	99	99	history	ac7c10e4c		
+rename+edit	tools/dropdown-test.ts	test/client/dropdown-test.ts	94	95	history	04d041c07		
+rename+edit	tools/dummy.ts	test/harness/dummy.ts	90	90	history	04d041c07		
+rename+edit	tools/dwell-test.mjs	test/client/dwell-test.mjs	75	75	history	04d041c07		
+rename+edit	tools/editcommit-test.ts	test/client/editcommit-test.ts	90	90	history	04d041c07		
+rename+edit	tools/editor-range-test.ts	test/shared/editor-range-test.ts	93	77	history	04d041c07		
+rename+edit	tools/editschema-test.ts	test/shared/editschema-test.ts	95	90	history	04d041c07		
+rename+edit	tools/edittheme-test.ts	test/client/edittheme-test.ts	75	76	history	04d041c07		
+rename+edit	tools/editworkspace-bench.ts	bench/editworkspace-bench.ts	82	83	history	ac7c10e4c		
+rename+edit	tools/effective-test.ts	test/mcpl/effective-test.ts	96	96	history	04d041c07		
+rename+edit	tools/emenu-probe.mjs	test/client/emenu-probe.mjs	97	96	history	04d041c07		
+rename+edit	tools/emitter-percept-test.ts	test/mcpl/emitter-percept-test.ts	79	80	history	04d041c07		
+rename+edit	tools/environment-realizer-test.ts	test/client/environment-realizer-test.ts	86	86	history	04d041c07		
+rename+edit	tools/euler-test.ts	test/client/euler-test.ts	91	92	history	04d041c07		
+rename+edit	tools/event-wire-test.ts	test/mcpl/event-wire-test.ts	94	85	history	04d041c07		
+rename+edit	tools/extract-doll-fixture.ts	test/fixtures/extract-doll-fixture.ts	83	83	history	04d041c07		
+rename+edit	tools/fetchbytes-test.mjs	test/client/fetchbytes-test.mjs	85	84	history	04d041c07		
+rename+edit	tools/finger-curl-test.mjs	test/client/finger-curl-test.mjs	63	75	history	04d041c07		
+rename+edit	tools/first-name-account-test.ts	test/client/first-name-account-test.ts	91	91	history	04d041c07		
+rename+edit	tools/firstperson-plate-test.ts	test/client/firstperson-plate-test.ts	67	69	history	04d041c07		
+rename+edit	tools/flight-exit-test.ts	test/mcpl/flight-exit-test.ts	94	92	history	7d916d6df		
+rename+edit	tools/flight-fixture.ts	test/fixtures/flight-fixture.ts	77	82	history	04d041c07		
+rename+edit	tools/flight-test.ts	test/client/flight-test.ts	86	88	history	04d041c07		
+rename+edit	tools/flightbench/FLIGHT-MCP-INTERFACE.md	docs/history/FLIGHT-MCP-INTERFACE.md	99	99	history	f8e34ff30		
+rename+edit	tools/flora.test.ts	test/client/flora-test.ts	94	95	history	04d041c07		
+rename+edit	tools/foliage-probe.mjs	test/client/foliage-probe.mjs	91	89	history	04d041c07		
+rename+edit	tools/forecast-test.ts	test/client/forecast-test.ts	89	89	history	04d041c07		
+rename+edit	tools/fp-view-test.ts	test/client/fp-view-test.ts	86	87	history	04d041c07		
+rename+edit	tools/framebudget-test.mjs	test/shared/framebudget-test.mjs	94	92	history	04d041c07		
+rename+edit	tools/frames-layout-test.ts	test/client/frames-layout-test.ts	76	84	history	04d041c07		
+rename+edit	tools/frames-resize-test.ts	test/client/frames-resize-test.ts	46	77	history	04d041c07		
+rename+edit	tools/full-detail-stub.mjs	test/stubs/full-detail-stub.mjs	97	97	history	04d041c07		
+rename+edit	tools/full-detail-test.ts	test/client/full-detail-test.ts	83	81	history	04d041c07		
+rename+edit	tools/ghost-mesh-size-test.ts	test/shared/ghost-mesh-size-test.ts	71	71	history	04d041c07		
+rename+edit	tools/glb2vrm-test.ts	test/shared/glb2vrm-test.ts	89	81	history	04d041c07		
+rename+edit	tools/glbperf-file-test.ts	test/server/glbperf-file-test.ts	88	80	history	04d041c07		
+rename+edit	tools/glbperf-parity-probe.mjs	bench/glbperf-parity.mjs	93	90	history	0244dc9f0,ac7c10e4c		
+rename+edit	tools/governor-xr-test.ts	test/client/governor-xr-test.ts	88	86	history	04d041c07		
+rename+edit	tools/gpulost-test.mjs	test/client/gpulost-test.mjs	79	37	history	04d041c07		
+rename+edit	tools/gputime-core-stub.mjs	test/stubs/gputime-core-stub.mjs	67	46	history	04d041c07		
+rename+edit	tools/gputime-probe.mjs	test/client/gputime-probe.mjs	96	96	history	04d041c07		
+rename+edit	tools/gputime-test.ts	test/client/gputime-test.ts	76	57	history	04d041c07		
+rename+edit	tools/grant-command-test.ts	test/client/grant-command-test.ts	82	76	history	04d041c07		
+rename+edit	tools/grant-until-test.ts	test/client/grant-until-test.ts	73	85	history	04d041c07		
+rename+edit	tools/grass-quality-test.ts	test/client/grass-quality-test.ts	84	89	history	04d041c07		
+rename+edit	tools/grass-terrain-stub.mjs	test/stubs/grass-terrain-stub.mjs	89	89	history	04d041c07		
+rename+edit	tools/ground-asset-check.ts	tools/assets/ground-asset-measure.ts	69	69	history	0244dc9f0,ac7c10e4c		
+rename+edit	tools/ground-now-probe.mjs	test/client/ground-now-probe.mjs	95	95	history	04d041c07		
+rename+edit	tools/groundstep-test.mjs	test/client/groundstep-test.mjs	91	91	history	7d916d6df		
+rename+edit	tools/guard-label-stub.mjs	test/stubs/guard-label-stub.mjs	91	93	history	04d041c07		
+rename+edit	tools/harness-test.ts	test/client/harness-test.ts	87	38	history	04d041c07		
+rename+edit	tools/harness.ts	test/harness/harness.ts	88	73	history	04d041c07		
+rename+edit	tools/headset-seen-test.mjs	test/client/headset-seen-test.mjs	33	61	history	04d041c07		
+rename+edit	tools/heightmap-readiness-browser-test.ts	test/client/heightmap-readiness-browser-test.ts	93	93	history	04d041c07		
+rename+edit	tools/heightmap-readiness-test.ts	test/mcpl/heightmap-readiness-test.ts	58	56	history	04d041c07		
+rename+edit	tools/heightmap-route-test.ts	test/server/heightmap-route-test.ts	78	81	history	04d041c07		
+rename+edit	tools/held-pose-parity-test.ts	test/client/held-pose-parity-test.ts	96	96	history	04d041c07		
+rename+edit	tools/helm-leave-test.ts	test/client/helm-leave-test.ts	83	83	history	04d041c07		
+rename+edit	tools/hierarchy-commit-test.ts	test/client/hierarchy-commit-test.ts	84	85	history	04d041c07		
+rename+edit	tools/hierarchy-test.ts	test/shared/hierarchy-test.ts	94	94	history	04d041c07		
+rename+edit	tools/history-request-test.ts	test/client/history-request-test.ts	92	92	history	04d041c07		
+rename+edit	tools/htmlmesh-pick-probe.mjs	test/client/htmlmesh-pick-probe.mjs	92	92	history	04d041c07		
+rename+edit	tools/htmlmesh-wrap-probe.mjs	test/client/htmlmesh-wrap-probe.mjs	93	93	history	04d041c07		
+rename+edit	tools/icons-test.ts	test/client/icons-test.ts	64	60	history	04d041c07		
+rename+edit	tools/idle-stall-test.ts	test/server/idle-stall-test.ts	97	97	history	04d041c07		
+rename+edit	tools/image-container-check.ts	tools/assets/image-container-sweep.ts	61	69	history	0244dc9f0,ac7c10e4c		
+rename+edit	tools/image-lie-test.ts	test/server/image-lie-test.ts	91	93	history	04d041c07		
+rename+edit	tools/image-upload-test.ts	test/client/image-upload-test.ts	89	89	history	04d041c07		
+rename+edit	tools/import-tripo-avatar.ts	tools/assets/import-tripo-avatar.ts	74	89	history	4399e1c22		
+rename+edit	tools/join-probe.mjs	tools/operator/join-canary.mjs	0	0	history	0244dc9f0,ac7c10e4c	move then rewrite: <20% of lines in common; read both	
+rename+edit	tools/join-rfc005.test.ts	test/mcpl/join-rfc005-test.ts	60	76	history	1836087f8,04d041c07		
+rename+edit	tools/keepalive.test.ts	test/server/keepalive-test.ts	70	75	history	1d8dcab97,04d041c07		
+rename+edit	tools/keyhints-check.ts	test/client/keyhints-check.ts	74	72	history	04d041c07		
+rename+edit	tools/killz-slumped-test.ts	test/server/killz-slumped-test.ts	89	90	history	04d041c07		
+rename+edit	tools/knockdown-test.ts	test/server/knockdown-test.ts	78	78	history	04d041c07		
+rename+edit	tools/ktx2-resize-test.ts	test/server/ktx2-resize-test.ts	83	83	history	04d041c07		
+rename+edit	tools/ktx2-tf-purge-test.ts	test/server/ktx2-tf-purge-test.ts	82	79	history	04d041c07		
+rename+edit	tools/ktx2-tf-purge.ts	tools/assets/ktx2-tf-purge.ts	63	75	history	ac7c10e4c		
+rename+edit	tools/ktx2-transfer-test.ts	test/server/ktx2-transfer-test.ts	86	84	history	04d041c07		
+rename+edit	tools/lamp-skin-test.mjs	test/client/lamp-skin-test.mjs	69	80	history	04d041c07		
+rename+edit	tools/lamp-slot-policy-test.mjs	test/client/lamp-slot-policy-test.mjs	73	78	history	04d041c07		
+rename+edit	tools/landmarks-test.ts	test/client/landmarks-test.ts	93	92	history	04d041c07		
+rename+edit	tools/lantern-test.ts	test/client/lantern-test.ts	92	92	history	04d041c07		
+rename+edit	tools/last-world-test.ts	test/client/last-world-test.ts	95	95	history	04d041c07		
+rename+edit	tools/latestread-test.ts	test/client/latestread-test.ts	94	94	history	04d041c07		
+rename+edit	tools/layers-test.ts	test/shared/layers-test.ts	83	80	history	04d041c07		
+rename+edit	tools/library-badge-probe.mjs	test/client/library-badge-probe.mjs	96	95	history	04d041c07		
+rename+edit	tools/library-decode-test.ts	test/server/library-decode-test.ts	92	83	history	04d041c07		
+rename+edit	tools/light-readers-test.ts	test/client/light-readers-test.ts	76	70	history	04d041c07		
+rename+edit	tools/lite-banner-probe.mjs	test/client/lite-banner-probe.mjs	97	97	history	04d041c07		
+rename+edit	tools/lite-choice-test.mjs	test/client/lite-choice-test.mjs	95	81	history	04d041c07		
+rename+edit	tools/lite-graph-test.ts	test/client/lite-graph-test.ts	87	81	history	04d041c07		
+rename+edit	tools/loadtest.ts	bench/loadtest.ts	98	98	history	ac7c10e4c		
+rename+edit	tools/loadwork-stub.mjs	test/stubs/loadwork-stub.mjs	43	60	history	04d041c07		
+rename+edit	tools/lock-strength-test.ts	test/client/lock-strength-test.ts	89	89	history	04d041c07		
+rename+edit	tools/locomotion-clip-test.mjs	test/client/locomotion-clip-test.mjs	63	85	history	04d041c07		
+rename+edit	tools/lod-budget-test.ts	test/server/lod-budget-test.ts	94	91	history	04d041c07		
+rename+edit	tools/lod-census.ts	tools/assets/lod-census.ts	81	86	history	ac7c10e4c		
+rename+edit	tools/lod-client-stub.mjs	test/stubs/lod-client-stub.mjs	92	92	history	04d041c07		
+rename+edit	tools/lod-client-test.ts	test/client/lod-client-test.ts	87	89	history	04d041c07		
+rename+edit	tools/lod-loader-probe.ts	test/client/lod-loader-child.ts	89	86	history	708929e6c,ac7c10e4c		
+rename+edit	tools/lod-loader-stub.mjs	test/stubs/lod-loader-stub.mjs	95	95	history	04d041c07		
+rename+edit	tools/lod-normals-test.ts	test/server/lod-normals-test.ts	94	93	history	04d041c07		
+rename+edit	tools/lod-policy-test.ts	test/client/lod-policy-test.ts	92	91	history	04d041c07		
+rename+edit	tools/logo-probe.mjs	test/client/logo-probe.mjs	96	96	history	04d041c07		
+rename+edit	tools/look-test.ts	test/mcpl/look-test.ts	94	82	history	04d041c07		
+rename+edit	tools/make-bighead-vrm.ts	tools/assets/make-bighead-vrm.ts	67	85	history	ac7c10e4c		
+rename+edit	tools/media-trust-tabs-test.ts	test/client/media-trust-tabs-test.ts	84	84	history	04d041c07		
+rename+edit	tools/mention-delivery-test.ts	test/server/mention-delivery-test.ts	85	86	history	04d041c07		
+rename+edit	tools/mention-regex-test.mjs	test/mcpl/mention-regex-test.mjs	87	88	history	04d041c07		
+rename+edit	tools/mic-hud-probe.mjs	test/client/mic-hud-probe.mjs	86	91	history	04d041c07		
+rename+edit	tools/mic-meter-states.mjs	test/labs/mic-meter-states.mjs	93	93	history	ac7c10e4c		
+rename+edit	tools/mic-ptt-test.mjs	test/client/mic-ptt-test.mjs	88	81	history	04d041c07		
+rename+edit	tools/mini-sfu-test.mjs	test/labs/mini-sfu-repro.mjs	95	95	history	0244dc9f0,ac7c10e4c		
+rename+edit	tools/mkconfig-test.ts	test/server/mkconfig-test.ts	93	93	history	04d041c07		
+rename+edit	tools/modclose-support-test.ts	test/mcpl/modclose-support-test.ts	34	48	history	04d041c07		
+rename+edit	tools/models-field-test.ts	test/client/models-field-test.ts	89	90	history	04d041c07		
+rename+edit	tools/motion-vectors.ts	tools/vectors/motion.ts	82	82	history	ac7c10e4c,6feac6fc0		
+rename+edit	tools/motioneval-test.ts	test/client/motioneval-test.ts	97	96	history	04d041c07		
+rename+edit	tools/msgrate-test.ts	test/server/msgrate-test.ts	93	58	history	04d041c07		
+rename+edit	tools/name-snowball-test.ts	test/client/name-snowball-test.ts	92	89	history	04d041c07		
+rename+edit	tools/nameplate-card-probe.mjs	test/client/nameplate-card-probe.mjs	95	95	history	04d041c07		
+rename+edit	tools/namereveal-test.mjs	test/client/namereveal-test.mjs	66	79	history	04d041c07		
+rename+edit	tools/native-login-fixture.ts	test/fixtures/native-login-fixture.ts	91	91	history	04d041c07		
+rename+edit	tools/native-login-test.ts	test/server/native-login-test.ts	14	5	history	04d041c07	move then rewrite: <20% of lines in common; read both	
+rename+edit	tools/navgrid-test.ts	test/server/navgrid-test.ts	76	76	history	04d041c07		
+rename+edit	tools/object-lod-test.ts	test/server/object-lod-test.ts	96	96	history	04d041c07		
+rename+edit	tools/oldworlds-test.ts	test/server/oldworlds-test.ts	87	86	history	04d041c07		
+rename+edit	tools/one-libvips-test.ts	test/server/one-libvips-test.ts	77	88	history	04d041c07		
+rename+edit	tools/operator-bind.ts	tools/operator/operator-bind.ts	78	78	history	ac7c10e4c		
+rename+edit	tools/operator-repair.ts	tools/operator/operator-repair.ts	72	72	history	ac7c10e4c		
+rename+edit	tools/optimize-pump-test.ts	test/server/optimize-pump-test.ts	90	90	history	04d041c07		
+rename+edit	tools/originof-test.ts	test/client/originof-test.ts	84	84	history	04d041c07		
+rename+edit	tools/other-body-pose-test.ts	test/mcpl/other-body-pose-test.ts	82	80	history	04d041c07		
+rename+edit	tools/overdraw-probe.mjs	bench/overdraw-measure.mjs	93	92	history	0244dc9f0,ac7c10e4c		
+rename+edit	tools/own-names-test.ts	test/shared/own-names-test.ts	80	80	git-M		moved in the merge of anima/main (b7d498f4e); paired by end-to-end git -M	
+rename+edit	tools/panel-teardown-probe.mjs	test/client/panel-teardown-probe.mjs	71	76	history	04d041c07		
+rename+edit	tools/panelbench.ts	bench/panelbench.ts	92	96	history	ac7c10e4c		
+rename+edit	tools/panels-schema-test.ts	test/client/panels-schema-test.ts	70	68	history	04d041c07		
+rename+edit	tools/panels-test.ts	test/client/panels-test.ts	97	96	history	04d041c07		
+rename+edit	tools/panels-tour-probe.mjs	test/client/panels-tour-probe.mjs	95	93	history	04d041c07		
+rename+edit	tools/particles-host-test.ts	test/client/particles-host-test.ts	89	91	history	04d041c07		
+rename+edit	tools/particles-test.ts	test/client/particles-test.ts	93	95	history	04d041c07		
+rename+edit	tools/parts-stub.mjs	test/stubs/parts-stub.mjs	82	82	history	04d041c07		
+rename+edit	tools/parts-test.ts	test/client/parts-test.ts	82	75	history	04d041c07		
+rename+edit	tools/perfscope-stub.mjs	test/stubs/perfscope-stub.mjs	93	93	history	04d041c07		
+rename+edit	tools/perfscope-test.ts	test/client/perfscope-test.ts	93	92	history	04d041c07		
+rename+edit	tools/physconst-test.ts	test/shared/physconst-test.ts	66	80	history	04d041c07		
+rename+edit	tools/physics-off-test.ts	test/client/physics-off-test.ts	80	78	history	04d041c07		
+rename+edit	tools/picture-editor-probe.ts	test/client/picture-editor-probe.ts	90	90	history	04d041c07		
+rename+edit	tools/picture-note-test.ts	test/client/picture-note-test.ts	89	82	history	04d041c07		
+rename+edit	tools/picture-probe.ts	test/client/picture-probe.ts	96	96	history	04d041c07		
+rename+edit	tools/picture-race-probe.ts	test/client/picture-race-probe.ts	93	92	history	04d041c07		
+rename+edit	tools/places-test.ts	test/mcpl/places-test.ts	90	89	history	04d041c07		
+rename+edit	tools/plateanchor-test.ts	test/client/plateanchor-test.ts	85	68	history	04d041c07		
+rename+edit	tools/pose-handler-test.ts	test/server/pose-handler-test.ts	79	31	history	04d041c07		
+rename+edit	tools/pose-provenance-test.ts	test/mcpl/pose-provenance-test.ts	67	65	history	04d041c07		
+rename+edit	tools/poseclip-parity-test.ts	test/mcpl/poseclip-parity-test.ts	82	82	history	04d041c07		
+rename+edit	tools/posture-tiles-stub.mjs	test/stubs/posture-tiles-stub.mjs	97	96	history	04d041c07		
+rename+edit	tools/posture-tiles-test.ts	test/client/posture-tiles-test.ts	85	86	history	04d041c07		
+rename+edit	tools/predict-pending-test.ts	test/client/predict-pending-test.ts	84	83	history	04d041c07		
+rename+edit	tools/presence-session-test.ts	test/server/presence-session-test.ts	80	83	history	04d041c07		
+rename+edit	tools/probe-harness.mjs	test/harness/probe-harness.mjs	37	34	history	04d041c07		
+rename+edit	tools/protocol/SURFACE-PARITY.md	docs/contributing/SURFACE-PARITY.md	79	78	history	f8e34ff30		
+rename+edit	tools/protocol/access-check.ts	test/protocol/access-check.ts	95	95	history	7339f6fa8		
+rename+edit	tools/protocol/access-panel-probe.ts	test/protocol/access-panel-probe.ts	95	93	history	7339f6fa8		
+rename+edit	tools/protocol/agentshove-check.ts	test/protocol/agentshove-check.ts	79	77	history	7339f6fa8		
+rename+edit	tools/protocol/agenttools-check.ts	test/protocol/agenttools-check.ts	86	85	history	7339f6fa8		
+rename+edit	tools/protocol/attack-check.ts	test/protocol/attack-check.ts	93	94	history	7339f6fa8		
+rename+edit	tools/protocol/authority-check.ts	test/protocol/authority-check.ts	91	94	history	7339f6fa8		
+rename+edit	tools/protocol/authority-layers-check.ts	test/protocol/authority-layers-check.ts	65	65	history	7339f6fa8		
+rename+edit	tools/protocol/batch2-check.ts	test/protocol/batch2-check.ts	89	91	history	7339f6fa8		
+rename+edit	tools/protocol/batch2-probe.ts	test/protocol/batch2-probe.ts	84	84	history	7339f6fa8		
+rename+edit	tools/protocol/blockers-mutants.ts	test/protocol/blockers-mutants.ts	76	64	history	7339f6fa8		
+rename+edit	tools/protocol/browser-check.ts	test/protocol/browser-check.ts	94	94	history	7339f6fa8		
+rename+edit	tools/protocol/build-check.ts	test/protocol/build-check.ts	89	91	history	7339f6fa8		
+rename+edit	tools/protocol/build-probe.ts	test/protocol/build-probe.ts	84	84	history	7339f6fa8		
+rename+edit	tools/protocol/catalogue-check.ts	test/protocol/catalogue-check.ts	78	73	history	7339f6fa8		
+rename+edit	tools/protocol/chrome.ts	test/gate/chrome.ts	91	91	history	7339f6fa8		
+rename+edit	tools/protocol/client-check.ts	test/protocol/client-check.ts	88	88	history	7339f6fa8		
+rename+edit	tools/protocol/climb-env-check.ts	test/protocol/climb-env-check.ts	91	95	history	7339f6fa8		
+rename+edit	tools/protocol/clock.ts	test/gate/clock.ts	92	92	history	7339f6fa8		
+rename+edit	tools/protocol/common.ts	test/gate/common.ts	99	93	history	7339f6fa8		
+rename+edit	tools/protocol/compare.ts	test/protocol/compare.ts	90	89	history	7339f6fa8		
+rename+edit	tools/protocol/consent-check.ts	test/protocol/consent-check.ts	86	83	history	7339f6fa8		
+rename+edit	tools/protocol/counter-check.ts	test/protocol/counter-check.ts	90	91	history	7339f6fa8		
+rename+edit	tools/protocol/describe-particles-check.ts	test/protocol/describe-particles-check.ts	89	90	history	7339f6fa8		
+rename+edit	tools/protocol/diffcheck.ts	test/gate/diffcheck.ts	76	61	history	7339f6fa8		
+rename+edit	tools/protocol/directory-check.ts	test/protocol/directory-check.ts	91	92	history	7339f6fa8		
+rename+edit	tools/protocol/disabled-check.ts	test/protocol/disabled-check.ts	74	80	history	7339f6fa8		
+rename+edit	tools/protocol/drive-check.ts	test/protocol/drive-check.ts	91	94	history	7339f6fa8		
+rename+edit	tools/protocol/eidomodel-check.ts	test/protocol/eidomodel-check.ts	86	86	history	7339f6fa8		
+rename+edit	tools/protocol/eidosim-check.ts	test/protocol/eidosim-check.ts	96	96	history	7339f6fa8		
+rename+edit	tools/protocol/eidosim-live-check.ts	test/protocol/eidosim-live-check.ts	90	90	history	7339f6fa8		
+rename+edit	tools/protocol/engine-check.ts	test/protocol/engine-check.ts	92	92	history	7339f6fa8		
+rename+edit	tools/protocol/engine-scenarios.ts	test/protocol/engine-scenarios.ts	90	90	history	7339f6fa8		
+rename+edit	tools/protocol/epoch-probe.ts	test/protocol/epoch-child.ts	70	70	history	708929e6c,7339f6fa8		
+rename+edit	tools/protocol/fixture-ids.ts	test/harness/fixture-ids.ts	83	83	history	7339f6fa8,0ce08767a		
+rename+edit	tools/protocol/fixture-repin.ts	test/protocol/fixture-repin.ts	96	96	history	7339f6fa8		
+rename+edit	tools/protocol/foldparity-check.ts	test/protocol/foldparity-check.ts	95	95	history	7339f6fa8		
+rename+edit	tools/protocol/force-check.ts	test/protocol/force-check.ts	86	91	history	7339f6fa8		
+rename+edit	tools/protocol/fork-reset-check.ts	test/protocol/fork-reset-check.ts	80	86	history	7339f6fa8		
+rename+edit	tools/protocol/freeze-check.ts	test/protocol/freeze-check.ts	93	92	history	7339f6fa8		
+rename+edit	tools/protocol/gaps-check.ts	test/protocol/gaps-check.ts	95	95	history	7339f6fa8		
+rename+edit	tools/protocol/gates-check.ts	test/protocol/gates-check.ts	98	98	history	7339f6fa8		
+rename+edit	tools/protocol/gov-reserved-check.ts	test/protocol/gov-reserved-check.ts	71	65	history	7339f6fa8		
+rename+edit	tools/protocol/grab-check.ts	test/protocol/grab-check.ts	94	95	history	7339f6fa8		
+rename+edit	tools/protocol/hands-check.ts	test/protocol/hands-check.ts	76	82	history	7339f6fa8		
+rename+edit	tools/protocol/hello-refused-check.ts	test/protocol/hello-refused-check.ts	84	84	history	7339f6fa8		
+rename+edit	tools/protocol/history-diff-check.ts	test/protocol/history-diff-check.ts	52	55	history	7339f6fa8		
+rename+edit	tools/protocol/history-rows-check.ts	test/protocol/history-rows-check.ts	90	88	history	7339f6fa8		
+rename+edit	tools/protocol/hostile-check.ts	test/protocol/hostile-check.ts	97	97	history	7339f6fa8		
+rename+edit	tools/protocol/hygiene-baseline.json	test/gate/hygiene-baseline.json	21	8	history	7339f6fa8	move then rewrite: <20% of lines in common; read both	
+rename+edit	tools/protocol/hygiene-check.ts	test/gate/hygiene-check.ts	83	57	history	7339f6fa8		
+rename+edit	tools/protocol/idalias.ts	test/harness/idalias.ts	97	97	history	7339f6fa8,0ce08767a		
+rename+edit	tools/protocol/identity-check.ts	test/protocol/identity-check.ts	85	76	history	7339f6fa8		
+rename+edit	tools/protocol/ids-check.ts	test/protocol/ids-check.ts	89	89	history	7339f6fa8		
+rename+edit	tools/protocol/import-v1/README.md	tools/import-v1/README.md	88	85	history	7339f6fa8		
+rename+edit	tools/protocol/import-v1/build.ts	tools/import-v1/build.ts	83	83	history	7339f6fa8		
+rename+edit	tools/protocol/import-v1/cssnames.js	tools/import-v1/cssnames.js	97	97	history	7339f6fa8		
+rename+edit	tools/protocol/import-v1/eidosim-v1-test.ts	test/protocol/import-v1/eidosim-v1-test.ts	94	95	history	7339f6fa8		
+rename+edit	tools/protocol/import-v1/eidosim-v1.js	tools/import-v1/eidosim-v1.js	99	99	history	7339f6fa8		
+rename+edit	tools/protocol/import-v1/lamps.ts	tools/import-v1/lamps.ts	94	92	history	7339f6fa8		
+rename+edit	tools/protocol/import-v1/shapes.js	tools/import-v1/shapes.js	75	75	history	7339f6fa8		
+rename+edit	tools/protocol/import-v1/snapshot-oracle.ts	tools/import-v1/snapshot-oracle.ts	92	91	history	7339f6fa8		
+rename+edit	tools/protocol/import-v1/sockets.js	tools/import-v1/sockets.js	88	88	history	7339f6fa8		
+rename+edit	tools/protocol/import-v1/translate-v1.js	tools/import-v1/translate-v1.js	98	98	history	7339f6fa8		
+rename+edit	tools/protocol/import-v1/world.ts	tools/import-v1/world.ts	94	93	history	7339f6fa8		
+rename+edit	tools/protocol/importer-check.ts	test/protocol/importer-check.ts	94	95	history	7339f6fa8		
+rename+edit	tools/protocol/inplace-check.ts	test/protocol/inplace-check.ts	96	95	history	7339f6fa8		
+rename+edit	tools/protocol/inspectharness.ts	test/harness/inspectharness.ts	83	82	history	7339f6fa8,0ce08767a		
+rename+edit	tools/protocol/kernel-check.ts	test/protocol/kernel-check.ts	90	91	history	7339f6fa8		
+rename+edit	tools/protocol/labhost.ts	test/harness/labhost.ts	83	83	history	7339f6fa8,0ce08767a		
+rename+edit	tools/protocol/labmodels.js	test/harness/labmodels.js	96	96	history	7339f6fa8,0ce08767a		
+rename+edit	tools/protocol/laws-check.ts	test/protocol/laws-check.ts	91	91	history	7339f6fa8		
+rename+edit	tools/protocol/libfile-check.ts	test/protocol/libfile-check.ts	83	85	history	7339f6fa8		
+rename+edit	tools/protocol/migrate-identities-check.ts	test/protocol/migrate-identities-check.ts	92	91	history	7339f6fa8		
+rename+edit	tools/protocol/migrate-identities.ts	tools/migrate-identities.ts	78	82	history	7339f6fa8		
+rename+edit	tools/protocol/modhole-check.ts	test/protocol/modhole-check.ts	78	77	history	7339f6fa8		
+rename+edit	tools/protocol/modserver-mutants.ts	test/protocol/modserver-mutants.ts	64	58	history	7339f6fa8		
+rename+edit	tools/protocol/mover-check.ts	test/protocol/mover-check.ts	93	94	history	7339f6fa8		
+rename+edit	tools/protocol/names-check.ts	test/protocol/names-check.ts	87	87	history	7339f6fa8		
+rename+edit	tools/protocol/nonumber-check.ts	test/protocol/nonumber-check.ts	81	79	history	7339f6fa8		
+rename+edit	tools/protocol/normative-check.ts	test/protocol/normative-check.ts	94	94	history	7339f6fa8		
+rename+edit	tools/protocol/nov1-check.ts	test/protocol/nov1-check.ts	84	85	history	7339f6fa8		
+rename+edit	tools/protocol/onepose-check.ts	test/protocol/onepose-check.ts	66	67	history	7339f6fa8		
+rename+edit	tools/protocol/oneshot-check.ts	test/protocol/oneshot-check.ts	90	91	history	7339f6fa8		
+rename+edit	tools/protocol/oneshot-sim.ts	test/protocol/oneshot-sim.ts	97	97	history	7339f6fa8		
+rename+edit	tools/protocol/owners-check.ts	test/protocol/owners-check.ts	95	94	history	7339f6fa8		
+rename+edit	tools/protocol/palm-frame.lab.ts	test/labs/palm-frame.lab.ts	96	96	history	7339f6fa8		
+rename+edit	tools/protocol/parity-check.ts	test/protocol/parity-check.ts	88	88	history	7339f6fa8		
+rename+edit	tools/protocol/particles-shots.ts	test/labs/particles-shots.ts	84	86	history	7339f6fa8		
+rename+edit	tools/protocol/party-probe.ts	test/protocol/party-probe.ts	90	89	history	7339f6fa8		
+rename+edit	tools/protocol/phys-check.ts	test/protocol/phys-check.ts	94	94	history	7339f6fa8		
+rename+edit	tools/protocol/physics-volume-check.ts	test/protocol/physics-volume-check.ts	93	88	git-M		moved in the merge of anima/main (b7d498f4e); paired by end-to-end git -M	
+rename+edit	tools/protocol/physlive-check.ts	test/protocol/physlive-check.ts	95	95	history	7339f6fa8		
+rename+edit	tools/protocol/physseeds-check.ts	test/protocol/physseeds-check.ts	89	89	history	7339f6fa8		
+rename+edit	tools/protocol/phystick-check.ts	test/protocol/phystick-check.ts	85	85	history	7339f6fa8		
+rename+edit	tools/protocol/pinhistory.ts	test/harness/pinhistory.ts	93	87	history	7339f6fa8,0ce08767a		
+rename+edit	tools/protocol/presence-check.ts	test/protocol/presence-check.ts	78	81	history	7339f6fa8		
+rename+edit	tools/protocol/pretrans-check.ts	test/protocol/pretrans-check.ts	93	93	history	7339f6fa8		
+rename+edit	tools/protocol/procgroup-check.ts	test/protocol/procgroup-check.ts	80	72	history	7339f6fa8		
+rename+edit	tools/protocol/procgroup.ts	test/gate/procgroup.ts	33	33	commit-table			
+rename+edit	tools/protocol/r10-check.ts	test/protocol/r10-check.ts	88	87	history	7339f6fa8		
+rename+edit	tools/protocol/r11-check.ts	test/protocol/r11-check.ts	84	84	history	7339f6fa8		
+rename+edit	tools/protocol/r8-check.ts	test/protocol/r8-check.ts	92	92	history	7339f6fa8		
+rename+edit	tools/protocol/r9-check.ts	test/protocol/r9-check.ts	92	92	history	7339f6fa8		
+rename+edit	tools/protocol/reachgate-check.ts	test/protocol/reachgate-check.ts	94	89	history	7339f6fa8		
+rename+edit	tools/protocol/refusedjoin-check.ts	test/protocol/refusedjoin-check.ts	92	90	history	7339f6fa8		
+rename+edit	tools/protocol/replay-check.ts	test/protocol/replay-check.ts	69	73	history	7339f6fa8		
+rename+edit	tools/protocol/reset-check.ts	test/protocol/reset-check.ts	80	86	history	7339f6fa8		
+rename+edit	tools/protocol/reset-race-check.ts	test/protocol/reset-race-check.ts	94	93	history	7339f6fa8		
+rename+edit	tools/protocol/roles-check.ts	test/protocol/roles-check.ts	89	86	history	7339f6fa8		
+rename+edit	tools/protocol/run-client-settle-check.ts	test/protocol/run-client-settle-check.ts	82	64	history	7339f6fa8		
+rename+edit	tools/protocol/run.ts	test/gate/run.ts	88	81	history	7339f6fa8		
+rename+edit	tools/protocol/scale-check.ts	test/protocol/scale-check.ts	80	76	history	7339f6fa8		
+rename+edit	tools/protocol/scars-check.ts	test/protocol/scars-check.ts	90	90	history	7339f6fa8		
+rename+edit	tools/protocol/sclock-check.ts	test/protocol/sclock-check.ts	68	62	history	7339f6fa8		
+rename+edit	tools/protocol/scratchworld.ts	test/harness/scratchworld.ts	94	94	history	7339f6fa8,0ce08767a		
+rename+edit	tools/protocol/scripting-check.ts	test/protocol/scripting-check.ts	91	89	history	7339f6fa8		
+rename+edit	tools/protocol/scripts-check.ts	test/protocol/scripts-check.ts	95	95	history	7339f6fa8		
+rename+edit	tools/protocol/server-check.ts	test/protocol/server-check.ts	88	87	history	7339f6fa8		
+rename+edit	tools/protocol/settle-check.ts	test/protocol/settle-check.ts	78	82	history	7339f6fa8		
+rename+edit	tools/protocol/setup-check.ts	test/protocol/setup-check.ts	90	89	history	7339f6fa8		
+rename+edit	tools/protocol/shiplist-check.ts	test/protocol/shiplist-check.ts	83	83	history	7339f6fa8		
+rename+edit	tools/protocol/shiplist-probe.ts	test/protocol/shiplist-probe.ts	83	83	history	7339f6fa8		
+rename+edit	tools/protocol/shove-check.ts	test/protocol/shove-check.ts	91	89	history	7339f6fa8		
+rename+edit	tools/protocol/simckpt-check.ts	test/protocol/simckpt-check.ts	96	95	history	7339f6fa8		
+rename+edit	tools/protocol/siminputs-check.ts	test/protocol/siminputs-check.ts	93	92	history	7339f6fa8		
+rename+edit	tools/protocol/soundclock-check.ts	test/protocol/soundclock-check.ts	58	58	history	7339f6fa8		
+rename+edit	tools/protocol/statecache-check.ts	test/protocol/statecache-check.ts	97	89	history	7339f6fa8		
+rename+edit	tools/protocol/suites.ts	test/gate/suites.ts	19	11	commit-table		move then rewrite: <20% of lines in common; read both	
+rename+edit	tools/protocol/surface-parity.ts	tools/surface-parity.ts	85	88	history	7339f6fa8		
+rename+edit	tools/protocol/sweep.ts	test/protocol/sweep.ts	93	93	history	7339f6fa8		
+rename+edit	tools/protocol/toast-group-check.ts	test/protocol/toast-group-check.ts	77	75	history	7339f6fa8		
+rename+edit	tools/protocol/translate-check.ts	test/protocol/translate-check.ts	94	94	history	7339f6fa8		
+rename+edit	tools/protocol/trig-check.ts	test/protocol/trig-check.ts	82	82	history	7339f6fa8		
+rename+edit	tools/protocol/txn-check.ts	test/protocol/txn-check.ts	80	80	history	7339f6fa8		
+rename+edit	tools/protocol/upgrade-check.ts	test/protocol/upgrade-check.ts	96	96	history	7339f6fa8		
+rename+edit	tools/protocol/verbclasses-check.ts	test/protocol/verbclasses-check.ts	69	73	history	7339f6fa8		
+rename+edit	tools/protocol/vocab-check.ts	test/protocol/vocab-check.ts	93	77	history	7339f6fa8		
+rename+edit	tools/protocol/vocab-fixtures-check.ts	test/protocol/vocab-fixtures-check.ts	87	90	history	7339f6fa8		
+rename+edit	tools/protocol/wait.ts	test/gate/wait.ts	95	93	history	7339f6fa8		
+rename+edit	tools/protocol/world.ts	tools/world.ts	85	86	history	7339f6fa8		
+rename+edit	tools/protocol/wsettings.lab.ts	test/labs/wsettings.lab.ts	83	83	history	7339f6fa8		
+rename+edit	tools/protocol/xss-probe.ts	test/protocol/xss-probe.ts	86	86	history	7339f6fa8		
+rename+edit	tools/protocol/zone-water-check.ts	test/protocol/zone-water-check.ts	95	94	history	7339f6fa8		
+rename+edit	tools/put-settle-stub.mjs	test/stubs/put-settle-stub.mjs	94	88	history	04d041c07		
+rename+edit	tools/put-settle-test.ts	test/client/put-settle-test.ts	92	92	history	04d041c07		
+rename+edit	tools/quadcolour-test.mjs	test/client/quadcolour-test.mjs	79	81	history	04d041c07		
+rename+edit	tools/rag-pose-audit.mjs	test/labs/rag-pose-audit.mjs	93	91	history	ac7c10e4c		
+rename+edit	tools/rag-tune.mjs	test/labs/rag-tune.mjs	81	80	history	ac7c10e4c		
+rename+edit	tools/ragdoll-floor-test.ts	test/client/ragdoll-floor-test.ts	79	77	history	04d041c07		
+rename+edit	tools/ragdoll-test.ts	test/client/ragdoll-test.ts	96	97	history	04d041c07		
+rename+edit	tools/rain-splash-probe.mjs	test/client/rain-splash-probe.mjs	97	97	history	04d041c07		
+rename+edit	tools/rand-test.ts	test/shared/rand-test.ts	75	77	git-M		moved in the merge of anima/main (b7d498f4e); paired by end-to-end git -M	
+rename+edit	tools/reach-command-fixture.ts	test/fixtures/reach-command-fixture.ts	48	48	history	04d041c07		
+rename+edit	tools/reach-continuity-test.ts	test/shared/reach-continuity-test.ts	97	97	history	04d041c07		
+rename+edit	tools/reach-frame-fixture.ts	test/fixtures/reach-frame-fixture.ts	74	70	history	04d041c07		
+rename+edit	tools/reach-order-test.ts	test/client/reach-order-test.ts	93	92	history	04d041c07		
+rename+edit	tools/reach-test.ts	test/shared/reach-test.ts	96	96	history	04d041c07		
+rename+edit	tools/reachlive-test.ts	test/client/reachlive-test.ts	97	95	history	04d041c07		
+rename+edit	tools/reachrig-test.ts	test/shared/reachrig-test.ts	89	89	history	04d041c07		
+rename+edit	tools/reachwire-test.ts	test/shared/reachwire-test.ts	98	96	history	04d041c07		
+rename+edit	tools/realized-lifecycle-test.ts	test/client/realized-lifecycle-test.ts	92	91	history	04d041c07		
+rename+edit	tools/rebuild-test.ts	test/server/rebuild-test.ts	91	90	history	04d041c07		
+rename+edit	tools/recovery-avatar-stub.mjs	test/stubs/recovery-avatar-stub.mjs	93	93	history	04d041c07		
+rename+edit	tools/reexport-binding-test.mjs	test/client/reexport-binding-test.mjs	61	58	history	04d041c07		
+rename+edit	tools/relay-decision-test.ts	test/server/relay-decision-test.ts	40	74	history	04d041c07		
+rename+edit	tools/remotes-lifecycle-test.ts	test/client/remotes-lifecycle-test.ts	83	89	history	04d041c07		
+rename+edit	tools/remotes-limp-edge-test.ts	test/client/remotes-limp-edge-test.ts	93	93	history	04d041c07		
+rename+edit	tools/remotes-stub.mjs	test/stubs/remotes-stub.mjs	67	40	history	04d041c07		
+rename+edit	tools/remotes-stubs.mjs	test/stubs/remotes-stubs.mjs	98	97	history	04d041c07		
+rename+edit	tools/render-aside-test.mjs	test/client/render-aside-test.mjs	85	83	history	04d041c07		
+rename+edit	tools/render-health-test.ts	test/server/render-health-test.ts	88	90	history	04d041c07		
+rename+edit	tools/renderer-cred-test.ts	test/server/renderer-cred-test.ts	78	54	history	04d041c07		
+rename+edit	tools/renderer-join-test.ts	test/client/renderer-join-test.ts	86	88	history	04d041c07		
+rename+edit	tools/replica-freeze-test.ts	test/shared/replica-freeze-test.ts	74	78	history	04d041c07		
+rename+edit	tools/retired-commands-test.ts	test/client/retired-commands-test.ts	75	83	history	04d041c07		
+rename+edit	tools/rig-fixture.mjs	test/fixtures/rig-fixture.mjs	74	74	history	04d041c07		
+rename+edit	tools/rig-load.mjs	tools/assets/rig-load.mjs	69	83	history	04d041c07,4399e1c22		
+rename+edit	tools/roaming-renderer-check.ts	test/client/roaming-renderer-check.ts	88	86	history	04d041c07		
+rename+edit	tools/role-grammar-test.ts	test/shared/role-grammar-test.ts	38	72	history	04d041c07		
+rename+edit	tools/rot-test.ts	test/shared/rot-test.ts	74	85	history	04d041c07		
+rename+edit	tools/route-shape-test.ts	test/shared/route-shape-test.ts	49	74	history	04d041c07		
+rename+edit	tools/run-client.ts	test/harness/run-client.ts	86	83	history	04d041c07		
+rename+edit	tools/scheduler-test.ts	test/client/scheduler-test.ts	83	83	history	04d041c07		
+rename+edit	tools/schema-layers-test.ts	test/shared/schema-layers-test.ts	81	88	history	04d041c07		
+rename+edit	tools/screenshots-test.ts	test/server/screenshots-test.ts	98	96	history	04d041c07		
+rename+edit	tools/scriptnew-expect-stub.mjs	test/stubs/scriptcard-expect-stub.mjs	86	86	history	04d041c07,628f253d2		
+rename+edit	tools/scriptnew-expect-test.ts	test/client/scriptcard-expect-test.ts	73	71	history	04d041c07,628f253d2		
+rename+edit	tools/seat-accept.ts	tools/operator/seat-accept.ts	61	74	history	ac7c10e4c		
+rename+edit	tools/seat-lifecycle-test.ts	test/server/seat-lifecycle-test.ts	62	71	history	04d041c07		
+rename+edit	tools/seatcore-test.ts	test/client/seatcore-test.ts	95	95	history	04d041c07		
+rename+edit	tools/seatlab-measure-test.ts	test/client/seatlab-measure-test.ts	78	76	history	04d041c07		
+rename+edit	tools/seatlab/README.md	bench/seatlab/README.md	84	81	history	ac7c10e4c		
+rename+edit	tools/seatlab/seatlab.js	bench/seatlab/seatlab.js	78	85	history	ac7c10e4c		
+rename+edit	tools/seats-store-test.ts	test/server/seats-store-test.ts	95	94	history	04d041c07		
+rename+edit	tools/selection-test-stub.mjs	test/stubs/selection-test-stub.mjs	91	91	history	04d041c07		
+rename+edit	tools/selection-test.ts	test/client/selection-test.ts	90	90	history	04d041c07		
+rename+edit	tools/server-clock-test.ts	test/client/server-clock-test.ts	90	93	history	04d041c07		
+rename+edit	tools/servergate.ts	tools/operator/servergate.ts	72	82	history	ac7c10e4c		
+rename+edit	tools/settings-panels-stub.mjs	test/stubs/settings-panels-stub.mjs	97	97	history	04d041c07		
+rename+edit	tools/settings-panels-test.ts	test/client/settings-panels-test.ts	68	66	history	04d041c07		
+rename+edit	tools/settled-pose-test.ts	test/server/settled-pose-test.ts	71	76	history	04d041c07		
+rename+edit	tools/sfu-adapter-test.ts	test/server/sfu-adapter-test.ts	52	62	history	04d041c07		
+rename+edit	tools/sfu-browser-smoke.mjs	test/server/sfu-browser-probe.mjs	73	78	history	ac7c10e4c,1f41c6cae		
+rename+edit	tools/sfu-load.ts	bench/sfu-load.ts	82	90	history	ac7c10e4c		
+rename+edit	tools/sfu-mic-intent-race-test.mjs	test/client/sfu-mic-intent-race-test.mjs	92	92	history	04d041c07		
+rename+edit	tools/sfu-test.ts	test/server/sfu-test.ts	76	80	history	04d041c07		
+rename+edit	tools/sfu-verb-gate-test.mjs	test/server/sfu-verb-gate-test.mjs	38	45	history	04d041c07		
+rename+edit	tools/shadow-fade-test.mjs	test/client/shadow-fade-test.mjs	74	19	history	04d041c07	move then rewrite: <20% of lines in common; read both	
+rename+edit	tools/shape-attach-test.ts	test/shared/shape-attach-test.ts	86	90	history	04d041c07		
+rename+edit	tools/shape-import-test.ts	test/shared/shape-import-test.ts	74	75	history	04d041c07		
+rename+edit	tools/shape-physics-test.ts	test/shared/shape-physics-test.ts	89	92	history	04d041c07		
+rename+edit	tools/shape-render-test.ts	test/shared/shape-render-test.ts	83	84	history	04d041c07		
+rename+edit	tools/shove-test.ts	test/shared/shove-test.ts	93	93	history	04d041c07		
+rename+edit	tools/simmath-test.ts	test/shared/simmath-test.ts	91	89	history	04d041c07		
+rename+edit	tools/sky-bake-time-probe.mjs	test/client/sky-bake-time-probe.mjs	62	66	history	04d041c07		
+rename+edit	tools/sky-bakegraph-probe.mjs	test/client/sky-bakegraph-probe.mjs	75	82	history	04d041c07		
+rename+edit	tools/sky-bakelock-test.mjs	test/client/sky-bakelock-test.mjs	91	66	history	04d041c07		
+rename+edit	tools/sky-band-probe.mjs	test/client/sky-band-probe.mjs	92	92	history	04d041c07		
+rename+edit	tools/sky-interim-probe.mjs	test/client/sky-interim-probe.mjs	81	80	history	04d041c07		
+rename+edit	tools/sky-lifecycle-test.mjs	test/client/sky-lifecycle-test.mjs	88	76	history	04d041c07		
+rename+edit	tools/sky-prebuild-probe.mjs	test/client/sky-prebuild-probe.mjs	79	88	history	04d041c07		
+rename+edit	tools/sky-swapchain-test.mjs	test/client/sky-swapchain-test.mjs	89	87	history	04d041c07		
+rename+edit	tools/sky.ts	test/labs/sky.ts	91	91	history	ac7c10e4c		
+rename+edit	tools/skypanel-state-test.ts	test/client/skypanel-state-test.ts	90	53	history	04d041c07		
+rename+edit	tools/skypanel-stub.mjs	test/stubs/skypanel-stub.mjs	82	80	history	04d041c07		
+rename+edit	tools/skystamp-test.ts	test/shared/skystamp-test.ts	74	70	history	04d041c07		
+rename+edit	tools/skywatch-test.ts	test/shared/skywatch-test.ts	43	57	history	04d041c07		
+rename+edit	tools/smoke.ts	tools/operator/smoke.ts	87	92	history	ac7c10e4c		
+rename+edit	tools/snap-at-probe.mjs	test/client/snap-at-probe.mjs	93	93	history	04d041c07		
+rename+edit	tools/snap-settle-test.ts	test/client/snap-settle-test.ts	65	65	history	04d041c07		
+rename+edit	tools/snapframe-render-test.ts	test/client/snapframe-render-test.ts	75	74	history	04d041c07		
+rename+edit	tools/snapframe-test.ts	test/server/snapframe-test.ts	83	36	history	04d041c07		
+rename+edit	tools/sockets-test.ts	test/shared/sockets-test.ts	94	94	history	04d041c07		
+rename+edit	tools/sound-clock-stub.mjs	test/stubs/sound-clock-stub.mjs	97	97	history	04d041c07		
+rename+edit	tools/sound-clock-test.ts	test/client/sound-editor-test.ts	70	63	history	9d7dbd83e,04d041c07		
+rename+edit	tools/sound-guard-stub.mjs	test/stubs/sound-guard-stub.mjs	53	71	history	04d041c07		
+rename+edit	tools/sound-probe.ts	test/client/sound-probe.ts	90	89	history	04d041c07		
+rename+edit	tools/sound-test.ts	test/shared/sound-test.ts	89	85	history	04d041c07		
+rename+edit	tools/splash-lifecycle-test.mjs	test/client/splash-lifecycle-test.mjs	89	85	history	04d041c07		
+rename+edit	tools/spoken-form-test.mjs	test/client/spoken-form-test.mjs	57	57	history	04d041c07		
+rename+edit	tools/spoken-say-door-test.ts	test/server/spoken-say-door-test.ts	66	69	history	04d041c07		
+rename+edit	tools/stdio-door-test.ts	test/mcpl/stdio-door-test.ts	77	78	history	04d041c07		
+rename+edit	tools/store-variants-test.ts	test/server/store-variants-test.ts	82	90	history	04d041c07		
+rename+edit	tools/structure-collider-test.ts	test/client/structure-collider-test.ts	90	90	history	04d041c07		
+rename+edit	tools/structure-demo.ts	test/labs/structure-demo.ts	92	92	history	ac7c10e4c		
+rename+edit	tools/structure-edit-test.ts	test/shared/structure-edit-test.ts	91	91	history	04d041c07		
+rename+edit	tools/structure-field-test.ts	test/shared/structure-field-test.ts	86	89	history	04d041c07		
+rename+edit	tools/structure-threshold-test.ts	test/shared/structure-threshold-test.ts	56	48	history	04d041c07		
+rename+edit	tools/support-lifecycle-test.ts	test/server/support-lifecycle-test.ts	91	93	history	04d041c07		
+rename+edit	tools/support-swap-test.ts	test/mcpl/support-swap-test.ts	67	49	history	04d041c07		
+rename+edit	tools/support-test.ts	test/client/support-test.ts	90	90	history	04d041c07		
+rename+edit	tools/supportclass-test.ts	test/client/supportclass-test.ts	90	92	history	04d041c07		
+rename+edit	tools/surface-hold-test.ts	test/client/surface-hold-test.ts	91	93	history	04d041c07		
+rename+edit	tools/surface-matrix-owned.ts	test/labs/surface-matrix-owned.ts	87	87	history	ac7c10e4c		
+rename+edit	tools/surface-test.py	test/labs/surface-test.py	97	96	history	ac7c10e4c		
+rename+edit	tools/swim-lists-test.ts	test/client/swim-lists-test.ts	90	90	history	04d041c07		
+rename+edit	tools/syncgate-probe.mjs	test/client/syncgate-probe.mjs	95	94	history	04d041c07		
+rename+edit	tools/terrainshape-test.ts	test/shared/terrainshape-test.ts	96	92	history	04d041c07		
+rename+edit	tools/tick-test.ts	test/server/tick-test.ts	63	61	history	04d041c07		
+rename+edit	tools/token-registry-test.ts	test/mcpl/token-registry-test.ts	95	90	history	04d041c07		
+rename+edit	tools/transmission-test.mjs	test/client/transmission-test.mjs	82	88	history	04d041c07		
+rename+edit	tools/tts-acceptance.mjs	tools/operator/tts-acceptance.mjs	75	83	history	ac7c10e4c		
+rename+edit	tools/tts-fault-test.ts	test/client/tts-fault-test.ts	85	81	history	04d041c07		
+rename+edit	tools/tts-test.ts	test/client/tts-test.ts	67	59	history	04d041c07		
+rename+edit	tools/two-storey-fixture.ts	test/fixtures/two-storey-fixture.ts	99	99	history	04d041c07		
+rename+edit	tools/typing-mcpl.test.ts	test/server/typing-mcpl-test.ts	75	74	history	f3fd12d7a,04d041c07		
+rename+edit	tools/typing-relay-test.ts	test/mcpl/typing-relay-test.ts	54	68	history	04d041c07		
+rename+edit	tools/underwater-presence-test.ts	test/server/underwater-presence-test.ts	86	86	history	04d041c07		
+rename+edit	tools/underwater-wire-test.ts	test/server/underwater-wire-test.ts	88	88	history	04d041c07		
+rename+edit	tools/uneven-support-test.ts	test/client/uneven-support-test.ts	91	86	history	04d041c07		
+rename+edit	tools/unknown-comp-report-spy.mjs	test/stubs/unknown-comp-report-spy.mjs	57	57	history	04d041c07		
+rename+edit	tools/unknown-comp-stub.mjs	test/stubs/unknown-comp-stub.mjs	70	70	history	04d041c07		
+rename+edit	tools/unknown-comp-test.ts	test/client/unknown-comp-test.ts	86	86	history	04d041c07		
+rename+edit	tools/variant-status-test.ts	test/server/variant-status-test.ts	94	92	history	04d041c07		
+rename+edit	tools/version-route-test.ts	test/client/version-route-test.ts	36	43	history	04d041c07		
+rename+edit	tools/voice-wire-mutation-test.ts	test/server/voice-wire-mutation-test.ts	87	87	history	04d041c07		
+rename+edit	tools/voice-wire-test.ts	test/shared/voice-wire-test.ts	85	83	history	04d041c07		
+rename+edit	tools/voicebot-test.ts	test/services/voicebot-test.ts	69	67	history	04d041c07,51fa7599e		
+rename+edit	tools/voicebot/bun.lock	services/voicebot/bun.lock	99	100	history	51fa7599e		
+rename+edit	tools/voicebot/index.ts	services/voicebot/index.ts	97	97	history	51fa7599e		
+rename+edit	tools/voicebot/package.json	services/voicebot/package.json	86	86	history	51fa7599e		
+rename+edit	tools/voicesource-real-test.mjs	test/client/voicesource-real-test.mjs	57	61	history	04d041c07		
+rename+edit	tools/vrm-ktx2-mark-test.ts	test/server/vrm-ktx2-mark-test.ts	88	88	history	04d041c07		
+rename+edit	tools/vrmheight-test.ts	test/server/vrmheight-test.ts	95	95	history	04d041c07		
+rename+edit	tools/vrmic-exec-test.mjs	test/client/vrmic-exec-test.mjs	92	61	history	04d041c07		
+rename+edit	tools/vrmic-probe.mjs	test/client/vrmic-probe.mjs	90	95	history	04d041c07		
+rename+edit	tools/walk-support-lifecycle-test.ts	test/mcpl/walk-support-lifecycle-test.ts	84	88	history	04d041c07		
+rename+edit	tools/water-lifecycle-test.ts	test/mcpl/water-lifecycle-test.ts	82	82	history	04d041c07		
+rename+edit	tools/water-vectors.ts	tools/vectors/water.ts	90	90	history	6feac6fc0		
+rename+edit	tools/water/crossing-pipelines-check.ts	test/water/crossing-pipelines-check.ts	88	95	history	7d916d6df		
+rename+edit	tools/water/fog-mask-check.ts	test/water/fog-mask-check.ts	87	87	history	aa9c46518		
+rename+edit	tools/water/gpu-test.ts	test/water/gpu-test.ts	97	97	history	aa9c46518		
+rename+edit	tools/water/import-golden-check.ts	test/water/import-golden-check.ts	93	92	history	aa9c46518		
+rename+edit	tools/water/level-dive-check.ts	test/water/level-dive-check.ts	94	93	history	aa9c46518		
+rename+edit	tools/water/level-underwater-check.ts	test/water/level-underwater-check.ts	98	98	history	aa9c46518		
+rename+edit	tools/water/preview-check.ts	test/water/preview-check.ts	82	79	history	aa9c46518		
+rename+edit	tools/waterkind-test.ts	test/shared/waterkind-test.ts	96	96	history	04d041c07		
+rename+edit	tools/windows-guard-test.ts	test/client/windows-guard-test.ts	92	92	history	04d041c07		
+rename+edit	tools/world-hold-stub.mjs	test/stubs/world-hold-stub.mjs	98	98	history	04d041c07		
+rename+edit	tools/worldentity-test.ts	test/shared/worldentity-test.ts	87	86	history	04d041c07		
+rename+edit	tools/worlds-route-test.ts	test/server/worlds-route-test.ts	46	68	history	04d041c07		
+rename+edit	tools/worn-name-test.mjs	test/client/worn-name-test.mjs	70	64	history	04d041c07		
+rename+edit	tools/xr-debug-live-probe.mjs	test/client/xr-debug-live-probe.mjs	47	53	history	04d041c07		
+rename+edit	tools/xr-dropdown-probe.mjs	test/client/xr-dropdown-probe.mjs	82	91	history	04d041c07		
+rename+edit	tools/xr-dual-warm-probe.mjs	bench/xr-dual-warm-measure.mjs	81	91	history	0244dc9f0,ac7c10e4c		
+rename+edit	tools/xr-entry-effects-test.mjs	test/client/xr-entry-effects-test.mjs	88	73	history	04d041c07		
+rename+edit	tools/xr-eye-binding-probe.mjs	test/client/xr-eye-binding-probe.mjs	74	84	history	04d041c07		
+rename+edit	tools/xr-lifecycle-probe.mjs	test/client/xr-lifecycle-probe.mjs	55	75	history	04d041c07		
+rename+edit	tools/xr-mirror-probe.mjs	test/client/xr-mirror-probe.mjs	83	89	history	04d041c07		
+rename+edit	tools/xr-nullfb-test.mjs	test/client/xr-nullfb-test.mjs	84	84	history	04d041c07		
+rename+edit	tools/xr-panel-drag-probe.mjs	test/client/xr-panel-drag-probe.mjs	87	87	history	04d041c07		
+rename+edit	tools/xr-plate-card-probe.mjs	test/client/xr-plate-card-probe.mjs	93	96	history	04d041c07		
+rename+edit	tools/xr-pointer-probe.mjs	test/client/xr-pointer-probe.mjs	92	93	history	04d041c07		
+rename+edit	tools/xr-quad-colour-probe.mjs	test/client/xr-quad-colour-probe.mjs	90	92	history	04d041c07		
+rename+edit	tools/xr-quad-softswap-probe.mjs	test/client/xr-quad-softswap-probe.mjs	85	94	history	04d041c07		
+rename+edit	tools/xr-render-errors-probe.mjs	test/client/xr-render-errors-probe.mjs	82	90	history	04d041c07		
+rename+edit	tools/xr-res-probe.mjs	test/client/xr-res-probe.mjs	53	53	history	04d041c07		
+rename+edit	tools/xr-ring-probe.mjs	test/client/xr-ring-probe.mjs	60	71	history	04d041c07		
+rename+edit	tools/xr-session-lifecycle-test.mjs	test/client/xr-session-lifecycle-test.mjs	92	85	history	04d041c07		
+rename+edit	tools/xr-switch-compile-probe.mjs	bench/xr-switch-compile-measure.mjs	67	81	history	0244dc9f0,ac7c10e4c		
+rename+edit	tools/xrpanels-contract-test.ts	test/client/xrpanels-contract-test.ts	79	52	history	04d041c07		
+rename+edit	tools/xrpanels-domquad-stub.mjs	test/stubs/xrpanels-domquad-stub.mjs	95	95	history	04d041c07		
+rename+edit	tools/xrpanels-test.ts	test/client/xrpanels-test.ts	83	82	history	04d041c07		
+rename+edit	tools/xrpass-test.mjs	test/client/xrpass-test.mjs	82	80	history	04d041c07		
+rename+edit	tools/xrpixelratio-test.mjs	test/client/xrpixelratio-test.mjs	86	86	history	04d041c07		
+rename+edit	tools/xrpointer-test.mjs	test/client/xrpointer-test.mjs	86	86	history	04d041c07		
+rename+edit	tools/xrshadow-test.mjs	test/client/xrshadow-test.mjs	74	70	history	04d041c07		
+modified	.gitattributes	.gitattributes			same path			
+modified	.github/workflows/browser-probe.yml	.github/workflows/browser-probe.yml			same path			
+modified	.github/workflows/protocol-gate.yml	.github/workflows/protocol-gate.yml			same path			
+modified	.gitignore	.gitignore			same path			
+modified	AGENTS.md	AGENTS.md			same path			
+modified	DESIGN.md	DESIGN.md			same path			
+modified	README.md	README.md			same path			
+modified	THIRD-PARTY.md	THIRD-PARTY.md			same path			
+modified	bun.lock	bun.lock			same path			
+modified	client/bun.lock	client/bun.lock			same path			
+modified	client/credits.html	client/credits.html			same path			
+modified	client/index.html	client/index.html			same path			
+modified	client/lib/assets.js	client/lib/assets.js			same path			
+modified	client/lib/base.js	client/lib/base.js			same path			
+modified	client/lib/boot.js	client/lib/boot.js			same path			
+modified	client/lib/colliders.js	client/lib/colliders.js			same path			
+modified	client/lib/core.js	client/lib/core.js			same path			
+modified	client/lib/debuglog.js	client/lib/debuglog.js			same path			
+modified	client/lib/defs.js	client/lib/defs.js			same path			
+modified	client/lib/edge.js	client/lib/edge.js			same path			
+modified	client/lib/edit/backoff.js	client/lib/edit/backoff.js			same path			
+modified	client/lib/edit/latestread.js	client/lib/edit/latestread.js			same path			
+modified	client/lib/edit/selection.js	client/lib/edit/selection.js			same path			
+modified	client/lib/facemedia.js	client/lib/facemedia.js			same path			
+modified	client/lib/mediaprefs.js	client/lib/mediaprefs.js			same path			
+modified	client/lib/mods.js	client/lib/mods.js			same path			
+modified	client/lib/motion.js	client/lib/motion.js			same path			
+modified	client/lib/net.js	client/lib/net.js			same path			
+modified	client/lib/parts.js	client/lib/parts.js			same path			
+modified	client/lib/prefetch.js	client/lib/prefetch.js			same path			
+modified	client/lib/realize/environment.js	client/lib/realize/environment.js			same path			
+modified	client/lib/realize/lifecycle.js	client/lib/realize/lifecycle.js			same path			
+modified	client/lib/realize/livechat.js	client/lib/realize/livechat.js			same path			
+modified	client/lib/realize/models.js	client/lib/realize/models.js			same path			
+modified	client/lib/realize/models_field.js	client/lib/realize/models_field.js			same path			
+modified	client/lib/realize/recentchat.js	client/lib/realize/recentchat.js			same path			
+modified	client/lib/realize/social.js	client/lib/realize/social.js			same path			
+modified	client/lib/realize/structure.js	client/lib/realize/structure.js			same path			
+modified	client/lib/realize/structuretf.js	client/lib/realize/structuretf.js			same path			
+modified	client/lib/scenegraph.js	client/lib/scenegraph.js			same path			
+modified	client/lib/serverclock.js	client/lib/serverclock.js			same path			
+modified	client/lib/splashrays.worker.js	client/lib/splashrays.worker.js			same path			
+modified	client/lib/state.js	client/lib/state.js			same path			
+modified	client/lib/terrain.js	client/lib/terrain.js			same path			
+modified	client/lib/thingphysics.js	client/lib/thingphysics.js			same path			
+modified	client/lib/vegetation/vegetation.js	client/lib/vegetation/vegetation.js			same path			
+modified	client/lib/vegetation/vegetation_corn_gen.js	client/lib/vegetation/vegetation_corn_gen.js			same path			
+modified	client/lib/vegetation/vegetation_shrub_gen.js	client/lib/vegetation/vegetation_shrub_gen.js			same path			
+modified	client/lib/vegetation/vegetation_sunflower_gen.js	client/lib/vegetation/vegetation_sunflower_gen.js			same path			
+modified	client/lib/water.js	client/lib/water.js			same path			
+modified	client/lib/world.js	client/lib/world.js			same path			
+modified	client/lite.js	client/lite.js			same path			
+modified	client/main.js	client/main.js			same path			
+modified	client/package.json	client/package.json			same path			
+modified	client/vendor/piper/NOTICE.md	client/vendor/piper/NOTICE.md			same path			
+modified	defs/README.md	defs/README.md			same path			
+modified	defs/avatars/claude_robot_2k.json	defs/avatars/claude_robot_2k.json			same path			
+modified	deploy/deploy-vps.sh	deploy/deploy-vps.sh			same path			
+modified	deploy/eido-chatbridge.service	deploy/eido-chatbridge.service			same path			
+modified	deploy/nginx-show.conf	deploy/nginx-show.conf			same path			
+modified	deploy/projector/README.md	deploy/projector/README.md			same path			
+modified	deploy/render-health.ts	deploy/render-health.ts			same path			
+modified	deploy/render-watchdog.ts	deploy/render-watchdog.ts			same path			
+modified	deploy/run-mac-renderer.sh	deploy/run-mac-renderer.sh			same path			
+modified	docs/research/portable-identity.md	docs/research/portable-identity.md			same path			
+modified	mcpl/agent.ts	mcpl/agent.ts			same path			
+modified	mcpl/body-state.ts	mcpl/body-state.ts			same path			
+modified	mcpl/bun.lock	mcpl/bun.lock			same path			
+modified	mcpl/declaration.ts	mcpl/declaration.ts			same path			
+modified	mcpl/denoise.ts	mcpl/denoise.ts			same path			
+modified	mcpl/effective.ts	mcpl/effective.ts			same path			
+modified	mcpl/event-wire.ts	mcpl/event-wire.ts			same path			
+modified	mcpl/headless-core.mjs	mcpl/headless-core.mjs			same path			
+modified	mcpl/manifest.ts	mcpl/manifest.ts			same path			
+modified	mcpl/mention.ts	mcpl/mention.ts			same path			
+modified	mcpl/net-server.ts	mcpl/net-server.ts			same path			
+modified	mcpl/package.json	mcpl/package.json			same path			
+modified	mcpl/physics.ts	mcpl/physics.ts			same path			
+modified	mcpl/ping-wire.ts	mcpl/ping-wire.ts			same path			
+modified	mcpl/pose-clips.ts	mcpl/pose-clips.ts			same path			
+modified	mcpl/rigbones.ts	mcpl/rigbones.ts			same path			
+modified	mcpl/server.ts	mcpl/server.ts			same path			
+modified	mcpl/token-registry.ts	mcpl/token-registry.ts			same path			
+modified	mcpl/tools.ts	mcpl/tools.ts			same path			
+modified	mcpl/typing-relay.ts	mcpl/typing-relay.ts			same path			
+modified	package.json	package.json			same path			
+modified	patched/README.md	patched/README.md			same path			
+modified	scripting/run.ts	scripting/run.ts			same path			
+modified	scripting/world.d.ts	scripting/world.d.ts			same path			
+modified	server/access.ts	server/access.ts			same path			
+modified	server/accountage.ts	server/accountage.ts			same path			
+modified	server/aid1.ts	server/aid1.ts			same path			
+modified	server/auth.ts	server/auth.ts			same path			
+modified	server/backups.ts	server/backups.ts			same path			
+modified	server/buildcheck-queue.ts	server/buildcheck-queue.ts			same path			
+modified	server/buildcheck-run.ts	server/buildcheck-run.ts			same path			
+modified	server/buildcheck.ts	server/buildcheck.ts			same path			
+modified	server/clientlog.ts	server/clientlog.ts			same path			
+modified	server/config.ts	server/config.ts			same path			
+modified	server/csp.ts	server/csp.ts			same path			
+modified	server/custody.ts	server/custody.ts			same path			
+modified	server/custodycheck.ts	server/custodycheck.ts			same path			
+modified	server/defs.ts	server/defs.ts			same path			
+modified	server/directory.ts	server/directory.ts			same path			
+modified	server/durable.ts	server/durable.ts			same path			
+modified	server/eidoindex.ts	server/eidoindex.ts			same path			
+modified	server/foldviews.ts	server/foldviews.ts			same path			
+modified	server/fsutil.ts	server/fsutil.ts			same path			
+modified	server/geometry.ts	server/geometry.ts			same path			
+modified	server/glbparse.ts	server/glbparse.ts			same path			
+modified	server/glbperf.ts	server/glbperf.ts			same path			
+modified	server/heightmap.ts	server/heightmap.ts			same path			
+modified	server/keyfiles.ts	server/keyfiles.ts			same path			
+modified	server/lazylog.ts	server/lazylog.ts			same path			
+modified	server/libfile.ts	server/libfile.ts			same path			
+modified	server/limits.ts	server/limits.ts			same path			
+modified	server/livehost.ts	server/livehost.ts			same path			
+modified	server/mainknew.ts	server/mainknew.ts			same path			
+modified	server/messages.ts	server/messages.ts			same path			
+modified	server/modelcatalogue.ts	server/modelcatalogue.ts			same path			
+modified	server/moderation.ts	server/moderation.ts			same path			
+modified	server/msgrate.ts	server/msgrate.ts			same path			
+modified	server/native-login.ts	server/native-login.ts			same path			
+modified	server/oldworlds.ts	server/oldworlds.ts			same path			
+modified	server/oneshot.ts	server/oneshot.ts			same path			
+modified	server/operators.ts	server/operators.ts			same path			
+modified	server/optimize.ts	server/optimize.ts			same path			
+modified	server/ownerrecognise.ts	server/ownerrecognise.ts			same path			
+modified	server/peer.ts	server/peer.ts			same path			
+modified	server/posecheck.ts	server/posecheck.ts			same path			
+modified	server/procgroup.ts	server/procgroup.ts			same path			
+modified	server/provenance.ts	server/provenance.ts			same path			
+modified	server/ratewindow.ts	server/ratewindow.ts			same path			
+modified	server/reachgate.ts	server/reachgate.ts			same path			
+modified	server/readmeter.ts	server/readmeter.ts			same path			
+modified	server/relaydecision.ts	server/relaydecision.ts			same path			
+modified	server/render-flora.ts	server/render-flora.ts			same path			
+modified	server/requestwire.ts	server/requestwire.ts			same path			
+modified	server/routes.ts	server/routes.ts			same path			
+modified	server/screenshots.ts	server/screenshots.ts			same path			
+modified	server/scripts.ts	server/scripts.ts			same path			
+modified	server/seats.ts	server/seats.ts			same path			
+modified	server/server.ts	server/server.ts			same path			
+modified	server/setup.ts	server/setup.ts			same path			
+modified	server/sfu.ts	server/sfu.ts			same path			
+modified	server/sfuadapter.ts	server/sfuadapter.ts			same path			
+modified	server/sfuguard.ts	server/sfuguard.ts			same path			
+modified	server/sfusupervisor.ts	server/sfusupervisor.ts			same path			
+modified	server/solids.ts	server/solids.ts			same path			
+modified	server/statecache-verify.ts	server/statecache-verify.ts			same path			
+modified	server/statecache.ts	server/statecache.ts			same path			
+modified	server/store-variants.ts	server/store-variants.ts			same path			
+modified	server/tick.ts	server/tick.ts			same path			
+modified	server/tools-stamp.ts	server/tools-stamp.ts			same path			
+modified	server/transport.ts	server/transport.ts			same path			
+modified	server/upgrade.ts	server/upgrade.ts			same path			
+modified	server/upload.ts	server/upload.ts			same path			
+modified	server/vrmheight.ts	server/vrmheight.ts			same path			
+modified	server/world.ts	server/world.ts			same path			
+modified	server/worldindex.ts	server/worldindex.ts			same path			
+modified	server/worldlog.ts	server/worldlog.ts			same path			
+modified	shared/README.md	shared/README.md			same path			
+modified	shared/a11y.js	shared/a11y.js			same path			
+modified	shared/animdefs.js	shared/animdefs.js			same path			
+modified	shared/avatardefs.js	shared/avatardefs.js			same path			
+modified	shared/axes.js	shared/axes.js			same path			
+modified	shared/blast.js	shared/blast.js			same path			
+modified	shared/bodymode.js	shared/bodymode.js			same path			
+modified	shared/breath.js	shared/breath.js			same path			
+modified	shared/buoyancy.js	shared/buoyancy.js			same path			
+modified	shared/captions.js	shared/captions.js			same path			
+modified	shared/chatwindow.js	shared/chatwindow.js			same path			
+modified	shared/climb.js	shared/climb.js			same path			
+modified	shared/clockoffset.js	shared/clockoffset.js			same path			
+modified	shared/components.js	shared/components.js			same path			
+modified	shared/conformance/motion.json	shared/conformance/motion.json			same path			
+modified	shared/contact.js	shared/contact.js			same path			
+modified	shared/credits.js	shared/credits.js			same path			
+modified	shared/descriptors.js	shared/descriptors.js			same path			
+modified	shared/drafts.js	shared/drafts.js			same path			
+modified	shared/drive.js	shared/drive.js			same path			
+modified	shared/editschema.js	shared/editschema.js			same path			
+modified	shared/eido.js	shared/eido.js			same path			
+modified	shared/eidosim.js	shared/eidosim.js			same path			
+modified	shared/euler.js	shared/euler.js			same path			
+modified	shared/flight.js	shared/flight.js			same path			
+modified	shared/flightbody.js	shared/flightbody.js			same path			
+modified	shared/flightcap.js	shared/flightcap.js			same path			
+modified	shared/flightpilot.js	shared/flightpilot.js			same path			
+modified	shared/flora-placement.js	shared/flora-placement.js			same path			
+modified	shared/flora_args.js	shared/flora_args.js			same path			
+modified	shared/floradefs.js	shared/floradefs.js			same path			
+modified	shared/forecast.js	shared/forecast.js			same path			
+modified	shared/grab.js	shared/grab.js			same path			
+modified	shared/grounddefs.js	shared/grounddefs.js			same path			
+modified	shared/hierarchy.js	shared/hierarchy.js			same path			
+modified	shared/humanoid.js	shared/humanoid.js			same path			
+modified	shared/joints.js	shared/joints.js			same path			
+modified	shared/ktx2.js	shared/ktx2.js			same path			
+modified	shared/layers.js	shared/layers.js			same path			
+modified	shared/leafforce.js	shared/leafforce.js			same path			
+modified	shared/libcredits.js	shared/libcredits.js			same path			
+modified	shared/lod-distance.js	shared/lod-distance.js			same path			
+modified	shared/lookat.js	shared/lookat.js			same path			
+modified	shared/material.js	shared/material.js			same path			
+modified	shared/mediasrc.js	shared/mediasrc.js			same path			
+modified	shared/mover.js	shared/mover.js			same path			
+modified	shared/oldformat.js	shared/oldformat.js			same path			
+modified	shared/onceanim.js	shared/onceanim.js			same path			
+modified	shared/particle_effects.js	shared/particle_effects.js			same path			
+modified	shared/particles.js	shared/particles.js			same path			
+modified	shared/particlesim.js	shared/particlesim.js			same path			
+modified	shared/perfrank.js	shared/perfrank.js			same path			
+modified	shared/picture.js	shared/picture.js			same path			
+modified	shared/presencewire.js	shared/presencewire.js			same path			
+modified	shared/protocol/access.js	shared/protocol/access.js			same path			
+modified	shared/protocol/assetref.js	shared/protocol/assetref.js			same path			
+modified	shared/protocol/authority.js	shared/protocol/authority.js			same path			
+modified	shared/protocol/authority/blueprints.js	shared/protocol/authority/blueprints.js			same path			
+modified	shared/protocol/authority/bodyconsent.js	shared/protocol/authority/bodyconsent.js			same path			
+modified	shared/protocol/authority/bodyverbs.js	shared/protocol/authority/bodyverbs.js			same path			
+modified	shared/protocol/authority/capacity.js	shared/protocol/authority/capacity.js			same path			
+modified	shared/protocol/authority/catalogue.js	shared/protocol/authority/catalogue.js			same path			
+modified	shared/protocol/authority/checks.js	shared/protocol/authority/checks.js			same path			
+modified	shared/protocol/authority/ctx.js	shared/protocol/authority/ctx.js			same path			
+modified	shared/protocol/authority/drive.js	shared/protocol/authority/drive.js			same path			
+modified	shared/protocol/authority/followups.js	shared/protocol/authority/followups.js			same path			
+modified	shared/protocol/authority/gate.js	shared/protocol/authority/gate.js			same path			
+modified	shared/protocol/authority/manipulate.js	shared/protocol/authority/manipulate.js			same path			
+modified	shared/protocol/authority/math.js	shared/protocol/authority/math.js			same path			
+modified	shared/protocol/authority/moderation.js	shared/protocol/authority/moderation.js			same path			
+modified	shared/protocol/authority/occupants.js	shared/protocol/authority/occupants.js			same path			
+modified	shared/protocol/authority/physics.js	shared/protocol/authority/physics.js			same path			
+modified	shared/protocol/authority/refuse.js	shared/protocol/authority/refuse.js			same path			
+modified	shared/protocol/authority/rights.js	shared/protocol/authority/rights.js			same path			
+modified	shared/protocol/authority/scriptrun.js	shared/protocol/authority/scriptrun.js			same path			
+modified	shared/protocol/authority/scripts.js	shared/protocol/authority/scripts.js			same path			
+modified	shared/protocol/authority/sockets.js	shared/protocol/authority/sockets.js			same path			
+modified	shared/protocol/authority/spatial.js	shared/protocol/authority/spatial.js			same path			
+modified	shared/protocol/authority/storage.js	shared/protocol/authority/storage.js			same path			
+modified	shared/protocol/authority/undo.js	shared/protocol/authority/undo.js			same path			
+modified	shared/protocol/authority/use.js	shared/protocol/authority/use.js			same path			
+modified	shared/protocol/authority/verbs.js	shared/protocol/authority/verbs.js			same path			
+modified	shared/protocol/authority/writes.js	shared/protocol/authority/writes.js			same path			
+modified	shared/protocol/componentspec.js	shared/protocol/componentspec.js			same path			
+modified	shared/protocol/consent.js	shared/protocol/consent.js			same path			
+modified	shared/protocol/features.js	shared/protocol/features.js			same path			
+modified	shared/protocol/fold.js	shared/protocol/fold.js			same path			
+modified	shared/protocol/hash.js	shared/protocol/hash.js			same path			
+modified	shared/protocol/hello.js	shared/protocol/hello.js			same path			
+modified	shared/protocol/ids.js	shared/protocol/ids.js			same path			
+modified	shared/protocol/kernelspec.js	shared/protocol/kernelspec.js			same path			
+modified	shared/protocol/launchplan.js	shared/protocol/launchplan.js			same path			
+modified	shared/protocol/names.js	shared/protocol/names.js			same path			
+modified	shared/protocol/physconst.js	shared/protocol/physconst.js			same path			
+modified	shared/protocol/provenance.js	shared/protocol/provenance.js			same path			
+modified	shared/protocol/refusal.js	shared/protocol/refusal.js			same path			
+modified	shared/protocol/refusalcodes.js	shared/protocol/refusalcodes.js			same path			
+modified	shared/protocol/replica.js	shared/protocol/replica.js			same path			
+modified	shared/protocol/roles.js	shared/protocol/roles.js			same path			
+modified	shared/protocol/round.js	shared/protocol/round.js			same path			
+modified	shared/protocol/sandbox.js	shared/protocol/sandbox.js			same path			
+modified	shared/protocol/scriptaudit.js	shared/protocol/scriptaudit.js			same path			
+modified	shared/protocol/scriptrules.js	shared/protocol/scriptrules.js			same path			
+modified	shared/protocol/shapes.js	shared/protocol/shapes.js			same path			
+modified	shared/protocol/simlayer.js	shared/protocol/simlayer.js			same path			
+modified	shared/protocol/verbclasses.js	shared/protocol/verbclasses.js			same path			
+modified	shared/protocol/verbspec.js	shared/protocol/verbspec.js			same path			
+modified	shared/protocol/view.js	shared/protocol/view.js			same path			
+modified	shared/reach.js	shared/reach.js			same path			
+modified	shared/reachorder.js	shared/reachorder.js			same path			
+modified	shared/reachwire.js	shared/reachwire.js			same path			
+modified	shared/redial.js	shared/redial.js			same path			
+modified	shared/requests.js	shared/requests.js			same path			
+modified	shared/rig.js	shared/rig.js			same path			
+modified	shared/rot.js	shared/rot.js			same path			
+modified	shared/says.js	shared/says.js			same path			
+modified	shared/scale3.js	shared/scale3.js			same path			
+modified	shared/sha256.js	shared/sha256.js			same path			
+modified	shared/shove.js	shared/shove.js			same path			
+modified	shared/shown.js	shared/shown.js			same path			
+modified	shared/sim.js	shared/sim.js			same path			
+modified	shared/simmath.js	shared/simmath.js			same path			
+modified	shared/skydefs.js	shared/skydefs.js			same path			
+modified	shared/snapframe.js	shared/snapframe.js			same path			
+modified	shared/sockbody.js	shared/sockbody.js			same path			
+modified	shared/sound.js	shared/sound.js			same path			
+modified	shared/structdefs.js	shared/structdefs.js			same path			
+modified	shared/structure-route.js	shared/structure-route.js			same path			
+modified	shared/structure.js	shared/structure.js			same path			
+modified	shared/swimpose.js	shared/swimpose.js			same path			
+modified	shared/terrainlayers.js	shared/terrainlayers.js			same path			
+modified	shared/terrainmath.js	shared/terrainmath.js			same path			
+modified	shared/terrainshape.js	shared/terrainshape.js			same path			
+modified	shared/text.js	shared/text.js			same path			
+modified	shared/thingref.js	shared/thingref.js			same path			
+modified	shared/uidefs.js	shared/uidefs.js			same path			
+modified	shared/viewdiff.js	shared/viewdiff.js			same path			
+modified	shared/water.js	shared/water.js			same path			
+modified	shared/waterkind.js	shared/waterkind.js			same path			
+modified	shared/waves.js	shared/waves.js			same path			
+modified	shared/wingpresence.js	shared/wingpresence.js			same path			
+modified	shared/worldentity.js	shared/worldentity.js			same path			
+modified	shared/zone.js	shared/zone.js			same path			
+modified	spec/EIDO-URIS.md	spec/EIDO-URIS.md			same path			
+modified	spec/NORMATIVE.md	spec/NORMATIVE.md			same path			
+modified	spec/PHYSICS.md	spec/PHYSICS.md			same path			
+modified	spec/PROTOCOL.md	spec/PROTOCOL.md			same path			
+modified	spec/REGISTRY-CHANGELOG.md	spec/REGISTRY-CHANGELOG.md			same path			
+modified	spec/conformance/physics/fixture-repins.json	spec/conformance/physics/fixture-repins.json			same path			
+modified	spec/conformance/test_chain.py	spec/conformance/test_chain.py			same path			
+modified	spec/conformance/test_reader.py	spec/conformance/test_reader.py			same path			
+modified	spec/conformance/test_story.py	spec/conformance/test_story.py			same path			
+modified	spec/conformance/trig.json	spec/conformance/trig.json			same path			
+modified	spec/fixtures/replay/README.md	spec/fixtures/replay/README.md			same path			
+modified	spec/history/PROTOCOL-v2-sim.md	spec/history/PROTOCOL-v2-sim.md			same path			
+modified	spec/refusal-codes.json	spec/refusal-codes.json			same path			
+modified	spec/registry-pin.json	spec/registry-pin.json			same path			
+modified	tools/glb2vrm.ts	tools/glb2vrm.ts			same path			
+modified	tools/slim-vrm.ts	tools/slim-vrm.ts			same path			
+modified	tools/water/README.md	tools/water/README.md			same path			
+modified	tools/water/export-submarine-blender.py	tools/water/export-submarine-blender.py			same path			
+modified	tools/water/import.ts	tools/water/import.ts			same path			
+modified	tools/water/prepare.ts	tools/water/prepare.ts			same path			
+modified	tools/water/preview.ts	tools/water/preview.ts			same path			
+modified	tools/water/requests.js	tools/water/requests.js			same path			
+unchanged	.github/workflows/review.yml	.github/workflows/review.yml			same path			
+unchanged	.greptile/config.json	.greptile/config.json			same path			
+unchanged	LICENSE	LICENSE			same path			
+unchanged	client/captions.html	client/captions.html			same path			
+unchanged	client/vendor/ammo/ammo.wasm.js	client/vendor/ammo/ammo.wasm.js			same path			
+unchanged	client/vendor/ammo/ammo.wasm.wasm	client/vendor/ammo/ammo.wasm.wasm			same path			
+unchanged	client/vendor/piper/LICENSE-GPL-3.0.txt	client/vendor/piper/LICENSE-GPL-3.0.txt			same path			
+unchanged	client/vendor/piper/piper_phonemize.data	client/vendor/piper/piper_phonemize.data			same path			
+unchanged	client/vendor/piper/piper_phonemize.wasm	client/vendor/piper/piper_phonemize.wasm			same path			
+unchanged	defs/animations/_actionbar.json	defs/animations/_actionbar.json			same path			
+unchanged	defs/avatars/claude_robot.json	defs/avatars/claude_robot.json			same path			
+unchanged	defs/flora/_colors.json	defs/flora/_colors.json			same path			
+unchanged	defs/flora/_presets.json	defs/flora/_presets.json			same path			
+unchanged	defs/flora/blackbrush.json	defs/flora/blackbrush.json			same path			
+unchanged	defs/flora/corn.json	defs/flora/corn.json			same path			
+unchanged	defs/flora/creosote.json	defs/flora/creosote.json			same path			
+unchanged	defs/flora/galleta_dry.json	defs/flora/galleta_dry.json			same path			
+unchanged	defs/flora/grass.json	defs/flora/grass.json			same path			
+unchanged	defs/flora/sagebrush.json	defs/flora/sagebrush.json			same path			
+unchanged	defs/flora/sunflower.json	defs/flora/sunflower.json			same path			
+unchanged	defs/flora/yucca.json	defs/flora/yucca.json			same path			
+unchanged	defs/ground/_palette.json	defs/ground/_palette.json			same path			
+unchanged	defs/library/credits.json	defs/library/credits.json			same path			
+unchanged	defs/sky/_clocks.json	defs/sky/_clocks.json			same path			
+unchanged	defs/sky/_presets.json	defs/sky/_presets.json			same path			
+unchanged	defs/structure/_palette.json	defs/structure/_palette.json			same path			
+unchanged	defs/ui/_help.json	defs/ui/_help.json			same path			
+unchanged	deploy/projector/mediamtx.template.yml	deploy/projector/mediamtx.template.yml			same path			
+unchanged	deploy/projector/mkconfig.sh	deploy/projector/mkconfig.sh			same path			
+unchanged	deploy/projector/smoke.sh	deploy/projector/smoke.sh			same path			
+unchanged	mcpl/.gitignore	mcpl/.gitignore			same path			
+unchanged	mcpl/rig.ts	mcpl/rig.ts			same path			
+unchanged	mcpl/tokens.example.json	mcpl/tokens.example.json			same path			
+unchanged	mcpl/vectors/manifest-digest-vectors.json	mcpl/vectors/manifest-digest-vectors.json			same path			
+unchanged	patched/eidoverse/assets/animations/sitting_normal_chair.vrma	patched/eidoverse/assets/animations/sitting_normal_chair.vrma			same path			
+unchanged	scripting/examples/bellkeeper.js	scripting/examples/bellkeeper.js			same path			
+unchanged	scripting/examples/greeter.js	scripting/examples/greeter.js			same path			
+unchanged	scripting/examples/lighthouse.js	scripting/examples/lighthouse.js			same path			
+unchanged	server/briefing.ts	server/briefing.ts			same path			
+unchanged	shared/briefing.js	shared/briefing.js			same path			
+unchanged	shared/clipdefs.js	shared/clipdefs.js			same path			
+unchanged	shared/conformance/water.json	shared/conformance/water.json			same path			
+unchanged	shared/protocol/sandbox-child.js	shared/protocol/sandbox-child.js			same path			
+unchanged	shared/protocol/siminputs.js	shared/protocol/siminputs.js			same path			
+unchanged	shared/rand.js	shared/rand.js			same path			
+unchanged	shared/spawn.js	shared/spawn.js			same path			
+unchanged	spec/LICENSE	spec/LICENSE			same path			
+unchanged	spec/conformance/EXAMPLE-01.jsonl	spec/conformance/EXAMPLE-01.jsonl			same path			
+unchanged	spec/conformance/chain.py	spec/conformance/chain.py			same path			
+unchanged	spec/conformance/ed25519/speccheck-cases.json	spec/conformance/ed25519/speccheck-cases.json			same path			
+unchanged	spec/conformance/ed25519/test_vectors.py	spec/conformance/ed25519/test_vectors.py			same path			
+unchanged	spec/conformance/expected.json	spec/conformance/expected.json			same path			
+unchanged	spec/conformance/gov.py	spec/conformance/gov.py			same path			
+unchanged	spec/conformance/lab-cottage.jsonl	spec/conformance/lab-cottage.jsonl			same path			
+unchanged	spec/conformance/laws.json	spec/conformance/laws.json			same path			
+unchanged	spec/conformance/logs/01-baseline.jsonl	spec/conformance/logs/01-baseline.jsonl			same path			
+unchanged	spec/conformance/logs/02-spelling.jsonl	spec/conformance/logs/02-spelling.jsonl			same path			
+unchanged	spec/conformance/logs/03-dupkeys.jsonl	spec/conformance/logs/03-dupkeys.jsonl			same path			
+unchanged	spec/conformance/logs/04-numbers.jsonl	spec/conformance/logs/04-numbers.jsonl			same path			
+unchanged	spec/conformance/logs/04b-salt.jsonl	spec/conformance/logs/04b-salt.jsonl			same path			
+unchanged	spec/conformance/logs/05-names.jsonl	spec/conformance/logs/05-names.jsonl			same path			
+unchanged	spec/conformance/logs/06-nested-batch.jsonl	spec/conformance/logs/06-nested-batch.jsonl			same path			
+unchanged	spec/conformance/logs/06b-cascade.jsonl	spec/conformance/logs/06b-cascade.jsonl			same path			
+unchanged	spec/conformance/logs/06c-cascade-empty.jsonl	spec/conformance/logs/06c-cascade-empty.jsonl			same path			
+unchanged	spec/conformance/logs/06d-cascade-desc.jsonl	spec/conformance/logs/06d-cascade-desc.jsonl			same path			
+unchanged	spec/conformance/logs/06e-cascade-range.jsonl	spec/conformance/logs/06e-cascade-range.jsonl			same path			
+unchanged	spec/conformance/logs/06f-cascade-frac.jsonl	spec/conformance/logs/06f-cascade-frac.jsonl			same path			
+unchanged	spec/conformance/logs/06g-cascade-str.jsonl	spec/conformance/logs/06g-cascade-str.jsonl			same path			
+unchanged	spec/conformance/logs/07a-version-5.jsonl	spec/conformance/logs/07a-version-5.jsonl			same path			
+unchanged	spec/conformance/logs/07b-version-str.jsonl	spec/conformance/logs/07b-version-str.jsonl			same path			
+unchanged	spec/conformance/logs/07c-version-missing.jsonl	spec/conformance/logs/07c-version-missing.jsonl			same path			
+unchanged	spec/conformance/logs/07d-version-4.0.jsonl	spec/conformance/logs/07d-version-4.0.jsonl			same path			
+unchanged	spec/conformance/logs/07e-dialect-other.jsonl	spec/conformance/logs/07e-dialect-other.jsonl			same path			
+unchanged	spec/conformance/logs/07f-dialect-missing.jsonl	spec/conformance/logs/07f-dialect-missing.jsonl			same path			
+unchanged	spec/conformance/logs/08-edges.jsonl	spec/conformance/logs/08-edges.jsonl			same path			
+unchanged	spec/conformance/logs/09-redaction.jsonl	spec/conformance/logs/09-redaction.jsonl			same path			
+unchanged	spec/conformance/logs/10a-genesis-late.jsonl	spec/conformance/logs/10a-genesis-late.jsonl			same path			
+unchanged	spec/conformance/logs/10b-two-genesis.jsonl	spec/conformance/logs/10b-two-genesis.jsonl			same path			
+unchanged	spec/conformance/logs/10c-empty.jsonl	spec/conformance/logs/10c-empty.jsonl			same path			
+unchanged	spec/conformance/logs/11-envelope.jsonl	spec/conformance/logs/11-envelope.jsonl			same path			
+unchanged	spec/conformance/logs/12a-blank-crlf.jsonl	spec/conformance/logs/12a-blank-crlf.jsonl			same path			
+unchanged	spec/conformance/logs/12b-bom.jsonl	spec/conformance/logs/12b-bom.jsonl			same path			
+unchanged	spec/conformance/logs/12c-strings.jsonl	spec/conformance/logs/12c-strings.jsonl			same path			
+unchanged	spec/conformance/logs/12c-text.jsonl	spec/conformance/logs/12c-text.jsonl			same path			
+unchanged	spec/conformance/logs/13-depth.jsonl	spec/conformance/logs/13-depth.jsonl			same path			
+unchanged	spec/conformance/logs/14-batch-partial.jsonl	spec/conformance/logs/14-batch-partial.jsonl			same path			
+unchanged	spec/conformance/logs/16-bool.jsonl	spec/conformance/logs/16-bool.jsonl			same path			
+unchanged	spec/conformance/logs/17-bigint.jsonl	spec/conformance/logs/17-bigint.jsonl			same path			
+unchanged	spec/conformance/logs/18-ts.jsonl	spec/conformance/logs/18-ts.jsonl			same path			
+unchanged	spec/conformance/logs/18b-ts-missing.jsonl	spec/conformance/logs/18b-ts-missing.jsonl			same path			
+unchanged	spec/conformance/logs/18c-world-mismatch.jsonl	spec/conformance/logs/18c-world-mismatch.jsonl			same path			
+unchanged	spec/conformance/logs/19a-genesis-no-nonce.jsonl	spec/conformance/logs/19a-genesis-no-nonce.jsonl			same path			
+unchanged	spec/conformance/logs/19b-genesis-short-nonce.jsonl	spec/conformance/logs/19b-genesis-short-nonce.jsonl			same path			
+unchanged	spec/conformance/logs/19c-genesis-nonce-not-b64url.jsonl	spec/conformance/logs/19c-genesis-nonce-not-b64url.jsonl			same path			
+unchanged	spec/conformance/logs/19e-genesis-stray-minor.jsonl	spec/conformance/logs/19e-genesis-stray-minor.jsonl			same path			
+unchanged	spec/conformance/logs/19f-genesis-flat-owners.jsonl	spec/conformance/logs/19f-genesis-flat-owners.jsonl			same path			
+unchanged	spec/conformance/logs/19g-genesis-small-order-key.jsonl	spec/conformance/logs/19g-genesis-small-order-key.jsonl			same path			
+unchanged	spec/conformance/logs/19h-genesis-key-y-ge-p.jsonl	spec/conformance/logs/19h-genesis-key-y-ge-p.jsonl			same path			
+unchanged	spec/conformance/logs/19i-genesis-no-sequencer.jsonl	spec/conformance/logs/19i-genesis-no-sequencer.jsonl			same path			
+unchanged	spec/conformance/logs/19j-genesis-unknown-field.jsonl	spec/conformance/logs/19j-genesis-unknown-field.jsonl			same path			
+unchanged	spec/conformance/logs/19k-genesis-key-twice.jsonl	spec/conformance/logs/19k-genesis-key-twice.jsonl			same path			
+unchanged	spec/conformance/logs/19l-genesis-bad-quorum.jsonl	spec/conformance/logs/19l-genesis-bad-quorum.jsonl			same path			
+unchanged	spec/conformance/logs/19m-genesis-bad-window.jsonl	spec/conformance/logs/19m-genesis-bad-window.jsonl			same path			
+unchanged	spec/conformance/logs/19m2-genesis-old-window.jsonl	spec/conformance/logs/19m2-genesis-old-window.jsonl			same path			
+unchanged	spec/conformance/logs/19n-genesis-bad-parent.jsonl	spec/conformance/logs/19n-genesis-bad-parent.jsonl			same path			
+unchanged	spec/conformance/logs/19o-genesis-full.jsonl	spec/conformance/logs/19o-genesis-full.jsonl			same path			
+unchanged	spec/conformance/logs/19q-genesis-bad-requires.jsonl	spec/conformance/logs/19q-genesis-bad-requires.jsonl			same path			
+unchanged	spec/conformance/logs/19r-genesis-bad-provenance.jsonl	spec/conformance/logs/19r-genesis-bad-provenance.jsonl			same path			
+unchanged	spec/conformance/logs/19s-genesis-unknown-feature.jsonl	spec/conformance/logs/19s-genesis-unknown-feature.jsonl			same path			
+unchanged	spec/conformance/logs/19t-genesis-requires-provenance.jsonl	spec/conformance/logs/19t-genesis-requires-provenance.jsonl			same path			
+unchanged	spec/conformance/logs/19u-requiresadd-unknown.jsonl	spec/conformance/logs/19u-requiresadd-unknown.jsonl			same path			
+unchanged	spec/conformance/logs/20-redaction-roles.jsonl	spec/conformance/logs/20-redaction-roles.jsonl			same path			
+unchanged	spec/conformance/logs/20b-commit-unpurged.jsonl	spec/conformance/logs/20b-commit-unpurged.jsonl			same path			
+unchanged	spec/conformance/logs/21-nonstring-kind-op.jsonl	spec/conformance/logs/21-nonstring-kind-op.jsonl			same path			
+unchanged	spec/conformance/logs/22-redaction-index-null.jsonl	spec/conformance/logs/22-redaction-index-null.jsonl			same path			
+unchanged	spec/conformance/logs/23a-f1-request-admitted.jsonl	spec/conformance/logs/23a-f1-request-admitted.jsonl			same path			
+unchanged	spec/conformance/logs/23b-f2-request-refused.jsonl	spec/conformance/logs/23b-f2-request-refused.jsonl			same path			
+unchanged	spec/conformance/logs/23c-f3-say.jsonl	spec/conformance/logs/23c-f3-say.jsonl			same path			
+unchanged	spec/conformance/logs/23d-f8-cascade.jsonl	spec/conformance/logs/23d-f8-cascade.jsonl			same path			
+unchanged	spec/conformance/logs/24a-old-change-verb.jsonl	spec/conformance/logs/24a-old-change-verb.jsonl			same path			
+unchanged	spec/conformance/logs/24b-old-request-op.jsonl	spec/conformance/logs/24b-old-request-op.jsonl			same path			
+unchanged	spec/conformance/logs/24c-old-say-verb.jsonl	spec/conformance/logs/24c-old-say-verb.jsonl			same path			
+unchanged	spec/conformance/logs/24d-old-redaction-verb.jsonl	spec/conformance/logs/24d-old-redaction-verb.jsonl			same path			
+unchanged	spec/conformance/logs/24e-old-governance-verb.jsonl	spec/conformance/logs/24e-old-governance-verb.jsonl			same path			
+unchanged	spec/conformance/logs/24f-old-batch-followUps.jsonl	spec/conformance/logs/24f-old-batch-followUps.jsonl			same path			
+unchanged	spec/conformance/logs/24g-old-batch-item-verb.jsonl	spec/conformance/logs/24g-old-batch-item-verb.jsonl			same path			
+unchanged	spec/conformance/logs/24h-old-set-commit.jsonl	spec/conformance/logs/24h-old-set-commit.jsonl			same path			
+unchanged	spec/conformance/logs/24i-old-redaction-target-op.jsonl	spec/conformance/logs/24i-old-redaction-target-op.jsonl			same path			
+unchanged	spec/conformance/logs/24j-old-envelope-for.jsonl	spec/conformance/logs/24j-old-envelope-for.jsonl			same path			
+unchanged	spec/conformance/logs/24k-old-envelope-grant.jsonl	spec/conformance/logs/24k-old-envelope-grant.jsonl			same path			
+unchanged	spec/conformance/logs/24l-old-envelope-by.jsonl	spec/conformance/logs/24l-old-envelope-by.jsonl			same path			
+unchanged	spec/conformance/logs/24m-old-kind-act.jsonl	spec/conformance/logs/24m-old-kind-act.jsonl			same path			
+unchanged	spec/conformance/logs/24n-old-kind-sim.jsonl	spec/conformance/logs/24n-old-kind-sim.jsonl			same path			
+unchanged	spec/conformance/logs/24o-old-kind-purge.jsonl	spec/conformance/logs/24o-old-kind-purge.jsonl			same path			
+unchanged	spec/conformance/logs/24p-old-kind-sequencer.jsonl	spec/conformance/logs/24p-old-kind-sequencer.jsonl			same path			
+unchanged	spec/conformance/logs/24q-old-genesis-verb.jsonl	spec/conformance/logs/24q-old-genesis-verb.jsonl			same path			
+unchanged	spec/conformance/logs/25-story.jsonl	spec/conformance/logs/25-story.jsonl			same path			
+unchanged	spec/conformance/physics/arc-onto-table.jsonl	spec/conformance/physics/arc-onto-table.jsonl			same path			
+unchanged	spec/conformance/physics/crate-slide.jsonl	spec/conformance/physics/crate-slide.jsonl			same path			
+unchanged	spec/conformance/physics/crate-tumble.jsonl	spec/conformance/physics/crate-tumble.jsonl			same path			
+unchanged	spec/conformance/physics/digests-exact.json	spec/conformance/physics/digests-exact.json			same path			
+unchanged	spec/conformance/physics/digests.json	spec/conformance/physics/digests.json			same path			
+unchanged	spec/conformance/physics/knock-a-sleeper-2.jsonl	spec/conformance/physics/knock-a-sleeper-2.jsonl			same path			
+unchanged	spec/conformance/physics/knock-a-sleeper.jsonl	spec/conformance/physics/knock-a-sleeper.jsonl			same path			
+unchanged	spec/conformance/physics/onto-hills.jsonl	spec/conformance/physics/onto-hills.jsonl			same path			
+unchanged	spec/conformance/physics/repins/shape-ceremony-2026-11-05/arc-onto-table.jsonl	spec/conformance/physics/repins/shape-ceremony-2026-11-05/arc-onto-table.jsonl			same path			
+unchanged	spec/conformance/physics/repins/shape-ceremony-2026-11-05/crate-slide.jsonl	spec/conformance/physics/repins/shape-ceremony-2026-11-05/crate-slide.jsonl			same path			
+unchanged	spec/conformance/physics/repins/shape-ceremony-2026-11-05/crate-tumble.jsonl	spec/conformance/physics/repins/shape-ceremony-2026-11-05/crate-tumble.jsonl			same path			
+unchanged	spec/conformance/physics/repins/shape-ceremony-2026-11-05/digests-exact.json	spec/conformance/physics/repins/shape-ceremony-2026-11-05/digests-exact.json			same path			
+unchanged	spec/conformance/physics/repins/shape-ceremony-2026-11-05/knock-a-sleeper-2.jsonl	spec/conformance/physics/repins/shape-ceremony-2026-11-05/knock-a-sleeper-2.jsonl			same path			
+unchanged	spec/conformance/physics/repins/shape-ceremony-2026-11-05/knock-a-sleeper.jsonl	spec/conformance/physics/repins/shape-ceremony-2026-11-05/knock-a-sleeper.jsonl			same path			
+unchanged	spec/conformance/physics/repins/shape-ceremony-2026-11-05/onto-hills.jsonl	spec/conformance/physics/repins/shape-ceremony-2026-11-05/onto-hills.jsonl			same path			
+unchanged	spec/conformance/physics/repins/shape-ceremony-2026-11-05/straight-up.jsonl	spec/conformance/physics/repins/shape-ceremony-2026-11-05/straight-up.jsonl			same path			
+unchanged	spec/conformance/physics/straight-up.jsonl	spec/conformance/physics/straight-up.jsonl			same path			
+unchanged	spec/conformance/reader.py	spec/conformance/reader.py			same path			
+unchanged	spec/conformance/test_gov.py	spec/conformance/test_gov.py			same path			
+unchanged	spec/fixtures/replay/.replaybench.json	spec/fixtures/replay/.replaybench.json			same path			
+unchanged	spec/fixtures/replay/eidosim-0.3/log.jsonl	spec/fixtures/replay/eidosim-0.3/log.jsonl			same path			
+unchanged	spec/fixtures/replay/eidosim-0.4/log.jsonl	spec/fixtures/replay/eidosim-0.4/log.jsonl			same path			
+unchanged	spec/fixtures/replay/eidosim-0.5/log.jsonl	spec/fixtures/replay/eidosim-0.5/log.jsonl			same path			
+unchanged	spec/fixtures/replay/eidosim-order/log.jsonl	spec/fixtures/replay/eidosim-order/log.jsonl			same path			
+unchanged	spec/history/PRE-RELEASE-RENAMES.md	spec/history/PRE-RELEASE-RENAMES.md			same path			
+unchanged	spec/history/PROTOCOL-v1.md	spec/history/PROTOCOL-v1.md			same path			
+unchanged	spec/kernel-pin.json	spec/kernel-pin.json			same path			
+unchanged	spec/kernel-vectors/first-deploy/vectors.json	spec/kernel-vectors/first-deploy/vectors.json			same path			
+unchanged	spec/readback.json	spec/readback.json			same path			
+unchanged	tools/water/export-unreal.py	tools/water/export-unreal.py			same path			
+unchanged	tools/water/native-coordinate-fix.patch	tools/water/native-coordinate-fix.patch			same path			
+deleted	client/lib/flora_args.js				history	72e4bbdde	NC-22: delete the client/lib/flora_args.js shim; its three importers take shared/flora_args.js	
+deleted	client/lib/hud.js				history	9a52bc032	NC-28: fold hud.js into statuschips.js: paintHud(status) paints the ∃ mark beside the status strip	
+deleted	client/package-lock.json				history	fe14b4576	DL-16: delete client/ and mcpl/ package-lock.json; bun.lock is the one lock	
+deleted	client/voices/hesperus-clockwork.onnx.json				history	b76c6a3d9	voices: the engine ships no voice; client/voices/ is a drop folder, ignored whole	test/fixtures/ammodoll-rig.json (36% of its lines)
+deleted	mcpl/package-lock.json				history	fe14b4576	DL-16: delete client/ and mcpl/ package-lock.json; bun.lock is the one lock	
+deleted	mcpl/playtest.ts				history	0bcfdfdf0	DL-11: delete mcpl/playtest.ts, an unrunnable lab in a production dir	
+deleted	mcpl/shape.ts				history	c0557aebd	SS-6, SS-39 (shape.ts): one finite-vec3 guard, isFiniteVec3 in shared/protocol/is.js	
+deleted	shared/blueprint.js				history	5a8e14f47	test trim: delete dead tests, rows that can't fail, and an API with no caller (#333 trim H2 H4 H8-H15)	tools/import-v1/frozen/blueprint.js (96% of its lines)
+deleted	tools/actionbar-restore-test.ts				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	test/client/actionbar-test.ts (52% of its lines)
+deleted	tools/approach-dwell-test.ts				history	7a51f36ae	tests: denoise waits on its conditions and runs in the gate; the four approach tests merge into it and door-unit	
+deleted	tools/approach-env-clamp-test.ts				history	7a51f36ae	tests: denoise waits on its conditions and runs in the gate; the four approach tests merge into it and door-unit	
+deleted	tools/approach-seed-test.ts				history	7a51f36ae	tests: denoise waits on its conditions and runs in the gate; the four approach tests merge into it and door-unit	
+deleted	tools/approach-wire-test.ts				history	7a51f36ae	tests: denoise waits on its conditions and runs in the gate; the four approach tests merge into it and door-unit	
+deleted	tools/attention-probe.ts				history	8234f7766	tests: delete 15 ungated probes the gate-or-delete audit marked DELETE that nothing references (duplicates of gated rows or dead one-offs; GATE-OR-DELETE-2026-10-29 §1)	
+deleted	tools/audio-cmd-probe.mjs				history	4e3b6e3e6	tests: delete 8 more audit-DELETE files whose coverage lives in a gated row (skypanel-state, sky-lifecycle, xrpixelratio, batch2 P1-P3, micstate-single-transport) or that were one-off receipts; repoint the comments that cited them	
+deleted	tools/audio-report-test.mjs				history	e12a7874e	audio tests: transcriptions of product code become executed rows against the shipped modules	
+deleted	tools/audio-unlock-test.mjs				history	2c69ca486	tests: delete #132's one-off cutover receipt script and the six it ran (tautological models, source-greps, a re-typed copy, stale regexes: GATE-OR-DELETE §1), and lite-weight-test (lite-graph-test gates the claim statically)	
+deleted	tools/audiopanel-css-probe.html				history	a08c5cead	test cut step 1: delete 16 dead probes and benches (1,529 lines)	
+deleted	tools/blanket-probe.ts				history	a08c5cead	test cut step 1: delete 16 dead probes and benches (1,529 lines)	
+deleted	tools/body-state-mutation-preload.ts				history	1eb545377	body-state-test: one field table (bones, yaw, clip, scale, named pose) x both senders absorbs body-state-scale-test	
+deleted	tools/body-state-scale-mutation-test.ts				history	1eb545377	body-state-test: one field table (bones, yaw, clip, scale, named pose) x both senders absorbs body-state-scale-test	test/mcpl/body-state-mutation-test.ts (72% of its lines)
+deleted	tools/body-state-scale-test.ts				history	1eb545377	body-state-test: one field table (bones, yaw, clip, scale, named pose) x both senders absorbs body-state-scale-test	test/mcpl/body-state-test.ts (52% of its lines)
+deleted	tools/bodyscale-probe.mjs				history	0025c8705	tests: delete 10 one-off probes the audit marked DELETE; drop the comments that cited them as evidence (the claim stays, the dead pointer goes)	
+deleted	tools/channel-cap-gate-test.mjs				history	5a8e14f47	test trim: delete dead tests, rows that can't fail, and an API with no caller (#333 trim H2 H4 H8-H15)	
+deleted	tools/chat-catchup-probe.ts				history	a08c5cead	test cut step 1: delete 16 dead probes and benches (1,529 lines)	
+deleted	tools/chat-markdown-test.ts				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	test/client/chat-log-test.ts (68% of its lines)
+deleted	tools/conjure-coop-contract-test.mjs				history	963e6510e	wiring-check: the source-grep wiring rows as one table, each row with its controls; absorbs conjure-coop-contract-test	
+deleted	tools/cutover-receipts.sh				history	2c69ca486	tests: delete #132's one-off cutover receipt script and the six it ran (tautological models, source-greps, a re-typed copy, stale regexes: GATE-OR-DELETE §1), and lite-weight-test (lite-graph-test gates the claim statically)	
+deleted	tools/deps-route-test.ts				history	e6f797ba4	served-routes-test: one table of served routes, each isolated, absorbs isolation-headers-test and deps-route-test	
+deleted	tools/dock-boot-test.ts				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	test/client/dock-test.ts (61% of its lines)
+deleted	tools/dome-order-probe.mjs				history	0025c8705	tests: delete 10 one-off probes the audit marked DELETE; drop the comments that cited them as evidence (the claim stays, the dead pointer goes)	
+deleted	tools/flight-capture.mjs				history	d23238ed0	bench: retire flightbench and flight-capture	
+deleted	tools/flight-headless-test.ts				history	befa6ecbc	test trim: merge twin suites, keeping every row that was the only cover (#333 trim H5 H6 M2 M5)	
+deleted	tools/flightbench/.gitignore				history	d23238ed0	bench: retire flightbench and flight-capture	
+deleted	tools/flightbench/bench.html				history	d23238ed0	bench: retire flightbench and flight-capture	
+deleted	tools/flightbench/fly.html				history	d23238ed0	bench: retire flightbench and flight-capture	
+deleted	tools/flightbench/out/receipt.json				history	04a8d7b60	bench: drop flightbench's committed receipt; ignore bench outputs	
+deleted	tools/flightbench/out/telemetry-A.json				history	d23238ed0	bench: retire flightbench and flight-capture	
+deleted	tools/flightbench/out/telemetry-B.json				history	d23238ed0	bench: retire flightbench and flight-capture	
+deleted	tools/flightbench/scripts/flightplan.js				history	d23238ed0	bench: retire flightbench and flight-capture	
+deleted	tools/flightbench/serve.mjs				history	d23238ed0	bench: retire flightbench and flight-capture	
+deleted	tools/forecast-probe.mjs				history	a08c5cead	test cut step 1: delete 16 dead probes and benches (1,529 lines)	
+deleted	tools/fp-snap-probe.ts				history	4e3b6e3e6	tests: delete 8 more audit-DELETE files whose coverage lives in a gated row (skypanel-state, sky-lifecycle, xrpixelratio, batch2 P1-P3, micstate-single-transport) or that were one-off receipts; repoint the comments that cited them	
+deleted	tools/framebudget-probe.mjs				history	8234f7766	tests: delete 15 ungated probes the gate-or-delete audit marked DELETE that nothing references (duplicates of gated rows or dead one-offs; GATE-OR-DELETE-2026-10-29 §1)	
+deleted	tools/frames-relayout-probe.mjs				history	a08c5cead	test cut step 1: delete 16 dead probes and benches (1,529 lines)	
+deleted	tools/garden-look-probe.mjs				history	a08c5cead	test cut step 1: delete 16 dead probes and benches (1,529 lines)	
+deleted	tools/gpulost-gate-test.mjs				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	test/client/gpulost-test.mjs (41% of its lines)
+deleted	tools/gpulost-probe.mjs				history	0025c8705	tests: delete 10 one-off probes the audit marked DELETE; drop the comments that cited them as evidence (the claim stays, the dead pointer goes)	
+deleted	tools/hollow-probe.ts				history	a08c5cead	test cut step 1: delete 16 dead probes and benches (1,529 lines)	
+deleted	tools/host-class-test.mjs				history	663999bf0	host-class-test, ice-stall-report-test: deleted; neither imports product code, and neither exits non-zero on FAIL	
+deleted	tools/ice-stall-report-test.mjs				history	663999bf0	host-class-test, ice-stall-report-test: deleted; neither imports product code, and neither exits non-zero on FAIL	
+deleted	tools/inspect-handler-test.ts				history	8234f7766	tests: delete 15 ungated probes the gate-or-delete audit marked DELETE that nothing references (duplicates of gated rows or dead one-offs; GATE-OR-DELETE-2026-10-29 §1)	
+deleted	tools/isolation-headers-test.mjs				history	e6f797ba4	served-routes-test: one table of served routes, each isolated, absorbs isolation-headers-test and deps-route-test	
+deleted	tools/lantern-probe.mjs				history	0025c8705	tests: delete 10 one-off probes the audit marked DELETE; drop the comments that cited them as evidence (the claim stays, the dead pointer goes)	
+deleted	tools/library-status-probe.mjs				history	4e3b6e3e6	tests: delete 8 more audit-DELETE files whose coverage lives in a gated row (skypanel-state, sky-lifecycle, xrpixelratio, batch2 P1-P3, micstate-single-transport) or that were one-off receipts; repoint the comments that cited them	
+deleted	tools/lightbench.ts				history	acddb74b3	SWB-8: delete bench/lightbench.ts, which can't run on this protocol	
+deleted	tools/lite-weight-test.mjs				history	2c69ca486	tests: delete #132's one-off cutover receipt script and the six it ran (tautological models, source-greps, a re-typed copy, stale regexes: GATE-OR-DELETE §1), and lite-weight-test (lite-graph-test gates the claim statically)	
+deleted	tools/live-contact-test.ts				history	04c8f3a6a	tests: delete 8 ungated files whose behaviour a gated row owns (GATE-OR-DELETE §1)	
+deleted	tools/loadgate-boundary-test.mjs				history	d1f33d4ab	tests: gate bodygate; loadgate-boundary folded into it (the test was stale, not assets.js)	test/client/bodygate-test.mjs (39% of its lines)
+deleted	tools/lod-gate-test.ts				history	0025c8705	tests: delete 10 one-off probes the audit marked DELETE; drop the comments that cited them as evidence (the claim stays, the dead pointer goes)	
+deleted	tools/lod-look-probe.mjs				history	a08c5cead	test cut step 1: delete 16 dead probes and benches (1,529 lines)	
+deleted	tools/lookat-forward-check.ts				history	1381ca92e	descriptor-defaults-test: every option the Inspector offers goes through its planner and the door; absorbs lookat-forward-check	
+deleted	tools/lying-support-test.ts				history	befa6ecbc	test trim: merge twin suites, keeping every row that was the only cover (#333 trim H5 H6 M2 M5)	
+deleted	tools/meadow-grank-probe.mjs				history	0025c8705	tests: delete 10 one-off probes the audit marked DELETE; drop the comments that cited them as evidence (the claim stays, the dead pointer goes)	
+deleted	tools/mic-gate-wired-test.mjs				history	2c69ca486	tests: delete #132's one-off cutover receipt script and the six it ran (tautological models, source-greps, a re-typed copy, stale regexes: GATE-OR-DELETE §1), and lite-weight-test (lite-graph-test gates the claim statically)	
+deleted	tools/mic-ptt-ungated-test.mjs				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	
+deleted	tools/mic-resume-after-synth-test.mjs				history	e12a7874e	audio tests: transcriptions of product code become executed rows against the shipped modules	
+deleted	tools/micstate-exec-test.mjs				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	
+deleted	tools/micstate-mesh-fallback-test.mjs				history	4e3b6e3e6	tests: delete 8 more audit-DELETE files whose coverage lives in a gated row (skypanel-state, sky-lifecycle, xrpixelratio, batch2 P1-P3, micstate-single-transport) or that were one-off receipts; repoint the comments that cited them	
+deleted	tools/micstate-release-test.mjs				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	
+deleted	tools/micstate-single-transport-test.mjs				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	test/client/micstate-test.mjs (30% of its lines)
+deleted	tools/native-environment-control.ts				history	5692685e2	tools: the last senders of the old verb message speak requests (harness requester: {type: request, id, verb, args} with idalias placeholders) — lite-banner, snap-at, uneven-support, roaming-renderer; delete the render-scene wire fixtures (nothing serves render-scene here); NATIVE-WORLD-RENDERING says so and drops the lease/epoch contract; captions/pose-provenance drop their v1 changelog comments (SWEEP-13 C5 C6 C7 C8 C10 C12 C13 C15 C19 G1 G5)	
+deleted	tools/native-interactions-fixture.ts				history	04c8f3a6a	tests: delete 8 ungated files whose behaviour a gated row owns (GATE-OR-DELETE §1)	
+deleted	tools/native-login-wire-test.ts				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	
+deleted	tools/navgrid-edge-test.ts				history	a15ffd54e	navgrid-rows-test: built-box routes and scaled places as two tables, absorbing navgrid-edge and places-scale	test/client/navgrid-rows-test.ts (44% of its lines)
+deleted	tools/panel-identity-test.mjs				history	6fb9c11ad	tests: delete panel-identity-test.mjs, a model of sync-in-place checked against itself (imports no product code)	
+deleted	tools/permtest.ts				history	1f41c6cae	test trim: gate what is green with no blocker left; name and fold the three invisible files (#333 trim H3 H18)	
+deleted	tools/picture-test.ts				history	4e3b6e3e6	tests: delete 8 more audit-DELETE files whose coverage lives in a gated row (skypanel-state, sky-lifecycle, xrpixelratio, batch2 P1-P3, micstate-single-transport) or that were one-off receipts; repoint the comments that cited them	
+deleted	tools/places-scale-test.ts				history	a15ffd54e	navgrid-rows-test: built-box routes and scaled places as two tables, absorbing navgrid-edge and places-scale	
+deleted	tools/plateanchor-shot-probe.mjs				history	0025c8705	tests: delete 10 one-off probes the audit marked DELETE; drop the comments that cited them as evidence (the claim stays, the dead pointer goes)	
+deleted	tools/platesize-test.ts				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	test/client/plateanchor-test.ts (80% of its lines)
+deleted	tools/pose-release-probe.ts				history	8234f7766	tests: delete 15 ungated probes the gate-or-delete audit marked DELETE that nothing references (duplicates of gated rows or dead one-offs; GATE-OR-DELETE-2026-10-29 §1)	
+deleted	tools/posecheck-test.ts				history	b97b65260	tests: merge three small duplicates into the gated suite that owns their behaviour	test/server/pose-handler-test.ts (93% of its lines)
+deleted	tools/posture-browser-parity-test.ts				history	8234f7766	tests: delete 15 ungated probes the gate-or-delete audit marked DELETE that nothing references (duplicates of gated rows or dead one-offs; GATE-OR-DELETE-2026-10-29 §1)	
+deleted	tools/presence-actor-test.ts				history	59d8ae44a	net-send-shape-test: one table over every net.js sender that names a person, and say's offline/spoken rows	test/client/history-request-test.ts (41% of its lines)
+deleted	tools/puddle-gate-probe.mjs				history	0025c8705	tests: delete 10 one-off probes the audit marked DELETE; drop the comments that cited them as evidence (the claim stays, the dead pointer goes)	
+deleted	tools/ragdoll-shots-agent.ts				history	04c8f3a6a	tests: delete 8 ungated files whose behaviour a gated row owns (GATE-OR-DELETE §1)	
+deleted	tools/ragdoll-shots-probe.mjs				history	04c8f3a6a	tests: delete 8 ungated files whose behaviour a gated row owns (GATE-OR-DELETE §1)	
+deleted	tools/rapier-spike.ts				history	5f88b96e5	drop the rapier devDependency with its only user, test/labs/rapier-spike.ts	
+deleted	tools/readhistory-test.ts				history	0579d4bfe	tests: delete readhistory-test: its file-leg/memory-leg contract is gone; paging is server-check SH1	
+deleted	tools/render-scene-control.ts				history	5692685e2	tools: the last senders of the old verb message speak requests (harness requester: {type: request, id, verb, args} with idalias placeholders) — lite-banner, snap-at, uneven-support, roaming-renderer; delete the render-scene wire fixtures (nothing serves render-scene here); NATIVE-WORLD-RENDERING says so and drops the lease/epoch contract; captions/pose-provenance drop their v1 changelog comments (SWEEP-13 C5 C6 C7 C8 C10 C12 C13 C15 C19 G1 G5)	
+deleted	tools/render-scene-wire-test.ts				history	04c8f3a6a	tests: delete 8 ungated files whose behaviour a gated row owns (GATE-OR-DELETE §1)	
+deleted	tools/replica-hierarchy-test.ts				history	8234f7766	tests: delete 15 ungated probes the gate-or-delete audit marked DELETE that nothing references (duplicates of gated rows or dead one-offs; GATE-OR-DELETE-2026-10-29 §1)	test/shared/replica-hierarchy-test.ts (87% of its lines)
+deleted	tools/route-preparation-bench.ts				history	a08c5cead	test cut step 1: delete 16 dead probes and benches (1,529 lines)	
+deleted	tools/route-preparation-test.ts				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	test/shared/structure-threshold-test.ts (56% of its lines)
+deleted	tools/rowcontrols-probe.ts				history	8234f7766	tests: delete 15 ungated probes the gate-or-delete audit marked DELETE that nothing references (duplicates of gated rows or dead one-offs; GATE-OR-DELETE-2026-10-29 §1)	
+deleted	tools/say-live-test.ts				history	59d8ae44a	net-send-shape-test: one table over every net.js sender that names a person, and say's offline/spoken rows	test/client/history-request-test.ts (31% of its lines)
+deleted	tools/screenshots-wire-test.ts				history	5a8e14f47	test trim: delete dead tests, rows that can't fail, and an API with no caller (#333 trim H2 H4 H8-H15)	test/server/snapframe-test.ts (32% of its lines)
+deleted	tools/self-tts-gain-test.mjs				history	e12a7874e	audio tests: transcriptions of product code become executed rows against the shipped modules	
+deleted	tools/served-path-test.ts				history	8234f7766	tests: delete 15 ungated probes the gate-or-delete audit marked DELETE that nothing references (duplicates of gated rows or dead one-offs; GATE-OR-DELETE-2026-10-29 §1)	
+deleted	tools/sfu-loss-test.mjs				history	2c69ca486	tests: delete #132's one-off cutover receipt script and the six it ran (tautological models, source-greps, a re-typed copy, stale regexes: GATE-OR-DELETE §1), and lite-weight-test (lite-graph-test gates the claim statically)	
+deleted	tools/sfu-no-duplicate-playback-test.mjs				history	2c69ca486	tests: delete #132's one-off cutover receipt script and the six it ran (tautological models, source-greps, a re-typed copy, stale regexes: GATE-OR-DELETE §1), and lite-weight-test (lite-graph-test gates the claim statically)	
+deleted	tools/sfu-ops-test.mjs				history	2c69ca486	tests: delete #132's one-off cutover receipt script and the six it ran (tautological models, source-greps, a re-typed copy, stale regexes: GATE-OR-DELETE §1), and lite-weight-test (lite-graph-test gates the claim statically)	
+deleted	tools/shadow-fade-probe.mjs				history	8234f7766	tests: delete 15 ungated probes the gate-or-delete audit marked DELETE that nothing references (duplicates of gated rows or dead one-offs; GATE-OR-DELETE-2026-10-29 §1)	
+deleted	tools/shadow-follow-test.mjs				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	test/client/shadow-fade-test.mjs (67% of its lines)
+deleted	tools/shadow-pref-test.mjs				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	test/client/shadow-fade-test.mjs (83% of its lines)
+deleted	tools/shadow-res-probe.mjs				history	538faed2d	test trim: pure rows out of browser runs (#333 trim H17)	test/client/camera-world-probe.mjs (43% of its lines)
+deleted	tools/shadow-toggle-probe.mjs				history	a08c5cead	test cut step 1: delete 16 dead probes and benches (1,529 lines)	test/client/htmlmesh-pick-probe.mjs (32% of its lines)
+deleted	tools/sidetone-gain-live-test.mjs				history	cf40f6141	sidetone-gain-live-test: deleted, it imports no product code (it tests an inline copy of the arithmetic)	
+deleted	tools/sky-bakelock-probe.mjs				history	8234f7766	tests: delete 15 ungated probes the gate-or-delete audit marked DELETE that nothing references (duplicates of gated rows or dead one-offs; GATE-OR-DELETE-2026-10-29 §1)	
+deleted	tools/sky-bands-test.mjs				history	b97b65260	tests: merge three small duplicates into the gated suite that owns their behaviour	test/client/sky-lifecycle-test.mjs (35% of its lines)
+deleted	tools/sky-busy-probe.mjs				history	14a38e288	sky-bakelock-test: hook × situation table (queued, its bake throws, its sky torn down, its guard says no): INTERCEPT, GUARD and AFTER run at their own turn, once; INTERCEPT's restore once whenever it ran	
+deleted	tools/sky-cap-ui-probe.mjs				history	0025c8705	tests: delete 10 one-off probes the audit marked DELETE; drop the comments that cited them as evidence (the claim stays, the dead pointer goes)	
+deleted	tools/sky-flip-probe.mjs				history	a08c5cead	test cut step 1: delete 16 dead probes and benches (1,529 lines)	
+deleted	tools/sky-refresh-probe.mjs				history	0025c8705	tests: delete 10 one-off probes the audit marked DELETE; drop the comments that cited them as evidence (the claim stays, the dead pointer goes)	
+deleted	tools/sky-state-probe.mjs				history	4e3b6e3e6	tests: delete 8 more audit-DELETE files whose coverage lives in a gated row (skypanel-state, sky-lifecycle, xrpixelratio, batch2 P1-P3, micstate-single-transport) or that were one-off receipts; repoint the comments that cited them	
+deleted	tools/sky-xr-hold-probe.mjs				history	8234f7766	tests: delete 15 ungated probes the gate-or-delete audit marked DELETE that nothing references (duplicates of gated rows or dead one-offs; GATE-OR-DELETE-2026-10-29 §1)	
+deleted	tools/sky-xr-livehold-probe.mjs				history	4e3b6e3e6	tests: delete 8 more audit-DELETE files whose coverage lives in a gated row (skypanel-state, sky-lifecycle, xrpixelratio, batch2 P1-P3, micstate-single-transport) or that were one-off receipts; repoint the comments that cited them	
+deleted	tools/snap-timeout-test.ts				history	be40e148c	snapshots-wire-test: every snap outcome's status and [snap] line, absorbing snap-timeout-test	
+deleted	tools/sound-guard-test.ts				history	9d7dbd83e	sound-editor-test: sound-clock and sound-guard share one fixture over the real sounds.js	test/client/sound-editor-test.ts (38% of its lines)
+deleted	tools/structure-diagonal-parity.test.ts				history	abeb200ad	structure-field §22: one diagonal loop over axis × opening × tile × cell absorbs structure-diagonal-parity.test.ts	
+deleted	tools/structure-look-probe.ts				history	a08c5cead	test cut step 1: delete 16 dead probes and benches (1,529 lines)	
+deleted	tools/structure-route-probe.ts				history	a08c5cead	test cut step 1: delete 16 dead probes and benches (1,529 lines)	
+deleted	tools/structure-route-support-test.ts				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	
+deleted	tools/support-heightfield-probe.ts				history	8234f7766	tests: delete 15 ungated probes the gate-or-delete audit marked DELETE that nothing references (duplicates of gated rows or dead one-offs; GATE-OR-DELETE-2026-10-29 §1)	
+deleted	tools/synth-hook-broadcast-test.mjs				history	e12a7874e	audio tests: transcriptions of product code become executed rows against the shipped modules	
+deleted	tools/terrain-layers-test.mjs				history	b97b65260	tests: merge three small duplicates into the gated suite that owns their behaviour	
+deleted	tools/tilt-probe.mjs				history	8234f7766	tests: delete 15 ungated probes the gate-or-delete audit marked DELETE that nothing references (duplicates of gated rows or dead one-offs; GATE-OR-DELETE-2026-10-29 §1)	
+deleted	tools/transport-check.mjs				history	2c69ca486	tests: delete #132's one-off cutover receipt script and the six it ran (tautological models, source-greps, a re-typed copy, stale regexes: GATE-OR-DELETE §1), and lite-weight-test (lite-graph-test gates the claim statically)	
+deleted	tools/tts-blocking-probe.mjs				history	8234f7766	tests: delete 15 ungated probes the gate-or-delete audit marked DELETE that nothing references (duplicates of gated rows or dead one-offs; GATE-OR-DELETE-2026-10-29 §1)	
+deleted	tools/tts-import-order-test.mjs				history	e12a7874e	audio tests: transcriptions of product code become executed rows against the shipped modules	
+deleted	tools/tts-mic-precedence-test.mjs				history	e12a7874e	audio tests: transcriptions of product code become executed rows against the shipped modules	
+deleted	tools/tts-publishes-mic-off-test.mjs				history	e12a7874e	audio tests: transcriptions of product code become executed rows against the shipped modules	
+deleted	tools/tts-threading-bench.mjs				history	a08c5cead	test cut step 1: delete 16 dead probes and benches (1,529 lines)	
+deleted	tools/ttsrow-select-test.mjs				history	e12a7874e	audio tests: transcriptions of product code become executed rows against the shipped modules	
+deleted	tools/typing-dots-probe.ts				history	8234f7766	tests: delete 15 ungated probes the gate-or-delete audit marked DELETE that nothing references (duplicates of gated rows or dead one-offs; GATE-OR-DELETE-2026-10-29 §1)	
+deleted	tools/voice-matrix.mjs				history	76585d668	tools: delete voice-matrix.mjs, a harness for the deleted /lib/voice.js mesh that cannot run against this tree	
+deleted	tools/voice-wiring-test.ts				history	5a8e14f47	test trim: delete dead tests, rows that can't fail, and an API with no caller (#333 trim H2 H4 H8-H15)	
+deleted	tools/voicelist-empty-test.mjs				history	e12a7874e	audio tests: transcriptions of product code become executed rows against the shipped modules	
+deleted	tools/voicelist-inplace-test.mjs				history	e12a7874e	audio tests: transcriptions of product code become executed rows against the shipped modules	
+deleted	tools/vr-cloud-cap-probe.mjs				history	a08c5cead	test cut step 1: delete 16 dead probes and benches (1,529 lines)	test/client/camera-world-probe.mjs (30% of its lines)
+deleted	tools/vrmic-policy-test.mjs				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	test/client/vrmic-exec-test.mjs (64% of its lines)
+deleted	tools/walk-precision-test.ts				history	04c8f3a6a	tests: delete 8 ungated files whose behaviour a gated row owns (GATE-OR-DELETE §1)	
+deleted	tools/water/browser-check.ts				history	76d196f6b	tests: delete water/math-test (its expectations live in gated zone-water-check ZM) and water/browser-check (only its README ran it); drop a hygiene-check.ts.tmp committed by an assembly merge	
+deleted	tools/water/controller-check.ts				history	04c8f3a6a	tests: delete 8 ungated files whose behaviour a gated row owns (GATE-OR-DELETE §1)	
+deleted	tools/water/math-test.ts				history	76d196f6b	tests: delete water/math-test (its expectations live in gated zone-water-check ZM) and water/browser-check (only its README ran it); drop a hygiene-check.ts.tmp committed by an assembly merge	
+deleted	tools/water/regression-check.ts				history	04c8f3a6a	tests: delete 8 ungated files whose behaviour a gated row owns (GATE-OR-DELETE §1)	
+deleted	tools/wing-fold-presence-test.ts				history	60ea1def7	named-pose-test: one test over every registered pose name replaces the two wing-only presence tests	
+deleted	tools/wing-owner-wire-test.ts				history	60ea1def7	named-pose-test: one test over every registered pose name replaces the two wing-only presence tests	
+deleted	tools/xr-entry-policy-test.mjs				history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	
+deleted	tools/xr-eye-viewport-probe.mjs				history	4e3b6e3e6	tests: delete 8 more audit-DELETE files whose coverage lives in a gated row (skypanel-state, sky-lifecycle, xrpixelratio, batch2 P1-P3, micstate-single-transport) or that were one-off receipts; repoint the comments that cited them	
+deleted	tools/xr-frame-clock-test.mjs				history	befa6ecbc	test trim: merge twin suites, keeping every row that was the only cover (#333 trim H5 H6 M2 M5)	
+deleted	tools/xr-invr-label-probe.mjs				history	db893179b	xr-desktop-banner-probe: the desktop banner as one transition table (killed > 'In VR' > none, across pref changes and exit); absorbs xr-invr-label and xr-mirror-banner	
+deleted	tools/xr-mirror-banner-probe.mjs				history	db893179b	xr-desktop-banner-probe: the desktop banner as one transition table (killed > 'In VR' > none, across pref changes and exit); absorbs xr-invr-label and xr-mirror-banner	
+deleted	tsconfig.flight.json				history	fc5627be8	entry points: bun run setup / start / test; drop gate-duplicate scripts, npm boilerplate and the ungated flight typecheck; gate shadow-fade's --mutants arm (only test:shadows ever ran it)	
+added		CONTRIBUTING.md			history	a3e3dc025	docs: a map (docs/README.md), CONTRIBUTING.md, and the dead doc pointers fixed (org C0)	
+added		client/README.md			history	f14be971d	READMEs for client/, test/, mcpl/: entry, what to read first, the one trap	
+added		client/lib/avatar/avatar-thumbnail.js			history	d874a280f	G14 avatar/avatar-thumbnail.js: the roster portrait and perf stamp leave avatar.js (pure move)	client/lib/avatar.js (80% of its lines)
+added		client/lib/avatar/face.js			history	d14920ff9	G18b lift avatar/face.js: gaze, blink, eyeballs, lids and mouth leave avatar.js as a piece the avatar owns	client/lib/avatar.js (70% of its lines)
+added		client/lib/avatar/nameplate.js			history	0ea75e779	G16 lift avatar/nameplate.js: the name pill, speech bubble and typing pill leave avatar.js as a piece the avatar owns	client/lib/avatar.js (78% of its lines)
+added		client/lib/avatar/wings.js			history	e0286f058	G18a lift avatar/wings.js: the flap and the fold leave avatar.js as a piece the avatar owns	client/lib/avatar.js (60% of its lines)
+added		client/lib/ragdoll/ammo-load.js			history	37c6053a5	G19 ammodoll: the tuning tables, the wasm loader and the interior triangles leave for three files (pure moves)	client/lib/ammodoll.js (88% of its lines)
+added		client/lib/ragdoll/ammodoll-dressing.js			history	edd388769	G20 ammodoll: the hair and wing chains lift into ragdoll/ammodoll-dressing.js, called at the same two points	client/lib/ammodoll.js (76% of its lines)
+added		client/lib/ragdoll/ammodoll-interior.js			history	37c6053a5	G19 ammodoll: the tuning tables, the wasm loader and the interior triangles leave for three files (pure moves)	client/lib/ammodoll.js (68% of its lines)
+added		client/lib/ragdoll/ammodoll-tuning.js			history	37c6053a5	G19 ammodoll: the tuning tables, the wasm loader and the interior triangles leave for three files (pure moves)	client/lib/ammodoll.js (41% of its lines)
+added		client/lib/ui/ui-dock.js			history	d4739c141	G22 ui.js: the rail, the ∃ menu and the front door lift into ui-dock.js, ui-menu.js and ui-door.js	client/lib/ui.js (77% of its lines)
+added		client/lib/ui/ui-door.js			history	d4739c141	G22 ui.js: the rail, the ∃ menu and the front door lift into ui-dock.js, ui-menu.js and ui-door.js	client/lib/ui.js (92% of its lines)
+added		client/lib/ui/ui-menu.js			history	d4739c141	G22 ui.js: the rail, the ∃ menu and the front door lift into ui-dock.js, ui-menu.js and ui-door.js	client/lib/ui.js (89% of its lines)
+added		client/lib/version.js			history	b12c3f6b2	/version asked once per page (version.js): assets, chat and main read the one no-store answer	
+added		client/lib/xr/xr-fingercurl.js			history	064d426ba	G24b xr: the finger curl and the device scale lift into xr/xr-fingercurl.js and xr/xr-scale.js	client/lib/xr.js (69% of its lines)
+added		client/lib/xr/xr-prefs.js			history	1b4b6a4e6	G24a xr/xr-prefs.js: the headset preferences leave xr.js (pure move)	client/lib/xr.js (53% of its lines)
+added		client/lib/xr/xr-scale.js			history	064d426ba	G24b xr: the finger curl and the device scale lift into xr/xr-fingercurl.js and xr/xr-scale.js	client/lib/xr.js (55% of its lines)
+added		client/vendor/ammo/LICENSE-ammo-zlib.txt			history	219e4b908	DL-4, DL-5b, DL-6: ammo.js's upstream commit and zlib LICENSE, SeedThree's MIT licence; ragdoll-physics' licence not yet recorded	
+added		deploy/eidoverse-mcpl.service.template			history	c9a7b752d	deploy: unit templates for eidoverse and eidoverse-mcpl; how to run the door	deploy/eido-chatbridge.service (53% of its lines)
+added		deploy/eidoverse.service.template			history	c9a7b752d	deploy: unit templates for eidoverse and eidoverse-mcpl; how to run the door	deploy/eido-chatbridge.service (42% of its lines)
+added		docs/README.md			history	a3e3dc025	docs: a map (docs/README.md), CONTRIBUTING.md, and the dead doc pointers fixed (org C0)	
+added		docs/design/ROADMAP.md			history	d47ffd3cb	docs: DESIGN holds only what's built; the unbuilt ideas move to docs/design/ROADMAP.md, each with its state	
+added		docs/history/ORIGIN.md			history	6409d607b	docs: DESIGN's "Why eidoverse" and "First prototype scope (2026-07)" move verbatim to docs/history/ORIGIN.md	DESIGN.md (89% of its lines)
+added		docs/operator/RUNNING-A-SERVER.md			history	c9a7b752d	deploy: unit templates for eidoverse and eidoverse-mcpl; how to run the door	
+added		docs/reference/WALKER.md			history	4a64c304a	docs: AGENTS's walker contract moves verbatim to docs/reference/WALKER.md	
+added		docs/research/actionbar-placement.md			history	2935d0324	comments (client a: accesspanel..base, avatar): essays cut to one line + pointer	
+added		docs/research/ammodoll-tuning.md			history	2935d0324	comments (client a: accesspanel..base, avatar): essays cut to one line + pointer	
+added		docs/research/avatar-design-notes.md			history	2935d0324	comments (client a: accesspanel..base, avatar): essays cut to one line + pointer	
+added		docs/research/clock-offset.md			history	47a3e84bd	comments (shared a: a11y..particle_effects): essays cut to one line + pointer	
+added		docs/research/collider-heuristics.md			history	6d9657984	comments (client b: bodies..editpanels): essays cut to one line + pointer	
+added		docs/research/deck-fill-threshold.md			history	ea2302d73	comments (mcpl: agent, body-state, declaration, denoise): essays cut to one line + pointer	
+added		docs/research/griddled-structures.md			history	bba05c084	comments (shared c: protocol/newscript..zone): essays cut to one line + pointer	
+added		docs/research/headless-storeys.md			history	ea2302d73	comments (mcpl: agent, body-state, declaration, denoise): essays cut to one line + pointer	
+added		docs/research/ktx2-key-generations.md			history	47a3e84bd	comments (shared a: a11y..particle_effects): essays cut to one line + pointer	
+added		docs/research/library-serving.md			history	127858fd4	comments (server, scripting): essays cut to one line + pointer	
+added		docs/research/light-rig.md			history	0884de34b	comments (client c: edittabs..materials): essays cut to one line + pointer	
+added		docs/research/material-factory.md			history	0884de34b	comments (client c: edittabs..materials): essays cut to one line + pointer	
+added		docs/research/meadow-grass-rendering.md			history	0884de34b	comments (client c: edittabs..materials): essays cut to one line + pointer	
+added		docs/research/optimize-design-notes.md			history	127858fd4	comments (server, scripting): essays cut to one line + pointer	
+added		docs/research/piper-voice-engine.md			history	0884de34b	comments (client c: edittabs..materials): essays cut to one line + pointer	
+added		docs/research/seat-clip-delta.md			history	c0da8f9f6	bake-seat-clip: OUT is patched/, where the clip is committed; --check had always read an absent upstream-patched/ file	
+added		docs/research/seat-store-integrity.md			history	22d9f1765	comments (server b: screenshots..worldlog): essays cut to one line + pointer	
+added		docs/research/sfu-client-negotiation.md			history	77a193d67	comments (client f: stylepanel..voicesfu): essays cut to one line + pointer	
+added		docs/research/sfu-p2p-offload.md			history	22d9f1765	comments (server b: screenshots..worldlog): essays cut to one line + pointer	
+added		docs/research/shadow-depth-prewarm.md			history	93682ac83	comments (client g: voicesfubridge..main): essays cut to one line + pointer	
+added		docs/research/sky-quality-and-vr.md			history	10ece29f9	comments (client e: reachbone..stt, realize/): essays cut to one line + pointer	
+added		docs/research/store-variants-design.md			history	22d9f1765	comments (server b: screenshots..worldlog): essays cut to one line + pointer	
+added		docs/research/stt-browser-recognition.md			history	10ece29f9	comments (client e: reachbone..stt, realize/): essays cut to one line + pointer	
+added		docs/research/tts-mouth.md			history	77a193d67	comments (client f: stylepanel..voicesfu): essays cut to one line + pointer	
+added		docs/research/two-bone-reach.md			history	bba05c084	comments (shared c: protocol/newscript..zone): essays cut to one line + pointer	
+added		docs/research/verlet-ragdoll.md			history	4ea962d6c	comments (client d: matoverride..ragdoll): essays cut to one line + pointer	
+added		mcpl/README.md			history	f14be971d	READMEs for client/, test/, mcpl/: entry, what to read first, the one trap	
+added		mcpl/agent-flight.ts			history	09ca9959e	G9 lift: mcpl/agent-flight.ts, flight (the integrator flown at the tick, its courses and waits, every way down)	mcpl/agent.ts (63% of its lines)
+added		mcpl/agent-ground.ts			history	e763df8bf	G5 lift: mcpl/agent-ground.ts, the ground (terrain, floors, placed things' supports, the mesh cache)	mcpl/agent.ts (60% of its lines)
+added		mcpl/agent-places.ts			history	78dd1ce0a	G3 lift: mcpl/agent-places.ts, named places (the places piece of WorldAgent)	mcpl/agent.ts (65% of its lines)
+added		mcpl/agent-reach.ts			history	19e06a0b9	G7 lift: mcpl/agent-reach.ts, reaching (hands and feet reaching, and its consent)	mcpl/agent.ts (69% of its lines)
+added		mcpl/agent-result.ts			history	5928b5a36	G1 move: mcpl/agent-result.ts, the small vocabulary every piece of the agent shares	mcpl/agent.ts (54% of its lines)
+added		mcpl/agent-senses.ts			history	a74f95383	G11 lift: mcpl/agent-senses.ts, the senses (what the body notices, and look's account of the world)	mcpl/agent.ts (61% of its lines)
+added		server/aid1-issuer.ts			history	86b62bcee	SS-11: HN_ISSUER_KEY/HN_ISS/HN_AUD read once, in server/aid1-issuer.ts	server/auth.ts (86% of its lines)
+added		server/three.mjs			history	19da765cf	production imports nothing from test/: server/three.mjs (the client's three, by path, no renderer) answers geometry's BVH and the build check's core.js; filehost.ts and clock.ts, the suites' host, move to test/harness/ (hostclock.ts); hygiene rule prod-imports-test, zero, red-first on geometry/buildcheck-run/filehost (review 11-08)	
+added		shared/protocol/authority/reads.js			history	470fcfe93	SS-34: the read verbs move out of authority/blueprints.js into authority/reads.js	shared/protocol/authority/blueprints.js (84% of its lines)
+added		shared/protocol/is.js			history	913ae3883	duplication: isE and opsQuiet live once in fold.js beside Malformed and opsOf (storage, statecache, foldviews, lazylog, livehost, credits read them); idOut once in view.js (replica, worldlog, editwrites); isNum/isStr/isObj once in shared/protocol/is.js for twenty shared files (bag and num were the same tests under other names); scriptaudit's different predicate is isKinded, sockets' PURGED-aware one liveObj (SWEEP-13 E1 E2 E3 E5 D1)	
+added		test/README.md			history	f14be971d	READMEs for client/, test/, mcpl/: entry, what to read first, the one trap	
+added		test/client/bus-events-test.ts			history	6b21bfb54	dock-moved, lantern and keyhint ride the bus instead of window CustomEvents	
+added		test/client/editquad-test.ts			history	fa49ef4a6	fix(333-cm): a9 the edit quad's padlock respects r.lockable	
+added		test/client/groundpanel-test.ts			history	8bb6a3a83	fix(333-cm): a6 grow never sends a delete; a7 the palette guard covers the grass dials	
+added		test/client/mic-meter-gate-test.mjs			history	43936433d	sensitivity meter: bar and latch on the gate's own dB threshold (bot #333 130)	
+added		test/client/micstate-test.mjs			history	ff2b1d49d	tests (round 3, lane A): 16 duplicate tests merged into their survivors, waits on conditions (sfu, keepalive, tts, spoken-say, chatbridge), micstate one suite; every touched test run alone green, references repointed, ungated 109→96	
+added		test/client/named-pose-test.ts			history	60ea1def7	named-pose-test: one test over every registered pose name replaces the two wing-only presence tests	
+added		test/client/navgrid-rows-test.ts			history	a15ffd54e	navgrid-rows-test: built-box routes and scaled places as two tables, absorbing navgrid-edge and places-scale	tools/navgrid-edge-test.ts (32% of its lines)
+added		test/client/net-send-shape-test.ts			history	59d8ae44a	net-send-shape-test: one table over every net.js sender that names a person, and say's offline/spoken rows	
+added		test/client/one-binding-test.ts			history	ba1c268d6	one-binding-test: one table over every "no copy outside its owner" source grep, as a gate suite	
+added		test/client/rolespanels-access-test.ts			history	0bac54dfa	fix(333-cm): a1 door batch spelt {requests}; a2 newcomer warning reads dr.can.generate	
+added		test/client/server-clock-readers-test.ts			history	a3838b297	sky, roles, world panel: a server stamp is read on serverNow(), not this machine's Date.now()	
+added		test/client/sky-degrade-test.mjs			history	5e7151afa	fix(333-cm): b2 sky degrade level 1 turns the light cache off	tools/sky-lifecycle-test.mjs (72% of its lines)
+added		test/client/stt-ptt-test.mjs			history	f5e5de9f7	captions obey push-to-talk: STT posts and listens only while V is held (bot #333 131)	
+added		test/client/track-teleport-test.ts			history	23c0599e4	thingphysics: a forced track re-arrives by teleport at most once in 3 s too (each is an act on the record)	
+added		test/client/ttsrow-test.mjs			history	e12a7874e	audio tests: transcriptions of product code become executed rows against the shipped modules	
+added		test/client/wiring-check.ts			history	963e6510e	wiring-check: the source-grep wiring rows as one table, each row with its controls; absorbs conjure-coop-contract-test	
+added		test/client/world-card-probe.ts			history	b6df4c294	fix(333-cm): a5 Create ▸ Environment and env rows open the world's card and scroll to it	tools/comps-parity-test.ts (35% of its lines)
+added		test/client/xr-desktop-banner-probe.mjs			history	db893179b	xr-desktop-banner-probe: the desktop banner as one transition table (killed > 'In VR' > none, across pref changes and exit); absorbs xr-invr-label and xr-mirror-banner	
+added		test/fixtures/README.md			history	61839f1d5	spec/: only what an outside implementer needs; the v1 worlds and the rig/asset fixtures move to test/fixtures/ (org C7)	spec/fixtures/README.md (60% of its lines)
+added		test/gate/merge-receipts.ts			history	15d120ed0	gate: run.ts --shard I/N (1-based) and merge-receipts.ts, for CI's sharded gate	
+added		test/gate/mutant-anchors-check.ts			history	9280f90dd	mutant arms: one runMutants helper, 26 dead anchors retargeted, a static anchor check (#333 H1)	
+added		test/gate/mutants.ts			history	9280f90dd	mutant arms: one runMutants helper, 26 dead anchors retargeted, a static anchor check (#333 H1)	
+added		test/gate/paths-check.ts			history	9258bb57f	gate: a suite that every cited repo path resolves (paths)	
+added		test/gate/shard.ts			history	15d120ed0	gate: run.ts --shard I/N (1-based) and merge-receipts.ts, for CI's sharded gate	
+added		test/gate/suite-times.json			history	15d120ed0	gate: run.ts --shard I/N (1-based) and merge-receipts.ts, for CI's sharded gate	
+added		test/gate/suite.ts			history	7e3583cb8	suite.ts: one scaffold for the protocol suites (ok/check, --only, the summary, the exit); 8 suites moved onto it	
+added		test/gate/underscore-names.json			history	7abfcdfa4	hygiene: new file names are lowercase-hyphen; today's 37 underscore names are listed exceptions that only shrink	
+added		test/gate/ungated.json			history	708929e6c	hygiene: refuse an ungated test (R 10-29: every test in the gate or gone); the 161 still out are listed with one line why	
+added		test/harness/bun-test.ts			history	0aef22999	gate: snapshots-test and snapframe-render-test were never run (a bun:test file needs bun test: tools/bun-test.ts)	
+added		test/harness/cdp-pw.mjs			history	1302e43dd	tests: the browser probes run without playwright: probe-harness drives Chromium over raw CDP (cdp-pw.mjs); 7 XR/VR probes gated	
+added		test/harness/labworld.ts			history	b6477cf79	labworld.ts: the in-process authority fixture (scratch root, lab clock, call that steps then requests, ENG); disabled, hands, settle, reset, histdiff use it	
+added		test/harness/no-world.ts			history	d58846037	tools tests: every WorldAgent gets the test's own server (tools/no-world.ts, port 0); seven tests read /geom and /library from 127.0.0.1:8940	
+added		test/harness/stub-test.ts			history	c23ffa20f	stub.ts: a stub that applied to a relative import naming no file fails its suite (the class behind "(xr/)?xrpanels")	
+added		test/harness/stub.ts			history	817c90d32	test/harness/stub.ts: a resolver stub that never applied fails its suite at exit	
+added		test/mcpl/agent-reads-test.ts			history	9190f1d4a	agent: every world-server read has a deadline; a geometry read that failed isn't cached	
+added		test/mcpl/headless-core-test.ts			history	d2cd4005f	headless-core: backendName is a function, as core.js's is; headless-core suite pins every shared export's kind	
+added		test/protocol/determinism-check.ts			history	a554f54bc	gate: determinism row — no host sin/cos/tan/atan2/exp/log/pow/random, Date.now or performance.now in fold.js, eidosim or the sim modules they reach	
+added		test/protocol/shard-check.ts			history	15d120ed0	gate: run.ts --shard I/N (1-based) and merge-receipts.ts, for CI's sharded gate	
+added		test/server/agent-tokens-reload-test.ts			history	6f4149a02	agentTokens: a malformed or unreadable reload fails closed (bot #333 5)	
+added		test/server/anim-backpressure-test.ts			history	8f6fcdec9	anim: a socket holding a backlog skips the 64 KB packet (stop still always goes; security review M5)	
+added		test/server/served-routes-test.ts			history	e6f797ba4	served-routes-test: one table of served routes, each isolated, absorbs isolation-headers-test and deps-route-test	
+added		test/server/upload-cap-test.ts			history	b29544bc5	MS-S2: upload-cap-test holds /upload's whole-body cap; image-upload-test's oversize row pins IMAGE_CAP's words	
+added		test/shared/help-words-test.ts			history	ea2c5afbd	fix(333-cm): C-5 C-6 C-7 C-8 help and refusal words say what the code holds	
+added		test/shared/picture-look-test.ts			history	1428464d4	picture-look: the agent's look() line for a picture, main's picture-test perception leg, gated (bot #333 408)	tools/picture-test.ts (32% of its lines)
+added		test/shared/replica-hierarchy-test.ts			history	2cf188f21	replica-hierarchy: main's index-vs-scan suite, ported and gated (#333 q2 411)	tools/replica-hierarchy-test.ts (90% of its lines)
+added		test/shared/structure-oracle.ts			history	ed9f5df61	structure routing: one route table over the planner, one oracle and one tick driver for the agent suites	
+added		test/shared/structure-route-test.ts			history	ed9f5df61	structure routing: one route table over the planner, one oracle and one tick driver for the agent suites	
+added		test/stubs/lookat-stub.mjs			history	0acf1a545	fix(333-r2): look-at's 90 m gate reads a parented thing's world position, as motion's does (#687)	
+added		test/water/wp5-verdict-test.ts			history	538faed2d	test trim: pure rows out of browser runs (#333 trim H17)	tools/water/crossing-pipelines-check.ts (31% of its lines)
+added		test/water/wp5-verdict.ts			history	538faed2d	test trim: pure rows out of browser runs (#333 trim H17)	tools/water/crossing-pipelines-check.ts (62% of its lines)
+added		tools/mv-module.ts			history	6cc1afd12	tools/dev/mv-module.ts: the folder commits' one mover; resolves every path it rewrites, never a blind substitution	
+added		tools/operator/snap-native.ts			history	5a8e14f47	test trim: delete dead tests, rows that can't fail, and an API with no caller (#333 trim H2 H4 H8-H15)	tools/screenshots-wire-test.ts (35% of its lines)
