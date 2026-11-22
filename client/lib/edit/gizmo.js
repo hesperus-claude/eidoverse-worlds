@@ -25,6 +25,7 @@ let helper = null;
 let attachedId = null;
 let start = null;        // { rec, comps? } at drag start (the components the release's expect names)
 let cancelled = false;   // Esc during the drag: the thing goes back, the release writes nothing
+let streamed = false;  // this gesture sent drag samples (others show a claim until the end sample)
 let lastSent = 0;
 // the pivot (Roblox's PivotOffset): with a `pivot` comp the handles ride a PROXY at the pivot, oriented as the thing,
 // and the thing follows it: objWorld = proxy × offset (offset fixed at drag start), so a turn or a size goes about the pivot.
@@ -98,7 +99,7 @@ function beginDrag() {
   if (viaProxy) { const obj = entities.get(attachedId); obj.updateWorldMatrix(true, false); proxy.updateMatrixWorld(true); offset = proxy.matrixWorld.clone().invert().multiply(obj.matrixWorld); }
   const rec = foldRecord(attachedId);
   start = rec ? { rec: JSON.parse(JSON.stringify(rec)), comps: Edits.compsOf(attachedId) } : null;
-  cancelled = false;
+  cancelled = false; streamed = false;
 }
 function onChange() {
   const obj = attachedId && entities.get(attachedId); if (!obj) return;
@@ -113,7 +114,7 @@ function onChange() {
   reindexCollider(attachedId); refreshOutline();
   const now = performance.now();
   if (now - lastSent >= 66) {
-    lastSent = now; const p = obj.position; const q = obj.quaternion;
+    lastSent = now; streamed = true; const p = obj.position; const q = obj.quaternion;
     // yaw for older peers (the heading), q for everyone who reads it
     sendDrag(attachedId, [p.x, p.y, p.z], new THREE.Euler().setFromQuaternion(q, 'YXZ').y, [q.x, q.y, q.z, q.w]);
   }
@@ -142,8 +143,14 @@ function endPivotDrag() {
   import('../ui/ui.js').then((m) => m.flashHint(snapped ? m.html`pivot → <b>${snapped}</b>` : data ? 'pivot moved — the thing stays where it is' : 'pivot back at the origin', 2200));
   bus.emit('pivot-set', { id, pos: p, snapped });
 }
+// the last sample says so (as build.js's free drag does): others drop the amber claim at once, not after CLAIM_MS
+function endSamples() {
+  const obj = streamed && attachedId && entities.get(attachedId); streamed = false; if (!obj) return;
+  const q = obj.quaternion;
+  sendDrag(attachedId, obj.position.toArray(), new THREE.Euler().setFromQuaternion(q, 'YXZ').y, [q.x, q.y, q.z, q.w], { end: true });
+}
 function endDrag() {
-  release();
+  release(); endSamples();
   if (getTool() === 'pivot') { endPivotDrag(); return; }
   if (cancelled) { cancelled = false; start = null; return; }
   const id = attachedId; const obj = id && entities.get(id);
