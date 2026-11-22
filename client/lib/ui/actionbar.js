@@ -11,10 +11,10 @@ import { register as registerAction } from './actions.js';
 import { myState, setPosture, sitHere, standUp, getPosture } from '../player/controller.js';
 const POSTURES = ['sit', 'stand', 'lie'];
 // sit runs the controller's seat search (a nearby seat wins, else sit where you stand); stand leaves seat and posture.
-// The xr:* events let the VR entry (main.js) try a seat first.
+// One path each: a second dismount call would read as the escape's repeat press and get you off a script-held seat.
 function posture(k) {
-  if (k === 'sit') { sitHere(); bus.emit('xr:sit'); }
-  else if (k === 'stand') { standUp(); bus.emit('xr:stand'); }
+  if (k === 'sit') sitHere();
+  else if (k === 'stand') standUp();
   else setPosture('lie');
 }
 let litAnim = null, litUntil = 0;   // net.js clears myState.anim on the first pose send, so the bar remembers its own

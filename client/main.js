@@ -77,7 +77,6 @@ import { tickXRMirror } from './lib/xr/xrmirror.js';
 import { ensureXRBodyHook, bindXRBodySelf, xrAvatarYaw, xrLookPitch, xrWire, xrSimActive } from './lib/xr/xrbody.js';
 import { tickXRVignette } from './lib/xr/xrvignette.js';
 import { initVRPanel } from './lib/xr/vrpanel.js';
-import { trySitOn as xrTrySitOn, dismountMe as xrDismountMe } from './lib/player/localbody.js';
 import {
   toast, flashHint, buildHelp, toggleHelp,
   togglePeopleHere, panelFrame, settingsFrame, setLoadingItems,
@@ -558,8 +557,6 @@ registerSystem('instances', () => tickInstances());   // a thing's instanced cop
 registerSystem('render', renderWorld);
 registerSystem('xrmirror', () => tickXRMirror());           // desktop view while presenting (Settings › VR)
 // radial-menu actions: the ring speaks through the same flows the keyboard does
-bus.on('xr:sit', () => { if (!xrTrySitOn(null)) setPosture('sit'); });
-bus.on('xr:stand', () => xrDismountMe('menu'));
 bus.on('xr:mic', async () => { const { xrMicPress } = await import('./lib/xr/vrmic.js'); await xrMicPress(); });   // a bounded permission try in VR (vrmic.js)
 bus.on('xr:select', (id) => sceneSelect(id));
 globalThis.__waterDebug = waterDebug;
