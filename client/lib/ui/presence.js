@@ -21,5 +21,6 @@ function emit() { const v = presence(); if (v !== last) { last = v; bus.emit('pr
 const seen = () => { lastInput = performance.now(); if (auto !== 'present') { auto = 'present'; emit(); } };
 export const markActive = seen;   // for inputs that never reach the DOM (XR sticks and buttons)
 for (const ev of ['pointerdown', 'keydown', 'pointermove']) addEventListener(ev, seen, { passive: true });
-document.addEventListener('visibilitychange', () => { auto = document.hidden ? 'away' : 'present'; emit(); });
+// coming back to the tab counts as input: without seen(), the next tick read the old lastInput and went away again
+document.addEventListener('visibilitychange', () => { if (document.hidden) { auto = 'away'; emit(); } else seen(); });
 setInterval(() => { if (!document.hidden && performance.now() - lastInput > AWAY_S * 1000 && auto !== 'away') { auto = 'away'; emit(); } }, 5000);
