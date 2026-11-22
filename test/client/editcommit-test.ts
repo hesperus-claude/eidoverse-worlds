@@ -86,6 +86,7 @@ console.log("\nrefusals, gestures, and the door's undo of the other edits:");
   check("a locked pose: the door refuses `locked`, I'm asked first, and cancel writes nothing", rl.ok && H.asked.length === asked + 1 && c("c1").transform.pos[0] === 1 && H.hints.some((t: string) => /cancelled/.test(t)), JSON.stringify({ rl, asked: H.asked.length, pos: c("c1").transform.pos }));
   const rv = H.drags.slice(d0).filter((d: any[]) => d[0] === "c1");
   check("…and the put-back sample ends the drag claim (end: true), so watchers don't hold amber for CLAIM_MS", rv.length > 0 && rv[rv.length - 1][4]?.end === true, JSON.stringify(rv));
+  check("…carrying the restored scale, so a cancelled resize doesn't leave watchers at the streamed size", Array.isArray(rv[rv.length - 1]?.[4]?.scale), JSON.stringify(rv[rv.length - 1]));
   H.W.call("delete", { id: "c1", component: "lock" }); H.sync();
   // two locks: unlock the first, cancel the second's question: the hint says a lock was lifted
   H.W.call("create", { id: "tbl", model: "crate", components: { transform: { pos: [5, 0, 5] } } });

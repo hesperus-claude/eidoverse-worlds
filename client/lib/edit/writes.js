@@ -65,7 +65,7 @@ export function revertPose(id) {
   bus.emit('pose-revert', { id });
   const o = entities.get(id); if (!o) return;
   const q = o.quaternion; const yaw = Math.atan2(2 * (q.w * q.y + q.x * q.z), 1 - 2 * (q.x * q.x + q.y * q.y));
-  sendDrag(id, [o.position.x, o.position.y, o.position.z], yaw, [q.x, q.y, q.z, q.w], { end: true });   // a put-back ends the gesture: no claim left held
+  sendDrag(id, [o.position.x, o.position.y, o.position.z], yaw, [q.x, q.y, q.z, q.w], { end: true, scale: o.scale.toArray() });   // a put-back ends the gesture (no claim left held), at the restored size
 }
 
 /** Show a refusal in a person's words (plainwords.js: no code, no tool syntax, things by their labels). The authority's whole
