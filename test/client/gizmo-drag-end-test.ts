@@ -4,7 +4,8 @@
 // is a stand-in served from this file (a bun plugin namespace, as dismount-height-test does); TransformControls is a
 // recorder whose events the test fires.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/gizmo-drag-end-test.ts
-// Mutation (must go red): delete the end sample in endDrag (rows E1, E2); drop the revert on a refused edit (row E3).
+// Mutation (must go red): delete the end sample in endDrag (rows E1, E2); drop the revert on a refused edit (row E3);
+// make sized() return {} (rows S1).
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
 import { suite } from '../gate/suite.ts';
@@ -88,6 +89,18 @@ drag(2);
 G.__gz.editErrors = false;
 S.check('E3 an edit this client refuses (editOps errors) puts the thing back where the log has it', crate.position.x === home, JSON.stringify({ at: crate.position.x, home }));
 S.check('...and the last sample ends the claim at that pose', drags[drags.length - 1]?.[4]?.end === true && drags[drags.length - 1]?.[1]?.[0] === home, JSON.stringify(drags[drags.length - 1]));
+
+G.__gz.tool = 'scale'; bus.emit('tool');
+drags.length = 0; G.__gz.dragStart = crate.position.clone();
+c.dragging = true; c.fire('dragging-changed', { value: true });
+for (let i = 0; i < 2; i++) { now += 100; crate.scale.multiplyScalar(1.5); c.fire('objectChange'); }
+c.dragging = false; c.fire('dragging-changed', { value: false });
+S.check('S1 a resize streams its scale, so watchers see the size change live', drags.length >= 3 && drags.slice(0, -1).map((d: any[]) => d[4]?.scale?.[0]).join() === '1.5,2.25', JSON.stringify(drags.map((d: any[]) => d[4])));
+S.check('...and the end sample carries the final scale', drags[drags.length - 1]?.[4]?.end === true && drags[drags.length - 1]?.[4]?.scale?.[0] === crate.scale.x, JSON.stringify(drags[drags.length - 1]?.[4]));
+crate.scale.set(1, 1, 1);
+G.__gz.tool = 'move'; bus.emit('tool');
+drag(1);
+S.check('a move sends no scale (payload unchanged outside the scale tool)', drags.every((d: any[]) => !d[4]?.scale), JSON.stringify(drags.map((d: any[]) => d[4])));
 
 G.__gz.tool = 'pivot'; bus.emit('tool');
 drag(2);

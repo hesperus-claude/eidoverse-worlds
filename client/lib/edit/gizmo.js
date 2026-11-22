@@ -116,9 +116,11 @@ function onChange() {
   if (now - lastSent >= 66) {
     lastSent = now; streamed = true; const p = obj.position; const q = obj.quaternion;
     // yaw for older peers (the heading), q for everyone who reads it
-    sendDrag(attachedId, [p.x, p.y, p.z], new THREE.Euler().setFromQuaternion(q, 'YXZ').y, [q.x, q.y, q.z, q.w]);
+    sendDrag(attachedId, [p.x, p.y, p.z], new THREE.Euler().setFromQuaternion(q, 'YXZ').y, [q.x, q.y, q.z, q.w], sized(obj));
   }
 }
+// a resize streams its scale too, so watchers see the size change live (build.js's drag handler applies it)
+const sized = (obj) => (controls?.mode === 'scale' ? { scale: obj.scale.toArray() } : {});
 // the pivot tool's release: where the proxy ended, in the thing's own frame (before scale), snapped to the nearest
 // hotspot of the model's box within 15 cm (centre, the 6 face centres with base and top among them, the 8 corners);
 // one pivot write
@@ -147,7 +149,7 @@ function endPivotDrag() {
 function endSamples() {
   const obj = streamed && attachedId && entities.get(attachedId); streamed = false; if (!obj) return;
   const q = obj.quaternion;
-  sendDrag(attachedId, obj.position.toArray(), new THREE.Euler().setFromQuaternion(q, 'YXZ').y, [q.x, q.y, q.z, q.w], { end: true });
+  sendDrag(attachedId, obj.position.toArray(), new THREE.Euler().setFromQuaternion(q, 'YXZ').y, [q.x, q.y, q.z, q.w], { end: true, ...sized(obj) });
 }
 function endDrag() {
   release(); endSamples();
