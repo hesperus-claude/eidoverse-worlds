@@ -4,7 +4,7 @@
 // is a stand-in served from this file (a bun plugin namespace, as dismount-height-test does); TransformControls is a
 // recorder whose events the test fires.
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/gizmo-drag-end-test.ts
-// Mutation (must go red): delete the end sample in endDrag (rows E1, E2).
+// Mutation (must go red): delete the end sample in endDrag (rows E1, E2); drop the revert on a refused edit (row E3).
 import { plugin } from 'bun';
 import { fileURLToPath } from 'node:url';
 import { suite } from '../gate/suite.ts';
@@ -18,14 +18,14 @@ const STUBS: Record<string, string> = {
   'render/frameloop': `export const registerSystem = () => {};`,
   scenegraph: `export const sceneSelected = () => globalThis.__gz.selected;`,
   'edit/build': `export const getTool = () => globalThis.__gz.tool; export const getSpace = () => 'world'; export const isBuilding = () => true; export const refreshOutline = () => {}; export const setPointerVeto = () => {}; export let esc = null; export const setEscapeHook = (f) => { globalThis.__gz.esc = f; };`,
-  'edit/writes': `export const sent = []; export const sendOps = (ops, o) => sent.push(ops); export const compsOf = () => null; export const revertPose = () => { const g = globalThis.__gz; g.entities.get(g.selected).position.copy(g.dragStart); }; globalThis.__gz.sent = sent;`,
+  'edit/writes': `export const sent = []; export const sendOps = (ops, o) => sent.push(ops); export const compsOf = () => null; export const revertPose = () => { const g = globalThis.__gz; const o = g.entities.get(g.selected); o.position.copy(g.dragStart); g.drags.push([g.selected, o.position.toArray(), 0, o.quaternion.toArray(), { end: true }]); };   // as writes.js: back, and one ending sample globalThis.__gz.sent = sent;`,
   colliders: `export const reindexCollider = () => {};`,
   'edit/keyhints': `export const engage = () => {}; export const release = () => {};`,
   'realize/models': `export const boxOf = () => null;`,
   'edit/inspect': `export const foldRecord = (id) => ({ id, pos: [0, 0, 0] });`,
   'edit/gripedit': `export const gripEditing = () => false;`,
   'ui/ui': `export const flashHint = () => {}; export const html = (s) => s.join('');`,
-  editschema: `export const inspectSchema = () => ({}); export const fieldAt = () => ({ disabled: false }); export const poseEdits = () => ({ 'pos.x': 1 }); export const editOps = () => ({ ops: [{ op: 'set' }], errors: [] });`,
+  editschema: `export const inspectSchema = () => ({}); export const fieldAt = () => ({ disabled: false }); export const poseEdits = () => ({ 'pos.x': 1 }); export const editOps = () => (globalThis.__gz.editErrors ? { ops: [], errors: ['pos.x: no such field on crate'] } : { ops: [{ op: 'set' }], errors: [] });`,
   requests: `export const set = () => ({}); export const unset = () => ({});`,
   TransformControls: `import * as THREE from ${T};
     export class TransformControls { constructor() { this.ls = {}; this.mode = 'translate'; globalThis.__gz.controls = this; }
@@ -82,6 +82,12 @@ drag(2, { cancel: true });
 const endC = drags[drags.length - 1];
 S.check('E2 a cancelled drag (Esc) also releases the claim', endC?.[4]?.end === true, JSON.stringify(endC));
 S.check('...at the pose it went back to', endC?.[1]?.[0] === before && crate.position.x === before, JSON.stringify({ end: endC?.[1], at: crate.position.x, before }));
+
+const home = crate.position.x; G.__gz.editErrors = true;
+drag(2);
+G.__gz.editErrors = false;
+S.check('E3 an edit this client refuses (editOps errors) puts the thing back where the log has it', crate.position.x === home, JSON.stringify({ at: crate.position.x, home }));
+S.check('...and the last sample ends the claim at that pose', drags[drags.length - 1]?.[4]?.end === true && drags[drags.length - 1]?.[1]?.[0] === home, JSON.stringify(drags[drags.length - 1]));
 
 G.__gz.tool = 'pivot'; bus.emit('tool');
 drag(2);

@@ -163,7 +163,7 @@ function endDrag() {
   // about a pivot, a turn or a size ALSO moves the origin (it swings round the pivot): send the position with it
   const set = viaProxy && mode !== 'move' ? { ...poseEdits(rec, id, 'move', pose), ...poseEdits(rec, id, mode, pose) } : poseEdits(rec, id, mode, pose);
   const { ops, errors } = editOps(rec, id, set);   // the authority asks about locks
-  if (errors.length || !ops.length) { start = null; return; }
+  if (errors.length || !ops.length) { start = null; if (errors.length) Edits.revertPose(id); return; }   // refused here: back where the log has it
   // the drag was presence; the release is ONE request, expecting where the drag started
   const what = `${controls.mode === 'translate' ? 'move' : controls.mode === 'rotate' ? 'turn' : 'size'} ${id}`;
   const base = start.comps ? { [id]: start.comps } : null; start = null;
