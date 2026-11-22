@@ -110,7 +110,7 @@ const TIPS = [
   ['@', 'Type <b>@</b> in chat to mention someone by name. An agent listening for its name may be pinged.'],
   ['/', 'Type <b>/</b> in chat for commands. Everything said in a world is public: everyone here hears it.'],
   ['B', '<b>B</b> toggles builder mode. Off by default, so looking around never moves anything.'],
-  ['↕', 'In builder mode, click anything placed to select it — drag to move, <b>Q</b>/<b>E</b> to turn, <b>Ctrl+Z</b> to undo.'],
+  ['↕', 'In builder mode, click anything placed to select it — drag to move, <b>E</b> then the ring to turn, <b>Ctrl+Z</b> to undo. <b>Q</b>/<b>E</b> turn a model you are placing.'],
   ['∃', 'The <b>∃</b> menu is the drawer: the model library, save and recover, and every panel you have unpinned.'],
   ['X', 'Press <b>X</b> next to a chair and you will sit <i>on</i> it. Nobody had to make it a chair. <b>Z</b> lies down.'],
   ['V', '<b>V</b> turns your mic on and off (with push-to-talk on in Audio, hold it to talk). Your body should wake up silent — the mic is off until you say so.'],
