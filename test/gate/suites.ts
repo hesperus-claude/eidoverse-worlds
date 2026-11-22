@@ -441,7 +441,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["door-admit-revoke", "mcpl/door-admit-revoke-test.ts", 1], // the MCPL door's admit() asks for the credential again: a token revoked, expired or narrowed while the dial waits on /access admits nobody and takes over no session
   ["mutant-anchors", "gate/mutant-anchors-check.ts", 1], // every mutant table's find text occurs exactly once in its file (static: reads the tables, runs no mutant; #333 H1)
   ["wp5-verdict", "water/wp5-verdict-test.ts", 1], // water-cross's WP5 verdict on synthetic evidence: its negative controls, no browser
-  ["actionbar", "client/actionbar-test.ts", 1], // the action bar (actionbar.js): nine tiles, whole-tile snapping, postures on the desktop body and at VR entry
+  ["actionbar", "client/actionbar-test.ts", 1], // the action bar (actionbar.js): nine tiles, whole-tile snapping, postures by one controller path
   ["aux-binding", "server/aux-binding-test.ts", 1], // B1 (#57): an aux leg binds to the primary's identity authority, or it does not attach
   ["keepalive", "server/keepalive-test.ts", 1], // the MCPL door's keepalive tolerates a thinking agent: missed pongs survive, a reap only after the full grace
   ["chatbridge", "services/chatbridge-test.ts", 1], // the Discord chat bridge (services/chatbridge) against an owned scratch world, in its DRY_RUN
