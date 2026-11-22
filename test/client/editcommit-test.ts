@@ -80,10 +80,12 @@ console.log("\nrefusals, gestures, and the door's undo of the other edits:");
   const r = commitEdit("c1", "sockets.add", 1);
   check("a viewport gesture is handled by the module and never sent", r.handled === true && H.sent.length === n0);
   H.W.call("set", { id: "c1", component: "lock", value: true }); H.sync();
-  const asked = H.asked.length; H.choose = "cancel";
+  const asked = H.asked.length; H.choose = "cancel"; const d0 = H.drags.length;
   const rl = commitEdit("c1", "pos.x", 3);
   await H.flush();
   check("a locked pose: the door refuses `locked`, I'm asked first, and cancel writes nothing", rl.ok && H.asked.length === asked + 1 && c("c1").transform.pos[0] === 1 && H.hints.some((t: string) => /cancelled/.test(t)), JSON.stringify({ rl, asked: H.asked.length, pos: c("c1").transform.pos }));
+  const rv = H.drags.slice(d0).filter((d: any[]) => d[0] === "c1");
+  check("…and the put-back sample ends the drag claim (end: true), so watchers don't hold amber for CLAIM_MS", rv.length > 0 && rv[rv.length - 1][4]?.end === true, JSON.stringify(rv));
   H.W.call("delete", { id: "c1", component: "lock" }); H.sync();
   // two locks: unlock the first, cancel the second's question: the hint says a lock was lifted
   H.W.call("create", { id: "tbl", model: "crate", components: { transform: { pos: [5, 0, 5] } } });
