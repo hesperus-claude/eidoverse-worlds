@@ -202,5 +202,13 @@ console.log("\nan edit landing while an undo is in flight (house I162, #260):");
   check("a drag reaches previewLight with the dragged values, nothing sent", got.some((g) => g.id === "lamp" && g.intensity === 30) && got.some((g) => g.range === 12) && H.sent.length === n0, JSON.stringify({ got, sent: H.sent.length - n0 }));
   (globalThis as any).__previewLight = undefined; endGesture?.("lamp"); }
 
+// G3-029: a refused or cancelled gesture's revert tells the watchers the size too (a scale drag streams it live)
+{ const o = H.entities.get("c1"); o.scale.set(1.5, 1.5, 1.5);   // where pose-revert puts it back to (the log's size)
+  const n0 = H.drags.length;
+  Edits.revertPose("c1");
+  const d = H.drags.slice(n0).at(-1);
+  check("G3-029 revertPose's drag carries the thing's scale, so a watcher of a scale drag sees it go back", !!d && JSON.stringify(d[4]?.scale) === JSON.stringify([1.5, 1.5, 1.5]), JSON.stringify(d));
+  o.scale.set(1, 1, 1); }
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
