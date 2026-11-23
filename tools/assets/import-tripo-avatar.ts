@@ -7,7 +7,7 @@
 //      alone doesn't count: PORCELAIN drops it).
 //   3. DIET: weld + meshopt-simplify toward --max-verts; skipped when under budget.
 //   4. VRMIFY: a VRMC_vrm 1.0 humanoid map (Tripo→VRM; twist bones and finger metacarpals stay unmapped), hair and
-//      wing chains as VRMC_springBone (wing springs are written only when hair springs are).
+//      wing chains as VRMC_springBone (each on its own: --no-hair-springs, --no-wing-springs).
 //   5. SCALE: a uniform bake to --height into translations, positions and inverse-bind rows (no scale nodes).
 //   6. VERIFY: a fall under both the ammo and verlet engines with the fleet suite's fixtures.
 // Output: <out>/<name>.vrm + a report. Install is a copy into the opt store's vrms/; this tool never touches a box.
@@ -218,8 +218,9 @@ say(`vrmified: ${Object.keys(humanBones).length} humanoid bones`);
       chains.set(m[1], c);
     }
   }
-  if (chains.size && !args.includes('--no-hair-springs')) {
-    const springs: unknown[] = [];
+  const springs: unknown[] = [];
+  const hairOn = chains.size > 0 && !args.includes('--no-hair-springs');
+  if (hairOn) {
     for (const [cname, joints] of chains) {
       joints.sort((a, b) => a.idx - b.idx);
       if (joints.length < 2) continue;
@@ -244,40 +245,42 @@ say(`vrmified: ${Object.keys(humanBones).length} humanoid bones`);
         colliderGroups: [0],
       });
     }
-    // Wings get springbones too: the flap is driven only on the owning client, so a fallen body's wings froze mid-stroke
-    // for every observer; three-vrm is the fallback hair always had. Stiffer than hair (a limb, not a filament), same
-    // hips center. Suppressed wholesale while a local sim owns the body (avatar.js).
-    const wingChains = new Map<string, { idx: number; node: number }[]>();
-    for (const [name, ni] of idx.entries()) {
-      const m = /^([LR]_Wing_(?:Upper|Lower))(?:_(\d+))?$/.exec(String(name));
-      if (!m) continue;
-      const c = wingChains.get(m[1]) ?? [];
-      c.push({ idx: m[2] ? Number(m[2]) : 0, node: ni as number });
-      wingChains.set(m[1], c);
+  }
+  // Wings get springbones too: the flap is driven only on the owning client, so a fallen body's wings froze mid-stroke
+  // for every observer; three-vrm is the fallback hair always had. Stiffer than hair (a limb, not a filament), same
+  // hips center. Suppressed wholesale while a local sim owns the body (avatar.js).
+  const wingChains = new Map<string, { idx: number; node: number }[]>();
+  for (const [name, ni] of idx.entries()) {
+    const m = /^([LR]_Wing_(?:Upper|Lower))(?:_(\d+))?$/.exec(String(name));
+    if (!m) continue;
+    const c = wingChains.get(m[1]) ?? [];
+    c.push({ idx: m[2] ? Number(m[2]) : 0, node: ni as number });
+    wingChains.set(m[1], c);
+  }
+  let wingSprings = 0;
+  if (!args.includes('--no-wing-springs')) {
+    for (const [cname, joints] of wingChains) {
+      joints.sort((a, b) => a.idx - b.idx);
+      if (joints.length < 2) continue;
+      springs.push({
+        name: `wing_${cname}`,
+        center: need('Hip'),
+        joints: joints.map((j, i) => {
+          const t = i / Math.max(1, joints.length - 1);
+          return {
+            node: j.node,
+            hitRadius: 0.02,
+            stiffness: 1.6 - 0.9 * t,     // shoulder holds, tip trails
+            gravityPower: 0.05 + 0.15 * t, // a limp wing hangs
+            gravityDir: [0, -1, 0],
+            dragForce: 0.75 - 0.25 * t,
+          };
+        }),
+      });
+      wingSprings++;
     }
-    let wingSprings = 0;
-    if (!args.includes('--no-wing-springs')) {
-      for (const [cname, joints] of wingChains) {
-        joints.sort((a, b) => a.idx - b.idx);
-        if (joints.length < 2) continue;
-        springs.push({
-          name: `wing_${cname}`,
-          center: need('Hip'),
-          joints: joints.map((j, i) => {
-            const t = i / Math.max(1, joints.length - 1);
-            return {
-              node: j.node,
-              hitRadius: 0.02,
-              stiffness: 1.6 - 0.9 * t,     // shoulder holds, tip trails
-              gravityPower: 0.05 + 0.15 * t, // a limp wing hangs
-              gravityDir: [0, -1, 0],
-              dragForce: 0.75 - 0.25 * t,
-            };
-          }),
-        });
-        wingSprings++;
-      }
-    }
+  }
+  if (hairOn || wingSprings) {
     g.extensionsUsed = [...new Set([...(g.extensionsUsed ?? []), 'VRMC_springBone'])];
     g.extensions.VRMC_springBone = {
       specVersion: '1.0',
