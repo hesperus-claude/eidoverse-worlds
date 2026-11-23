@@ -477,8 +477,8 @@ export function buildHelp() {
       ${(h.sections ?? []).map((x) => `<h2>${x.h}</h2><p class="sub">${x.html}</p>`).join('')}`}
       <h2>Your layout</h2>
       <p class="sub">Every panel moves and resizes, and where you put it is
-        remembered. <kbd>Alt</kbd>+drag moves a panel from anywhere on it. The
-        🔓 in the corner locks the layout once you like it.
+        remembered. <kbd>Alt</kbd>+drag moves a panel from anywhere on it. Once
+        you like it, lock it in the ∃ menu: Panels ▸ layout unlocked.
         <button id="help-reset" style="margin-left:6px">reset layout</button></p>`;
     s.querySelector('.close-x').onclick = () => closeOverlay(el.help);
     s.querySelector('#help-reset').onclick = () => { resetHudLayout(); closeOverlay(el.help); };
