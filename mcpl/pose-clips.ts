@@ -9,10 +9,12 @@ export class PoseClips {
   async load(slot: string) {
     if (slot !== 'sitchair' && !CLIP_SLOTS.includes(slot)) throw new Error(`unsupported posture clip: ${slot}`);
     const file = slot === 'sitchair' ? SEAT_CLIP_FILE : (CLIP_FILES as any)[slot] ?? slot;
-    this.roster ??= fetch(`${this.base}/animations`, { cache: 'no-store', signal: AbortSignal.timeout(10_000) })
-      .then(async r => r.ok ? new Map<string, string>((await r.json() as any[]).map(e => [e.name, e.path])) : new Map<string, string>())
-      .catch(() => new Map<string, string>());
-    const path = (await this.roster).get(file) ?? `eidoverse/assets/animations/${file}.vrma`;
+    // the world's roster of clip paths: an answer is kept (a 4xx too: no roster here); a read that threw or met a 5xx
+    // falls back to the default paths for this clip only, and the next clip asks again
+    const roster = this.roster ??= fetch(`${this.base}/animations`, { cache: 'no-store', signal: AbortSignal.timeout(10_000) })
+      .then(async r => { if (r.status >= 500) throw new Error(`HTTP ${r.status}`); return r.ok ? new Map<string, string>((await r.json() as any[]).map(e => [e.name, e.path])) : new Map<string, string>(); });
+    const byName = await roster.catch(() => { if (this.roster === roster) this.roster = null; return new Map<string, string>(); });
+    const path = byName.get(file) ?? `eidoverse/assets/animations/${file}.vrma`;
     if (!this.clips.has(path)) {
       const pending = (async () => {
         const r = await fetch(`${this.base}/library/${path}`, { signal: AbortSignal.timeout(10_000) });

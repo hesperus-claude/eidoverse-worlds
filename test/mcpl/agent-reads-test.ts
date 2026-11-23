@@ -110,6 +110,21 @@ try {
     await HeadlessBody.create(ag4.httpBase, "store/skel.vrm");
     check("...kept for the next body, and read again once its avatar's bytes change (avatar-updated)", once === 1 && seen.length === 2, `${once} read(s), then ${seen.length}`);
     ag4.close(); }
+
+  // G6-034: a posture clip roster (/animations) that failed to load isn't kept as empty for the body's life: the next
+  // clip asks again, and finds the world's own path for it
+  { const { PoseClips } = await import("../../mcpl/pose-clips.ts");
+    const clips = new PoseClips("http://clips.test");
+    seen.length = 0;
+    answer = async (u) => { if (u.endsWith("/animations")) throw new DOMException("The operation timed out.", "TimeoutError"); return new Response("no", { status: 404 }); };
+    await clips.load("sit").catch(() => {});
+    answer = async (u) => u.endsWith("/animations") ? Response.json([{ name: "sit_laying_on_ground", path: "custom/lie.vrma" }]) : new Response("no", { status: 404 });
+    await clips.load("lie").catch(() => {});
+    check("a clip roster that failed to load is asked again by the next clip, which reads the world's path for it (G6-034)",
+      seen.filter((x) => x.url.endsWith("/animations")).length === 2 && seen.some((x) => x.url.endsWith("/library/custom/lie.vrma")), JSON.stringify(seen.map((x) => x.url)));
+    answer = async () => new Response("no", { status: 404 });
+    await clips.load("idle").catch(() => {});
+    check("...and one it read is kept: a third clip doesn't ask again", seen.filter((x) => x.url.endsWith("/animations")).length === 2, JSON.stringify(seen.map((x) => x.url))); }
 } finally {
   globalThis.fetch = realFetch;
 }
