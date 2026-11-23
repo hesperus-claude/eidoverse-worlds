@@ -320,9 +320,11 @@ export function paintSky(body) {
 
   commit.textContent = '✓ log to world';
   commit.title = 'share this sky with everyone, permanently';
-  commit.onclick = () => {
-    sendOps([{ verb: 'sky', args: gather() }], { what: 'the sky', expect: false });
+  commit.onclick = async () => {
+    // clean at once, so the write's own echo (which can beat its reply) forgets `local`; a refusal makes it unsaved again
     commit.classList.remove('dirty');
+    const r = await sendOps([{ verb: 'sky', args: gather() }], { what: 'the sky', expect: false });
+    if (!r?.ok) { commit.classList.add('dirty'); return; }   // writes.js said why; never "logged" (G2-084)
     commit.textContent = '✓ logged';
     setTimeout(() => { commit.textContent = '✓ log to world'; }, 1200);
   };

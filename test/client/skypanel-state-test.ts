@@ -180,5 +180,21 @@ for (const inXR of [false, true]) for (const capped of [false, true]) {
 }
 S.inXR = false; S.cap = null; bus.emit("xr:state", false);
 
+// G2-084: ✓ says "logged" only when the authority took the write; a refusal leaves the edit unsaved (dirty) to try again
+console.log("SKY PANEL — ✓ says logged only once the write landed");
+for (const ok of [true, false]) {
+  const b = fresh();
+  S.reply = ok ? { ok: true, act: 1 } : { ok: false, refused: { code: "rights", reason: "the sky takes editWorld" } };
+  const sl = b.querySelector('input[type="range"]') as HTMLInputElement;
+  sl.value = "9"; sl.dispatchEvent(new Event("input"));
+  const btn = b.querySelector("button.dirty") as HTMLButtonElement;
+  btn.click();
+  await new Promise((r) => setTimeout(r, 0));
+  if (ok) check("G2-084 control: a write the authority took reads ✓ logged", btn.textContent === "✓ logged" && !btn.classList.contains("dirty"), `${btn.textContent} dirty=${btn.classList.contains("dirty")}`);
+  else check("G2-084 a refused write never reads ✓ logged, and stays unsaved", btn.textContent !== "✓ logged" && btn.classList.contains("dirty"), `${btn.textContent} dirty=${btn.classList.contains("dirty")}`);
+  b.remove();
+}
+S.reply = { ok: true };
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
