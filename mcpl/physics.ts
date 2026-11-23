@@ -348,30 +348,39 @@ export async function removeSupport(holder: string, id: string) {
   generation++;
 }
 
-// skeletons per server, avatar file and version (its ?v=), as rigbones.ts keys its readings: parsed once, dropped when
-// the file's bytes change (forgetSkeletons, on avatar-updated). A read that failed or met a 5xx is not kept.
-const skeletons = new Map<string, Record<string, any> | null>();
+// skeletons per server, avatar file and version (its ?v=), as rigbones.ts keys its readings: the read's promise, shared
+// by concurrent bodies and dropped when the file's bytes change (forgetSkeletons, on avatar-updated), in flight or not, so
+// a read that began before the change is never kept. A read that failed or met a 5xx is dropped too: asked again.
+const skeletons = new Map<string, Promise<Record<string, any> | null>>();
 
 /** Forget every skeleton read of this server's avatar `name`, at any version: its bytes changed (avatar-updated). */
 export function forgetSkeletons(httpBase: string, name: string) {
   for (const key of skeletons.keys()) if (key.startsWith(`${httpBase}/library/`) && nameFromAvatarPath(key) === name) skeletons.delete(key);
 }
 
-async function skeletonFor(httpBase: string, avatarPath: string) {
-  const path = avatarPath.split("?")[0], key = `${httpBase}/library/${avatarPath}`;
-  if (skeletons.has(key)) return skeletons.get(key);
+function skeletonFor(httpBase: string, avatarPath: string): Promise<Record<string, any> | null> {
+  const key = `${httpBase}/library/${avatarPath}`;
+  let p = skeletons.get(key);
+  if (!p) {
+    const read = readSkeleton(httpBase, avatarPath.split("?")[0], key);
+    const settled: Promise<Record<string, any> | null> = read.catch((e) => {
+      console.error(`[physics] couldn't read ${key} for its skeleton (asked again next time):`, (e as Error).message);
+      if (skeletons.get(key) === settled) skeletons.delete(key);
+      return null;
+    });
+    skeletons.set(key, p = settled);
+  }
+  return p;
+}
+
+/** The skeleton in this file, or null for one with none (kept); throws when the read fails, which may pass. */
+async function readSkeleton(httpBase: string, path: string, key: string): Promise<Record<string, any> | null> {
   const m = await loadSim();
   if (!m) return null;
-  let buf: Uint8Array;
-  try {
-    const res = await fetch(`${httpBase}/library/${path}`, { signal: AbortSignal.timeout(WORLD_READ_MS) });
-    if (res.status >= 500) throw new Error(`the world server answered ${res.status}`);   // its trouble, not the file's
-    if (!res.ok) { console.error(`[physics] no skeleton in ${path}: ${res.status} — this body will slump`); skeletons.set(key, null); return null; }
-    buf = new Uint8Array(await res.arrayBuffer());
-  } catch (e) {
-    console.error(`[physics] couldn't read ${path} for its skeleton (asked again next time):`, (e as Error).message);
-    return null;
-  }
+  const res = await fetch(`${httpBase}/library/${path}`, { signal: AbortSignal.timeout(WORLD_READ_MS) });
+  if (res.status >= 500) throw new Error(`the world server answered ${res.status}`);   // its trouble, not the file's
+  if (!res.ok) { console.error(`[physics] no skeleton in ${path}: ${res.status} — this body will slump`); return null; }
+  const buf = new Uint8Array(await res.arrayBuffer());
   try {
     const g = m.rig.glbJson(buf);
     const bones = m.rig.humanBones(g);
@@ -416,11 +425,9 @@ async function skeletonFor(httpBase: string, avatarPath: string) {
     // VRM 0.x bodies face -Z; the reach frame algebra needs to know (non-enumerable: not part of P's contract)
     Object.defineProperty(P, "__vrm0", { value: !!g.extensions?.VRM, enumerable: false });
     Object.defineProperty(P, "__restAxes", { value: restAxes, enumerable: false });
-    skeletons.set(key, P);
     return P;
   } catch (e) {
     console.error(`[physics] cannot read a skeleton out of ${key} — this body will slump:`, e);
-    skeletons.set(key, null);
     return null;
   }
 }

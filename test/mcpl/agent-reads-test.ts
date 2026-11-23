@@ -121,7 +121,18 @@ try {
     ag4.invalidateBodyAsset("skel");
     await HeadlessBody.create(ag4.httpBase, "store/skel.vrm");
     check("...kept for the next body, and read again once its avatar's bytes change (avatar-updated)", once === 1 && seen.length === 2, `${once} read(s), then ${seen.length}`);
-    ag4.close(); }
+    ag4.close();
+    // a skeleton whose avatar changed while it downloaded isn't kept: the read in flight is what forgetSkeletons forgets
+    const { forgetSkeletons } = await import("../../mcpl/physics.ts");
+    seen.length = 0;
+    let release!: () => void; const held = new Promise<void>((r) => { release = r; });
+    answer = async () => { await held; return new Response(vrm); };
+    const during = HeadlessBody.create("http://held.test", "store/held.vrm");
+    await tryUntil("the first skeleton read is under way", () => seen.length === 1, { ms: 3000 });
+    forgetSkeletons("http://held.test", "held"); release(); await during;
+    answer = async () => new Response(vrm);
+    await HeadlessBody.create("http://held.test", "store/held.vrm");
+    check("a skeleton read in flight when its avatar changed isn't kept: the next body reads the new bytes", seen.length === 2, `${seen.length} read(s)`); }
 
   // G6-034: a posture clip roster (/animations) that failed to load isn't kept as empty for the body's life: the next
   // clip asks again, and finds the world's own path for it
