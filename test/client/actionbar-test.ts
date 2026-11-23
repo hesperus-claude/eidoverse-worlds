@@ -306,6 +306,7 @@ console.log('ACTIONBAR — a defs push rebuilds the lantern\'s gesture actions, 
   bus.emit('animnames-updated');
   check('a moved gesture takes its new number key (clap → 1)', A.get('bar:clap')?.key === '1', `key=${A.get('bar:clap')?.key}`);
   check('a gesture moved past nine loses its key (wave, 1st → 10th)', !!A.get('bar:wave') && A.get('bar:wave').key === undefined, `key=${A.get('bar:wave')?.key}`);
+  check('…and its tile\'s label names no key (G2-042)', tile('[data-anim=wave]')?.title === 'wave' && tile('[data-anim=spin]')?.title === 'spin — key 9', `title=${tile('[data-anim=wave]')?.title}`);
   ANIM_ORDER.splice(0, ANIM_ORDER.length, 'wave', 'cheer');
   bus.emit('animnames-updated');
   check('a removed gesture leaves the lantern (clap gone)', A.get('bar:clap') === null);

@@ -105,7 +105,7 @@ export function initActionBar() {
       const b = document.createElement('button');
       b.className = 'tile';
       b.dataset.anim = name;
-      b.title = `${name} — key ${i + 1}`;
+      b.title = i < 9 ? `${name} — key ${i + 1}` : name;   // main.js binds Digit1-9 only (G2-042)
       const em = ANIM_ICONS[name] ?? GLYPH[name] ?? '✨';
       b.innerHTML = emojiRenders(em) ? `<span class="tile-glyph">${escapeHtml(em)}</span>` : `<span class="tile-word">${escapeHtml(name)}</span>`;   // names and glyphs come from the world's defs: escape them
       b.onclick = () => { getMe()?.playOnce(name); myState.anim = name; litAnim = name; litUntil = performance.now() + 1500; paint(); };
