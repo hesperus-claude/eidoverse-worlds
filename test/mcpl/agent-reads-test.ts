@@ -136,6 +136,18 @@ try {
     answer = async () => new Response(vrm);
     await HeadlessBody.create("http://held.test", "store/held.vrm");
     check("a skeleton read in flight when its avatar changed isn't kept: the next body reads the new bytes", seen.length === 2, `${seen.length} read(s)`);
+    // ...and that old read failing afterwards doesn't drop the newer read cached in its place
+    seen.length = 0;
+    let fail!: () => void; const failing = new Promise<void>((r) => { fail = r; });
+    let n = 0;
+    answer = async () => { if (n++ === 0) { await failing; return new Response("busy", { status: 503 }); } return new Response(vrm); };
+    const old = HeadlessBody.create("http://swap.test", "store/swap.vrm");
+    await tryUntil("the old skeleton read is under way", () => seen.length === 1, { ms: 3000 });
+    forgetSkeletons("http://swap.test", "swap");
+    const fresh = await HeadlessBody.create("http://swap.test", "store/swap.vrm");
+    fail(); await old;
+    await HeadlessBody.create("http://swap.test", "store/swap.vrm");
+    check("...and an old read that fails after the avatar changed leaves the new one cached: a third body reads nothing", fresh !== null && seen.length === 2, `${seen.length} read(s)`);
     // a VRM is many megabytes: a slow link that keeps sending is read to the end, not cut at a header read's deadline. Here
     // every timeout runs at 1/20 (main's 10 s whole-read deadline would be 0.5 s) and the file trickles in over 1.2 s; the
     // stream fails if its fetch's signal aborts, as a real download does
