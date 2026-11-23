@@ -195,7 +195,7 @@ console.log("mounted geometry regression");
 { const src = (await import("node:fs")).readFileSync(new URL("../../client/lib/render/net_capture.js", import.meta.url), "utf8");
   const call = src.slice(src.indexOf("composeFirstPerson({"), src.indexOf("});", src.indexOf("composeFirstPerson({")));
   check("net_capture: the first-person snapshot passes the live head bone and hides its own root around the render",
-    /head: head \? \[head\.x, head\.y, head\.z\] : null,/.test(call) && /setOwnVisible: \(v\) => \{ root\.visible = v; \},/.test(call) && /render: captureFrame,/.test(call)); }
+    /head: head \? \[head\.x, head\.y, head\.z\] : null,/.test(call) && /setOwnVisible: \(v\) => \{ root\.visible = v && was; \},/.test(call) && /render: captureFrame,/.test(call)); }
 
 console.log(`\n${S.pass} passed, ${S.fail} failed`);
 if (S.fail) process.exit(1);

@@ -116,6 +116,20 @@ await shoot({ view: "first" });
 check("omitted pitch reaches it as undefined", composed.length === n + 1 && composed.at(-1)!.pitch === undefined);
 await shoot({ view: "first", frame: { pitch: -200 } });
 check("pitch is clamped before the composer", composed.at(-1)!.pitch === -85, JSON.stringify(composed.at(-1)?.pitch));
+// the own-body exclusion hands back the visibility it found: a body already hidden stays hidden after the shot
+{
+  await shoot({ view: "first" });
+  const hide = composed.at(-1)!.setOwnVisible as (v: boolean) => void;
+  hide(false); hide(true);
+  const shown = root.visible;
+  root.visible = false;
+  await shoot({ view: "first" });
+  const hide2 = composed.at(-1)!.setOwnVisible as (v: boolean) => void;
+  hide2(false); hide2(true);
+  check("a visible body is shown again after the shot, and a hidden one stays hidden", shown === true && root.visible === false,
+    `visible ${shown}, hidden ${root.visible}`);
+  root.visible = true;
+}
 
 // ---- view × field × where: a field moves the camera only when it is nested in `frame` AND applies to the view
 // (dist/height: third and selfie; pitch: first); a top-level field is never framing (an image size's `height`)

@@ -112,6 +112,7 @@ export async function capture(msg) {
     } else {
       const head = r.avatar.headWorldPosition(_snapHead);
       const box = head ? null : r.avatar.visualBounds(_snapBox);
+      const was = root.visible;   // a body already hidden stays hidden after the shot
       dataUrl = composeFirstPerson({
         camera,
         yaw: root.rotation.y,
@@ -119,7 +120,7 @@ export async function capture(msg) {
         head: head ? [head.x, head.y, head.z] : null,
         bounds: box ? { min: box.min.toArray(), max: box.max.toArray() } : null,
         name: msg.follow,
-        setOwnVisible: (v) => { root.visible = v; },
+        setOwnVisible: (v) => { root.visible = v && was; },
         render: captureFrame,
       });
     }
