@@ -125,6 +125,7 @@ export class WorldClient {
   get pendingCount(): number { return this.pending.length + (this.inflight ? 1 : 0); }
 
   connect(): void {
+    this.helloRefused = null;   // a fresh dial: only this connection's own refusal stops it
     const ws = new WebSocket(this.opts.url);
     this.ws = ws;
     ws.onopen = () => {

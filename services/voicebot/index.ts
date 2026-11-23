@@ -140,7 +140,7 @@ function connectWorld() {
   const ws = new WebSocket(WORLD_URL);
   ws.onopen = () => ws.send(JSON.stringify({ type: "join", hello: helloOf(), world: WORLD_NAME, id: "voice", avatar: "", spectate: true, token: WORLD_TOKEN, replica: true }));
   ws.onclose = () => {
-    if (helloRefused) { log(`world refused the join: ${helloRefused} — not redialing`); process.exit(78); }   // 78 = EX_CONFIG: the unit is told not to restart on it
+    if (helloRefused) { log(`world refused the join: ${helloRefused} — not redialing`); process.exit(78); }   // 78 = EX_CONFIG; deploy/ has no voicebot unit: whatever supervises it needs RestartPreventExitStatus=78
     log("world socket closed — reconnecting"); setTimeout(connectWorld, 1500); };
   ws.onmessage = (ev) => {
     const msg = JSON.parse(String(ev.data));

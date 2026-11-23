@@ -324,5 +324,20 @@ console.log('— M. the join line: the captioners hint keeps the screen\'s exist
   (w as any).halted = 'x';
 }
 
+console.log('— N. a hello refusal stops the redial, and a later connect() starts fresh —');
+{
+  let refuse = true, joins = 0; const logs: string[] = []; const refusals: string[] = [];
+  const fake = Bun.serve({ port: 0, fetch: (req, s) => (s.upgrade(req) ? undefined : new Response('ws only', { status: 400 })),
+    websocket: { message(ws, m) { if (JSON.parse(String(m))?.type !== 'join') return; joins++;
+      if (refuse) ws.send(JSON.stringify({ type: 'refused', code: 'update-required', need: { dialect: 'eidoverse', v: 999 } })); ws.close(4005, 'bye'); } } });
+  const w = new WorldClient({ url: `ws://127.0.0.1:${fake.port}/ws`, token: 't', world: 'w', actor: 'cap', screenId: 'cinema', log: (m) => logs.push(m), agent: false, onRefused: (why) => refusals.push(why) });
+  w.connect(); await sleep(2500);
+  const first = { joins, refusals: refusals.length };
+  refuse = false; w.connect(); await sleep(400);   // the operator's own reconnect, to a server that now takes the hello (and drops the line)
+  w.close(); fake.stop(true);
+  check('a refused hello: one join, onRefused once with the words, no redial', first.joins === 1 && first.refusals === 1 && /update the client/.test(refusals[0] ?? ''), JSON.stringify(first));
+  check('…and a later connect() is not taken for refused: its close redials', refusals.length === 1 && logs.some((l) => /world socket closed — reconnecting/.test(l)), JSON.stringify({ refusals: refusals.length, logs: logs.slice(-3) }));
+}
+
 console.log(`\n${pass} ok, ${fail} failed`);
 process.exit(fail ? 1 : 0);
