@@ -123,7 +123,7 @@ check("the built-in joints data has hinges", !!j.default?.hinges);
 // 6. product-door ownership: the pure core is not enough if Avatar never calls it.
 const avsrc = readFileSync(join(ROOT, "client/lib/avatar/avatar.js"), "utf8");
 const at = (...needles: string[]) => needles.map((n) => avsrc.indexOf(n));
-const [mix, after, reach, before, vu] = at("this.mixer.update(dt)", "this.bodyRuntime.afterMixer", "BC('av:reach')", "this.bodyRuntime.beforeVrmUpdate", "this.vrm.update(dt)");
+const [mix, after, reach, before, vu] = at("this.mixer.update(dt)", "this.bodyRuntime.afterMixer", "BC('av:reach')", "this.bodyRuntime.beforeVrmUpdate", "this._vrmUpdate(dt)");
 check("Avatar runs the runtime after mixer and after reach, before vrm.update",
   mix >= 0 && mix < after && after < reach && reach < before && before < vu, { mix, after, reach, before, vu });
 check("Avatar load initializes and installs the runtime",
