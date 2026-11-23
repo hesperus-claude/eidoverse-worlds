@@ -99,6 +99,7 @@ const STATES = ['granted', 'denied', 'prompt', 'unknown'];
   check('pre-VR: a garbage remembered value counts as never asked', preVrStep({ state: 'prompt', remembered: 'yes' }).step === 'ask');
   check('pre-VR: a mic already live on the desktop goes straight in, even with the permission unread or a promise owed (G3-052)',
     ['prompt', 'unknown'].every((s) => [false, true].every((p) => eq(preVrStep({ state: s, remembered: null, pending: p, micOn: true }), { step: 'straight', hint: null }))));
+  check('pre-VR: denied still gets the settings hint with a live mic (the browser\'s denied outranks micOn)', eq(preVrStep({ state: 'denied', micOn: true }), { step: 'straight', hint: 'denied' }));
   check('in VR: turning the mic OFF is never gated', inVrMicPlan({ turningOn: false, presenting: true, state: 'prompt' }) === 'proceed');
   check('in VR: outside a session nothing is gated', inVrMicPlan({ turningOn: true, presenting: false, state: 'prompt' }) === 'proceed');
   check('in VR: granted in VR just toggles', inVrMicPlan({ turningOn: true, presenting: true, state: 'granted' }) === 'proceed');
