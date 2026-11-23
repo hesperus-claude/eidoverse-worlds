@@ -74,8 +74,8 @@ try {
   ok(seen() === undefined, "before the close, nothing has written this agent's seen-time (the prelude is waiting on history)", seen());
   ws.close();
   const atClose = await until("the session's finally wrote the seen-time", () => seen(), { ms: 8000 });
-  // the held read gives up after 8 s (agent.ts history); past that, a prelude that resumed would have written again
-  await pause("the held history read times out", 10_000);
+  // the held read gives up after 8 s (agent.ts history); 12 s leaves 4 s for a resumed prelude's write on a loaded box
+  await pause("the held history read times out", 12_000);
   const after = seen();
   ok(after === atClose, "G2-059 a session closed during the prelude's history read: nothing writes after its finally (the prelude stops)", { atClose, after });
 } catch (error) {
