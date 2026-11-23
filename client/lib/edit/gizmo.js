@@ -115,7 +115,7 @@ function onChange() {
   if (now - lastSent >= 66) {
     lastSent = now; const p = obj.position; const q = obj.quaternion;
     // yaw for older peers (the heading), q for everyone who reads it
-    sendDrag(attachedId, [p.x, p.y, p.z], new THREE.Euler().setFromQuaternion(q, 'YXZ').y, [q.x, q.y, q.z, q.w]);
+    sendDrag(attachedId, [p.x, p.y, p.z], new THREE.Euler().setFromQuaternion(q, 'YXZ').y, [q.x, q.y, q.z, q.w], { scale: obj.scale.toArray() });   // the scale tool's size too (G3-029)
   }
 }
 // the pivot tool's release: where the proxy ended, in the thing's own frame (before scale), snapped to the nearest

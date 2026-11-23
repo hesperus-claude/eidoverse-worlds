@@ -166,38 +166,61 @@ try {
     check("GH5 the status line is given back once it's placed", await waitFor(`__hints.at(-1) === null`, 2000), await evalJson(`__hints.slice(-2)`));
   }
 
-  const ghThing = myActs().at(-1)?.e.body?.args?.id;   // GH's crate: SC's subject, taken before SD writes its own act
+  const ghThing = myActs().at(-1)?.e.body?.args?.id;   // GH's crate: SC's subject, taken before SD writes its own acts
   // ---- SD: a scale drag streams to the others, as a move or a turn does (G3-029) ----
-  // The press aims at the crate off its centre, but what it lands on is whatever is drawn there (house-a, in front of it,
-  // in this world); SD scales THAT, the thing the press picked (its id is the gizmo's)
-  { const thing = ghThing;
-    const seen: any[] = []; const onDrag = (ev: any) => { const m = JSON.parse(String(ev.data)); if (m.type === "drag") seen.push(m); };
+  // Its own subject: a box made for it 4.5 m ahead of the camera, nearer than anything the earlier sections built. Two drags: the gizmo's
+  // scale (gizmo.js, driven at its controls as client-check G does) and the mesh drag (build.js, a real press on the box
+  // where no gizmo handle is hot: a hot handle owns the press).
+  { const seen: any[] = []; const onDrag = (ev: any) => { const m = JSON.parse(String(ev.data)); if (m.type === "drag") seen.push(m); };
     bob.addEventListener("message", onDrag);
-    check("SD (setup) GH's crate is drawn", !!thing && await waitFor(`import('/lib/world.js').then((m) => (m.entities.get('${thing}')?.children.length ?? 0) > 0)`, 12000), thing);
-    await page(`(await import('/lib/scenegraph.js')).sceneSelect('${thing}'); (await import('/lib/edit/build.js')).setTool('scale'); return true;`);
-    // press a mesh off the crate's centre, where no gizmo handle sits (a handle there would own the press: gizmo.js);
-    // the press selects what it hits, which is the thing the drag scales
-    const at = await evalJson(`Promise.all([import('/lib/core.js'), import('/lib/world.js')]).then(([c, w]) => { const T = c.THREE, o = w.entities.get('${thing}');
-      const b = new T.Box3().setFromObject(o), m = b.getCenter(new T.Vector3()), h = b.getSize(new T.Vector3()).multiplyScalar(0.5);
-      const r = c.camera.matrixWorld.elements, right = new T.Vector3(r[0], 0, r[2]).normalize();
-      const p = m.clone().addScaledVector(right, Math.min(h.x, h.z) * 0.75).project(c.camera);
-      return { x: Math.round((p.x + 1) / 2 * innerWidth), y: Math.round((1 - p.y) / 2 * innerHeight) }; })`);
     const frame = () => evalJson(`new Promise((r) => requestAnimationFrame(() => r(true)))`);   // one frame: the build loop reads the pointer
-    await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...at }); await frame();
-    await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", ...at, button: "left", clickCount: 1 });
-    const id = await evalJson(`globalThis.__gizmo?.().attached ?? null`);
-    const sx = () => evalJson(`import('/lib/world.js').then((m) => m.entities.get(globalThis.__gizmo?.().attached)?.scale.x ?? null)`);
-    const s0 = await sx();
-    for (let k = 1; k <= 10; k++) { await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at.x + k * 8, y: at.y, button: "left", buttons: 1 }); await frame(); }
-    await waitFor(`import('/lib/world.js').then((m) => (m.entities.get(globalThis.__gizmo?.().attached)?.scale.x ?? 0) > ${s0 ?? 1e9} * 1.2)`, 4000);
-    const mid = await sx();
-    check("SD (setup) the press picked a thing and the drag scales it in the page", !!id && s0 != null && mid != null && mid > s0 * 1.2, { id, s0, mid, at });
-    check("SD1 the drag's live samples carry its scale to the others (Bob sees it grow before the release)",
-      await waitDisk(() => seen.some((m) => m.id === id && !m.end && Array.isArray(m.scale) && m.scale[0] > s0 * 1.2), 3000), seen.slice(-3));   // the relay is a hop behind the page
-    const n0 = myActs().length;
-    await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: at.x + 80, y: at.y, button: "left", clickCount: 1 });
-    check("SD2 the release is ONE act, a set of its transform", await waitDisk(() => myActs().length === n0 + 1 && myActs().at(-1).e.verb === "set" && myActs().at(-1).e.body?.args?.id === id), myActs().slice(n0).map((x) => x.e.body?.args));
+    const made = await page(`const c = await import('/lib/core.js'), T = c.THREE; const f = c.camera.getWorldDirection(new T.Vector3()); f.y = 0; f.normalize();
+      const o = c.camera.getWorldPosition(new T.Vector3()); const g = (await import('/lib/terrain.js')).heightAt?.(o.x + f.x * 4.5, o.z + f.z * 4.5) ?? 0;
+      const r = await (await import('/lib/net.js')).sendRequest('create', { id: '$new', components: { transform: { pos: [o.x + f.x * 4.5, g, o.z + f.z * 4.5], q: [0, 0, 0, 1], scale: [1, 1, 1] }, mesh: { shape: 'box', size: [1.6, 1.6, 1.6] }, label: 'sd-box' } });
+      return r.ok ? r.ids?.['$new'] ?? null : JSON.stringify(r.refused);`);
+    const box = typeof made === "string" && !made.startsWith("{") ? made : null;
+    check("SD (setup) a box for SD is made and drawn", !!box && await waitFor(`import('/lib/world.js').then((m) => !!m.entities.get('${box}'))`, 12000), made);
+    await page(`(await import('/lib/scenegraph.js')).sceneSelect('${box}'); (await import('/lib/edit/build.js')).setTool('scale'); return true;`);
+    check("SD (setup) the scale gizmo is on the box", await waitFor(`globalThis.__gizmo?.().attached === '${box}' && globalThis.__gizmo?.().mode === 'scale'`), await evalJson(`({ attached: globalThis.__gizmo?.().attached, mode: globalThis.__gizmo?.().mode })`));
+    const sx = () => evalJson(`import('/lib/world.js').then((m) => m.entities.get('${box}')?.scale.x ?? null)`);
+
+    // SD-G: the gizmo's scale drag
+    let n0 = myActs().length; seen.length = 0;
+    await evalJson(`(() => { const c = globalThis.__gizmo().controls; c.dispatchEvent({ type: 'dragging-changed', value: true }); c.object.scale.multiplyScalar(1.5); c.dispatchEvent({ type: 'objectChange' }); return true; })()`);
+    check("SD-G1 the gizmo's scale drag streams the size to the others (Bob sees ×1.5 before the release)",
+      await waitDisk(() => seen.some((m) => m.id === box && !m.end && Array.isArray(m.scale) && Math.abs(m.scale[0] - 1.5) < 1e-3), 3000), seen.slice(-2));
+    await evalJson(`(() => { globalThis.__gizmo().controls.dispatchEvent({ type: 'dragging-changed', value: false }); return true; })()`);
+    check("SD-G2 …its release is ONE set of the box's transform", await waitDisk(() => myActs().length === n0 + 1 && myActs().at(-1).e.verb === "set" && myActs().at(-1).e.body?.args?.id === box), myActs().slice(n0).map((x) => x.e.body?.args));
+
+    // SD-M: the mesh drag. The box alone is in this viewer's view for it (myview.js isolate: the others aren't drawn or
+    // clickable, so the press can land only on the box), at a point on its mesh with no gizmo handle hot
+    await evalJson(`Promise.all([import('/lib/edit/myview.js'), import('/lib/world.js')]).then(([v, w]) => (v.setIsolate(['${box}'], () => null, [...w.entities.keys()]), true))`);
+    const cands = await evalJson(`Promise.all([import('/lib/core.js'), import('/lib/world.js')]).then(([c, w]) => { const T = c.THREE, o = w.entities.get('${box}');
+      const b = new T.Box3().setFromObject(o), out = [], rc = new T.Raycaster(), targets = [o];
+      for (const u of [0.15, 0.85, 0.3, 0.7]) for (const v of [0.2, 0.8, 0.5]) {
+        const p = new T.Vector3(b.min.x + (b.max.x - b.min.x) * u, b.min.y + (b.max.y - b.min.y) * v, b.min.z + (b.max.z - b.min.z) * (1 - u)).project(c.camera);
+        rc.setFromCamera(new T.Vector2(p.x, p.y), c.camera); const h = rc.intersectObjects(targets, true)[0]; let r = h?.object; while (r && !r.userData.entityId) r = r.parent;
+        const x = Math.round((p.x + 1) / 2 * innerWidth), y = Math.round((1 - p.y) / 2 * innerHeight);
+        if (r?.userData.entityId === '${box}' && x > 8 && y > 8 && x < innerWidth - 8 && y < innerHeight - 8) out.push({ x, y }); }
+      return out; })`) ?? [];
+    let at: any = null;
+    for (const p of cands) { await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...p }); await frame(); await frame();
+      if (!(await evalJson(`globalThis.__gizmo?.().controls?.axis ?? null`))) { at = p; break; } }
+    check("SD (setup) a point on the box clear of the gizmo's handles", !!at, { cands });
+    const s0 = await sx(); n0 = myActs().length; seen.length = 0;
+    if (at) {
+      await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", ...at, button: "left", clickCount: 1 });
+      for (let k = 1; k <= 10; k++) { await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at.x + k * 8, y: at.y, button: "left", buttons: 1 }); await frame(); }
+      await waitFor(`import('/lib/world.js').then((m) => (m.entities.get('${box}')?.scale.x ?? 0) > ${s0 ?? 1e9} * 1.2)`, 4000);
+    }
+    const mid = await sx(); const id = await evalJson(`globalThis.__gizmo?.().attached ?? null`);
+    check("SD (setup) the press is on the box, and the mesh drag scales it in the page", id === box && s0 != null && mid != null && mid > s0 * 1.2, { id, box, s0, mid, at });
+    check("SD1 the mesh drag's live samples carry its scale to the others (Bob sees it grow before the release)",
+      await waitDisk(() => seen.some((m) => m.id === box && !m.end && Array.isArray(m.scale) && m.scale[0] > s0 * 1.2), 3000), seen.slice(-3));   // the relay is a hop behind the page
+    if (at) await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: at.x + 80, y: at.y, button: "left", clickCount: 1 });
+    check("SD2 the release is ONE act, a set of the box's transform", await waitDisk(() => myActs().length === n0 + 1 && myActs().at(-1).e.verb === "set" && myActs().at(-1).e.body?.args?.id === box), myActs().slice(n0).map((x) => x.e.body?.args));
     bob.removeEventListener("message", onDrag);
+    await evalJson(`import('/lib/edit/myview.js').then((v) => (v.setIsolate(null), true))`);
     await page(`(await import('/lib/edit/build.js')).setTool('move'); return true;`);
   }
 
