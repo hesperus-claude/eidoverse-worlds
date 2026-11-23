@@ -3,7 +3,11 @@
 import { relayIdentity, parseRelayIdentity, nextIncarnation,
   subscriptionActive, applyConsentUpdate,
 } from "../../server/relaydecision.ts";
+import { bootIncarnation } from "../../server/transport.ts";
 import { suite } from "../gate/suite.ts";
+import fs from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const S = suite("relay-decision");
 const t = (name: string, got: unknown, want: unknown) => S.check(name, JSON.stringify(got) === JSON.stringify(want), `got ${JSON.stringify(got)} want ${JSON.stringify(want)}`);
@@ -21,6 +25,16 @@ t("first incarnation", nextIncarnation(null, "abc"), "i1-abc");
 t("advance past prev", nextIncarnation("i7-old", "new"), "i8-new");
 t("lost-file restart cannot equal prev (entropy differs)",
   nextIncarnation(null, "x9") !== nextIncarnation(null, "abc"), true);
+{ // the advance is fsynced before boot goes on: a power loss can't hand the next boot a stale prev (G2-076)
+  const dir = fs.mkdtempSync(join(tmpdir(), "incarnation-")), file = join(dir, "relay-incarnation");
+  const real = fs.fsyncSync; let synced = 0;
+  (fs as any).fsyncSync = (fd: number) => { synced++; return real(fd); };
+  try {
+    const a = bootIncarnation(dir), b = bootIncarnation(dir);
+    t("boot advances the kept incarnation", [fs.readFileSync(file, "utf8"), /^i2-/.test(b), /^i1-/.test(a)], [b, true, true]);
+    S.check("the advance is fsynced (file and its directory), not only renamed", synced >= 2 * (process.platform === "win32" ? 1 : 2), `${synced} fsyncs for 2 boots`);
+  } finally { (fs as any).fsyncSync = real; fs.rmSync(dir, { recursive: true, force: true }); }
+}
 
 // ── audibility: three independent states (amendment 3) ──────────────────────
 t("no consent → inactive (fail closed)",
