@@ -244,6 +244,7 @@ async function wirePart() {
 }
 
 /** client/main.js's onRestore body (client/lib/player/restore.js restoreMyBody), run against stubs; calls setFolded. */
+// main.js's own call into restoreMyBody is covered by test/client/getup-browser-probe.ts (it goes red if onRestore stops calling it).
 function mainOnRestore() {
   const { restoreMyBody } = require("../../client/lib/player/restore.js");
   return (sample: any, setFolded: (v: boolean) => void) => {
