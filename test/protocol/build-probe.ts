@@ -166,8 +166,11 @@ try {
     check("GH5 the status line is given back once it's placed", await waitFor(`__hints.at(-1) === null`, 2000), await evalJson(`__hints.slice(-2)`));
   }
 
+  const ghThing = myActs().at(-1)?.e.body?.args?.id;   // GH's crate: SC's subject, taken before SD writes its own act
   // ---- SD: a scale drag streams to the others, as a move or a turn does (G3-029) ----
-  { const thing = myActs().at(-1)?.e.body?.args?.id;   // GH's crate, placed under (SX - 120, SY + 40): the press aims beside it
+  // The press aims at the crate off its centre, but what it lands on is whatever is drawn there (house-a, in front of it,
+  // in this world); SD scales THAT, the thing the press picked (its id is the gizmo's)
+  { const thing = ghThing;
     const seen: any[] = []; const onDrag = (ev: any) => { const m = JSON.parse(String(ev.data)); if (m.type === "drag") seen.push(m); };
     bob.addEventListener("message", onDrag);
     check("SD (setup) GH's crate is drawn", !!thing && await waitFor(`import('/lib/world.js').then((m) => (m.entities.get('${thing}')?.children.length ?? 0) > 0)`, 12000), thing);
@@ -190,7 +193,7 @@ try {
     const mid = await sx();
     check("SD (setup) the press picked a thing and the drag scales it in the page", !!id && s0 != null && mid != null && mid > s0 * 1.2, { id, s0, mid, at });
     check("SD1 the drag's live samples carry its scale to the others (Bob sees it grow before the release)",
-      seen.some((m) => m.id === id && !m.end && Array.isArray(m.scale) && m.scale[0] > s0 * 1.2), seen.slice(-3));
+      await waitDisk(() => seen.some((m) => m.id === id && !m.end && Array.isArray(m.scale) && m.scale[0] > s0 * 1.2), 3000), seen.slice(-3));   // the relay is a hop behind the page
     const n0 = myActs().length;
     await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: at.x + 80, y: at.y, button: "left", clickCount: 1 });
     check("SD2 the release is ONE act, a set of its transform", await waitDisk(() => myActs().length === n0 + 1 && myActs().at(-1).e.verb === "set" && myActs().at(-1).e.body?.args?.id === id), myActs().slice(n0).map((x) => x.e.body?.args));
@@ -199,7 +202,7 @@ try {
   }
 
   // ---- SC: a new script from the Inspector ----
-  { const thing = myActs().at(-1)?.e.body?.args?.id;
+  { const thing = ghThing;
     await page(`(await import('/lib/scenegraph.js')).sceneSelect('${thing}'); return true;`);
     const btn = `[...document.querySelectorAll('[data-frame="inspector"] button')].find((b) => /Add Script/.test(b.textContent))`;
     check("SC1 the Inspector offers 'Add Script…' on the selected thing", await waitFor(`!!(${btn}) && !(${btn}).disabled`), await evalJson(`[...document.querySelectorAll('[data-frame="inspector"] button')].map((b) => b.textContent).slice(0, 30)`));
