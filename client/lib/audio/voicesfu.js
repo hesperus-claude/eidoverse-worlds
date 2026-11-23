@@ -101,7 +101,7 @@ export async function sfuConnect(credential, send) {
             + `iceConnectionState=${pc.iceConnectionState} after 8s.`
             + (hostOnly ? '  Only HOST candidates were gathered: this peer can only reach '
                 + 'the server on the same machine/LAN. A phone or remote listener needs a '
-                + 'STUN/TURN server, which this build does not configure (iceServers: []).'
+                + `STUN/TURN server it can reach (this connection had ${credential?.iceServers?.length ?? 0} ICE servers configured).`
                 : '')
             + '  Your mic is capturing (the meter is local) but NOTHING is being transmitted.');
           logChat('*', 'voice: no media path to the server — mic is on but nobody can hear you');
