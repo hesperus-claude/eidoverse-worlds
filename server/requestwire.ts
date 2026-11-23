@@ -189,9 +189,12 @@ export const REQUEST_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
       if (r?.ok && PERSON_ACTS.has(verb)) { sweep?.(w);
         const who = String(args.who ?? ""); const notice = verb === "warn" ? { type: "warned", by: c.id, reason: String(args.reason ?? "") }
           : verb === "mute" ? { type: "moderated", verb: "mute", by: c.id, you: true, channels: r.channels, until: r.until, ...(args.reason ? { reason: String(args.reason) } : {}) } : null;
-        if (notice) for (const t of w.clients) if (t.actorId === who) { try { t.ws.send(JSON.stringify(notice)); } catch { /* gone */ } }
-        // a warning is private: its moderator alone is told it went, as the broadcast tells them of a mute or kick
-        if (verb === "warn") try { ws.send(JSON.stringify({ type: "moderated", verb, by: c.id, text: modLine(w, c.id, verb, who) })); } catch { /* gone */ } }
+        let told = 0;
+        if (notice) for (const t of w.clients) if (t.actorId === who) { try { t.ws.send(JSON.stringify(notice)); told++; } catch { /* gone */ } }
+        // a warning is private: its moderator alone is told it went, as the broadcast tells them of a mute or kick; or, with
+        // no live socket of theirs here, that it was logged and reached no one (G6-001)
+        if (verb === "warn") try { ws.send(JSON.stringify({ type: "moderated", verb, by: c.id,
+          text: modLine(w, c.id, verb, who) + (told ? "" : " (logged, but not delivered: they aren't here)") })); } catch { /* gone */ } }
       if (r?.ok && (verb === "ban" || verb === "kick" || verb === "unban" || verb === "mute" || verb === "unmute") && typeof args.who === "string") {
         const who = String(args.who);
         const happened = verb === "kick" || verb === "mute" || verb === "unmute" ? [...w.clients].some((t) => t.actorId === who && !t.spectator) : wasBanned !== isBanned(w.log.live, who);

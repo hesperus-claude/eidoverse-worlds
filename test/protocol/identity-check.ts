@@ -29,7 +29,7 @@
 //   MA  a pose past the size cap isn't relayed or remembered; one websocket message past the cap closes the socket
 //   LC  on a box with a JOIN_TOKEN, /worlds, /snap, /geom?world and /relay-diag need a key a join would take
 //   RS  roles and moderation at the server (research roles S4): your-rights from the authority, voice-moderate as the authority's
-//       identity-keyed logged mute (surviving a reconnect), a kick that lets them straight back (R 10-28), warn and
+//       identity-keyed logged mute (surviving a reconnect), a kick that lets them straight back (R 10-28), warn (RS5d: to someone absent, said undelivered) and
 //       mute notices, access (listed / max with the moderator bypass); RS7 reset is the most senior owner's;
 //       RS8 whisper is removed (R 10-18: refused `removed`, delivered to nobody); RS9 the ban list,
 //       a guest's ban by address (a kick bars no address); RS10 speech is arrival-only: no say before you arrived reaches a non-admin by either
@@ -375,6 +375,11 @@ const S2 = await start({ TRUST_NAMES: "" });   // the public door: typed names a
     const toldWarn = (x: { msgs: any[] }) => x.msgs.filter((m) => m.type === "moderated" && m.verb === "warn");
     ok(wn.ok && toldWarn(fern).length === 1 && /warned Moss/.test(toldWarn(fern)[0].text ?? "") && toldWarn(own).length === 0 && toldWarn(rejoin).length === 0,
       "RS5b the moderator's /warn is confirmed to the moderator alone", [toldWarn(fern), toldWarn(own).length, toldWarn(rejoin).length]);
+    // RS5d (G6-001): a warning for someone not here is logged, and the moderator is told it reached no one, not that it went
+    { const k = fern.msgs.length; const wa = await fern.req("warn", { who: "u-nobody-here", reason: "for the record" });
+      const line = await tryUntil("the absent warning's line reaches its moderator", () => fern.msgs.slice(k).find((m) => m.type === "moderated" && m.verb === "warn"), { ms: 3000, step: 20 });
+      ok(wa.ok && /not delivered/.test(line?.text ?? "") && /warned Moss/.test(toldWarn(fern)[0].text ?? "") && !/not delivered/.test(toldWarn(fern)[0].text ?? ""),
+        "RS5d a /warn for someone absent is confirmed as logged but not delivered; one for someone present isn't", [wa, line, toldWarn(fern)[0]]); }
     // RS6: access: 'listed' admits only people with a role here; a moderator gets in past max
     await own.req("set", { id: "@world", component: "access", value: { join: "listed" } });
     const st = await sock(S4.port); const js = await st.join("heath", "Stranger", { agentToken: mint({ kind: "agent", name: "Stranger", sub: "agent:stranger@home.test" }) });
