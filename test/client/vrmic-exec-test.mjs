@@ -97,6 +97,8 @@ const STATES = ['granted', 'denied', 'prompt', 'unknown'];
   check('pre-VR: a remembered "allow" (prompt dismissed since) is not re-asked', preVrStep({ state: 'prompt', remembered: 'allow' }).step === 'straight');
   check('pre-VR: a VR promise outranks an earlier not-now', preVrStep({ state: 'prompt', remembered: 'later', pending: true }).step === 'ask');
   check('pre-VR: a garbage remembered value counts as never asked', preVrStep({ state: 'prompt', remembered: 'yes' }).step === 'ask');
+  check('pre-VR: a mic already live on the desktop goes straight in, even with the permission unread or a promise owed (G3-052)',
+    ['prompt', 'unknown'].every((s) => [false, true].every((p) => eq(preVrStep({ state: s, remembered: null, pending: p, micOn: true }), { step: 'straight', hint: null }))));
   check('in VR: turning the mic OFF is never gated', inVrMicPlan({ turningOn: false, presenting: true, state: 'prompt' }) === 'proceed');
   check('in VR: outside a session nothing is gated', inVrMicPlan({ turningOn: true, presenting: false, state: 'prompt' }) === 'proceed');
   check('in VR: granted in VR just toggles', inVrMicPlan({ turningOn: true, presenting: true, state: 'granted' }) === 'proceed');
@@ -223,6 +225,15 @@ console.log('\n— 5. a browser with no permissions.query —');
   check('…and the watcher is not left "watching": once the API answers, a grant announces itself', hints.filter((h) => /allowed/.test(h)).length === 1, JSON.stringify(hints));
   await advance(5000);
   if (scrims()) closeCard();
+}
+console.log('\n— 5b. the desktop mic is already live —');
+{
+  reset(); perm.state = 'not-a-state'; mic.on = true;   // no usable Permissions answer, but the mic is on: nothing to ask
+  let proceeds = 0;
+  const res = V.vrMicPreflight(() => proceeds++); await advance(500);
+  check('a live desktop mic shows no permission card: the visor press goes straight in', (await res) === 'straight' && proceeds === 1 && scrims() === 0,
+    JSON.stringify({ proceeds, scrims: scrims() }));
+  mic.on = false; if (scrims()) closeCard();
 }
 // ── 6. vrmic.js does what the policy decides: every pre-VR row, the in-VR turn-on per state and every after-exit row, executed through its effects ──
 const asState = (s) => s === 'unknown' ? 'not-a-state' : s;   // micPermissionState maps any other answer to 'unknown'

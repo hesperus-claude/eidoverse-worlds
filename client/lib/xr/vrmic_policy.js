@@ -10,15 +10,17 @@
 //               'granted' | 'denied' | 'prompt' | 'unknown' (no Permissions API / no 'microphone' name / it threw)
 //   remembered  what this browser chose at the 2D step before: null (never asked) | 'allow' | 'later'
 //   pending     VR could not get an answer and promised "you'll be asked when you leave VR" (the in-VR fallback)
+//   micOn       the desktop mic is live now (micstate.js): the browser has already said yes, whatever the query read
 
 export const MIC_CHOICE_KEY = 'ew-vr-mic-choice';     // 'allow' | 'later' — the 2D step's remembered answer
 export const MIC_PENDING_KEY = 'ew-vr-mic-pending';   // '1' — VR owes the person a flat-page ask
 
 /** The Enter VR press. → { step: 'ask' | 'straight', hint: null | 'denied' }
  *  A browser-level answer (granted / denied) always wins; 'unknown' is treated like 'prompt'. */
-export function preVrStep({ state, remembered = null, pending = false }) {
+export function preVrStep({ state, remembered = null, pending = false, micOn = false }) {
   if (state === 'granted') return { step: 'straight', hint: null };
   if (state === 'denied') return { step: 'straight', hint: 'denied' };
+  if (micOn) return { step: 'straight', hint: null };   // a live mic is a yes the query could not read (G3-052)
   // A promise VR made outranks an earlier "not now": the person tried to talk in the headset since then.
   if (pending) return { step: 'ask', hint: null };
   if (remembered === 'allow' || remembered === 'later') return { step: 'straight', hint: null };
