@@ -7,7 +7,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { readLog, worldIdOf } from "../shared/protocol/fold.js";
 import { directoryFileIn, custodyFileIn } from "./keyfiles.ts";
 import { secretOf } from "./custody.ts";
 import { readCustody } from "./custodycheck.ts";
@@ -40,12 +39,11 @@ export function nameTagKey(worldsDir: string): Buffer | null {
   return null;
 }
 
-/** `existingWorlds` is accepted but no longer read: the v1 → v2 upgrade keeps every id server-wide without it. */
-export function directoryAt(file: string, now: () => number = Date.now, existingWorlds: () => string[] = () => []) {
+export function directoryAt(file: string, now: () => number = Date.now) {
   const read = (): File => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : { v: 2, ids: {} });
   const d: File = read();
   if (d.v !== 2) {
-    d.v = 2; void existingWorlds;
+    d.v = 2;
     // v1 keyed an agent by its display slug (`agent:<name>`); v2 keys an enrolled agent by its enrolment
     // (`agent:token:<id>`), never a slug. The enrolled agents keep their ids through the rename.
     for (const e of Object.values(d.ids)) e.subs = e.subs.map((s) => (/^agent:(?!token:)/.test(s) ? `agent:token:${s.slice(6)}` : s));
@@ -162,19 +160,6 @@ export function foldName(s: string): string {
   return String(s).normalize("NFKD").replace(/(?<=\p{Script=Latin}\p{M}*)\p{M}/gu, "").normalize("NFKC").toLowerCase().replace(/[\p{Cf}\p{Z}\p{P}\p{S}_]/gu, "");
 }
 
-/** The world ids already standing in a worlds dir (each world's genesis hash, read from its log's first line). */
-function worldIdsIn(worldsDir: string): string[] {
-  const out: string[] = [];
-  if (!fs.existsSync(worldsDir)) return out;
-  for (const name of fs.readdirSync(worldsDir)) {
-    const f = path.join(worldsDir, name, "world.jsonl"); if (!fs.existsSync(f)) continue;
-    try { const fd = fs.openSync(f, "r"); const buf = Buffer.alloc(1 << 16); const n = fs.readSync(fd, buf, 0, buf.length, 0); fs.closeSync(fd);
-      const nl = buf.subarray(0, n).indexOf(0x0a); const [g] = readLog(buf.subarray(0, nl < 0 ? n : nl + 1));
-      const w = g ? worldIdOf(g) : null; if (w) out.push(w); } catch { /* an unreadable log isn't a world */ }
-  }
-  return out;
-}
-
 /** Run `f` holding `<file>.lock` (durable.ts withFileLock: another process writing the same directory waits, a dead holder's
  *  lock is removed, one held past WAIT_MS throws), re-entrant within this process. */
 const WAIT_MS = 10_000, held = new Map<string, number>();
@@ -191,5 +176,5 @@ const cache = new Map<string, Directory>();
 /** The one directory for a worlds dir (shared by every world in it, and by the translator writing into it). */
 export function directoryFor(worldsDir: string): Directory {
   const f = directoryFileIn(worldsDir);
-  let d = cache.get(f); if (!d) cache.set(f, (d = directoryAt(f, Date.now, () => worldIdsIn(path.resolve(worldsDir))))); return d;
+  let d = cache.get(f); if (!d) cache.set(f, (d = directoryAt(f))); return d;
 }
