@@ -166,6 +166,37 @@ try {
     check("GH5 the status line is given back once it's placed", await waitFor(`__hints.at(-1) === null`, 2000), await evalJson(`__hints.slice(-2)`));
   }
 
+  // ---- SD: a scale drag streams to the others, as a move or a turn does (G3-029) ----
+  { const thing = myActs().at(-1)?.e.body?.args?.id;   // GH's crate, placed under (SX - 120, SY + 40): the press aims beside it
+    const seen: any[] = []; const onDrag = (ev: any) => { const m = JSON.parse(String(ev.data)); if (m.type === "drag") seen.push(m); };
+    bob.addEventListener("message", onDrag);
+    check("SD (setup) GH's crate is drawn", !!thing && await waitFor(`import('/lib/world.js').then((m) => (m.entities.get('${thing}')?.children.length ?? 0) > 0)`, 12000), thing);
+    await page(`(await import('/lib/scenegraph.js')).sceneSelect('${thing}'); (await import('/lib/edit/build.js')).setTool('scale'); return true;`);
+    // press a mesh off the crate's centre, where no gizmo handle sits (a handle there would own the press: gizmo.js);
+    // the press selects what it hits, which is the thing the drag scales
+    const at = await evalJson(`Promise.all([import('/lib/core.js'), import('/lib/world.js')]).then(([c, w]) => { const T = c.THREE, o = w.entities.get('${thing}');
+      const b = new T.Box3().setFromObject(o), m = b.getCenter(new T.Vector3()), h = b.getSize(new T.Vector3()).multiplyScalar(0.5);
+      const r = c.camera.matrixWorld.elements, right = new T.Vector3(r[0], 0, r[2]).normalize();
+      const p = m.clone().addScaledVector(right, Math.min(h.x, h.z) * 0.75).project(c.camera);
+      return { x: Math.round((p.x + 1) / 2 * innerWidth), y: Math.round((1 - p.y) / 2 * innerHeight) }; })`);
+    await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...at }); await sleep(100);
+    await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", ...at, button: "left", clickCount: 1 });
+    const id = await evalJson(`globalThis.__gizmo?.().attached ?? null`);
+    const sx = () => evalJson(`import('/lib/world.js').then((m) => m.entities.get(globalThis.__gizmo?.().attached)?.scale.x ?? null)`);
+    const s0 = await sx();
+    for (let k = 1; k <= 10; k++) { await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at.x + k * 8, y: at.y, button: "left", buttons: 1 }); await sleep(60); }
+    await sleep(400);
+    const mid = await sx();
+    check("SD (setup) the press picked a thing and the drag scales it in the page", !!id && s0 != null && mid != null && mid > s0 * 1.2, { id, s0, mid, at });
+    check("SD1 the drag's live samples carry its scale to the others (Bob sees it grow before the release)",
+      seen.some((m) => m.id === id && !m.end && Array.isArray(m.scale) && m.scale[0] > s0 * 1.2), seen.slice(-3));
+    const n0 = myActs().length;
+    await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: at.x + 80, y: at.y, button: "left", clickCount: 1 });
+    check("SD2 the release is ONE act, a set of its transform", await waitDisk(() => myActs().length === n0 + 1 && myActs().at(-1).e.verb === "set" && myActs().at(-1).e.body?.args?.id === id), myActs().slice(n0).map((x) => x.e.body?.args));
+    bob.removeEventListener("message", onDrag);
+    await page(`(await import('/lib/edit/build.js')).setTool('move'); return true;`);
+  }
+
   // ---- SC: a new script from the Inspector ----
   { const thing = myActs().at(-1)?.e.body?.args?.id;
     await page(`(await import('/lib/scenegraph.js')).sceneSelect('${thing}'); return true;`);

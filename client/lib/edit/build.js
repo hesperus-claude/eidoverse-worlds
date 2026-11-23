@@ -331,7 +331,7 @@ export function updateBuild() {
       reindexCollider(selected.id); refreshOutline(); relayDrag();
     } else if (tool === 'scale') {
       { const k = Math.exp((dragging.clientX - dragging.startX) * 0.006); const sc = selected.obj.scale.copy(dragging.startScale).multiplyScalar(k); sc.set(...sc.toArray().map((v) => THREE.MathUtils.clamp(v, 0.1, 12))); }   // keeps a stretched thing's proportions
-      reindexCollider(selected.id); refreshOutline();
+      reindexCollider(selected.id); refreshOutline(); relayDrag({ scale: true });   // others see the size live too (G3-029)
     } else if (dragging.vertical) {
       // screen-vertical pixels → world metres at the object's depth, so a drag feels the same near or far
       const fov = camera.fov * Math.PI / 180;
@@ -376,12 +376,12 @@ function setWorldPosition(obj, w) {
 }
 
 // relay at pose cadence so others see it move, not teleport
-function relayDrag() {
+function relayDrag({ scale = false } = {}) {
   const now = performance.now();
   if (now - (dragging.lastSent ?? 0) < 66) return;
   dragging.lastSent = now;
   const p = selected.obj.position; const q = selected.obj.quaternion;
-  sendDrag(selected.id, [p.x, p.y, p.z], new THREE.Euler().setFromQuaternion(q, 'YXZ').y, [q.x, q.y, q.z, q.w]);
+  sendDrag(selected.id, [p.x, p.y, p.z], new THREE.Euler().setFromQuaternion(q, 'YXZ').y, [q.x, q.y, q.z, q.w], scale ? { scale: selected.obj.scale.toArray() } : {});
 }
 
 // remote drags: applied transiently, no log involvement. A live drag is a CLAIM: while samples flow, `by` is editing
