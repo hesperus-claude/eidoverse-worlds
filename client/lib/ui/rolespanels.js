@@ -280,8 +280,8 @@ function paintWorld(body) {
 }
 function paintCard(body) {
   const ab = wc().about ?? {}; const edit = has('editWorld');
-  body.innerHTML = `<label class="rp-field">Name <input data-k="name" maxlength="80" value="${esc(ab.name ?? '')}" ${edit ? '' : 'disabled'}></label>`
-    + `<label class="rp-field rp-wide">Description <textarea data-k="text" rows="4" maxlength="2000" ${edit ? '' : 'disabled'}>${esc(ab.text ?? '')}</textarea></label>`
+  body.innerHTML = `<label class="rp-field">Name <input data-k="name" value="${esc(ab.name ?? '')}" ${edit ? '' : 'disabled'}></label>`
+    + `<label class="rp-field rp-wide">Description <textarea data-k="text" rows="4" ${edit ? '' : 'disabled'}>${esc(ab.text ?? '')}</textarea></label>`
     + `<p class="rp-dim">address: <code>${esc(CONFIG.params.get('world') ?? '')}</code></p>${edit ? '<button type="button" class="rp-btn" data-save>Save</button>' : ro('the owner (or someone with editWorld)')}`;
   body.querySelectorAll('input,textarea').forEach((x) => x.addEventListener('keydown', (e) => e.stopPropagation()));
   body.querySelector('[data-save]')?.addEventListener('click', () => act('set', { id: '@world', component: 'about', value: { name: body.querySelector('[data-k=name]').value, text: body.querySelector('[data-k=text]').value } }, 'the card', () => paintCard(body)));
@@ -356,4 +356,4 @@ export function initRolesPanels() {
   bus.on('roster', () => { if (sections.bans?.isOpen) paintBans(sections.bans.body); });
   syncModeration();
 }
-export const _test = { paintRoles, paintAccess, paintWorld, paintPlaces, paintPeople, paintWorldAll, syncModeration, sections };
+export const _test = { paintRoles, paintAccess, paintWorld, paintCard, paintPlaces, paintPeople, paintWorldAll, syncModeration, sections };

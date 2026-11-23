@@ -13,7 +13,7 @@ const replica: any = { st: { entities: { "@world": { c: {} } } } };
 const net: any = { you: "u-owner", myRights: { role: "owner", rank: 100, permissions: [] } };
 mock.module(L + "net.js", () => ({ net, replica, identities: new Map(), personName: (id: string) => id,
   sendRequest: async (verb: string, args: any) => { sent.push({ verb, args }); return { ok: true }; } }));
-mock.module(L + "base.js", () => ({ bus: { on() {}, emit() {} }, report() {}, CONFIG: {} }));
+mock.module(L + "base.js", () => ({ bus: { on() {}, emit() {} }, report() {}, CONFIG: { params: new URLSearchParams("world=t") } }));
 mock.module(L + "ui/ui.js", () => ({ makeSection: () => ({}), moderationFrame: () => null, worldSettingsFrame: () => null, toast() {} }));
 mock.module(L + "ui/ui-dock.js", () => ({ setDockEntry() {} }));
 mock.module(L + "ui/accesspanel.js", () => ({ paintListed() {} }));
@@ -36,6 +36,14 @@ for (const door of ["open", "public"]) {
   const b = document.createElement("div"); document.body.append(b); _test.paintAccess(b);
   const w = b.querySelector(".rp-warn")?.textContent ?? "";
   check("a2 a default-role with can.generate warns that arrivals spend the world's generation credit", /generation credit/.test(w), JSON.stringify(w));
+  b.remove();
+}
+// G2-047: the card's cap is the authority's, in graphemes (checks.js), never the browser's maxlength (UTF-16 units)
+{
+  replica.st.entities["@world"].c = { about: { name: "", text: "" } }; sent.length = 0;
+  const b = document.createElement("div"); document.body.append(b); _test.paintCard(b);
+  const name = b.querySelector("[data-k=name]") as any, text = b.querySelector("[data-k=text]") as any;
+  check("G2-047 the card's name and description carry no maxlength", !name.hasAttribute("maxlength") && !text.hasAttribute("maxlength"), name.outerHTML.slice(0, 80));
   b.remove();
 }
 S.done();
