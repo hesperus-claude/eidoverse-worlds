@@ -24,7 +24,9 @@ export function bootIncarnation(dir: string): string {
   const file = join(dir, "relay-incarnation");
   const prev = existsSync(file) ? readFileSync(file, "utf8").trim() : null;
   incarnation = nextIncarnation(prev, crypto.randomUUID().slice(0, 8));
-  replaceDurable(file, incarnation);
+  const made = !existsSync(dir);
+  replaceDurable(file, incarnation);   // makes a missing dir (mkdirDurable): said, so a typo in RELAY_STATE_DIR shows
+  if (made) console.log(`[relay] created ${dir} for the relay incarnation (RELAY_STATE_DIR or OPT_DIR)`);
   return incarnation;
 }
 
