@@ -608,14 +608,14 @@ export function frameOf(e) {
 
 /** Push `pos` out of anything solid and return the ground height under it. Mutates pos.x/pos.z, never pos.y. `r` is
  *  a horizontal radius (a vertical cylinder). `terrainAt` supplies the base ground. `tall` is how far the body extends
- *  above pos.y (1.9 for a standing avatar, ~cm for a ragdoll joint): it decides what you pass under and scales the
+ *  above pos.y (MOVER.body.height, 1.7 m, for a standing avatar, ~cm for a ragdoll joint): it decides what you pass under and scales the
  *  step-up and wall-probe heights. `climbs`: may this body mantle what blocks it (sets lastBlockedTop)? Defaults to
  *  a full-height body; the walking avatar passes true explicitly, so a smaller chosen size keeps its mantle while a
  *  ragdoll joint never climbs. */
 export function resolveColliders(pos, terrainAt, r = MOVER.body.radius, tall = MOVER.body.height, climbs = tall >= MOVER.body.height) {
   blockedTop = null; touched.clear();
   let ground = terrainAt(pos.x, pos.z);
-  // one routine serves a 1.9 m avatar and a 3 cm ragdoll bead, so the vertical numbers scale with `tall`; a climbing
+  // one routine serves a 1.7 m avatar and a 3 cm ragdoll bead, so the vertical numbers scale with `tall`; a climbing
   // body's step is the mover's, in proportion to its size, and a ragdoll joint does not climb stairs
   const step = climbs ? MOVER.body.step * (tall / MOVER.body.height) : Math.min(MOVER.body.step, tall * 0.3);
   const probeY = Math.min(HIP, tall * 0.5);  // mid-body, not "hip"
