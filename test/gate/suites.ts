@@ -320,6 +320,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["body-state", "mcpl/body-state-test.ts", 1], // body_state geometry on an owned sequencer: FK round trip, contacts, kneel, seated geometry withheld, a swimmer's stroke, body size end to end
   ["body-runtime", "client/body-runtime-test.ts", 1], // a body that brings its own runtime (§24 avatar defs `runtime`, #309): the def contract and the frame order the avatar runs it in
   ["glb2vrm", "shared/glb2vrm-test.ts", 1], // glb2vrm's rig-family gate (#123, #137): a Mixamo or unknown rig is refused by name, a Tripo-named one gets past the gate
+  ["import-tripo-avatar", "shared/import-tripo-avatar-test.ts", 1], // tools/assets/import-tripo-avatar.ts springs on a synthetic Tripo rig: wing chains get springs with or without hair (G2-091)
   ["vrmheight", "server/vrmheight-test.ts", 1], // a body's stature read from its VRM (vrmheight.ts via rig.js stature), the door's bodyHeightFor agreeing
   ["shape-attach", "shared/shape-attach-test.ts", 1], // shape audit 10-16 wave 2: socket/station, one action namespace, one home, grabbable registered, reactions frozen, look-at radians, places closed, spawn, lock, reserved names
   ["shape-physics", "shared/shape-physics-test.ts", 1], // shape audit 10-16 wave 2: transform pinned (glTF rule), parent −order, pivot {pos}, motion trims + repair, physics kind/reserved/kinematic, physics-engine, collider mesh, physics-joint + joint, structure, surface, stage
