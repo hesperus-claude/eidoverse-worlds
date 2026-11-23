@@ -305,6 +305,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["agent-reads", "mcpl/agent-reads-test.ts", 1], // every read the agent makes of the world server has a deadline; a geometry read that timed out is asked again
   ["route-shape", "shared/route-shape-test.ts", 1], // GET /geom ships the view record (viewOf) verbatim (C7a)
   ["door-unit", "mcpl/door-unit-test.ts", 0.5],   // the agent door's units: loops, stops, part refusals, speech tags
+  ["prelude-close", "mcpl/prelude-close-test.ts", 1], // a session closed while the door's catch-up prelude reads history: the prelude stops, no later watermark or seen-timer (G2-059)
   ["manifest", "mcpl/manifest-test.ts", 1], // §17.2 manifest digest against the frozen 25-vector corpus; an own manifest's revision excludes itself
   ["token-registry", "mcpl/token-registry-test.ts", 1], // the agent token registry fails closed: missing or malformed files authorize nobody, the tracked example credential is refused, no prototype keys
   ["door-media-whitelist", "mcpl/door-media-whitelist-test.mjs", 1], // the door's media lane to a voice sidecar is a whitelist (sfu-answer, sfu-ice, …), never a pipe (#100)

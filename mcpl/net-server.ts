@@ -571,6 +571,8 @@ class Session {
     if (sinceSeq != null) {
       // the live body's matcher: catch-up honours the same alias policy and degrades safely with no matchable name
       const said = await this.agent.missedSince(sinceSeq);
+      // the session may have ended during the read: its finally already wrote the watermark (prelude-close-test)
+      if (this.conn.isClosed) return;
       const missedSeq = said.filter((m) => m.who !== this.auth.id && this.agent.mentionsMe(m.text));
       if (missedSeq.length) {
         this.deliver(`While you were away, ${missedSeq.length} message${missedSeq.length === 1 ? "" : "s"} mentioned you:`,
