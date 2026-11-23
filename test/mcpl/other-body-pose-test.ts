@@ -82,6 +82,21 @@ check("replace sends the whole pose, and a replace with nothing left is a releas
   check("...and a replacing animation ends the caller's pose first", played.length === 2 && played[1].replace === true && state.pose === null && !sent.length);
 }
 
+// A pose the browser holds is checked as the agent's pose tool checks it, and what it couldn't read is said.
+{
+  const state: any = { pose: null }, warned: string[] = [];
+  const EW = poseCommands({ state, sendPuppet: () => {}, play: () => {} });
+  const warn = console.warn;
+  console.warn = (...a: unknown[]) => { warned.push(a.join(" ")); };
+  try {
+    EW.pose({ spien: [0, 0, 0, 1] });
+    check("EW.pose warns about a bone it can't read", warned.length === 1 && /spien/.test(warned[0]) && /spine/.test(warned[0]), JSON.stringify(warned));
+    warned.length = 0;
+    EW.pose({ head: [0, 0, 0, 1] }, { replace: true });
+    check("...and says nothing about a clean one", !warned.length, JSON.stringify(warned));
+  } finally { console.warn = warn; }
+}
+
 // Replace with no bones named makes the whole pose nothing, a release, as
 // replace with nothing left does; and replace may ride in an animation.
 {

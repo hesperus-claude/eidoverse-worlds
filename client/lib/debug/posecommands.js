@@ -19,7 +19,7 @@
 // A value per bone is [x,y,z,w] or {q, t, s} (shared/humanoid.js poseChannels).
 // Each verb throws a TypeError naming what it wants rather than guess at a call it can't read — above all one
 // meant for someone else that would otherwise land on the caller.
-import { mergePose, puppetPose } from '../../../shared/humanoid.js';
+import { mergePose, puppetPose, validatePose, poseReport } from '../../../shared/humanoid.js';
 
 const name = (t) => typeof t === 'string' && t.length > 0;
 
@@ -60,6 +60,9 @@ export function poseCommands({ state, sendPuppet, play }) {
         if (bones && !replace && !Object.keys(bones).length) return undefined;
         return sendPuppet(target, puppetPose(bones, replace));
       }
+      // checked as the pose tool checks one (without the rig, so kept as written), and what it couldn't read is said
+      const note = bones ? poseReport(validatePose(bones)) : '';
+      if (note) console.warn(`EW.pose: ${note}`);
       state.pose = bones === null ? null : mergePose(replace ? null : state.pose, bones);
       return state.pose;
     },
