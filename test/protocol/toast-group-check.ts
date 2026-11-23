@@ -1,6 +1,6 @@
 // test/protocol/toast-group-check.ts — load failures of one HTTP status (ui.js errorToast: `fetch <url>: NNN`) are ONE
-// toast that counts the things (R 10-28), each thing's line in the console; a network error ("Failed to fetch") isn't
-// grouped; dismissing it quiets that kind for the session; any other error still toasts on its own.
+// toast that counts the things (R 10-28), each thing's line in the console; a network error ("Failed to fetch") is a kind
+// of its own, grouped the same way (G2-048); dismissing it quiets that kind for the session; any other error still toasts on its own.
 import { scratchBench, mkCheck } from "../harness/harness.ts";
 import { until } from "../gate/wait.ts";
 
@@ -29,6 +29,15 @@ try {
   await js("(await import('/lib/ui/ui.js')).errorToast('realize spawn water-platform', 'fetch /library/store/models/p.glb: 404'); return true;");
   const afterDismiss = await toasts();
   check("TG3 dismissed, that kind stays quiet for the session (still logged)", !afterDismiss.some((t: string) => /couldn't load/.test(t)) && warns.some((w) => w.includes("water-platform")), JSON.stringify(afterDismiss));
+  // G2-048: a network error (Chrome's "Failed to fetch", Firefox's "NetworkError when attempting to fetch resource.") is
+  // its own kind, grouped the same way
+  await js(`const { errorToast } = await import('/lib/ui/ui.js');
+    errorToast('realize spawn net-a', 'Failed to fetch'); errorToast('realize spawn net-b', 'TypeError: Failed to fetch');
+    errorToast('realize spawn net-c', 'NetworkError when attempting to fetch resource.');
+    return true;`);
+  const net = (await toasts()).filter((t: string) => /couldn't load|realize spawn net-/.test(t));
+  check("TG5 three things failing on the network are ONE toast that counts three things", net.length === 1 && /^3 things couldn't load \(no answer from the network\)/.test(net[0] ?? ""), JSON.stringify(net));
+  await js("[...document.querySelectorAll('#toasts .toast:not(.out)')].find((t) => /couldn't load/.test(t.textContent))?.click(); return true;");
   await js("(await import('/lib/ui/ui.js')).errorToast('sky', 'shader compile failed'); return true;");
   const other = await toasts();
   check("TG4 an error of another kind still toasts on its own, in its own words", other.filter((t: string) => t.startsWith("sky: shader compile failed")).length === 1, JSON.stringify(other));
