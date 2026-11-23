@@ -91,6 +91,17 @@ console.log("--measure on a VRM 1.0 reads its humanoid map by node index");
   check("--measure reads head and hips by their humanoid node, not the first unnamed node (#509)", m.code === 0 && /head Y 1\.60\s+hips Y 1\.00/.test(m.out), m.out.trim() + m.err.trim());
 }
 
+console.log("--measure on a VRM 1.0 without toe bones (optional in VRM 1.0) still reports");
+{
+  const at = (name: string, t: number[]) => ({ name, translation: t });
+  const nodes = [at("head", [0, 1.6, 0]), at("hips", [0, 1, 0]), at("lhand", [0.5, 1.2, 0]), at("lfoot", [0.1, 0.1, 0]), at("rfoot", [-0.1, 0.1, 0])];
+  const humanBones = { head: { node: 0 }, hips: { node: 1 }, leftHand: { node: 2 }, leftFoot: { node: 3 }, rightFoot: { node: 4 } };
+  const p = join(dir, "toeless.vrm");
+  writeFileSync(p, glbOf({ asset: { version: "2.0" }, nodes, scenes: [{ nodes: nodes.map((_, i) => i) }], extensions: { VRMC_vrm: { humanoid: { humanBones } } } }));
+  const m = await run(p, "--measure");
+  check("--measure on a toeless VRM 1.0 exits 0 and says the facing is unmeasured", m.code === 0 && /forward .*n\/a/.test(m.out) && /head Y 1\.60\s+hips Y 1\.00/.test(m.out), m.out.trim() + m.err.trim());
+}
+
 console.log("prefix variants still identify as mixamo");
 {
   for (const variant of ["mixamorigHips", "mixamorig1:Hips", "MixamoRig:Hips"]) {
