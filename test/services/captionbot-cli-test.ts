@@ -131,6 +131,19 @@ console.log('\n— G. lines dropped for overflow: the summary counts them, and t
   check('the run exits non-zero', r.code === 1, `exit=${r.code}`);
 }
 
+console.log('\n— H. a server that refuses the hello: said, never redialed, exits 78 —\n');
+{
+  let joins = 0;
+  const fake = Bun.serve({ port: 0, fetch: (req, s) => (s.upgrade(req) ? undefined : new Response('ws only', { status: 400 })),
+    websocket: { message(ws, m) { if (JSON.parse(String(m))?.type !== 'join') return; joins++;
+      ws.send(JSON.stringify({ type: 'refused', code: 'update-required', need: { dialect: 'eidoverse', v: 999 } })); ws.close(4005, 'update-required'); } } });
+  const p = Bun.spawn(['bun', CLI], { env: envFor({ SPOOL: join(dir, 'spool-refused.jsonl'), WORLD_URL: `ws://127.0.0.1:${fake.port}/ws` }), stdout: 'pipe', stderr: 'pipe' });
+  const code = await Promise.race([p.exited, new Promise((r) => setTimeout(() => r('still running'), 8000))]);
+  try { p.kill(); } catch {} fake.stop(true);
+  const out = await new Response(p.stdout).text();
+  check('a hello refusal stops the bot: one join, the words, exit 78 (EX_CONFIG: its unit is not restarted)', code === 78 && joins === 1 && /update the client/.test(out) && /not redialing/.test(out), `exit=${code}, ${joins} joins: ${out.slice(-300)}`);
+}
+
 rmSync(dir, { recursive: true, force: true });
 console.log(`\n${pass} ok, ${fail} failed`);
 process.exit(fail ? 1 : 0);
