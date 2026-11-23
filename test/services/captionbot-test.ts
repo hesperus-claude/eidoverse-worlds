@@ -5,8 +5,8 @@
 //   A. segmentation — one caption per burst, t0/t1 on the burst's edges
 //      (media time), finals only;
 //   B. revision doctrine — a partial never becomes a caption; a revision
-//      before settle replaces; one after emission, once the segment has
-//      ended, is counted and dropped;
+//      before settle replaces; one after emission, segment open or ended,
+//      is counted and dropped;
 //   C. the stage cue labels the NEXT caption, not the ones already written;
 //   D. a segment is SEALED once its finals settle: a revision after that is
 //      counted and dropped, never a second caption, and the segment's own
@@ -123,6 +123,20 @@ console.log('— B. revision doctrine —');
   }, [tone(400), silence(600)], { settleMs: 30 });
   await sleep(150);
   check('partials with no final behind them never become a caption', out.length === 0, JSON.stringify(out));
+}
+
+{
+  // a revision of an emitted line while its segment is still OPEN (speech goes on) is dropped too, never a second caption
+  const tap = new AudioTap(RATE), provider = new FakeProvider(() => {});
+  const cap = new Captioner({ rateHz: RATE, provider, settleMs: 30, hangoverMs: 300, onsetMs: 60 });
+  const out: Caption[] = []; cap.onCaption((c) => out.push(c)); tap.attach(cap);
+  const f = framer(tap); f.write(tone(400));   // onset, no hangover yet: the segment is open
+  const say = (t: SttTranscript) => provider.sessions[0]?.fns.forEach((fn) => fn(t));
+  say({ utteranceId: 'u1', text: 'first words', final: true }); await sleep(90);
+  say({ utteranceId: 'u1', text: 'first words, revised', final: true }); await sleep(90);
+  const open = (cap as any).segment !== null;
+  f.write(silence(600)); f.end(); await sleep(60);
+  check('a revision of an emitted line while its segment is open is counted and dropped', open && out.length === 1 && out[0].text === 'first words' && cap.lateRevisions === 1, `open ${open}, ${JSON.stringify(out)}, ${cap.lateRevisions} late`);
 }
 
 console.log('— C. the stage cue —');
