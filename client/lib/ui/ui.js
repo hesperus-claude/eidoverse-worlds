@@ -61,15 +61,14 @@ function dismiss(key) {
 // them (each thing's line goes to the console). Dismissing it keeps that kind quiet for the session.
 const groups = new Map(), quiet = new Set();
 export function errorToast(context, message) {
-  // a fetch that never got an answer (Chrome "Failed to fetch", Firefox "NetworkError when attempting to fetch") is a kind too (G2-048)
-  const net = /\bFailed to fetch\b|\bNetworkError when attempting to fetch\b/.test(String(message));
-  const m = net ? [null, null, 'net'] : /\bfetch (\S+): (\d{3})\b/.exec(String(message));
+  // `net`: a load that got no answer (assets.js fetchBytes); any other network error toasts in its own words (G2-048)
+  const m = /\bfetch (\S+): (\d{3}|net)\b/.exec(String(message));
   if (!m) { toast(`${context}: ${message}`, 'err'); return; }
   const kind = `fetch-${m[2]}`;
   console.warn(`[load] ${context}: ${message}`);
   if (quiet.has(kind)) return;
   const g = groups.get(kind) ?? { things: new Set() }; groups.set(kind, g); g.things.add(String(context));
-  const n = g.things.size, why = net ? 'no answer from the network' : m[2] === '404' ? 'not on this server' : `the server answered ${m[2]}`;
+  const n = g.things.size, why = m[2] === 'net' ? 'no answer from the network' : m[2] === '404' ? 'not on this server' : `the server answered ${m[2]}`;
   const text = `${n} thing${n === 1 ? '' : 's'} couldn't load (${why}) — the list is in the console`;
   const live = g.key && liveToasts.get(g.key);
   if (live) { live.node.firstChild.textContent = text; clearTimeout(live.timer); live.timer = setTimeout(() => dismiss(g.key), 9000); return; }

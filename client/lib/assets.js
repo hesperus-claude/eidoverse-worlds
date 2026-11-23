@@ -107,7 +107,7 @@ export async function fetchBytes(path) {
         // cached rejection poisons every later ask for the path
         let r;
         for (let attempt = 0; ; attempt++) {
-          try { r = await fetch(path); } catch (err) { if (attempt >= 2) throw err; r = null; }
+          try { r = await fetch(path); } catch (err) { if (attempt >= 2) throw new Error(`fetch ${path}: net`, { cause: err }); r = null; }   // no answer: ui.js errorToast's fetch-net kind (G2-048)
           if (r && (r.ok || r.status < 500 || attempt >= 2)) break;
           await new Promise((res) => setTimeout(res, attempt === 0 ? 700 : 1800));
         }

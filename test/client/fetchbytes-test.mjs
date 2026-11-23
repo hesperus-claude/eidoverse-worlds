@@ -53,7 +53,7 @@ console.log('FETCHBYTES — 404 is final, and evicted');
 console.log('FETCHBYTES — three network failures');
 { const P = '/library/c.glb'; script.set(P, [{ throw: 1 }, { throw: 1 }, { throw: 1 }, { status: 200, len: 4 }]);
   const e = await rejects(fetchBytes(P));
-  check('three attempts, then the network error', count(P) === 3 && e instanceof TypeError, `${count(P)} calls; ${e?.constructor?.name}`);
+  check('three attempts, then the network error, named as a load (`fetch <path>: net`, the TypeError its cause: G2-048)', count(P) === 3 && e?.message === `fetch ${P}: net` && e?.cause instanceof TypeError, `${count(P)} calls; ${e?.message}; cause ${e?.cause?.constructor?.name}`);
   const { buf, err } = await resolves(fetchBytes(P));
   check('the next ask starts clean and succeeds', count(P) === 4 && buf?.byteLength === 4, `${count(P)} calls${err ? `, rejected again: ${err.message}` : ''}`); }
 console.log('FETCHBYTES — concurrent callers');
