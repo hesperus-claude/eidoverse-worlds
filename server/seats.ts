@@ -5,7 +5,7 @@
 // HTTP path (tools/operator/seat-accept.ts, noticed by an mtime watch). Every write is provenance-first under one on-disk
 // lock shared by every process. Rationale: docs/research/seat-store-integrity.md.
 
-import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, appendFileSync, statSync, openSync, closeSync, writeSync, unlinkSync } from "node:fs";
+import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, appendFileSync, statSync, openSync, closeSync, writeSync, unlinkSync, linkSync } from "node:fs";
 import { join } from "node:path";
 import { validateProfile, profileStatus } from "../shared/seatcore.js";
 import { OPT_DIR, LIBRARY_DIR, PATCH_DIR } from "./config.ts";
@@ -30,6 +30,8 @@ export type SeatFs = {
   writeFileSync: typeof writeFileSync; renameSync: typeof renameSync;
   appendFileSync: typeof appendFileSync;
 };
+/** The lock's own two moves, injectable apart from SeatFs (a transaction's faults never reach the lock): a race test's hook. */
+export type LockFs = { renameSync: typeof renameSync; linkSync: typeof linkSync };
 
 export type SeatVerdict = {
   pose: string; status: string;
@@ -67,10 +69,11 @@ export class SeatStore {
   private clipBases: string[];
   private vrmDirs: string[];
   private fs: SeatFs;
+  private lockFs: LockFs;
   private lockTimeoutMs: number;
 
   constructor(optDir: string, libraryDir: string, fsOverride: Partial<SeatFs> = {},
-    { lockTimeoutMs = 3000, patchDir = "" }: { lockTimeoutMs?: number; patchDir?: string } = {}) {
+    { lockTimeoutMs = 3000, patchDir = "", lockFs = {} }: { lockTimeoutMs?: number; patchDir?: string; lockFs?: Partial<LockFs> } = {}) {
     this.dir = join(optDir, "seats");
     this.file = join(this.dir, "profiles.json");
     this.logFile = join(this.dir, "profiles.log.jsonl");
@@ -81,6 +84,7 @@ export class SeatStore {
     // every body the avatar roster lists, which scans the same three
     this.vrmDirs = [patchDir, optDir, libraryDir].filter(Boolean).map((d) => join(d!, "eidoverse/assets/vrms"));
     this.fs = { writeFileSync, renameSync, appendFileSync, ...fsOverride };
+    this.lockFs = { renameSync, linkSync, ...lockFs };
     this.lockTimeoutMs = lockTimeoutMs;
     this.reload();
   }
@@ -117,16 +121,17 @@ export class SeatStore {
           // dead holder: claim the corpse atomically, verify it IS the corpse
           const tomb = `${this.lockFile}.tomb-${nonce}`;
           try {
-            renameSync(this.lockFile, tomb);
+            this.lockFs.renameSync(this.lockFile, tomb);
             const claimed = JSON.parse(readFileSync(tomb, "utf8"));
             if (claimed.nonce === holder.nonce) {
               console.error(`[seats] breaking dead writer's lock (pid ${holder.pid} no longer exists)`);
               unlinkSync(tomb);
             } else {
-              // the rename caught a NEWER lock — put it back untouched
-              try { renameSync(tomb, this.lockFile); } catch { try { unlinkSync(tomb); } catch { /* commit gates protect the rest */ } }
+              // the rename caught a NEWER lock: put it back with link, which refuses to clobber a lock taken since (G3-085)
+              this.putBack(tomb);
             }
           } catch { /* another breaker won the rename: loop */ }
+          if (Date.now() >= deadline) return false;   // a corpse we can't claim is waited on no longer than a live holder
           continue;
         }
         // live (or unknowable) holder: wait, however old its stamp — age is
@@ -135,6 +140,16 @@ export class SeatStore {
         Bun.sleepSync(25);
       }
     }
+  }
+
+  /** Restore a lock the claim's rename caught by mistake, never over one taken since: link fails with EEXIST where a
+   *  rename would replace (its owner's commit gates then refuse). A filesystem with no hard links keeps the old rename. */
+  private putBack(tomb: string) {
+    try { this.lockFs.linkSync(tomb, this.lockFile); }
+    catch (e: any) {
+      if (e?.code !== "EEXIST") { try { this.lockFs.renameSync(tomb, this.lockFile); return; } catch { /* fall through: drop it */ } }
+    }
+    try { unlinkSync(tomb); } catch { /* commit gates protect the rest */ }
   }
 
   /** True while the on-disk lock is still the one we minted — the commit
