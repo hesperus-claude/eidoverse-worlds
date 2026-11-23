@@ -64,6 +64,6 @@ check('a shove\'s punt refused not-here re-arrives without teleporting', telepor
 // source (driving it needs a world of dynamic things and a walk)
 { const src = (await import('node:fs')).readFileSync(new URL('../../client/lib/thingphysics.js', import.meta.url), 'utf8');
   const body = src.slice(src.indexOf('async function shove('), src.indexOf('\n}\n', src.indexOf('async function shove(')));
-  check('shove sends its punt with noTeleport, so the not-here re-arrive cannot teleport', /sendRequest\(\s*'punt'\s*,[\s\S]*?\{\s*noTeleport:\s*true\s*\}\s*\)/.test(body), body.slice(0, 200)); }
+  check('shove sends its punt with noTeleport, so the not-here re-arrive cannot teleport', /sendRequest\(\s*'punt'\s*,\s*\{[^}]*\}\s*,\s*\{\s*noTeleport:\s*true\s*\}\s*,?\s*\)/.test(body), body.slice(0, 200)); }
 
 SU.done();
