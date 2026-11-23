@@ -21,7 +21,9 @@ mock.module(L + "edit/writes.js", () => ({ send: async (r: any) => { sent.push(r
 mock.module(L + "ui/ui.js", () => ({ flashHint: (s: string) => hints.push(s) }));
 const world: any = { st: { entities: {} } };
 mock.module(L + "state.js", () => ({ state: world, onWorldChange: () => () => {} }));
-mock.module(L + "terrain.js", () => ({ getGrassQuality: () => "high", getGrassShed: () => 0, getGrassDensity: () => 1 }));
+const draw: any = { quality: "high", shed: 0, eff: 1, applied: { field: false, status: "no-field", strokes: [] } };
+mock.module(L + "terrain.js", () => ({ getGrassQuality: () => draw.quality, getGrassShed: () => draw.shed, getGrassDensity: () => draw.eff,
+  getGrassApplied: () => draw.applied }));
 (globalThis as any).fetch = async () => new Response("null", { status: 404 });
 const { paintGround } = await import(L + "edit/groundpanel.js");
 const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); await pause("one macrotask: the defs promise and the paint behind it", 0); };
@@ -57,6 +59,21 @@ for (const grassed of [false, true]) {
   b.remove();
 }
 world.st = { entities: {} };
+// G2-028: the "you:" line reads what the renderer applied (getGrassApplied), not only the requested factor
+{
+  world.st = { entities: {}, grass: { kind: "blades", density: 1 } };
+  Object.assign(draw, { quality: "low", shed: 1, eff: 0.5 });
+  for (const status of ["applied", "unavailable"]) {
+    draw.applied = { field: true, status, requested: 0.5, strokes: status === "applied" ? [] : [{ stroke: "stroke 0", ok: false }] };
+    const b = await mount(PAL);
+    const you = b.querySelector(".state-you")?.textContent ?? "";
+    if (status === "applied") check("G2-028 control: an applied ×0.5 reads as drawing ×0.5", /drawing ×0\.5/.test(you), you);
+    else check("G2-028 an unapplied ×0.5 does not claim to draw ×0.5, and says so", !/drawing ×0\.5/.test(you) && /unavailable/.test(you), you);
+    b.remove();
+  }
+  Object.assign(draw, { quality: "high", shed: 0, eff: 1, applied: { field: false, status: "no-field", strokes: [] } });
+  world.st = { entities: {} };
+}
 // control: the real palette grows a grass set
 {
   const b = await mount(PAL); sent.length = 0;

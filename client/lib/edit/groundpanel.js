@@ -14,7 +14,7 @@ import { selectRow, btn, btnRow } from './rows.js';
 import { paletteDefaults, terrainArgs, grassArgs } from '../../../shared/grounddefs.js';
 import { state, onWorldChange } from '../state.js';
 import { stateLines } from '../ui/statelines.js';
-import { getGrassQuality, getGrassShed, getGrassDensity } from '../terrain.js';
+import { getGrassQuality, getGrassShed, getGrassDensity, getGrassApplied } from '../terrain.js';
 
 // panel state, outside the paint: a defs push repaints the rows and must keep what the author dialed in
 const st = { tint: null, shape: null, seed: 7, density: null, grass: false, plant: null, height: null };
@@ -105,7 +105,9 @@ export function paintGround(body) {
       let you = null;
       if (g && !g.clear) {
         const cap = getGrassQuality(), shed = getGrassShed(), eff = getGrassDensity();
+        const rep = getGrassApplied();   // what the renderer applied, not only the requested factor (G2-028; skypanel's row reads the same)
         if (cap === 'off') you = 'no grass drawn (your grass⚙ is off)';
+        else if (eff < 1 && rep.field && rep.status !== 'applied') you = `asked for ×${+eff.toFixed(2)} of it, but the renderer's density dial did not take (${rep.status}): drawing it as built`;
         else if (eff < 1) you = `drawing ×${+eff.toFixed(2)} of it (${shed < 1 ? `auto governor ×${+shed.toFixed(2)}` : ''}${shed < 1 && cap !== 'full' ? ', ' : ''}${cap !== 'full' ? `your grass⚙ ${cap}` : ''})`;
       }
       lines.set(world, you);
