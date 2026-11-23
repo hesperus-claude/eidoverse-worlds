@@ -624,7 +624,9 @@ export class WorldAgent {
           clearTimeout(timeout);
           // the words are this body's, kept open: the agent doors (mcpl/server.ts, net-server's serve and travel) end on this
           // rejection and close it, so they say only what a body that is kept does (docs/reference/WIRE.md 4005)
-          reject(new Error(`${refused ?? "the world is full"} — trying again by itself while this body is kept open (closing it gives up the wait)`));
+          // .refusal: the world's words alone, for a door that ends the body on this instead (net-server's travel)
+          const words = refused ?? "the world is full";
+          reject(Object.assign(new Error(`${words} — trying again by itself while this body is kept open (closing it gives up the wait)`), { refusal: words }));
           setTimeout(() => { if (!this.closed && !this.joined) this.connect().catch(() => {}); }, this.redial.next(REDIAL.full));
           return;
         }

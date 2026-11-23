@@ -742,6 +742,7 @@ try {
       ws.send(snapshot()); setTimeout(() => ws.close(1001, "restarting"), 300);
     },
     grounded: (ws) => ws.send(snapshot({ yourRights: { role: "builder", fly: false } })),
+    full: (ws) => ws.close(4005, "full"),
   };
   const wsWorld = Bun.serve({
     hostname: "127.0.0.1", port: 0,
@@ -771,6 +772,15 @@ try {
     const a = body(name);
     const got = await outcome(a.connect());
     check(`a join the world refuses says so, in its words if it gave any (${name})`, got === want && a.closed === true, got);
+  }
+  {
+    // G2-057: a full world's rejection keeps the world's words apart from the body's own "trying again" clause, so a door
+    // that closes the body on it (travel) can say the words without promising a wait it is ending
+    const a = body("full");
+    const err: any = await a.connect().then(() => null, (e: unknown) => e);
+    a.close();
+    check("a full world's rejection says the body tries again while kept, and carries the world's words alone (G2-057)",
+      /trying again by itself while this body is kept open/.test(err?.message ?? "") && err?.refusal === "the world is full", `${err?.message} / refusal ${JSON.stringify(err?.refusal)}`);
   }
   const kicked = body("kicked");
   const kickedJoin = await outcome(kicked.connect());

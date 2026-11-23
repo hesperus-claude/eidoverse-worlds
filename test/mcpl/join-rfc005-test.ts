@@ -43,6 +43,7 @@ writeFileSync(tokensPath, JSON.stringify({
   "nofound-token": { id: "nofound", name: "NoFound", world: "commons", worlds: ["*"], create: false },
   "roamer2-token": { id: "roamer2", name: "Roamer2", world: "commons", worlds: ["annex"] },
   "free-token":    { id: "free",    name: "Free",    world: "commons" },
+  "crowd-token":   { id: "crowd",   name: "Crowd",   world: "commons" },
 }));
 const S = suite("join-rfc005");
 const check = (name: string, ok: unknown, extra?: unknown) => S.check(name, ok, extra);
@@ -585,6 +586,15 @@ async function shut(h: { ws: WebSocket }) {
     const owner = await connectHost("roamer-token");       // keep was founded for the roamer agent, so it owns it
     const ot = txt(await owner.request("tools/call", { name: "travel", arguments: { world: "keep" } }));
     check("the owner goes to its world", /Arrived in "keep"|Already in/.test(ot), ot);
+    // G2-057: a world full past the detach is travel's fatal path: it says the world's words and that the connection is
+    // closed, not the body's own "trying again by itself while this body is kept open"
+    const capped = await owner.request("tools/call", { name: "act", arguments: { verb: "set", args: { id: "@world", component: "access", value: { max: 1 } } } });
+    check("(the owner caps keep at one body, its own)", !capped.result?.isError, txt(capped));
+    const crowd = await connectHost("crowd-token");
+    const fullText = txt(await crowd.request("tools/call", { name: "travel", arguments: { world: "keep" } }));
+    check("travel into a world full past the detach says it is full and the connection CLOSED, not that the body keeps trying (G2-057)",
+      /past the point of no return: .*is full/.test(fullText) && /CLOSED/.test(fullText) && !/trying again by itself/.test(fullText), fullText);
+    crowd.ws.close();
     const closed = await owner.request("tools/call", { name: "act", arguments: { verb: "set", args: { id: "@world", component: "access", value: { join: "listed" } } } });
     check("the owner agent closes it (set @world.access {join: listed})", !closed.result?.isError, txt(closed));
     const refused = await free.request("tools/call", { name: "travel", arguments: { world: "keep" } });

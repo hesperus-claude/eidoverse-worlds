@@ -847,7 +847,8 @@ class Session {
       if (f.fatal) this.finishFatalJoin();
       return { content: [{ type: "text", text: f.fatal
         // say plainly that the seat is gone: an agent told only "travel failed" keeps issuing verbs into a closed connection
-        ? `travel failed past the point of no return: ${f.why}. Your old body was already released, so this connection is now CLOSED; your host has to reconnect to the door for a new body.`
+        // the world's words alone: a full world's rejection also says the body keeps trying, and this one is closing
+        ? `travel failed past the point of no return: ${typeof (e as { refusal?: unknown })?.refusal === "string" ? (e as { refusal: string }).refusal : f.why}. Your old body was already released, so this connection is now CLOSED; your host has to reconnect to the door for a new body.`
         : `${stayed}${f.why}` }], isError: true };
     }
     // An MCPL host also learns of the move by channels/changed; a PLAIN-MCP host learns only this text, so it is
