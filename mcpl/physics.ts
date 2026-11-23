@@ -373,14 +373,37 @@ function skeletonFor(httpBase: string, avatarPath: string): Promise<Record<strin
   return p;
 }
 
+/** A skeleton read's deadlines: the whole file (a VRM can be 100 MB) within totalMs, the answer's headers and each chunk
+ *  after them within stallMs, so a slow link that keeps sending is read to the end and a stalled one fails. */
+export const SKELETON_READ = { totalMs: 60_000, stallMs: WORLD_READ_MS };
+
+/** `p`, or a rejection once `ms` pass without it. */
+function within<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, no) => { timer = setTimeout(() => no(new Error(`${what} (${ms} ms without a byte)`)), ms); });
+  return Promise.race([p, late]).finally(() => clearTimeout(timer));
+}
+
 /** The skeleton in this file, or null for one with none (kept); throws when the read fails, which may pass. */
 async function readSkeleton(httpBase: string, path: string, key: string): Promise<Record<string, any> | null> {
   const m = await loadSim();
   if (!m) return null;
-  const res = await fetch(`${httpBase}/library/${path}`, { signal: AbortSignal.timeout(WORLD_READ_MS) });
+  const res = await within(fetch(`${httpBase}/library/${path}`, { signal: AbortSignal.timeout(SKELETON_READ.totalMs) }), SKELETON_READ.stallMs, "the world server didn't answer");
   if (res.status >= 500) throw new Error(`the world server answered ${res.status}`);   // its trouble, not the file's
   if (!res.ok) { console.error(`[physics] no skeleton in ${path}: ${res.status} — this body will slump`); return null; }
-  const buf = new Uint8Array(await res.arrayBuffer());
+  const parts: Uint8Array[] = [];
+  if (res.body) {
+    const reader = res.body.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await within(reader.read(), SKELETON_READ.stallMs, "the download stalled");
+        if (done) break;
+        parts.push(value);
+      }
+    } catch (e) { reader.cancel().catch(() => {}); throw e; }
+  }
+  const buf = new Uint8Array(parts.reduce((n, b) => n + b.length, 0));
+  for (let at = 0, i = 0; i < parts.length; at += parts[i++].length) buf.set(parts[i], at);
   try {
     const g = m.rig.glbJson(buf);
     const bones = m.rig.humanBones(g);

@@ -132,7 +132,38 @@ try {
     forgetSkeletons("http://held.test", "held"); release(); await during;
     answer = async () => new Response(vrm);
     await HeadlessBody.create("http://held.test", "store/held.vrm");
-    check("a skeleton read in flight when its avatar changed isn't kept: the next body reads the new bytes", seen.length === 2, `${seen.length} read(s)`); }
+    check("a skeleton read in flight when its avatar changed isn't kept: the next body reads the new bytes", seen.length === 2, `${seen.length} read(s)`);
+    // a VRM is many megabytes: a slow link that keeps sending is read to the end, not cut at a header read's deadline. Here
+    // every timeout runs at 1/20 (main's 10 s whole-read deadline would be 0.5 s) and the file trickles in over 1.2 s; the
+    // stream fails if its fetch's signal aborts, as a real download does
+    const { SKELETON_READ } = await import("../../mcpl/physics.ts") as any;
+    const trickle = (chunks: number, everyMs: number, upTo = chunks) => () => {
+      const signal = seen.at(-1)?.signal as AbortSignal | undefined, size = Math.ceil(vrm.length / chunks);
+      return Promise.resolve(new Response(new ReadableStream({ start(c) {
+        let i = 0;
+        const next = () => {
+          if (signal?.aborted) { c.error(signal.reason); return; }
+          if (i >= upTo) { signal?.addEventListener("abort", () => c.error(signal.reason)); return; }   // stalls here
+          c.enqueue(vrm.subarray(i * size, ++i * size)); if (i === chunks) c.close(); else setTimeout(next, everyMs);
+        };
+        setTimeout(next, everyMs);
+      } })));
+    };
+    AbortSignal.timeout = ((ms: number) => { const sig = realTimeout(ms / 20); timed.set(sig, ms); return sig; }) as typeof AbortSignal.timeout;
+    try {
+      seen.length = 0;
+      answer = trickle(12, 100) as any;
+      const [one, two] = await Promise.all([HeadlessBody.create("http://slow.test", "store/trickle.vrm"), HeadlessBody.create("http://slow.test", "store/trickle.vrm")]);
+      check("a skeleton downloading slowly but steadily is read to the end, once for two bodies asking together", one !== null && two !== null && seen.length === 1, `${one} ${two}, ${seen.length} read(s)`);
+      const stallWas = SKELETON_READ?.stallMs; if (SKELETON_READ) SKELETON_READ.stallMs = 300;
+      seen.length = 0;
+      answer = trickle(12, 50, 2) as any;
+      const t0 = Date.now(), stalled = await HeadlessBody.create("http://slow.test", "store/stall.vrm"), took = Date.now() - t0;
+      if (SKELETON_READ) SKELETON_READ.stallMs = stallWas;
+      answer = async () => new Response(vrm);
+      const again = await HeadlessBody.create("http://slow.test", "store/stall.vrm");
+      check("...while one that stops sending fails at its stall deadline, and isn't kept", stalled === null && took < 1500 && again !== null && seen.length === 2, `${stalled} after ${took} ms, then ${again}`);
+    } finally { AbortSignal.timeout = ((ms: number) => { const sig = realTimeout(ms); timed.set(sig, ms); return sig; }) as typeof AbortSignal.timeout; } }
 
   // G6-034: a posture clip roster (/animations) that failed to load isn't kept as empty for the body's life: the next
   // clip asks again, and finds the world's own path for it
