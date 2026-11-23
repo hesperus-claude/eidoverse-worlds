@@ -287,5 +287,23 @@ for (const [name, st, wantNote, wantDim] of [
   gate.resolve(); await pending; await flush(10);
 }
 
+{ // G2-040: a failed pick's clear timer must not wipe an import that started after it
+  const handle = (name) => ({ getFile: async () => new File(['x'], name) });
+  let answers = [];
+  window.showOpenFilePicker = async () => answers.shift() ?? null;
+  await reset({ list: ['p1'] });
+  loadFails = true;
+  await tick(true); await flush(10);
+  loadFails = false;
+  gate = deferred();
+  answers = [[handle('imp.onnx'), handle('imp.onnx.json')]];
+  host.querySelector('.vl-add').click(); await flush(12);
+  report?.({ text: 'warming imp' }); await flush();
+  await pause('the failed pick\'s 2.5 s clear timer', 2_700); await flush();
+  const rowNote = host.querySelector('.vl-loading .vl-note')?.textContent ?? '(no row)';
+  t('timer: a failed pick\'s timer leaves a later import\'s progress alone', rowNote.startsWith('warming imp'), `row note="${rowNote}"`);
+  gate.resolve(); await flush(12);
+}
+
 console.log(`\n${ok} ok, ${bad} failed`);
 process.exit(bad ? 1 : 0);
