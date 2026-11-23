@@ -240,7 +240,8 @@ export class SeatStore {
       }
       console.log(`[seats] snapshot lagged its log — receipted writes folded forward to rev ${snap.rev}`);
       this.store = snap;
-      try { this.persistSnapshotOnly(); } catch { /* the log still leads; the next load folds again */ }
+      // the log is synced first, as persist() does: else the rewritten snapshot can outlive the receipts it folded
+      try { syncFile(this.logFile); this.persistSnapshotOnly(); } catch { /* the log still leads; the next load folds again */ }
       return;
     }
     this.store = snap;

@@ -104,6 +104,26 @@ try {
       JSON.stringify({ r, order }));
   }
 
+  console.log("B3 — the fold-forward syncs the log before the snapshot it rewrites");
+  {
+    const real = fs.fsyncSync, kind = (fd: number) => { let p = ""; try { p = fs.readlinkSync(`/proc/self/fd/${fd}`); } catch { /* no /proc */ }
+      return p.endsWith("profiles.log.jsonl") ? "log" : p.endsWith(".tmp") ? "snapshot" : p === seatsDir ? "dir" : p ? "other" : "?"; };
+    const probeFd = fs.openSync(seatsDir, "r"), named = kind(probeFd) !== "?"; fs.closeSync(probeFd);
+    if (!named) check("(no /proc to name fds: the fold-forward order row is skipped)", true);
+    else {
+      const store = new SeatStore(OPT, LIB), snapBefore = snapshotOf();
+      (fs as any).fsyncSync = (fd: number) => { if (kind(fd) === "log") { const e: any = new Error("EIO (injected)"); e.code = "EIO"; throw e; } return real(fd); };
+      let r: any; try { r = store.propose(profile("seatdummy"), "aid1:eio"); } finally { (fs as any).fsyncSync = real; }
+      check("a log fsync that fails refuses the write and leaves the snapshot as it was",
+        !r.ok && /not synced/.test(r.why) && snapshotOf() === snapBefore, JSON.stringify(r));
+      const order: string[] = [];
+      (fs as any).fsyncSync = (fd: number) => { order.push(kind(fd)); return real(fd); };
+      let again: SeatStore; try { again = new SeatStore(OPT, LIB); } finally { (fs as any).fsyncSync = real; }
+      check("…and the next load folds the receipt forward, syncing the log before the snapshot it rewrites",
+        again!.rev === store.rev + 1 && order.includes("log") && order.indexOf("log") < order.indexOf("snapshot"), JSON.stringify({ rev: again!.rev, order }));
+    }
+  }
+
   console.log("B3 — injected faults leave no unreceipted state");
   {
     const failAppend = new SeatStore(OPT, LIB, { appendFileSync: () => { throw new Error("disk full"); } });
