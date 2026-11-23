@@ -25,12 +25,13 @@ export function makeEntryEffects(deps) {
         pendingFor = intent;
         deps.tee(`[xr] session busy (another page holds it) — retrying once in ${verdict.delayMs} ms`);
         deps.toast(verdict.toast, 'info', 3000);
-        timer = deps.setTimer(() => {
-          timer = null;
+        const id = deps.setTimer(() => {
+          if (timer === id) timer = null;   // a superseded callback run late must not forget the newer timer (G2-051)
           if (pendingFor !== intent) { deps.tee('[xr] busy-retry dropped: a newer entry intent owns the visor'); return; }
           pendingFor = null;
           deps.enter({ retryOf: intent });
         }, verdict.delayMs);
+        timer = id;
         return 'retried';
       }
       case 'give-up':

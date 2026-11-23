@@ -161,10 +161,8 @@ console.log('\n— 4. the other three verdicts are ACTED ON, not just decided �
   const e3 = weird();
   check('an unknown error on WebGL surfaces', eff.apply(decideEntryFailure(e3, { gpu: false }), { intent: 1, error: e3 }) === 'surface');
   check('…and surfacing schedules nothing', !eff.hasPending);
-  // hasPending must read the TIMER, not pendingFor. After a normal fire both are null, so that case
-  // cannot tell them apart — the distinguishing state is a DROPPED retry: the timer is gone while
-  // pendingFor still names the newer intent. leaveVR gates on this, so wiring it to pendingFor would
-  // make a leave believe a retry is pending and swallow the leave.
+  // hasPending reads the TIMER (leaveVR gates on it). A superseded intent's callback that runs late
+  // nulls only its own handle, so the newer retry stays pending and a leave still cancels it (below).
   { const { eff: e2, fire: f2, timers } = rig();
     e2.apply(onBusy(false), { intent: 101 });
     check('hasPending is true while a timer is armed', e2.hasPending === true);
@@ -174,14 +172,16 @@ console.log('\n— 4. the other three verdicts are ACTED ON, not just decided �
     e2.apply(onBusy(false), { intent: 103 });
     e2.cancel('leave');                          // cancel clears the timer AND the intent
     check('…and a cancel leaves nothing pending', e2.hasPending === false && e2.pendingFor === null); }
-  { // the distinguishing case: pendingFor set, timer gone (a superseded intent's callback, run late, clears `timer` only)
-    const { eff: e3, timers } = rig();
+  { // a superseded intent's callback, run late anyway, is not the live timer: it must not forget 102's (G2-051)
+    const { eff: e3, timers, log: l3 } = rig();
     e3.apply(onBusy(false), { intent: 101 });
     const stale = [...timers.values()][0].fn;
     e3.apply(onBusy(false), { intent: 102 });   // supersedes 101
-    stale();                                    // 101's callback: timer = null, pendingFor stays 102
-    check('hasPending tracks the TIMER, so a fired retry reports nothing pending',
-      e3.hasPending === false && e3.pendingFor === 102, `hasPending=${e3.hasPending} pendingFor=${e3.pendingFor}`); }
+    stale();                                    // 101's callback: dropped, and 102's timer is still the live one
+    check('a stale retry callback leaves the newer retry pending (it nulls only its own timer)',
+      e3.hasPending === true && e3.pendingFor === 102 && l3.enters.length === 0, `hasPending=${e3.hasPending} pendingFor=${e3.pendingFor} enters=${l3.enters.length}`);
+    e3.cancel('leave');                         // so a leave still clears the newer timer
+    check('…and a leave after it cancels the newer retry', timers.size === 0 && e3.hasPending === false, `timers=${timers.size}`); }
 }
 
 console.log('\n— 5. THE SEAM, executed: decide → act → what the caller must do —');
