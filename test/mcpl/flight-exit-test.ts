@@ -668,5 +668,18 @@ console.log('\nthe 2026-11-23 sweep');
   const got = [Math.PI, Math.PI / 2, 0, -Math.PI / 2].map(headingOf);   // world yaw atan2(dx, dz): facing -z, +x, +z, -x
   check('flight_status says a heading as a compass bearing: north 0, east 90, south 180, west 270 (G3-063)', got.join() === '0,90,180,270', got.join());
 }
+{
+  // G6-036: the link drops while take_off reads the bones: no flight is installed on a body nothing ticks
+  const ag = bench('dropped-launch');
+  ag.ws = { readyState: 1, send() {} };
+  ag.loadBodyBones = async () => { ag.joined = false; ag.ws = null; return WINGED; };
+  const r = await ag.takeOff();
+  check('a take_off whose link dropped during the bone read is refused, and installs no flight (G6-036)', !r.ok && ag.flight == null && /connection/.test(r.text), `${r.text}; flight ${ag.flight?.phase ?? 'none'}`);
+  const closing = bench('closed-launch');
+  closing.loadBodyBones = async () => { closing.close(); return WINGED; };
+  const c = await closing.takeOff();
+  check('...and so is one whose body closed meanwhile', !c.ok && closing.flight == null, `${c.text}; flight ${closing.flight?.phase ?? 'none'}`);
+}
+
 for (const a of agents) { try { a.close(); } catch {} }
 done();
