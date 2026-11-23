@@ -21,13 +21,13 @@ export const SELECT_CSS = 'font:11px var(--font); background:rgba(4,14,20,.9); '
  *    fmt(k, v) — readout text (default String(v))
  *    label(k)  — row name (default the key itself)
  *    onSet(k)  — called after every write (live retune hooks)
- *    vW        — the value column's width (nmW is accepted but unused: the label width is CSS's)
+ *    vW        — the value column's width (the label column's is CSS's: index.html's row rule)
  *  Returns { el, repaint } — repaint re-reads the table into fresh rows, which
  *  is the whole reset story: write the defaults, call repaint. */
 export function sliderTable(fields, obj, {
   get = (k) => obj[k], set = (k, v) => { obj[k] = v; },
   fmt = (k, v) => String(v), label = (k) => k, onSet = null,
-  nmW = '54px', vW = '44px',
+  vW = '44px',
 } = {}) {
   const el = mk('div', null, 'display:flex;flex-direction:column;gap:3px');
   const repaint = () => {

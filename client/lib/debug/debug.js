@@ -307,7 +307,7 @@ function buildJointPanel(stack) {
   const table = sliderTable(LIMIT_FIELDS, null, {
     get: (f) => getF(JOINT_SPECS[pick.value], f),
     set: (f, v) => setF(JOINT_SPECS[pick.value], f, v),
-    fmt: (f, v) => `${v}°`, onSet: apply, nmW: '42px', vW: '34px',
+    fmt: (f, v) => `${v}°`, onSet: apply, vW: '34px',
   });
 
   const btns = document.createElement('div');
@@ -522,7 +522,7 @@ export function initDebug(p = {}) {
 
   const dials = sliderTable(DIALS, TUNING, {
     label: (k) => k.toLowerCase().replace(/_/g, ' '),
-    nmW: '92px', vW: '46px',
+    vW: '46px',
   });
   phys.appendChild(dials.el);
 
