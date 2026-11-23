@@ -2,7 +2,6 @@
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/named-pose-test.ts (the browser parts re-run this file with --part, for their own mocks)
 import { noWorldUrl } from "../harness/no-world.ts";
 import { join } from "node:path";
-import { readFileSync } from "node:fs";
 import { helloOf } from "../../shared/protocol/hello.js";
 
 const part = process.argv.includes("--part") ? process.argv[process.argv.indexOf("--part") + 1] : "wire";
@@ -244,19 +243,12 @@ async function wirePart() {
   for (const p of ["browser-owner", "remote"]) await child(p);
 }
 
-/** client/main.js's own onRestore callback, lifted out of the file and run against stubs; calls setFolded. */
+/** client/main.js's onRestore body (client/lib/player/restore.js restoreMyBody), run against stubs; calls setFolded. */
 function mainOnRestore() {
-  const src = readFileSync(join(import.meta.dir, "../../client/main.js"), "utf8");
-  const at = src.indexOf("onRestore: (r) => {");
-  if (at < 0) throw new Error("client/main.js onRestore not found");
-  let i = src.indexOf("{", at), depth = 0, end = -1;
-  for (; i < src.length; i++) { if (src[i] === "{") depth++; else if (src[i] === "}" && --depth === 0) { end = i + 1; break; } }
-  const body = src.slice(src.indexOf("(r) =>", at), end);
-  const make = new Function("deps", `with (deps) { return ${body}; }`);
-  const { readBodyMode } = require("../../shared/bodymode.js");
+  const { restoreMyBody } = require("../../client/lib/player/restore.js");
   return (sample: any, setFolded: (v: boolean) => void) => {
-    const deps: any = { restoredPosition: false, myState: { pos: { y: 0, set() {} } }, setCamYaw() {}, setPosture() {}, holdHeightUntilSolid() {}, readBodyMode, foldedIn, setFolded };
-    make(deps)(sample);
+    const deps: any = { myState: { pos: { y: 0, set() {} } }, setCamYaw() {}, setPosture() {}, holdHeightUntilSolid() {}, setFolded };
+    restoreMyBody(sample, deps);
   };
 }
 

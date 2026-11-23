@@ -47,22 +47,17 @@ const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok,
 const near = (a: number, b: number, eps = 1e-9) => Math.abs(a - b) < eps;
 
 // ---- the shipped dial -----------------------------------------------------
-// Evaluate the dial exactly as flora.js ships it, extracted from its source
-// (not retyped): at factor 0 it keeps 0 of 1000 (densityCount), where an
-// inline 5% floor would keep 50.
+// The dial as flora.js ships it (flora-dial.js wireDensityDial): at factor 0 it keeps 0 of 1000 (densityCount),
+// where an inline 5% floor would keep 50.
 const gqMod = await import("../../client/lib/vegetation/grass_quality.js");
-console.log("\nflora's shipped density dial (source-extracted)");
+const { wireDensityDial: wireDial } = await import("../../client/lib/vegetation/flora-dial.js");
+console.log("\nflora's shipped density dial");
 {
-  const src = await Bun.file(here("../../client/lib/vegetation/flora.js")).text();
-  const dial = src.match(/const keep = ([^;\n]+);/);
-  let keep: unknown = "dial expression not found in flora.js";
-  if (dial) {
-    try {
-      keep = new Function("n", "f", "densityCount", `return (${dial[1]});`)(
-        1000, 0, gqMod.densityCount);
-    } catch (e) { keep = `threw: ${e}`; }
-  }
-  check("factor 0 keeps ZERO of 1000 instances (an inline 5% floor would keep 50)", keep === 0, `keep=${keep}`);
+  const attr = (itemSize: number) => ({ itemSize, array: new Float32Array(1000 * itemSize), needsUpdate: false });
+  const table: any = { aPosRot: attr(4), aScaleVar: attr(2), aPhase: attr(1) };
+  const field: any = { count: 1000, mesh: { count: 1000, geometry: { getAttribute: (nm: string) => table[nm] } } };
+  wireDial(field); field.setDensity?.(0);
+  check("factor 0 keeps ZERO of 1000 instances (an inline 5% floor would keep 50)", field.mesh.count === 0, `keep=${field.mesh.count}`);
 }
 
 const { makeGrassQuality, densityCount, GRASS_QUALITY, QUALITY_DENSITY } = gqMod;
@@ -165,14 +160,8 @@ console.log("\nterrain lifecycle (the real setGrass/setGrassDensity path)");
 }
 
 // ---- applied truth (#74) --------------------------------------------------
-// flora.js's SHIPPED wireDensityDial, source-extracted so the silent-no-op
-// mechanism is demonstrated on the shipped code, not retyped into the test.
-const floraSrc = await Bun.file(here("../../client/lib/vegetation/flora.js")).text();
-const { mulberry32 } = await import("../../shared/rand.js");   // the one import wireDensityDial reads
-const wdMatch = floraSrc.match(/function wireDensityDial\(field\) \{[\s\S]*?\n\}/);
-const wireDial = wdMatch
-  ? new Function("densityCount", "mulberry32", `${wdMatch[0]}; return wireDensityDial;`)(densityCount, mulberry32)
-  : null;
+// flora's SHIPPED wireDensityDial (flora-dial.js, imported above), so the silent-no-op mechanism is demonstrated
+// on the shipped code, not retyped into the test.
 
 /** A stroke shaped to createFlora's contract: instance total, live mesh
  *  count, and (when compatible) the instanced attributes the dial expects. */
@@ -195,7 +184,7 @@ const ff = await import("../../client/lib/vegetation/flora_field.js");
 
 console.log("\nthe silent no-op seam (flora's shipped wireDensityDial)");
 {
-  check("wireDensityDial extracted from flora.js", typeof wireDial === "function");
+  check("wireDensityDial is flora-dial.js's export", typeof wireDial === "function");
   const good = mkStroke(1000, { label: "0:grass" });
   const yucca = mkStroke(800, { attrs: false, label: "1:yucca" });
   wireDial?.(good); wireDial?.(yucca);
