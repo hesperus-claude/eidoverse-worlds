@@ -6,7 +6,8 @@ import { warmLamps, lampsOf } from "./lamps.ts";
 import fs from "node:fs";
 import crypto from "node:crypto";
 import path from "node:path";
-import { TRUST_NAMES } from "../../server/config.ts";
+import { TRUST_NAMES, WORLDS_DIR } from "../../server/config.ts";
+import { shellWord } from "../../server/oldworlds.ts";
 import { directoryFor, foldName, idOfBytes, ACCOUNT_SHAPE, type Entry } from "../../server/directory.ts";
 import { mainKnowledge, type Known } from "../../server/mainknew.ts";
 import { recogniseOwner } from "../../server/ownerrecognise.ts";
@@ -207,8 +208,9 @@ const hostContent = (p: string) => { const h = contentAddressOf(p); return h ? `
 /** Everyone the translated world gives a role, and whether an account is bound to them (R 10-28): {name, role, account,
  *  from} or {name, role, account: null, why, bind}, each with its `id` (the one the written world holds: bot #369); owners first.
  *  What the operator approves, and the upgrade's result. */
-/** The bind command for one imported identity, by its id: a name may be two people's (Ann and ann), an id is one (bot #369). */
-const bindAdvice = (world: string, id: string) => `bun tools/operator/operator-repair.ts bind ${world} ${id} <their account>`;
+/** The bind command for one imported identity, by its id: a name may be two people's (Ann and ann), an id is one (bot #369).
+ *  It carries this host's worlds dir: bindCli reads WORLDS_DIR (operator-repair.ts usage). */
+const bindAdvice = (world: string, id: string) => `WORLDS_DIR=${shellWord(WORLDS_DIR)} bun tools/operator/operator-repair.ts bind ${world} ${id} <their account>`;
 export function peopleOf(world: string, r: Any, describe: (id: string) => Any) {
   const rank = (x: string) => ["owner", "moderator", "builder", "member"].indexOf(x) >>> 0;
   const out = Object.entries<Any>(r.final?.translated?.["@world"] ?? {}).filter(([k]) => k.startsWith("roles:")).map(([k, v]) => {
@@ -232,7 +234,9 @@ export function bansOf(world: string, r: Any, describe: (id: string) => Any) {
 export function ownerWarning(world: string, people: Any[] = []): string | null {
   const owners = people.filter((p) => p.role === "owner");
   if (owners.some((p) => p.account)) return null;
-  const how = `a server operator still enters it and can bind them (bun tools/operator/operator-repair.ts bind ${world} <name> <their account>) or give it to someone with operator-repair set (docs/operator/TRANSLATING-OLD-WORLDS.md)`;
+  // by id, as peopleOf's advice: bindIdentity refuses a name two imported people share
+  const binds = owners.length ? owners.map((p) => p.bind ?? bindAdvice(world, p.id)).join("; ") : bindAdvice(world, "<identity id>");
+  const how = `a server operator still enters it and can bind them (${binds}) or give it to someone with operator-repair set (docs/operator/TRANSLATING-OLD-WORLDS.md)`;
   return owners.length ? `no owner of "${world}" is bound to an account: ${owners.map((p) => p.name).join(", ")}. Until one is, nobody who signs in is its owner; ${how}`
     : `"${world}" has no owner at all after the upgrade; ${how}`;
 }
