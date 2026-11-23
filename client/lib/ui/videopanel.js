@@ -47,7 +47,7 @@ function needsReload(row) {
   if (row.querySelector('.reload')) return;
   const b = document.createElement('button');
   b.className = 'reload'; b.textContent = 'reload';
-  b.title = 'this setting applies when the renderer is built — reload now to apply it';
+  b.title = 'this setting applies when the renderer is built — reload now to apply it (a ?msaa= or ?webgl= in the address overrides it)';
   b.style.padding = '2px 7px';
   b.onclick = () => location.reload();
   const ctl = row.querySelector('.ctl');
@@ -181,7 +181,8 @@ export function initVideoPanel() {
 
     const msaaOn = (CONFIG.params.get('msaa') ?? lsGet(PREF_MSAA)) !== '0';
     body.appendChild(checkRow('antialiasing',
-      '4× MSAA smooths edges; off measured about +10 fps on a 2× screen (core.js §22n). Set when the renderer is built, so it applies on reload.',
+      '4× MSAA smooths edges; off measured about +10 fps on a 2× screen (core.js §22n). Set when the renderer is built, so it applies on reload'
+        + (CONFIG.params.has('msaa') ? ' (this page’s ?msaa= overrides it until you drop it from the address).' : '.'),
       msaaOn, (on, row) => { lsSet(PREF_MSAA, on ? '1' : '0'); needsReload(row); }));
   }, { id: 'video', host: 'settings' });
   // 🛡 safety: what this browser may fetch from other websites. One row, off by default: VRChat's
