@@ -31,7 +31,7 @@ encode, and every local check (samples written, sender bound, ICE connected) pas
 
 Piper emits 22050 Hz; WebRTC/Opus encodes at 48000. The ratio is not an integer, and a cheap linear resampler aliases,
 worst on short bursts. WebAudio's OfflineAudioContext resamples with a proper filter (the same one the sidetone path
-gets), so `resampleTo` hands WebRTC audio already at OUT_RATE. It was never verified to beat the browser's own conversion: the short-utterance artefact it targeted turned out
+gets), so `toOutRate` (tts.js) hands WebRTC audio already at OUT_RATE. It was never verified to beat the browser's own conversion: the short-utterance artefact it targeted turned out
 to be missing terminal punctuation (rhasspy/piper#252).
 The `localStorage.eidoTtsResample = 'off'` switch was removed (#333 sweep, G2-013): it still labelled 22050 Hz samples OUT_RATE, so speech played about 2.18× fast and could not A/B the conversion.
 
