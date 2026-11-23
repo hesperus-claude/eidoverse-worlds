@@ -667,6 +667,7 @@ console.log('\nthe 2026-11-23 sweep');
   const headingOf = (worldYaw: number) => { ag.flight.yaw = intYaw(worldYaw); return /heading (\d+)deg/.exec(ag.flightStatus())?.[1]; };
   const got = [Math.PI, Math.PI / 2, 0, -Math.PI / 2].map(headingOf);   // world yaw atan2(dx, dz): facing -z, +x, +z, -x
   check('flight_status says a heading as a compass bearing: north 0, east 90, south 180, west 270 (G3-063)', got.join() === '0,90,180,270', got.join());
+  check('...and a heading a hair west of north reads 0, not 360', headingOf(Math.PI + 0.005) === '0', String(headingOf(Math.PI + 0.005)));
 }
 {
   // G6-036: the link drops while take_off reads the bones: no flight is installed on a body nothing ticks
