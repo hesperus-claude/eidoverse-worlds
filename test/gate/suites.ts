@@ -34,6 +34,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["libfile", "protocol/libfile-check.ts", 2],  // #213 port: the resolver walks /library's own ladder and answers what the route serves
   ["library-decode", "server/library-decode-test.ts", 1], // /library/ percent-decoding: spaces resolve, a literal %xx file is found
   ["idle-stall", "server/idle-stall-test.ts", 1], // a download whose reader stalls past Bun's idle timeout still arrives whole
+  ["join-canary", "server/join-canary-test.ts", 1], // tools/operator/join-canary.mjs against a stub /ws: passes on a good key + a 4003 refusal, with or without a trailing slash (G2-098)
   ["fetchbytes", "client/fetchbytes-test.mjs", 1], // fetchBytes retries 5xx and network failures, never a 4xx, and evicts a failure
   ["variant-status", "server/variant-status-test.ts", 1], // store-variants variantStatus/classifyVariant: every optimization's state for a model
   ["optimize-pump", "server/optimize-pump-test.ts", 1], // the optimizer pump with a fake child: estimate, defer, queue

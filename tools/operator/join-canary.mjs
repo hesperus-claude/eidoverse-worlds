@@ -1,5 +1,5 @@
 // join-canary — does the server admit a good key and refuse a bad one? Joins over /ws directly, no client code.
-//   bun tools/operator/join-canary.mjs <http(s)-url, no trailing slash> <world> <good-key>
+//   bun tools/operator/join-canary.mjs <http(s)-url> <world> <good-key>
 // Exits 0 only when the good key gets a snapshot AND a made-up key is closed 4003 (the half that catches auth wired open).
 // (The browser paints the world name before the server answers, so a browser check can't tell. Trust this one.)
 import { helloOf } from '../../shared/protocol/hello.js';
@@ -7,7 +7,7 @@ const [,, URL, WORLD, KEY] = process.argv;
 if (!URL || !WORLD || !KEY) { console.error('usage: bun tools/operator/join-canary.mjs <http(s)-url> <world> <good-key>'); process.exit(2); }
 
 const attempt = (key) => new Promise((resolve) => {
-  const ws = new WebSocket(`${URL.replace(/^http/, 'ws')}/ws`);
+  const ws = new WebSocket(`${URL.replace(/\/+$/, '').replace(/^http/, 'ws')}/ws`);   // a trailing slash would make //ws
   const seen = []; let over = false;
   const end = (r) => { if (over) return; over = true; clearTimeout(timer); try { ws.close(); } catch { /* gone */ } resolve({ ...r, seen }); };
   const timer = setTimeout(() => end({ verdict: 'no answer in 6 s' }), 6000);
