@@ -840,15 +840,17 @@ function toSpec(id, c, adjust) {
     if (o) c[k] = o; }
 }
 // main's world with no owner was open: everyone builder + gen, its '*' and grants unread (shared/rightsfold.js rightsIn, at ccd5c53f)
+// research roles §translation: v1's `fly` and `gen` grants are the fly and generate switches, can.fly / can.generate
+// (@7: gen had stayed as written, read by the authority as generate); mainRights and the per-person grants share it
+const toCan = (v) => { if (!v || typeof v !== "object" || !("fly" in v || "gen" in v)) return v; const { fly, gen, ...rest } = v;
+  const can = { ...(rest.can ?? {}), ...(fly === true ? { fly: true } : {}), ...(gen === true ? { generate: true } : {}) };
+  return Object.keys(can).length ? { ...rest, can } : rest; };
 const ownedIn = (st) => Object.entries(st?.roles ?? {}).some(([k, r]) => k !== "*" && r?.role === "owner");
 /** main's effective rights as this protocol's @world components (R 10-28, item 22): {world, report}. Owned: newcomers and
  *  guests hold main's '*' (builder when none). Ownerless: everyone is builder, guests too (project lifts each grant below it),
  *  and builder's role-defs carry generate; the upgrader's claim is the owner (import-v1/world.ts refuses a translation without one). */
 export function mainRights(st) {
   const roles = st?.roles ?? {}, owned = ownedIn(st);
-  const toCan = (v) => { if (!v || typeof v !== "object" || !("fly" in v || "gen" in v)) return v; const { fly, gen, ...rest } = v;
-    const can = { ...(rest.can ?? {}), ...(fly === true ? { fly: true } : {}), ...(gen === true ? { generate: true } : {}) };
-    return Object.keys(can).length ? { ...rest, can } : rest; };
   const DOOR_OF = { none: { join: "listed" }, spectator: { join: "listed", watch: "anyone" } };
   const world = {}, notes = [], star = roles["*"];
   if (owned && DOOR_OF[star?.role]) { world.access = { ...DOOR_OF[star.role] }; const { role: _r, until: _u, ...rest } = toCan(star); if (Object.keys(rest).length) world["default-role"] = { role: "member", ...rest }; }
@@ -930,11 +932,7 @@ export function project(st, seen = null, who = null, ns = NAMESPACE, content = n
     if ("audio" in sky) sky.audio = Boolean(sky.audio);   // @25: main's switch, as makeSky read it (sky.js Boolean(a.audio))
     w.sky = sky; }
   for (const a of st.assets ?? []) w[keyed("assets", typeof a === "string" ? a : a.path ?? JSON.stringify(a))] = typeof a === "string" ? {} : a;
-  // research roles §translation: v1's `fly` and `gen` grants are the fly and generate switches, can.fly / can.generate
-  // (@7: gen had stayed as written, read by the authority as generate); a `caption` deed is a place in its screen's captioners (below)
-  const toCan = (v) => { if (!v || typeof v !== "object" || !("fly" in v || "gen" in v)) return v; const { fly, gen, ...rest } = v;
-    const can = { ...(rest.can ?? {}), ...(fly === true ? { fly: true } : {}), ...(gen === true ? { generate: true } : {}) };
-    return Object.keys(can).length ? { ...rest, can } : rest; };
+  // v1's fly/gen grants become can.fly / can.generate (toCan, above); a `caption` deed is a place in its screen's captioners (below)
   // upstream #258's world access rode the same map: `*` none = invite-only, `*` spectator = watch only. Here entry is
   // @world.access (shared/protocol/access.js); a person's own none / spectator is a record that lists no one (they watch
   // only where the world lets everyone watch), and in an owned world a none is also an imported ban that keeps them out. A timed grant keeps its `until` (the load's sweep ends one
