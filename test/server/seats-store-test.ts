@@ -274,6 +274,23 @@ try {
       raced && !pb.ok && lockNow === "newcomer", JSON.stringify({ raced, pb, lockNow }));
     check("G3-085: …and leaves no tomb behind", !fs.readdirSync(seatsDir).some((f) => f.includes(".tomb-")), fs.readdirSync(seatsDir).join(","));
     rmSync(join(seatsDir, ".write-lock"), { force: true });
+    // …and a caught lock that won't parse yet (a newer writer between its openSync("wx") and its writeSync) is put back too,
+    // not left in a tomb while its writer thinks it holds the lock
+    writeFileSync(join(seatsDir, ".write-lock"), JSON.stringify({ pid: 999_999_999, nonce: "corpse-4", ts: Date.now() }));
+    let blanked = false;
+    const blank = new SeatStore(OPT, LIB, {}, { lockTimeoutMs: 200, lockFs: {
+      renameSync: (from: any, to: any) => {
+        if (!blanked && String(from).endsWith(".write-lock") && String(to).includes(".tomb-")) { blanked = true; writeFileSync(from, ""); }
+        return fs.renameSync(from, to);
+      },
+    } });
+    const bl = blank.propose(profile("seatdummy"), "blank") as any;
+    check("a caught lock that won't parse is put back: the writer waits on it, and no tomb is left",
+      blanked && !bl.ok && existsSync(join(seatsDir, ".write-lock")) && readFileSync(join(seatsDir, ".write-lock"), "utf8") === ""
+      && !fs.readdirSync(seatsDir).some((f) => f.includes(".tomb-")), JSON.stringify({ blanked, bl, files: fs.readdirSync(seatsDir) }));
+    rmSync(join(seatsDir, ".write-lock"), { force: true });
+    for (const f of fs.readdirSync(seatsDir)) if (f.includes(".tomb-")) rmSync(join(seatsDir, f), { force: true });
+
     // …while with no newcomer, the newer lock the claim caught is put back as it was
     writeFileSync(join(seatsDir, ".write-lock"), JSON.stringify({ pid: 999_999_999, nonce: "corpse-3", ts: Date.now() }));
     let caught = false;
