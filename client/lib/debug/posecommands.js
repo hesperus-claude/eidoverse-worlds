@@ -46,6 +46,7 @@ function consoleOptions(verb, rest) {
 /** The verbs, acting through `state.pose` (the caller's held pose), `sendPuppet(target, request)` (net.js) and
  *  `play(anim)` (an animation on the caller's own body, played and sent). */
 export function poseCommands({ state, sendPuppet, play }) {
+  const warned = new Set();   // each distinct report once: a script posing every frame must not flood the console
   return {
     pose: (bones, ...rest) => {
       const { replace = false, target = null } = consoleOptions('EW.pose', rest);
@@ -62,7 +63,7 @@ export function poseCommands({ state, sendPuppet, play }) {
       }
       // checked as the pose tool checks one (without the rig, so kept as written), and what it couldn't read is said
       const note = bones ? poseReport(validatePose(bones)) : '';
-      if (note) console.warn(`EW.pose: ${note}`);
+      if (note && !warned.has(note)) { if (warned.size >= 256) warned.clear(); warned.add(note); console.warn(`EW.pose: ${note}`); }
       state.pose = bones === null ? null : mergePose(replace ? null : state.pose, bones);
       return state.pose;
     },

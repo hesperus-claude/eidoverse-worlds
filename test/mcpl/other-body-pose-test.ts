@@ -94,6 +94,8 @@ check("replace sends the whole pose, and a replace with nothing left is a releas
     warned.length = 0;
     EW.pose({ head: [0, 0, 0, 1] }, { replace: true });
     check("...and says nothing about a clean one", !warned.length, JSON.stringify(warned));
+    for (let i = 0; i < 60; i++) EW.pose({ L_Wing_Upper: [0, 0, 0.38, 0.92] });   // a script posing wings every frame
+    check("...and says each distinct thing once, not once per call", warned.length === 1 && /L_Wing_Upper/.test(warned[0]), `${warned.length} warnings`);
   } finally { console.warn = warn; }
 }
 
