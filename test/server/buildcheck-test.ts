@@ -54,6 +54,10 @@ try {
   const narrow = await run("narrow", without(isFront, [-3, FLOOR, 2.8, -0.15, 6.3, 3], [0.15, FLOOR, 2.8, 3, 6.3, 3], [-0.15, 2.4, 2.8, 0.15, 6.3, 3]));
   check("a 0.3m doorway: the inside is reachable only through a passage narrower than a body, and it says where",
     kinds(narrow).includes("narrow") && narrow.warnings.some((w: any) => w.kind === "narrow" && Math.abs(w.at[0]) < 0.5 && w.at[2] > 2.2 && w.at[2] < 3.6), say(narrow));
+  // G3-079: the clearance it names is one the halls bear out: this 0.3 m door is refused, and a 0.4 m one (the route test's
+  // 0.25 m door at 1.6×) fits, so "more than X" has 0.3 <= X < 0.4
+  { const need = Number(/needs more than ([\d.]+)m clear/.exec(narrow.warnings.find((w: any) => w.kind === "narrow")?.message ?? "")?.[1]);
+    check("the narrow warning's stated clearance sits between the door it refuses (0.3m) and one that fits (0.4m)", need >= 0.3 && need < 0.4, say(narrow)); }
 
   // overhanging the top FOUR treads: certainly cut off. (The mover's step is 0.8 m, so a body on the tread below a two- or
   // three-tread overhang steps straight up onto it; four leaves the slab's top 0.94 m above the last tread a body can

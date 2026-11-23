@@ -253,7 +253,7 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
       }
       const at = narrow.length ? centroid(narrow, body) : c;
       warnings.push({ kind: "narrow", at, message: `${where} can only be reached through a passage narrower than a body, near (${at[0]}, ${at[2]}) at ${at[1]}m — `
-        + `a body needs more than ${r2(2 * BODY_R)}m clear (its ${BODY_R}m radius each side); 1m is comfortable` });
+        + `a body needs more than ${r2(2 * (BODY_R - NUDGE))}m clear (its ${BODY_R}m radius each side, less the ${NUDGE}m a brush against the side allows); 1m is comfortable` });
       continue;
     }
     // next to reachable floor: a climb that fails, or a rise too high
