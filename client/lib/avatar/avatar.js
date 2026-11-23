@@ -562,7 +562,8 @@ export class Avatar {
   // frame (reachbone.js). Where a held pose and a reach would write the same bone the reach wins and the pose skips
   // it: one author per bone per frame, which _composeBegin depends on.
 
-  /** Measure the fixed facts about one arm/leg chain, once (in the root's frame, where rest is identity). */
+  /** Measure the fixed facts about one arm/leg chain, once: from the rest skeleton (every normalized bone's local
+   *  rotation identity), in the root's frame, where the bones' rest orientations need not be identity (reachbone.js). */
   _measureChain(key) {
     this._chains ??= new Map();
     if (!this._chains.has(key)) this._chains.set(key, measureChain(this, key));
