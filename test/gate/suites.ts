@@ -408,6 +408,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["particles-host", "client/particles-host-test.ts", 1], // the browser particle host (emitters.js) over a stand-in GPU half
   ["shadow-fade", "client/shadow-fade-test.mjs", 1], // registered shadow casters start not casting
   ["shadow-fade-mutants", "client/shadow-fade-test.mjs --mutants", 1], // each of its mutation controls goes red
+  ["caster-rank", "client/caster-rank-test.mjs", 1], // the caster budget ranks by apparent size; an all-emitter thing is not offered
   ["lamp-slot-policy", "client/lamp-slot-policy-test.mjs", 1], // who may claim the one casting slot (lightrig.js attachLamps)
   ["light-pool", "client/light-pool-test.mjs", 1], // the point pool lights what is on screen; a dark mirror holds no slot, a strike gets one the frame it fires (lightrig.js assign)
   ["casting-slot", "client/casting-slot-test.mjs", 1], // the casting slot draws shadows only for a holder that asked, composed with the viewer's switch (lightrig.js)
