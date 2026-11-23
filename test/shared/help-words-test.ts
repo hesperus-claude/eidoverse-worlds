@@ -42,6 +42,11 @@ const W = scratchWorld("help-words").seed({ cup: { model: "cup.glb", pos: [0, 0,
 { const r = W.call("consent", { switch: "accept" }); const said = `${r.refused?.reason ?? ""}`;
   check("HW7 consent {switch} is refused shape, with no review tag in the words", r.refused?.code === "shape" && /switch/.test(said) && !TAG.test(said), said); }
 
+// HW8 physics-volume's modes say only walk and swim change speed (shared/mover.js asks for those two; the authority's track reads all four), and say it is a list
+{ const pv = COMPONENTS["physics-volume"]; const docs = pv.docs.modes, help = pv.help;
+  const honest = (s) => /only walk and swim change a body's speed yet/.test(s) && /fly and climb are accepted/.test(s) && /nothing slows or boosts them/.test(s);
+  check("HW8 physics-volume docs.modes and help say a list, and that fly and climb are accepted but change no one's speed yet", honest(docs) && honest(help) && /a list of/.test(docs), { docs, help }); }
+
 // HW9 the scripts verb's test event names every event a script can be woken by (componentspec script on: + tick and wake)
 { const doc = VERBSPEC.scripts.args.test.doc; const want = [...COMPONENTS.script.itemEnums.on.map((e) => e === "changed:*" ? "changed:<comp>" : e), "tick", "wake"];
   const missing = want.filter((e) => !doc.includes(`'${e}'`));
