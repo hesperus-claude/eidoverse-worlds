@@ -50,12 +50,14 @@ for (const drop of ["grassHeight", "grassDensity"]) {
 {
   world.st = { entities: {}, grass: { kind: "blades", density: 1 } };
   Object.assign(draw, { quality: "low", shed: 1, eff: 0.5 });
-  for (const status of ["applied", "unavailable"]) {
+  for (const status of ["applied", "unavailable", "partial", "unknown"]) {
     draw.applied = { field: true, status, requested: 0.5, strokes: status === "applied" ? [] : [{ stroke: "stroke 0", ok: false }] };
     const b = await mount(PAL);
     const you = b.querySelector(".state-you")?.textContent ?? "";
     if (status === "applied") check("G2-028 control: an applied ×0.5 reads as drawing ×0.5", /drawing ×0\.5/.test(you), you);
-    else check("G2-028 an unapplied ×0.5 does not claim to draw ×0.5, and says so", !/drawing ×0\.5/.test(you) && /unavailable/.test(you), you);
+    else if (status === "unavailable") check("G2-028 an unapplied ×0.5 does not claim to draw ×0.5, and says so", !/drawing ×0\.5/.test(you) && /unavailable/.test(you), you);
+    // partial: some strokes took it; unknown: the field can't say. Neither is "did not take … drawing it as built"
+    else check(`G2-028 ${status}: its own words, not "did not take"`, /×0\.5/.test(you) && new RegExp(status).test(you) && !/did not take|as built$/.test(you), you);
     b.remove();
   }
   Object.assign(draw, { quality: "high", shed: 0, eff: 1, applied: { field: false, status: "no-field", strokes: [] } });

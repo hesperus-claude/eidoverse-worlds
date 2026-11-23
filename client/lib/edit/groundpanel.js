@@ -106,7 +106,12 @@ export function paintGround(body) {
         const cap = getGrassQuality(), shed = getGrassShed(), eff = getGrassDensity();
         const rep = getGrassApplied();   // what the renderer applied, not only the requested factor (G2-028; skypanel's row reads the same)
         if (cap === 'off') you = 'no grass drawn (your grass⚙ is off)';
-        else if (eff < 1 && rep.field && rep.status !== 'applied') you = `asked for ×${+eff.toFixed(2)} of it, but the renderer's density dial did not take (${rep.status}): drawing it as built`;
+        else if (eff < 1 && rep.field && rep.status !== 'applied') {
+          const ask = `asked for ×${+eff.toFixed(2)} of it`;
+          you = rep.status === 'partial' ? `${ask}; some of its strokes took it, the rest draw as built (partial)`
+            : rep.status === 'unknown' ? `${ask}; this field can't report what it draws (unknown)`
+              : `${ask}, but the renderer's density dial did not take (${rep.status}): drawing it as built`;
+        }
         else if (eff < 1) you = `drawing ×${+eff.toFixed(2)} of it (${shed < 1 ? `auto governor ×${+shed.toFixed(2)}` : ''}${shed < 1 && cap !== 'full' ? ', ' : ''}${cap !== 'full' ? `your grass⚙ ${cap}` : ''})`;
       }
       lines.set(world, you);
