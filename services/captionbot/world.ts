@@ -67,6 +67,8 @@ export interface WorldOptions {
   onSend?: (key: string) => void;
   /** Declare itself an agent at join (PROTOCOL §6a; default true; tests join undeclared). */
   agent?: boolean;
+  /** The server refused this build's hello: called once with its words; the client never redials (index.ts exits 78). */
+  onRefused?: (why: string) => void;
 }
 
 type Args = { id: string; session: string; n?: number; end?: true; t0?: number; t1?: number; text?: string; speaker?: string; title?: string };
@@ -87,6 +89,8 @@ export class WorldClient {
   private ackTimer: ReturnType<typeof setTimeout> | null = null;
   private lastSentAt = 0;
   private halted: string | null = null;
+  /** a hello refusal's words: the server won't speak this build, so no redial */
+  private helloRefused: string | null = null;
   private titled = false;
   private replica = makeReplica();
   private reqId = 0;
@@ -131,6 +135,7 @@ export class WorldClient {
       // whatever was in flight is unconfirmed: back to the head of the queue
       if (this.inflight) { this.pending.unshift(this.inflight); this.inflight = null; }
       if (this.ackTimer) { clearTimeout(this.ackTimer); this.ackTimer = null; }
+      if (this.helloRefused) { this.log(`world refused the join: ${this.helloRefused} — not redialing`); this.opts.onRefused?.(this.helloRefused); return; }
       this.log('world socket closed — reconnecting');
       setTimeout(() => this.connect(), 1500);
     };
@@ -147,7 +152,7 @@ export class WorldClient {
       } else if (msg.type === 'error') {
         this.onError(String(msg.error ?? ''));
       } else if (msg.type === 'refused') {
-        this.onError(refusalWords(msg));
+        this.helloRefused = refusalWords(msg);
       } else if (msg.type === 'log') {
         const r = this.replica.ingest(msg.entries ?? [], msg.from ?? -1, msg.names);
         if (r.resync) { this.ws?.close(); return; }   // a gap: rejoin for a fresh cut (onclose reconnects)
