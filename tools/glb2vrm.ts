@@ -260,13 +260,15 @@ if (has("measure")) {
   const v1 = g.extensions?.VRMC_vrm;
   const bones = v1?.humanoid?.humanBones;
   const node = (k: string) => (bones ? bones[k].node as number : nodeByName(g, TRIPO_MAP[k]));   // a VRM's map is by index
-  const fwd = measureForward(g, node("leftFoot"), node("leftToes"), node("rightFoot"), node("rightToes"));
+  // toes are optional in VRM 1.0: without them there is no foot→toe segment to measure (the spec says +Z)
+  const toeless = !!bones && !(bones.leftToes && bones.rightToes);
+  const fwd = toeless ? null : measureForward(g, node("leftFoot"), node("leftToes"), node("rightFoot"), node("rightToes"));
   const W = worldMatrices(g);
   const headY = posOf(W[node("head")]).y;
   const hipsY = posOf(W[node("hips")]).y;
   const lHand = posOf(W[node("leftHand")]);
   console.log(`${basename(input)}  vrm1=${!!v1}`);
-  console.log(`  forward (foot→toe): [${fwd.toArray().map((x) => x.toFixed(2))}]`);
+  console.log(fwd ? `  forward (foot→toe): [${fwd.toArray().map((x) => x.toFixed(2))}]` : "  forward (foot→toe): n/a (no toe bones; VRM 1.0 faces +Z by spec)");
   console.log(`  head Y ${headY.toFixed(2)}  hips Y ${hipsY.toFixed(2)}  leftHand [${lHand.toArray().map((x) => x.toFixed(2))}]`);
   process.exit(0);
 }
