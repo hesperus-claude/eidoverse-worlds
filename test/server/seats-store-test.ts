@@ -14,7 +14,7 @@
  * Run: bun run test/server/seats-store-test.ts   (scratch dirs only)
  */
 
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, appendFileSync as appendFileSyncReal } from "node:fs";
+import fs, { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, appendFileSync as appendFileSyncReal } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -85,6 +85,23 @@ try {
     check("a second process cannot countersign from a stale snapshot", p2.ok && !clobber.ok && /re-list/.test(clobber.why));
     const honest = storeB.accept("seatdummy", "sitchair", "receipt2", "op", 3) as any;
     check("…and succeeds after re-reviewing the moved store", honest.ok && honest.rev === 4);
+  }
+
+  console.log("B3 — a landed write is synced: the receipt before the snapshot (G2-072)");
+  {
+    const store = new SeatStore(OPT, LIB);
+    const real = fs.fsyncSync, order: string[] = [];
+    (fs as any).fsyncSync = (fd: number) => {
+      let p = ""; try { p = fs.readlinkSync(`/proc/self/fd/${fd}`); } catch { /* no /proc: count only */ }
+      order.push(p.endsWith("profiles.log.jsonl") ? "log" : p.endsWith(".tmp") ? "snapshot" : p === seatsDir ? "dir" : p || "?");
+      return real(fd);
+    };
+    let r: any;
+    try { r = store.propose(profile("seatdummy"), "aid1:someone"); } finally { (fs as any).fsyncSync = real; }
+    check("a landed proposal fsyncs its log line, its snapshot, and the snapshot's new name", r.ok
+      && (order.includes("?") ? order.length >= (process.platform === "win32" ? 2 : 3)
+        : order.indexOf("log") >= 0 && order.indexOf("log") < order.indexOf("snapshot") && (process.platform === "win32" || order.includes("dir"))),
+      JSON.stringify({ r, order }));
   }
 
   console.log("B3 — injected faults leave no unreceipted state");
