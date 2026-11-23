@@ -149,11 +149,11 @@ async function pumpWorld() {
   if (speaking) return;
   speaking = true;
   while (toWorld.length) {
-    if (!joined || worldWs?.readyState !== WebSocket.OPEN) break; // flushed on rejoin
-    while (toWorld.length > MAX_BACKLOG) {
+    while (toWorld.length > MAX_BACKLOG) {   // before the offline break: a world that is down never lets the queue grow
       const d = toWorld.shift()!;
       log(`⏭ world backlog — dropped "${d.author}: ${d.text.slice(0, 40)}…"`);
     }
+    if (!joined || worldWs?.readyState !== WebSocket.OPEN) break; // flushed on rejoin
     if (Date.now() < holdUntil) { await new Promise((r) => setTimeout(r, holdUntil - Date.now())); continue; }
     const m = toWorld.shift()!;
     let text = `${m.author}: ${m.text}`;
