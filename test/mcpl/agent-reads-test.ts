@@ -1,6 +1,6 @@
-// agent-reads-test: the agent's roster, terrain, heightmap, geometry and body-bone reads have a deadline (AbortSignal; not
-// yet rigbones.ts or physics.ts skeletonFor), and a geometry read that threw or timed out isn't cached, so the next walk
-// near that model asks again; an answer is kept, a 4xx one too (a 5xx is the server's trouble: asked again).
+// agent-reads-test: the agent's roster, terrain, heightmap, geometry, body-bone, rig and skeleton reads have a deadline
+// (AbortSignal), and a geometry or skeleton read that threw or timed out isn't cached, so the next walk or body asks
+// again; an answer is kept, a 4xx one too (a 5xx is the server's trouble: asked again).
 //   bun test/mcpl/agent-reads-test.ts
 process.env.WORLD_TOKEN = "";
 import { suite } from "../gate/suite.ts";
@@ -73,6 +73,43 @@ try {
     const build = (ag3 as any).ground.buildTerrain({ kind: "noise" });
     ag3.close(); release(); await build.catch(() => {});
     check("a terrain build that finishes after its body closed commits no ground", !(ag3 as any).ground.terrain, String(!!(ag3 as any).ground.terrain)); }
+
+  // G2-062: the rig and skeleton reads have a deadline too, and a skeleton read that threw or met a 5xx isn't kept as
+  // "this body has no skeleton": the next body asks again
+  { const { rigBonesFor } = await import("../../mcpl/rigbones.ts");
+    const { HeadlessBody } = await import("../../mcpl/physics.ts");
+    const { fixture } = await import("../fixtures/body-fixture.ts");
+    const vrm = fixture();
+    seen.length = 0;
+    answer = async () => new Response(vrm);
+    await rigBonesFor("http://rig.test", "store/rigged.vrm");
+    check("a read of an avatar's rig has a deadline (rigbones.ts)", bounded(readOf("rigged.vrm")), readOf("rigged.vrm") ? "no signal" : "no read");
+    seen.length = 0;
+    answer = async () => new Response("busy", { status: 503 });
+    const busy = await HeadlessBody.create("http://skel.test", "store/skel.vrm");
+    check("a read of an avatar's skeleton has a deadline (physics.ts skeletonFor)", bounded(readOf("skel.vrm")), readOf("skel.vrm") ? "no signal" : "no read");
+    answer = async () => new Response(vrm);
+    const back = await HeadlessBody.create("http://skel.test", "store/skel.vrm");
+    check("a skeleton read the server answered 503 isn't kept: the next body gets the skeleton", busy === null && back !== null && seen.filter((x) => x.url.includes("skel.vrm")).length === 2, `${busy} then ${back}`);
+    answer = async () => { throw new DOMException("The operation timed out.", "TimeoutError"); };
+    const slow = await HeadlessBody.create("http://skel.test", "store/slow.vrm");
+    answer = async () => new Response(vrm);
+    const after = await HeadlessBody.create("http://skel.test", "store/slow.vrm");
+    check("...and nor is one that timed out", slow === null && after !== null, `${slow} then ${after}`);
+    // G2-061: the skeleton is the server's file at that version: another server's file of the same path is read from
+    // that server, and an avatar-updated event (invalidateBodyAsset) has it read again
+    seen.length = 0;
+    await HeadlessBody.create("http://other.test", "store/skel.vrm");
+    check("a skeleton is read per server: the same path on another server is read from it (G2-061)", seen.some((x) => x.url.startsWith("http://other.test/")), JSON.stringify(seen.map((x) => x.url)));
+    const ag4: any = new WorldAgent({ name: "reader4", world: "reads-bench", url: "ws://127.0.0.1:1/ws" });
+    seen.length = 0;
+    await HeadlessBody.create(ag4.httpBase, "store/skel.vrm");
+    await HeadlessBody.create(ag4.httpBase, "store/skel.vrm");
+    const once = seen.length;
+    ag4.invalidateBodyAsset("skel");
+    await HeadlessBody.create(ag4.httpBase, "store/skel.vrm");
+    check("...kept for the next body, and read again once its avatar's bytes change (avatar-updated)", once === 1 && seen.length === 2, `${once} read(s), then ${seen.length}`);
+    ag4.close(); }
 } finally {
   globalThis.fetch = realFetch;
 }

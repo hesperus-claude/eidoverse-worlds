@@ -32,7 +32,7 @@ import { analyzeWater } from "../shared/waterkind.js";
 import * as THREE_W from "three/webgpu";
 import * as TSL from "three/tsl";
 import { NoiseGate, ACTIVITY_RADIUS_M } from "./denoise.ts";
-import { HeadlessBody, setHeightField, setWaterField, standOn, collidersReady, navProbe, collidersGeneration, inWorld, withoutColliders } from "./physics.ts";
+import { HeadlessBody, forgetSkeletons, setHeightField, setWaterField, standOn, collidersReady, navProbe, collidersGeneration, inWorld, withoutColliders } from "./physics.ts";
 import { makeNavGrid, NAV_SUBSTEP, NAV_NUDGE, NAV_STEP, type NavProbe, type NavTarget } from "../shared/navgrid.js";
 import { names } from "../shared/places.js";
 import { colliderOf } from "../shared/components.js";
@@ -973,7 +973,7 @@ export class WorldAgent {
   }
 
   private invalidateBodyAsset(name: string) {
-    forgetReadings(this.httpBase, name);
+    forgetReadings(this.httpBase, name); forgetSkeletons(this.httpBase, name);
     if (nameFromAvatarPath(this.avatar) === name) {
       this.selfBodyGeneration = ++this.bodyGenerationCounter;
       this.bodyReader?.forget(this.name);

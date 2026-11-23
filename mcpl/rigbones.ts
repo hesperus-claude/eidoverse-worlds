@@ -3,6 +3,7 @@
 import { glbJson, humanBones, stature, GLB_MAX_JSON } from "./rig.ts";
 import { nameFromAvatarPath } from "../shared/seatcore.js";
 import { setOwn } from "../shared/humanoid.js";
+import { WORLD_READ_MS } from "./agent-result.ts";
 
 export type RigBones = {
   /** every skin joint and humanoid bone, by node name */
@@ -52,9 +53,10 @@ export function rigBonesFor(httpBase: string, avatarPath: string): Promise<RigBo
  *  chunk is, past GLB_MAX_JSON refused. Identity-encoded so /library answers ranged instead of gzipping the whole
  *  file; a server that ignores Range answers 200 with the whole file, already downloaded when the cap is checked,
  *  so there the cap only refuses parsing it. Throws when the download fails, which may pass; null for a file this
- *  won't read. No deadline yet: a server that never finishes holds every caller of this key. */
+ *  won't read. Each read has the door's deadline (WORLD_READ_MS): a server that never finishes fails this one, and the
+ *  next call asks again. */
 async function headerAndJson(url: string): Promise<Uint8Array | null> {
-  const upTo = (end: number) => fetch(url, { headers: { Range: `bytes=0-${end}`, "Accept-Encoding": "identity" } });
+  const upTo = (end: number) => fetch(url, { headers: { Range: `bytes=0-${end}`, "Accept-Encoding": "identity" }, signal: AbortSignal.timeout(WORLD_READ_MS) });
   const head = await upTo(19);
   if (head.status === 416) return null;   // not even a header's worth of bytes (an empty file)
   if (!head.ok) throw new Error(`the world server answered ${head.status}`);

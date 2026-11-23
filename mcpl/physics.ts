@@ -28,6 +28,8 @@ import { bodyFrame, fromBody } from "../shared/joints.js";
 // the walking capsule's dimensions — pure module, the browser controller's own numbers
 import { colliderFor } from "../shared/bodyscale.js";
 import { NAV_NUDGE, type NavProbe } from "../shared/navgrid.js";
+import { nameFromAvatarPath } from "../shared/seatcore.js";
+import { WORLD_READ_MS } from "./agent-result.ts";
 
 const HEADLESS_CORE = fileURLToPath(new URL("./headless-core.mjs", import.meta.url));
 const CLIENT_CORE = fileURLToPath(new URL("../client/lib/core.js", import.meta.url));
@@ -346,18 +348,31 @@ export async function removeSupport(holder: string, id: string) {
   generation++;
 }
 
-// skeletons are per-VRM and immutable — parse each avatar file once
+// skeletons per server, avatar file and version (its ?v=), as rigbones.ts keys its readings: parsed once, dropped when
+// the file's bytes change (forgetSkeletons, on avatar-updated). A read that failed or met a 5xx is not kept.
 const skeletons = new Map<string, Record<string, any> | null>();
 
+/** Forget every skeleton read of this server's avatar `name`, at any version: its bytes changed (avatar-updated). */
+export function forgetSkeletons(httpBase: string, name: string) {
+  for (const key of skeletons.keys()) if (key.startsWith(`${httpBase}/library/`) && nameFromAvatarPath(key) === name) skeletons.delete(key);
+}
+
 async function skeletonFor(httpBase: string, avatarPath: string) {
-  const key = avatarPath.split("?")[0];
+  const path = avatarPath.split("?")[0], key = `${httpBase}/library/${avatarPath}`;
   if (skeletons.has(key)) return skeletons.get(key);
   const m = await loadSim();
   if (!m) return null;
+  let buf: Uint8Array;
   try {
-    const res = await fetch(`${httpBase}/library/${key}`);   // no deadline yet (the agent's own reads time out at WORLD_READ_MS, agent-result.ts)
-    if (!res.ok) throw new Error(`fetch ${key}: ${res.status}`);
-    const buf = new Uint8Array(await res.arrayBuffer());
+    const res = await fetch(`${httpBase}/library/${path}`, { signal: AbortSignal.timeout(WORLD_READ_MS) });
+    if (res.status >= 500) throw new Error(`the world server answered ${res.status}`);   // its trouble, not the file's
+    if (!res.ok) { console.error(`[physics] no skeleton in ${path}: ${res.status} — this body will slump`); skeletons.set(key, null); return null; }
+    buf = new Uint8Array(await res.arrayBuffer());
+  } catch (e) {
+    console.error(`[physics] couldn't read ${path} for its skeleton (asked again next time):`, (e as Error).message);
+    return null;
+  }
+  try {
     const g = m.rig.glbJson(buf);
     const bones = m.rig.humanBones(g);
     if (!bones) throw new Error("no humanoid extension");
