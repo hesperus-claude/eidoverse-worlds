@@ -913,23 +913,22 @@ console.log('\neased crossfade, interrupted (pre-review B2):');
   const { self } = stand();
   const mk = (name: string) => { const c = new THREE.AnimationClip(name, 1, [new THREE.QuaternionKeyframeTrack('hips.quaternion', [0, 1], [0, 0, 0, 1, 0, 0, 0, 1])]); const a = self.mixer.clipAction(c); a.enabled = true; a.setEffectiveWeight(0); a.play(); return a; };
   self.actions.walk = mk('walk'); self.actions.jump = mk('jump'); self.actions.idle = self.actions.idle;
-  for (const m of ['setClip', '_setAction']) self[m] = (Avatar.prototype as any)[m];
-  self.update = function (dt: number) {   // the slice of update() that owns _xfade
-    if (this._xfade) { const x = this._xfade; x.t += dt; const u = Math.min(1, x.t / x.dur), w = u * u * (3 - 2 * u);
-      x.in.setEffectiveWeight(x.in0 + (1 - x.in0) * w); if (x.out && x.out !== x.in) x.out.setEffectiveWeight(x.out0 * (1 - w));
-      if (u >= 1) { if (x.out && x.out !== x.in) x.out.setEffectiveWeight(0); this._xfade = null; } }
-    this.mixer.update(dt);
-  };
+  for (const m of ['setClip', '_setAction', '_stepXfade']) self[m] = (Avatar.prototype as any)[m];
+  self.update = function (dt: number) { this._stepXfade(dt); this.mixer.update(dt); };   // update()'s crossfade, then the mixer
   self.setClip('walk'); for (let i = 0; i < 30; i++) self.update(1 / 60);
   self.setClip('jump', 0, { fade: 0.5, ease: true }); for (let i = 0; i < 12; i++) self.update(1 / 60);   // 0.2 s into the ease
   const w = (a: any) => +a.getEffectiveWeight().toFixed(2);
   const before = { walk: w(self.actions.walk), jump: w(self.actions.jump), idle: w(self.actions.idle) };
-  self.setClip('walk'); self.update(1 / 60);   // LANDED inside the ease, still holding forward — back into WALK, the clip mid-fade-out: one frame later nothing may jump by more than 0.1 and the weights still sum to ~1 (round 4 S1b)
+  self.setClip('walk'); const cut = { ...self._xfade }; self.update(1 / 60);   // LANDED inside the ease, still holding forward — back into WALK, the clip mid-fade-out: one frame later nothing may jump by more than 0.1 and the weights still sum to ~1 (round 4 S1b)
   const after = { walk: w(self.actions.walk), jump: w(self.actions.jump), idle: w(self.actions.idle) };
   const maxMove = Math.max(...(['walk', 'jump', 'idle'] as const).map((k) => Math.abs(after[k] - before[k])));
   const sum = after.walk + after.jump + after.idle;
   check('a landing inside the ease moves no weight by more than 0.1 in one frame', maxMove <= 0.1, `before ${JSON.stringify(before)} after ${JSON.stringify(after)}`);
   check('...and the weights still sum to ~1', sum > 0.95 && sum < 1.05, `sum ${sum.toFixed(2)}`);
+  // the cut continues LINEAR from where the ease left it (a smoothstep there would start flat and dip the sum)
+  const lin = cut.in0 + (1 - cut.in0) * Math.min(1, (1 / 60) / cut.dur);
+  check('...and the cut continues linear, not smoothstepped', cut.linear === true && Math.abs(self.actions.walk.getEffectiveWeight() - lin) < 1e-6,
+    `walk ${self.actions.walk.getEffectiveWeight().toFixed(6)} want ${lin.toFixed(6)} (in0 ${cut.in0?.toFixed(3)}, dur ${cut.dur})`);
   for (let i = 0; i < 59; i++) self.update(1 / 60);                                                    // 1 s later
   self.setClip('idle'); for (let i = 0; i < 60; i++) self.update(1 / 60);   // then stop: 1 s later
   check('walk faded out after the ease was cut short', w(self.actions.walk) < 0.05, `walk ${w(self.actions.walk)} jump ${w(self.actions.jump)} idle ${w(self.actions.idle)}`);

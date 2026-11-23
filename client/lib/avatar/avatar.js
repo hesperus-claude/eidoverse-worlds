@@ -1173,14 +1173,19 @@ export class Avatar {
   get _plateRest() { return this.plate._plateRest; }
   get _seatApprox() { return this.plate._seatApprox; }
 
+  /** One frame of the eased crossfade (see _setAction): smoothstep in (linear for a cut landing inside an ease), its
+   *  complement out. */
+  _stepXfade(dt) {
+    if (!this._xfade) return;
+    const x = this._xfade; x.t += dt; const u = Math.min(1, x.t / x.dur), w = x.linear ? u : u * u * (3 - 2 * u);
+    x.in.setEffectiveWeight(x.in0 + (1 - x.in0) * w); if (x.out && x.out !== x.in) x.out.setEffectiveWeight(x.out0 * (1 - w));
+    if (u >= 1) { if (x.out && x.out !== x.in) x.out.setEffectiveWeight(0); this._xfade = null; }
+  }
+
   /** One frame. The order is the contract: mixer, park, head, swim, held pose, reach, face (face.js), vrm.update,
    *  wings (wings.js), the held pose's raw bones, lamp, shadow, plates. */
   update(dt, now = performance.now()) {
-    if (this._xfade) {   // the eased crossfade (see _setAction): smoothstep in, its complement out
-      const x = this._xfade; x.t += dt; const u = Math.min(1, x.t / x.dur), w = x.linear ? u : u * u * (3 - 2 * u);
-      x.in.setEffectiveWeight(x.in0 + (1 - x.in0) * w); if (x.out && x.out !== x.in) x.out.setEffectiveWeight(x.out0 * (1 - w));
-      if (u >= 1) { if (x.out && x.out !== x.in) x.out.setEffectiveWeight(0); this._xfade = null; }
-    }
+    this._stepXfade(dt);
     const BC = globalThis.__ewBC ?? (() => {});
     // gesture expiry
     if (this.onceAnim && now > this.onceAnim.until) this.cancelOnce();
