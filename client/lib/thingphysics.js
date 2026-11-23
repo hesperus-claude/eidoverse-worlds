@@ -165,13 +165,13 @@ function bodyArgs() {
   const h = me.bodyHeight?.(), s = me.userScale;
   return { ...(typeof h === 'number' && Number.isFinite(h) && h > 0 ? { height: h } : {}), ...(typeof s === 'number' && Number.isFinite(s) && s > 0 ? { scale: s } : {}) };   // always (1 too): absent, the authority keeps the last size it was sent
 }
-async function sendRequest(verb, args) {
+async function sendRequest(verb, args, { noTeleport = false } = {}) {   // noTeleport: a shove's, for its re-arrive
   if (verb === 'move') args = { ...args, ...bodyArgs() };
   if (lagMs && (verb === 'throw' || verb === 'drop' || verb === 'punt')) await new Promise((res) => setTimeout(res, lagMs));
   const r = await rawSend(verb, args);
   if (verb === 'move' || r?.refused?.code !== 'not-here') return r;
   arrived = false; trackedAt = null; arriveFails = 0; stuck = null;
-  return (await track(true)) ? rawSend(verb, args) : r;
+  return (await track(true, { noTeleport })) ? rawSend(verb, args) : r;
 }
 export { sendRequest as requestWithBody };
 /** Bring the authority's track of my body to where I stand. Resolves true when it's there (or close enough to act). */
@@ -712,7 +712,7 @@ function planPunt(id, v) {
 async function shove(id, v, now) {
   const plan = planPunt(id, v); if (plan) predict(plan);
   await track(true, { noTeleport: true });   // a shove never re-arrives the body (the teleport limiter is for walking)
-  const r = await sendRequest('punt', { id, v, contact: true });
+  const r = await sendRequest('punt', { id, v, contact: true }, { noTeleport: true });
   shoveLog.push({ id, v, t: now, ok: !!r?.ok, code: r?.refused?.code ?? null }); if (shoveLog.length > 32) shoveLog.shift();
   if (!r?.ok) { shover.refused(id, performance.now(), r?.refused?.code); if (pending.delete(id)) presV = -1; bus.emit('shove-refused', { id, refused: r?.refused ?? null });
     if (r?.refused?.code === 'unknown-arg') shoveOn = false; }   // a server from before shove: stop asking
@@ -897,7 +897,7 @@ export const physicsApi = { grab, put, drop, throw: throwHeld, punt, canPunt, gr
     const at = placeHeld(id, h, obj); return { want: at ? { p: at.p.toArray(), q: at.q?.toArray() ?? null } : null, drawn: { p: obj.getWorldPosition(new THREE.Vector3()).toArray(), q: obj.getWorldQuaternion(new THREE.Quaternion()).toArray() }, rec: h }; },
   /** probe surface: the palm frame a holder's hand gives ({p, q} world arrays), and the hold pose a body wears */
   palm: (actorId, side = 'right') => { const o = palmOf(actorId ?? net.you, side, { p: new THREE.Vector3(), q: new THREE.Quaternion() }); return o ? { p: o.p.toArray(), q: o.q.toArray() } : null; },
-  track: (o) => track(true, o), request: (verb, args) => sendRequest(verb, args), frame: (wall) => frame(wall),
+  track: (o) => track(true, o), request: (verb, args, o) => sendRequest(verb, args, o), frame: (wall) => frame(wall),
   /** the canonical fold's flights: id -> the launch seq it flies from */
   launched: () => Object.fromEntries(Object.entries(replica.sim?.launched ?? {}).map(([id, l]) => [id, l.seq])),
   /** what this client believes about its authority-tracked body (diagnostics) */

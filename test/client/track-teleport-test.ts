@@ -52,4 +52,12 @@ const { bus } = await import('../../client/lib/base.js');
 bus.emit('cut-adopted'); T = 20_000; await tp.physicsApi.track({ noTeleport: true });
 check('a noTeleport track that has to arrive sends its move, refused, and does NOT teleport', tp.physicsApi.body().lastMove?.arrive === true && teleports() === 2, `${teleports()} teleports; ${JSON.stringify(tp.physicsApi.body().lastMove)}`);
 
+// …nor does the re-arrive a punt's not-here refusal triggers inside sendRequest, when the punt is a shove's (#611)
+S.setReply((verb: string, a: any) => (verb === 'punt' ? { ok: false, refused: { code: 'not-here' } }
+  : verb !== 'move' || a.teleport ? { ok: true } : { ok: false, refused: { code: 'too-fast' } }));
+T = 40_000; const nP = S.sent.length;
+await tp.physicsApi.request('punt', { id: 'ball', v: [1, 0, 0], contact: true }, { noTeleport: true });
+check('a shove\'s punt refused not-here re-arrives without teleporting', teleports() === 2 && S.sent.slice(nP).some(([v, a]: any) => v === 'move' && !a.teleport),
+  `${teleports()} teleports; ${JSON.stringify(S.sent.slice(nP))}`);
+
 SU.done();
