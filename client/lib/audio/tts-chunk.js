@@ -4,7 +4,7 @@
  * Batch port of the token-router's LiveSay aggregation. The constants are measured: a
  * 152-char sentence is ≈ 5s of unbroken speech, so clauses past 90 chars get a soft split.
  * Sanitization lives here too: markdown marks and pictographic emoji are dropped for the voice only
- * (piper reads emoji by name; skin tones go with them; a flag's regional-indicator letters survive); the say keeps its glyphs.
+ * (piper reads emoji by name; skin tones, flags, keycap marks and tag chars go with them); the say keeps its glyphs.
  */
 
 const ABBREVS = new Set([
@@ -19,16 +19,17 @@ const MIN_LEN = 20;
 const SOFT_LEN = 90;
 const SOFT_MIN = 35;
 
-/** Text → what the larynx gets. ``` fenced code is dropped entirely (a ~~~ fence isn't); URLs become "link" (espeak spells
+/** Text → what the larynx gets. ``` and ~~~ fenced code is dropped entirely; URLs become "link" (espeak spells
  *  them out) and [label](url) keeps its label; symbols espeak would name aloud become the pause
  *  they meant. Times (6:04) keep their colon. */
 export function spokenForm(text) {
   return text
-    .replace(/```[\s\S]*?(?:```|$)/g, ' ')                     // fenced code never speaks
+    .replace(/(```|~~~)[\s\S]*?(?:\1|$)/g, ' ')                 // fenced code (either fence) never speaks
     .replace(/\[([^\]]{1,80})\]\((?:[^)]+)\)/g, '$1')           // [label](url) → label
     .replace(/\bhttps?:\/\/\S+/gi, 'link')                     // bare URLs → "link"
     .replace(/[*_`#]+/g, '')
-    .replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\u{FE0F}\u{200D}]/gu, '')   // a skin tone goes with its emoji
+    // a skin tone goes with its emoji; flags (regional indicators), keycap U+20E3 and tag chars too
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Regional_Indicator}\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, '')
     .replace(/[→⇒↔▸▶◦‣·•]+/g, ', ')                            // glyphs espeak names aloud
     .replace(/(?:->|=>|::)+/g, ', ')                           // ASCII arrows / double colon
     .replace(/(?<=[a-zA-Z])[:](?=[a-zA-Z])/g, ', ')            // world:staging → pause, 6:04 untouched
