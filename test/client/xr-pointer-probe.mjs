@@ -439,6 +439,33 @@ try {
   check('…drifting off the pill past its get-on slack (the raw ray finds nothing), within the stay margin: still held, still hovered', plate.nearOffRaw === null && plate.nearOff.held === 'plate:vrpeer' && plate.nearOff.bent && plate.nearOff.hover === 'vrpeer', J(plate));
   check('…past the stay margin: let go, no hover', plate.far.held === null && plate.far.hover !== 'vrpeer', J(plate.far));
 
+  // ---- 6b. the LEFT hand alone (G2-005): with the right controller gone, the left laser still clicks a panel control ----
+  const solo = await ev(pg, async () => {
+    const dq = __h.dq, dev = window.__iwerDevice, sess = EW.renderer.xr.getSession();
+    const sides = () => [...sess.inputSources].map((s) => s.handedness).sort().join(',');
+    for (const q of dq.domQuadIds()) dq.domQuadShow(q, q === 'settings');
+    await new Promise((r) => setTimeout(r, 400)); await __h.frames(3);
+    const tab = document.getElementById('sec-vr-tab'); tab.scrollIntoView({ block: 'nearest', inline: 'center' }); await new Promise((r) => setTimeout(r, 300));
+    const r = __h.rectIn('settings', tab);
+    __h.down('right');
+    dev.controllers.right.connected = false;
+    const t0 = performance.now(); while (sides() !== 'left' && performance.now() - t0 < 5000) await __h.frames(1);
+    const only = sides();
+    const before = __h.clicksOn(tab);
+    __h.aimAt('left', 'settings', r.cx, r.cy); await __h.frames(8);
+    const heldBefore = __h.dbg('left').held, beam = __h.xr.xrHands().left.laser.visible;
+    await __h.pull('left'); await new Promise((r) => setTimeout(r, 400));
+    const clicked = __h.clicksOn(tab) - before;
+    __h.down('left');
+    dev.controllers.right.connected = true;
+    const t1 = performance.now(); while (sides() !== 'left,right' && performance.now() - t1 < 5000) await __h.frames(1);
+    await new Promise((r) => setTimeout(r, 1200));   // a re-added source is untrusted for 700 ms (xr.js inputsSettledAt)
+    return { only, beam, heldBefore, clicked, back: sides() };
+  });
+  console.log('  · left alone', J(solo));
+  check('stage: the right controller is disconnected (only a left input source)', solo.only === 'left', J(solo));
+  check('the left hand alone: its laser holds a panel control and its trigger clicks it (G2-005)', solo.beam && solo.heldBefore?.kind === 'panel' && solo.clicked === 1, J(solo));
+
   // ---- 7. leave VR; the setting survives a reload --------------------------------------------------------------------
   await ev(pg, () => { __h.prefs.setXrPref('pointerVisibility', 'always'); __h.xr.leaveVR('probe'); });
   await pg.waitForFunction(() => !EW.renderer.xr.isPresenting, null, { timeout: 30000, polling: 250 });

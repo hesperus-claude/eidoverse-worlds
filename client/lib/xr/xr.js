@@ -1,8 +1,8 @@
 // xr — the door into the headset, and everything your hands do inside it.
 //
 // Owns the session and rig, and the hands: stick locomotion only fills xrIntent (the controller does the moving),
-// either hand's ray feeds sceneSelect (the xr:select event, main.js; the left one only while a right controller is
-// connected: the pointer loop sits inside the right-stick block), grip alone grabs a panel by its background or title (never by a control),
+// either hand's ray feeds sceneSelect (the xr:select event, main.js), with or without the other controller connected,
+// grip alone grabs a panel by its background or title (never by a control),
 // and the radial menu opens panels and local acts (recentre, ears, mic, leave). Never navigate mid-session.
 
 import { confirmCenter } from '../edit/confirmcenter.js';
@@ -896,14 +896,15 @@ export function updateXR(dtSec = 1 / 72) {
       const hid = xrPanelsHideToggle(); haptic('left', 0.3, 20); haptic('right', 0.3, 20); tee(`[xr] panels ${hid ? 'hidden' : 'shown'} (B/Y)`);
     }
     menuBtnWas = by; }
+  const ringOpenAtStart = radialOpen;   // a grip that closes the ring this frame is spent: it must not also grab
+  let ry = 0;   // the right stick's Y: it scrolls the panel under the right laser (the pointer loop below)
   if (R) {
     const rx = dead(pickAxis(R.axes[2], R.axes[0]));
-    const ry = dead(pickAxis(R.axes[3], R.axes[1]));
+    ry = dead(pickAxis(R.axes[3], R.axes[1]));
     const pressed = !!R.buttons[3]?.pressed;              // thumbstick click
     // CLICK / LATCH / TRIGGER: stick click opens and closes; grip cancels; 12 s idle closes (each close tees its
     // cause). Aim latches (deflect > 0.5) and stays when the stick springs back; trigger activates; a flick (back
     // within 220 ms) activates too; releasing the click while deflected within 700 ms commits (hold-aim-release).
-    const ringOpenAtStart = radialOpen;   // a grip that closes the ring this frame is spent: it must not also grab
     const gripNow = !!R.buttons[1]?.pressed;
     const trigNow = !!R.buttons[0]?.pressed;
     const magNow = Math.hypot(rx, ry);
@@ -946,8 +947,9 @@ export function updateXR(dtSec = 1 / 72) {
     } else if (Math.abs(rx) < 0.3) snapState.cooling = false;
     stickPressWas = pressed;
     if (xrIntent.fwd || xrIntent.strafe || turnMag || pressed) markActive();   // sticks are input too: a presenting person is not 'away' (presence.js listens to DOM events only)
-
-    // pointer + grab chord on BOTH hands, one thing held at a time; the ring stays on the right
+  }
+  {
+    // pointer + grab chord on BOTH hands (either may be the only one connected), one thing held at a time; the ring stays on the right
     const eye = renderer.xr.getCamera();
     for (const side of ['right', 'left']) {
       const G = side === 'right' ? R : L; const hand = hands[side];
