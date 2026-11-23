@@ -7,6 +7,7 @@ import { MAX_WATER, MAX_AIR, mediumAt } from '../../../shared/water.js';
 import { zonesOf, waterVolumes, physicsVolumesOf, speedFactorAt, zoneChangeTouches, foldOfView, fogSlots, worldLevelAt, lookOf, lookChangeTouches, waterBox, headingOf } from '../../../shared/zone.js';
 import { worldPose } from '../../../shared/protocol/simlayer.js';
 import { levelWaterInfo, surfaceHeightAt, waterAt as levelWaterAt, showUnderside } from '../water.js';
+import { serverNow } from '../serverclock.js';   // the shared wave clock: the authority's time
 // the sky's under-water switch, injected by main.js (setSkyHider): importing sky.js here would pull the whole sky
 // into everything that imports this module
 let hideSkyForWater = (_on) => {};
@@ -15,9 +16,6 @@ const { uniform, uniformArray, positionWorld, cameraPosition, output, Fn, Loop, 
   array, select, min, max, exp, exp2, distance, all } = TSL;
 let objects = () => new Map();
 export function setWaterObjects(fn) { objects = fn; }
-// the shared wave clock (server time, serverclock.js), injected by main.js (setWaterClock)
-let serverNow = () => Date.now();
-export function setWaterClock(fn) { serverNow = fn; }
 const waters = [], airs = [], airMasks = [], surfaces = [];
 let zonesNow = { bodies: [], exclusions: [] }, volumesNow = { waters: [], airs: [] }, physicsNow = [];   // the whole of the last build, for the CPU readers
 const clock = uniform(0), waterCount = uniform(0,'int'), airCount = uniform(0,'int');

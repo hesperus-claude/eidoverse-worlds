@@ -4,7 +4,7 @@
 // The client owns its own avatar; the server sequences and relays. Every system lives in lib/: identity and the `me`
 // handle in mybody.js, my body's physics in localbody.js, consent in consent.js, voice mouths in voicemouths.js,
 // /commands in lib/ui/commands/. lite.js is the renderer-free sibling.
-import { updateWater, updateWaterView, setWaterObjects, setWaterClock, setSkyHider, waterDebug, applyEnvLight } from './lib/realize/watervolumes.js';
+import { updateWater, updateWaterView, setWaterObjects, setSkyHider, waterDebug, applyEnvLight } from './lib/realize/watervolumes.js';
 
 import { say } from './lib/net.js';
 import { updateHelm, helmHull } from './lib/player/vehicles.js';
@@ -511,7 +511,6 @@ registerSystem('rig', (dt, t, now) => updateRig(now));          // light slots f
 registerSystem('sounds', () => tickSounds(), { every: 2 });      // panners follow entities, the listener the camera
 setWaterObjects(() => entities);
 setClimbObjects(() => entities);   // climb routes resolve through their hosts' live objects (client/lib/player/climb.js)
-setWaterClock(serverNow);
 setSkyHider(hideSkyForWater);
 registerSystem('water', updateWater);
 registerSystem('me-drive', (dt) => {
