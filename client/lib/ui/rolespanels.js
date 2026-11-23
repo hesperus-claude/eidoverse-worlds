@@ -284,7 +284,7 @@ function paintCard(body) {
     + `<label class="rp-field rp-wide">Description <textarea data-k="text" rows="4" ${edit ? '' : 'disabled'}>${esc(ab.text ?? '')}</textarea></label>`
     + `<p class="rp-dim">address: <code>${esc(CONFIG.params.get('world') ?? '')}</code></p>${edit ? '<button type="button" class="rp-btn" data-save>Save</button>' : ro('the owner (or someone with editWorld)')}`;
   body.querySelectorAll('input,textarea').forEach((x) => x.addEventListener('keydown', (e) => e.stopPropagation()));
-  body.querySelector('[data-save]')?.addEventListener('click', () => act('set', { id: '@world', component: 'about', value: { name: body.querySelector('[data-k=name]').value, text: body.querySelector('[data-k=text]').value } }, 'the card', () => paintCard(body)));
+  body.querySelector('[data-save]')?.addEventListener('click', () => act('set', { id: '@world', component: 'about', value: { name: body.querySelector('[data-k=name]').value, text: body.querySelector('[data-k=text]').value } }, 'the card').then((r) => { if (r?.ok) paintCard(body); }));   // a refusal keeps the draft (G2-047)
 }
 function paintPlaces(body) {
   const sp = wc().spawn ?? null, bd = wc().bounds ?? null; const edit = has('editWorld');

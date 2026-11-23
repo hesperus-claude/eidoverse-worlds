@@ -9,10 +9,11 @@ const S = suite("rolespanels-access");
 const check = (name: string, ok: unknown, detail?: unknown) => S.check(name, ok, detail);
 const L = "../../client/lib/";
 const sent: any[] = [];
+let reply: any = { ok: true };   // what sendRequest answers
 const replica: any = { st: { entities: { "@world": { c: {} } } } };
 const net: any = { you: "u-owner", myRights: { role: "owner", rank: 100, permissions: [] } };
 mock.module(L + "net.js", () => ({ net, replica, identities: new Map(), personName: (id: string) => id,
-  sendRequest: async (verb: string, args: any) => { sent.push({ verb, args }); return { ok: true }; } }));
+  sendRequest: async (verb: string, args: any) => { sent.push({ verb, args }); return reply; } }));
 mock.module(L + "base.js", () => ({ bus: { on() {}, emit() {} }, report() {}, CONFIG: { params: new URLSearchParams("world=t") } }));
 mock.module(L + "ui/ui.js", () => ({ makeSection: () => ({}), moderationFrame: () => null, worldSettingsFrame: () => null, toast() {} }));
 mock.module(L + "ui/ui-dock.js", () => ({ setDockEntry() {} }));
@@ -44,6 +45,13 @@ for (const door of ["open", "public"]) {
   const b = document.createElement("div"); document.body.append(b); _test.paintCard(b);
   const name = b.querySelector("[data-k=name]") as any, text = b.querySelector("[data-k=text]") as any;
   check("G2-047 the card's name and description carry no maxlength", !name.hasAttribute("maxlength") && !text.hasAttribute("maxlength"), name.outerHTML.slice(0, 80));
+  // with no maxlength an overlong draft reaches the authority: its refusal must not repaint the draft away
+  reply = { ok: false, refused: { code: "bounds", reason: "about.text is 2,001 characters; it must be ≤ 2000" } };
+  name.value = "Draft name"; text.value = "é".repeat(2001);
+  (b.querySelector("[data-save]") as any).click(); await settle();
+  const n2 = b.querySelector("[data-k=name]") as any, t2 = b.querySelector("[data-k=text]") as any;
+  check("G2-047 a refused save keeps the draft in both fields", sent.length === 1 && n2.value === "Draft name" && t2.value === "é".repeat(2001), JSON.stringify({ sent: sent.length, name: n2.value, text: t2.value.length }));
+  reply = { ok: true };
   b.remove();
 }
 S.done();
