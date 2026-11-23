@@ -54,6 +54,10 @@ say(alice, "fence after the discord line");
 await tryUntil("the fence line reaches Discord", () => /→ discord \[alice\]: fence after the discord line/.test(out));
 
 console.log("\nchatbridge — world ⇄ Discord (DRY_RUN) on a world\n");
+// the Discord → world loop gate, as the bridge's messageCreate reads it (no Discord in this test: the gate itself)
+{ const { skipFromDiscord: skip } = await import(join(ROOT, BRIDGE)); const own = { hookId: "h1", selfId: "me" };
+  check("loop gate: our own webhook mirror and a bot are skipped, a person is not (humans only by default)", skip({ webhookId: "h1", author: { id: "me", bot: true } }, own, false) && skip({ author: { id: "b2", bot: true } }, own, false) && !skip({ author: { id: "p1" } }, own, false));
+  check("loop gate: with ALLOW_BOTS and no webhook, the bridge's own posts (its bot account) are still skipped, another bot is not", skip({ author: { id: "me", bot: true } }, { hookId: null, selfId: "me" }, true) && !skip({ author: { id: "b2", bot: true } }, own, true)); }
 check('the bridge joins (replica) embodied, as "discord"', /joined "commons" as discord/.test(out), out.slice(-300));
 check("a world say reaches Discord, attributed to its speaker's display name (not the opaque id)", /→ discord \[alice\]: hello from the world/.test(out), out.slice(-300));
 check("history from before the join is not mirrored", !/before the bridge/.test(out));

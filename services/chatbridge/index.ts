@@ -22,8 +22,9 @@ import { helloOf } from "../../shared/protocol/hello.js";
 //   world → Discord: entries whose actor is the bridge's own identity (the
 //     snapshot's `actor`) are skipped — that covers the echo of every line it
 //     just spoke.
-//   Discord → world: messages from bots/webhooks are skipped — that covers
-//     the bridge's own posts (and any other bot; humans only by default).
+//   Discord → world: the bridge's own posts (its webhook, or its bot account)
+//     are always skipped; other bots/webhooks too unless ALLOW_BOTS (humans
+//     only by default).
 //
 // Env:
 //   WORLD_URL      ws(s)://host/ws            (default ws://127.0.0.1:8940/ws)
@@ -32,8 +33,8 @@ import { helloOf } from "../../shared/protocol/hello.js";
 //   BRIDGE_ID      in-world identity           (default "discord")
 //   DISCORD_TOKEN  bot token                   (omit with DRY_RUN=1)
 //   CHANNEL_ID     the mirrored text channel
-//   ALLOW_BOTS=1   relay other bots' Discord messages too (default: humans only); with no
-//                  webhook this relays the bridge's own posts back too (an echo loop)
+//   ALLOW_BOTS=1   relay other bots' Discord messages too (default: humans only); never
+//                  the bridge's own posts
 //   DRY_RUN=1      no Discord: world lines print to stdout, stdin lines of the
 //                  form "Name: text" play the part of Discord messages — lets
 //                  the world half be rehearsed before bot credentials exist
@@ -226,6 +227,11 @@ function connectWorld() {
 
 // ---------------------------------------------------------------- discord
 
+/** The Discord → world loop gate: our own posts always (the webhook mirror, or the bot account's plain posts); other
+ *  bots and webhooks unless ALLOW_BOTS. */
+export const skipFromDiscord = (m: any, own: { hookId?: string | null; selfId?: string | null }, allowBots = ALLOW_BOTS) =>
+  (!!m.webhookId && m.webhookId === own.hookId) || (!!m.author?.id && m.author.id === own.selfId) || (!!(m.author?.bot || m.webhookId) && !allowBots);
+
 async function connectDiscord() {
   if (DRY_RUN) {
     log("DRY_RUN — stdin plays Discord: type lines like  Name: hello world");
@@ -268,8 +274,7 @@ async function connectDiscord() {
 
   client.on("messageCreate", (m: any) => {
     if (m.channelId !== CHANNEL_ID) return;
-    if (m.webhookId && m.webhookId === (postHook as any)?.id) return; // our own webhook mirror, always (posted as the bot, only the bot gate below skips it)
-    if ((m.author?.bot || m.webhookId) && !ALLOW_BOTS) return; // loop gate + bot hygiene
+    if (skipFromDiscord(m, { hookId: (postHook as any)?.id, selfId: client.user?.id })) return;
     let text = String(m.content ?? "").replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, "").trim();
     const files = [...(m.attachments?.values?.() ?? [])].map((a: any) => a.url).filter(Boolean);
     if (files.length) text = [text, ...files].filter(Boolean).join(" ");
@@ -280,6 +285,8 @@ async function connectDiscord() {
   });
 }
 
-await connectDiscord();
-connectWorld();
-log(`bridging world "${WORLD_NAME}" (${WORLD_URL}) as "${BRIDGE_ID}" — ${DRY_RUN ? "DRY RUN" : `channel ${CHANNEL_ID}`}`);
+if (import.meta.main) {   // run as the bridge; imported (chatbridge-test), only its pure parts
+  await connectDiscord();
+  connectWorld();
+  log(`bridging world "${WORLD_NAME}" (${WORLD_URL}) as "${BRIDGE_ID}" — ${DRY_RUN ? "DRY RUN" : `channel ${CHANNEL_ID}`}`);
+}
