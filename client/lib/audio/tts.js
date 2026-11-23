@@ -221,16 +221,8 @@ function monitor(pcm, sampleRate) {
 }
 
 /** Resample to OUT_RATE with an OfflineAudioContext (WebAudio's own good resampler), so WebRTC
- *  never uses a cheap one. localStorage.eidoTtsResample = 'off' skips it: the samples still go out labelled OUT_RATE,
- *  so a voice at another rate plays at the wrong speed. */
+ *  never uses a cheap one. */
 async function toOutRate(pcm, inRate) {
-  try {
-    if (localStorage.getItem('eidoTtsResample') === 'off') {
-      const f = new Float32Array(pcm.length);
-      for (let i = 0; i < pcm.length; i++) f[i] = pcm[i] / 32768;
-      return f;
-    }
-  } catch { /* private mode */ }
   if (inRate === OUT_RATE) {
     const f = new Float32Array(pcm.length);
     for (let i = 0; i < pcm.length; i++) f[i] = pcm[i] / 32768;
