@@ -44,6 +44,11 @@ const read = (dir: string, f: string) => fs.readFileSync(path.join(dir, f), "utf
   const r3 = run(d, ["--check"]);
   check("MV2c a known row that resolves now fails as stale", r3.status === 1 && r3.out.includes("STALE b.ts ./gone.js"), r3.out); }
 
+// MV10: --check reads template-literal specifiers too; an interpolated one is skipped (it names a family, not a file)
+{ const d = tree("tpl", { "b.ts": "await import(`./gone.js`);\nawait import(`./x/${'${name}'}.js`);\n" });
+  const r = run(d, ["--check"]);
+  check("MV10 a template specifier that names nothing fails --check; an interpolated one is not accused", r.status === 1 && r.out.includes("UNRESOLVED b.ts:1 ./gone.js") && !r.out.includes("b.ts:2"), r.out); }
+
 // MV9: a specifier that leaves the checkout is unresolved even when the file exists beside it (a sibling library is on
 // one machine and not another), so it must be listed
 { const d = tree("outside", { "a/b.ts": `import "../../outside-mv9.js";\n` });

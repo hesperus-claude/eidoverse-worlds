@@ -1,6 +1,6 @@
 // tools/mv-module.ts — move engine files and rewrite every path that names them: resolved, never substituted blind.
 //   bun tools/mv-module.ts <from> <to> [<from> <to> …]     a file to a file, or a directory to a directory
-//   bun tools/mv-module.ts --check                            only verify the quoted relative specifiers (templates aren't read; see check())
+//   bun tools/mv-module.ts --check                            only verify the relative specifiers, template literals included (see check())
 // For each tracked text file (docs/history, spec/history and CHANGELOGs keep the paths of their day):
 //   1. a relative import specifier (from/import/export, import(), new URL(…, import.meta.url), require) is resolved from
 //      the importer's OLD place and rewritten from its NEW place to the target's NEW place: a moved importer and a moved
@@ -29,6 +29,8 @@ const HISTORY = [/^docs\/history\//, /^spec\/history\//, /CHANGELOG[^/]*\.md$/];
 const TEXT = /\.(md|ts|js|mjs|cjs|json|jsonl|sh|html|css|ya?ml|txt|toml)$/;
 const CODE = /\.(ts|js|mjs|cjs|html)$/;
 const SPEC = /(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\bexport\s*\*\s*from\s*|\brequire\s*\(\s*|new\s+URL\s*\(\s*|import\.meta\.resolve\s*\(\s*)(['"])(\.\.?\/[^'"\n]*)\2/g;
+// --check reads template literals too (an interpolated tail is skipped there); the mover still lists them as READ rows
+const CHECK_SPEC = new RegExp(SPEC.source.replace(`(['"])`, "(['\"`])").replace(`[^'"\\n]`, "[^'\"`\\n]"), "g");
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const exists = (p: string) => [""].concat(".ts", ".js", ".mjs").some((e) => fs.existsSync(path.join(ROOT, p + e)));
 /** Where a relative specifier in `f` names something: beside f; else, outside client/, a page-relative ./lib/ or ./vendor/
@@ -144,7 +146,7 @@ console.log(`moved ${move.size} files; rewrote ${counts.spec} specifiers, ${coun
 for (const n of [...new Set(notes)]) console.log("READ  " + n);
 process.exit(check() ? 0 : 1);
 
-/** Every quoted (not template) relative specifier in a tracked code file names something (base()), or is in KNOWN with why
+/** Every quoted or template relative specifier (an interpolated one skipped) in a tracked code file names something (base()), or is in KNOWN with why
  *  it names nothing (a runtime file, fixture text, a comment); a KNOWN row that now resolves or is gone fails too. */
 function check(): boolean {
   const known: Record<string, string> = JSON.parse(fs.readFileSync(path.join(ROOT, KNOWN), "utf8"));
@@ -152,7 +154,7 @@ function check(): boolean {
   for (const f of tracked()) {
     if (!CODE.test(f) || /(^|\/)node_modules\//.test(f)) continue;
     let s: string; try { s = fs.readFileSync(path.join(ROOT, f), "utf8"); } catch { continue; }
-    for (const m of s.matchAll(SPEC)) {
+    for (const m of s.matchAll(CHECK_SPEC)) {
       if (/^new/.test(m[1]) && !/^\s*,\s*import\.meta\.url/.test(s.slice(m.index! + m[0].length))) continue;
       const bare = m[3].replace(/[?#].*$/, "");
       if (/\$\{|\*|<|…/.test(bare) || base(f, bare)) continue;
