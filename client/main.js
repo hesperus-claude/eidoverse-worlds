@@ -16,7 +16,7 @@ import { versionReady } from './lib/version.js';
 import { makeAvatar, makeCapsuleAvatar, ANIM_ORDER } from './lib/avatar/avatar.js';
 import { contributeThumbnail } from './lib/avatar/avatar-thumbnail.js';
 import { updateSky, updateAutoSystems, skyArgs, setCloudQuality, hideSkyForWater } from './lib/sky/sky.js';
-import { setSkyArgsSource, entities, buildsPending, anyBuildsPending, avatarMounts, roleOf, worldHasOwner, bagOf, bags, seatSocket, socketsOn, currentTerrainArgs, terrainEditBase, noteTerrainSent, terrainPending } from './lib/world.js';
+import { entities, buildsPending, anyBuildsPending, avatarMounts, roleOf, worldHasOwner, bagOf, bags, seatSocket, socketsOn, currentTerrainArgs, terrainEditBase, noteTerrainSent, terrainPending } from './lib/world.js';
 import { presence } from './lib/ui/presence.js';
 import { initWorldQuad } from './lib/xr/worldquad.js';
 import { foldParity } from './lib/debug/parity.js';
@@ -148,7 +148,6 @@ const isViewer = CONFIG.spectate || CONFIG.renderer;
 
 // ---------------------------------------------------------------- realizers
 
-setSkyArgsSource(skyArgs);
 setResidencyFocus(() => myState?.pos ?? null);   // the body anchors residency
 // a renderer takes a snapshot only once the world is realized around the body it follows (net_capture.js settle);
 // shaders still warming do not block (a stall, never a missing object)

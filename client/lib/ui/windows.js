@@ -247,7 +247,7 @@ function fitsDefaults() {
  * @param id       stable key for the saved layout
  * @param opts     { title, x, y, w, h, minW, minH, resizable, closable, hidden, onResize, className }
  *                 x/y accept negatives to anchor from the right/bottom edge, and 'center'. DEFAULT_LAYOUT[id]
- *                 overrides what it names. (collapsible is accepted and unused.)
+ *                 overrides what it names.
  */
 export function makeFrame(id, opts = {}) {
   let docked = null;   // declared FIRST: paint()/fit() read it, and a let in the TDZ throws at construction
@@ -255,7 +255,7 @@ export function makeFrame(id, opts = {}) {
   opts = { ...opts, ...(DEFAULT_LAYOUT[id] ?? {}) };
   const {
     title = id, w = 300, h = 220, minW = 170, minH = 90,
-    resizable = true, collapsible = true, closable = true,
+    resizable = true, closable = true,
     hidden = false, onResize = null, className = '',
   } = opts;
 

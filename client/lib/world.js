@@ -475,8 +475,3 @@ export function mountTransform(occupantId, outPos, occ, poseOffset = null) {
   return { q: _mtR.toArray(), socketPos, socketQ: socketQw.toArray(), body, sock, upright, yaw: Math.atan2(_mtF.x, _mtF.z), pose: body?.clip ?? 'sitchair', to: s.id, host: s.host, slot: s.name ?? null,
     seatState: state, seatReason: reason };
 }
-
-// sky.js owns the current sky args; main.js hands in the reader so the module graph stays one-directional
-let currentSkyArgs = () => ({});
-export function setSkyArgsSource(fn) { currentSkyArgs = fn; }
-

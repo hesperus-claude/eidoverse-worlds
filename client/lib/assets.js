@@ -98,46 +98,44 @@ function noteBytes(path, len) {
 
 export async function fetchBytes(path) {
   if (byteCache.has(path)) { touchBytes(path); return byteCache.get(path); }
-  if (!byteCache.has(path)) {
-    byteCache.set(path, (async () => {
-      loadTrack(path, path.split('/').pop().split('?')[0]);
-      demandStart();
-      try {
-        // 3 tries on 5xx/network (a failure before the response; one mid-body is not retried); evict on final failure, or a
-        // cached rejection poisons every later ask for the path
-        let r;
-        for (let attempt = 0; ; attempt++) {
-          try { r = await fetch(path); } catch (err) { if (attempt >= 2) throw err; r = null; }
-          if (r && (r.ok || r.status < 500 || attempt >= 2)) break;
-          await new Promise((res) => setTimeout(res, attempt === 0 ? 700 : 1800));
+  byteCache.set(path, (async () => {
+    loadTrack(path, path.split('/').pop().split('?')[0]);
+    demandStart();
+    try {
+      // 3 tries on 5xx/network (a failure before the response; one mid-body is not retried); evict on final failure, or a
+      // cached rejection poisons every later ask for the path
+      let r;
+      for (let attempt = 0; ; attempt++) {
+        try { r = await fetch(path); } catch (err) { if (attempt >= 2) throw err; r = null; }
+        if (r && (r.ok || r.status < 500 || attempt >= 2)) break;
+        await new Promise((res) => setTimeout(res, attempt === 0 ? 700 : 1800));
+      }
+      if (!r.ok) throw new Error(`fetch ${path}: ${r.status}`);
+      const total = Number(r.headers.get('content-length') ?? 0);
+      if (r.body && total > 200_000) { // stream big bodies for byte progress
+        const reader = r.body.getReader();
+        const chunks = [];
+        let got = 0;
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          got += value.length;
+          lastDemandAt = performance.now(); // long downloads keep prefetch parked
+          loadProgress(path, got, total);
         }
-        if (!r.ok) throw new Error(`fetch ${path}: ${r.status}`);
-        const total = Number(r.headers.get('content-length') ?? 0);
-        if (r.body && total > 200_000) { // stream big bodies for byte progress
-          const reader = r.body.getReader();
-          const chunks = [];
-          let got = 0;
-          for (;;) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            chunks.push(value);
-            got += value.length;
-            lastDemandAt = performance.now(); // long downloads keep prefetch parked
-            loadProgress(path, got, total);
-          }
-          const buf = new Uint8Array(got);
-          let o = 0;
-          for (const c of chunks) { buf.set(c, o); o += c.length; }
-          noteBytes(path, buf.byteLength);
-          return buf.buffer;
-        }
-        const ab = await r.arrayBuffer();
-        noteBytes(path, ab.byteLength);
-        return ab;
-      } catch (err) { byteCache.delete(path); throw err; }
-      finally { loadDone(path); demandEnd(); }
-    })());
-  }
+        const buf = new Uint8Array(got);
+        let o = 0;
+        for (const c of chunks) { buf.set(c, o); o += c.length; }
+        noteBytes(path, buf.byteLength);
+        return buf.buffer;
+      }
+      const ab = await r.arrayBuffer();
+      noteBytes(path, ab.byteLength);
+      return ab;
+    } catch (err) { byteCache.delete(path); throw err; }
+    finally { loadDone(path); demandEnd(); }
+  })());
   return byteCache.get(path);
 }
 

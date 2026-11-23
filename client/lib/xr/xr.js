@@ -13,7 +13,7 @@ import { withXREyes } from './xrpass.js';
 import { installDualWarm } from './xrwarm.js';
 import { makeEntryEffects, handleEntryFailure } from './xr_entry_effects.js';
 import { installEntryClock } from './xr_frame_clock.js';
-import { CONFIG, report, bus, tee, wornNameOf } from '../base.js';
+import { CONFIG, report, bus, tee } from '../base.js';
 import { frameDebug } from '../render/frameloop.js';
 import { resetFingers, xrBodyDebug } from './xrbody.js';
 import { stroke, fillPath } from '../ui/icons.js';
