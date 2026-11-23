@@ -257,7 +257,7 @@ export class AgentReach {
       if (refused) {
         if (this.a.reaches.get(limb) === entry) this.a.reaches.delete(limb);
         const { r } = refused, ago = Math.round((Date.now() - r.ts) / 1000);
-        return { ok: false, text: `${limbW} toward ${what}: not shown to anyone — ${refused.by}'s consent refused it (class ${r.cls}): ${String(r.why).replace(String(r.to), refused.by)}${r.fix ? ` — ${r.fix}` : ""}. `
+        return { ok: false, text: `${limbW} toward ${what}: ${refused.fresh ? "not shown to anyone — " : ""}${refused.by}'s consent refused it (class ${r.cls}): ${String(r.why).replace(String(r.to), refused.by)}${r.fix ? ` — ${r.fix}` : ""}. `
           + (refused.fresh ? "The reach is withdrawn; nobody saw your hand there."
             : `That was said ${ago}s ago, and the world says it once per ${REACH_NOTE_MS / 1000}s, so the reach is withdrawn; it may have shown for a moment while this was checked. If they have changed their table since, reach again in ${Math.max(1, Math.ceil((REACH_NOTE_MS - (Date.now() - r.ts)) / 1000))}s.`) };
       }

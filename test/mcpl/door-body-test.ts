@@ -76,6 +76,8 @@ check("(the point between them lands in both bodies)", !!annCls && !!calCls);
   ag.reachRefusals.push(refusal("a-cal", calCls, 1000));
   const r = await ag.reach("rightHand", { p: between });
   check("a refusal the second body said a moment ago stands for a reach again", r.ok === false && /Cal's consent refused it/.test(r.text) && /That was said/.test(r.text), r.text);
+  // ...and, since the hand may have shown while that was checked, it doesn't open with "not shown to anyone" (G2-055)
+  check("...and says the reach may have shown, not that it was shown to no one", /may have shown/.test(r.text) && !/not shown to anyone/.test(r.text), r.text);
 }
 // A point in a body's own frame lands where its pose draws it. Ann's frame here is turned a quarter about +y by her pose's
 // q (a swimmer's whole-body turn), with her yaw left at 0: 2 m in front of her, in her frame, is then at x = 2, in Cal.
