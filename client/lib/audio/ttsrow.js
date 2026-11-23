@@ -20,10 +20,6 @@ let _wantSpeech = false;
 let _inFlight = null;      // one load at a time: a click during a load is a no-op
 let _pending = null;       // a pick missing its other half, kept as a row so it can be resumed (addFile)
 let _loadGen = 0;          // bumped by every load start, so an older load's clear timer leaves a newer load's status alone
-// the voice this row last loaded (id, and the source name it set), and whether a voice was marked while TTS was off: then
-// the tick loads the mark, unless a newer source from outside the row (an agent's window.setVoice) is live, which wins
-let _loadedId = null, _loadedName = null, _markedOff = false;
-const markIsStale = () => _markedOff && _selected !== _loadedId && ttsVoiceName() === _loadedName;
 /** Everything we can speak with: remembered files + this session's endpoints. */
 async function collectVoices() {
   const out = [];
@@ -76,7 +72,7 @@ export function ttsSection(host, onPaint = () => {}) {
      *  Returns false on refusal or failure, so the tick handler can undo itself. */
     async function pick(id) {
       if (id === '__pending') return resumePending();
-      if (id === _selected && ttsAvailable() && !markIsStale()) return true;   // already live
+      if (id === _selected && ttsAvailable()) return true;   // already live
       if (_inFlight) {
         console.log(`[voice] already loading ${_inFlight}; ignoring ${id}`);
         return false;
@@ -117,7 +113,7 @@ export function ttsSection(host, onPaint = () => {}) {
         if (!liveStatus(_busy)) build();
       });
       }
-      _selected = _loadedId = id; _loadedName = ttsVoiceName(); _markedOff = false;
+      _selected = id;
     try { localStorage.setItem('eido.tts.lastVoice', id); } catch { /* private mode */ }
     _needVoice = false;
       // choosing is not enabling: the tick decides whether, the list decides which
@@ -142,7 +138,7 @@ export function ttsSection(host, onPaint = () => {}) {
       await forgetVoice(id);
     }
     // removing the voice that is speaking also stops it
-    if (id === _selected) { setTtsSource(null); setTtsEnabled(false); _selected = _loadedId = _loadedName = null; }
+    if (id === _selected) { setTtsSource(null); setTtsEnabled(false); _selected = null; }
     repaint();
   }
   /** Finish an import once both halves are in hand (addFile and resumePending). */
@@ -172,7 +168,7 @@ export function ttsSection(host, onPaint = () => {}) {
           if (canRemember()) await rememberVoice(id, name, handles, identity);
         } catch (e) { console.warn('[voice] not remembered:', e); }
         _pending = null;
-        _selected = _loadedId = id; _loadedName = ttsVoiceName(); _markedOff = false;
+        _selected = id;
         setTtsEnabled(true);
       } catch (e) {
         report('tts voice', e);
@@ -384,7 +380,7 @@ function headDimmed() {
           select: (id) => {
             if (id === '__pending') return pick(id);
             if (isTtsEnabled()) return pick(id);
-            _selected = id; _markedOff = true;
+            _selected = id;
             try { localStorage.setItem('eido.tts.lastVoice', id); } catch { /* private mode */ }
             build();
           },
@@ -427,7 +423,7 @@ function headDimmed() {
       }
       if (_tickPending) return;   // a load this tick started is running; its completion honours the box
       // ticking means "speak": no voices → refuse and say why; else load the marked voice (last used, else first)
-      if (ttsAvailable() && !markIsStale()) {   // a voice marked while off is loaded below instead
+      if (ttsAvailable()) {
         _needVoice = false; setTtsEnabled(true);
         if (!syncHead()) repaint(); else onPaint();
         return;
@@ -488,7 +484,7 @@ function headDimmed() {
           select: (id) => {
             if (id === '__pending') return pick(id);
             if (isTtsEnabled()) return pick(id);
-            _selected = id; _markedOff = true;
+            _selected = id;
             try { localStorage.setItem('eido.tts.lastVoice', id); } catch { /* private mode */ }
             build();
           },
