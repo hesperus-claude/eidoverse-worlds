@@ -1366,6 +1366,11 @@ export class WorldAgent {
         if (g && this.ground.pendingTerrain === pend && pend.rev === this.ground.terrainRev) { this.ground.pendingTerrain = null; void this.ground.buildTerrain(pend.args); }
       });
     }
+    // a terrain whose terrain.js read failed: built again once its wait is over (agent-ground.ts terrainRetry)
+    const retry = this.ground.terrainRetry;
+    if (retry && retry.rev === this.ground.terrainRev && Date.now() >= retry.at) {
+      retry.at = Infinity; void this.ground.buildTerrain(retry.args).catch(() => {});
+    }
     // a heightmap world's engine waits for its grid (as the browser's does, thingphysics.js): noise ground would diverge
     const simShape = this.replica?.sim?.sim?.terrain?.shape;
     const simReady = shapeReady(simShape);

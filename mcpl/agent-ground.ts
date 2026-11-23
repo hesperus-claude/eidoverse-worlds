@@ -97,15 +97,22 @@ export class AgentGround {
   /** A heightmap terrain received but not yet buildable — its grid has not arrived. The last ground stands
    *  (never noise in its place); tick() retries the grid, and the arrival builds THIS bag, once. */
   pendingTerrain: { args: any; rev: number; grid: string } | null = null;
+  /** A terrain whose terrain.js read failed: tick() builds it again at `at`, the wait doubling to a minute. */
+  terrainRetry: { args: any; rev: number; at: number; wait: number } | null = null;
   async buildTerrain(args: any) {
     // Builds can overlap (a grid fetch is slow, a terrain edit is not): only the newest one may commit.
     const rev = ++this.terrainRev;
-    if (!this.terrainSrc) {
+    if (!this.terrainSrc) try {
       const r = await fetch(`${this.a.httpBase}/library/eidoverse/terrain.js`, { signal: AbortSignal.timeout(WORLD_READ_MS) });
       if (!r.ok) throw new Error(`terrain.js: HTTP ${r.status}`);
       const src = await r.text();
       (0, eval)(src);
       this.terrainSrc = src;   // cached only once it ran: a failed load is retried (bot #333 107)
+    } catch (e) {
+      // ...by the tick, not only by the world's next terrain change (agent.ts tickInWorld)
+      const wait = Math.min(60_000, (this.terrainRetry?.wait ?? 1000) * 2);
+      if (rev === this.terrainRev) this.terrainRetry = { args, rev, at: Date.now() + wait, wait };
+      throw e;
     }
     // Placed features and heightmaps (shared/terrainshape.js): the agent stands on the same shaped law the
     // client's mesh and the sim use. A heightmap's grid is fetched first; until it is here, the last ground
@@ -128,7 +135,7 @@ export class AgentGround {
     if (rev !== this.terrainRev) return;   // a newer terrain started while this one loaded
     // a body closed while this loaded commits nothing: the height and water fields are the process's, a successor's now
     if (this.a.closed) return;
-    this.pendingTerrain = null;
+    this.pendingTerrain = null; this.terrainRetry = null;
     const flat = flatHeightOf(args);   // a flat terrain is level ground at its height: no mesh to build
     const t = flat !== null ? { heightAt: () => flat } : (globalThis as any).makeTerrain({ ...args, layers: [] });
     this.terrain = shape ? { heightAt: shapedHeightAt(t.heightAt, args) } : t;
@@ -154,7 +161,7 @@ export class AgentGround {
   }
   /** The world's terrain is gone: back on the level floor. A build still on its way commits nothing. */
   dropTerrain() {
-    this.terrainRev++; this.pendingTerrain = null;
+    this.terrainRev++; this.pendingTerrain = null; this.terrainRetry = null;
     if (!this.terrain) return;
     this.terrain = null; this.navTerrainRev++;
     void setHeightField((x, z) => this.a.heightAt(x, z));

@@ -74,6 +74,17 @@ try {
     ag3.close(); release(); await build.catch(() => {});
     check("a terrain build that finishes after its body closed commits no ground", !(ag3 as any).ground.terrain, String(!!(ag3 as any).ground.terrain)); }
 
+  // G2-054: a terrain.js that failed to load is asked for again by the tick, not only by the world's next terrain change
+  { const ag5: any = new WorldAgent({ url: "ws://127.0.0.1:1/ws", name: "regrounded", world: "w" } as any);
+    answer = async () => new Response("<html>503</html>", { status: 503 });
+    await ag5.ground.buildTerrain({ seed: 1, size: 40 }).catch(() => {});
+    answer = async (u) => u.endsWith("/terrain.js") ? new Response("globalThis.makeTerrain = () => ({ heightAt: () => 7 });") : new Response("no", { status: 404 });
+    ag5.joined = true;
+    for (let i = 0; i < 60 && !ag5.ground.terrain; i++) { ag5.tick(); await new Promise((r) => setTimeout(r, 100)); }
+    ag5.joined = false;
+    check("a terrain.js that failed to load is fetched again by the tick, and the ground is built (G2-054)", ag5.ground.heightAt(0, 0) === 7, `ground ${ag5.ground.heightAt(0, 0)}`);
+    ag5.close(); }
+
   // G2-062: the rig and skeleton reads have a deadline too, and a skeleton read that threw or met a 5xx isn't kept as
   // "this body has no skeleton": the next body asks again
   { const { rigBonesFor } = await import("../../mcpl/rigbones.ts");
