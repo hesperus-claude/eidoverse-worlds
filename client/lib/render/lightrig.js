@@ -4,9 +4,10 @@
 // that wants a light (placed lights, emissive lamps, the weather's lightning) makes a REQUEST; slot churn is uniform
 // writes.
 //
-// Assignment is deterministic in (requests, camera): keep/adopted → authored → inferred lamps, then camera distance
-// with an incumbent bonus, then key. `keep` is top priority and escapes the governor's cap, not the pool: more keeps than
-// slots and the farthest glow without casting.
+// Assignment is deterministic in (requests, camera): keep/adopted → authored → inferred lamps, then whether a light
+// can reach the view at all, then what it can deliver there (intensity over the square of its distance, a light outside
+// the frustum paying for how far outside), with an incumbent bonus, then key. `keep` is top priority and escapes the
+// governor's cap, not the pool: more keeps than slots and the lowest-ranked glow without casting.
 //
 // The weather factory scene.add()s its own lightning PointLight, and a foreign light in the scene is a recompile
 // storm, so makeWeatherSystem is handed a Proxy of the scene whose add/remove ADOPT lights into requests (bottom of
@@ -190,6 +191,8 @@ export function requestLight(key, spec) {
     spot: null,       // {angle, inner} (glTF half-angles, rad): a spot, lit from the SPOT pool, shining along obj's -Z
     ...spec, key, slot: -1, sslot: -1,
   });
+  const r = requests.get(key);
+  r.rankIntensity = r.intensity;   // see rankOf
   assignDirty = true;
 }
 /** Patch a live request. Only keys that can change the ordering dirty assignment: a breathing lamp patches
@@ -200,7 +203,8 @@ export function updateRequest(key, patch) {
   if (!r) return;
   Object.assign(r, patch);
   if ('obj' in patch || 'offset' in patch) delete r._joint;   // skinnedPosOf re-derives the dominant joint
-  if (ORDERING_KEYS.some((k) => k in patch)) assignDirty = true;
+  // a re-placed request (models.js re-syncs the whole spec) ranks by its new intensity; a breath alone does not re-rank
+  if (ORDERING_KEYS.some((k) => k in patch)) { r.rankIntensity = r.intensity; assignDirty = true; }
 }
 export function releaseLight(key) {
   if (requests.delete(key)) assignDirty = true;
@@ -265,9 +269,11 @@ export const glowScale = () => dayGlow();
 
 // ---- assignment -------------------------------------------------------------
 // Deterministic in (requests, camera): tier (keep/adopted → authored →
-// inferred), then camera distance with a 15% incumbent bonus (hysteresis),
+// inferred), then reach (a light whose range cannot touch the view frustum
+// lights nothing on screen), then score with an incumbent bonus (hysteresis),
 // then key (stable tiebreak). Recomputed when the request set changes, the
-// camera moves, or 600ms passes — slot WRITES happen every frame regardless.
+// camera moves, a dark mirror lights, or 600ms passes (which is what picks up
+// a turn in place) — slot WRITES happen every frame regardless.
 
 let slotCap = N_SLOTS;
 export function setSlotCap(n) {
@@ -337,25 +343,67 @@ const _p = new THREE.Vector3();
 
 // the camera's WORLD position: in XR the camera is a child of the rig and camera.position is only the head's offset
 const _eye = new THREE.Vector3();
+// The view frustum three culls with, from the camera's world matrix (matrixWorldInverse is only refreshed by a render;
+// in XR the renderer writes both eyes' combined projection into camera.projectionMatrix).
+const _frustum = new THREE.Frustum();
+const _vp = new THREE.Matrix4();
+function viewFrustum() {
+  _vp.copy(camera.matrixWorld).invert().premultiply(camera.projectionMatrix);
+  _frustum.setFromProjectionMatrix(_vp, camera.coordinateSystem, camera.reversedDepth);
+}
+/** Metres p lies outside the view frustum: 0 inside, else its deepest single-plane overshoot (exact past one plane,
+ *  an underestimate past a corner). */
+function outsideView(p) {
+  let out = 0;
+  for (const pl of _frustum.planes) out = Math.max(out, -pl.distanceToPoint(p));
+  return out;
+}
+// Metres of distance a metre outside the frame costs: a lamp 1.5 m behind the eye (1.6 m past the near plane) ranks as
+// if 11 m away, a lamp 0.3 m past an edge pays under 2 m.
+const OFFSCREEN_WEIGHT = 6;
+// below this, nearness stops adding (a lamp at the face would otherwise outrank everything by any margin)
+const RANK_NEAR = 0.5;
+// the incumbent bonus as a ratio on the score: 1/0.85², so equal-intensity lights keep the old 15%-of-distance edge
+const INCUMBENT = 1 / (0.85 * 0.85);
+/** What a request can deliver to the view, for ranking: its intensity over the square of its distance from the eye,
+ *  that distance grown by how far outside the frustum it sits. The intensity is the one last requested with its
+ *  placement (rankIntensity), not a per-frame animation of it: avatar.js breathes the chest lamp's intensity
+ *  between 3% and 100%, and a rank that read the breath would trade slots with it. A light whose range sphere lies
+ *  wholly outside one plane lights nothing on screen (`miss`). */
+function rankOf(r, incumbent) {
+  const p = worldPosOf(r, _p);
+  const out = outsideView(p);
+  const range = (r.mirror ? r.mirror.distance : r.range) || Infinity;   // 0 = no cutoff in three
+  const lum = r.mirror ? r.mirror.intensity : (r.rankIntensity ?? r.intensity) * (r.dayAware ? dayGlow() : 1);
+  const d = p.distanceTo(_eye) + OFFSCREEN_WEIGHT * out;
+  return {
+    r,
+    tier: r.keep ? 0 : r.authored ? 1 : 2,
+    miss: out > range ? 1 : 0,
+    score: (lum / Math.max(RANK_NEAR, d) ** 2) * (incumbent ? INCUMBENT : 1),   // incumbents hold their ground
+    d,
+  };
+}
+const byRank = (a, b) => a.tier - b.tier || a.miss - b.miss || b.score - a.score || a.d - b.d || (a.r.key < b.r.key ? -1 : 1);
+// A mirror (the adopted lightning) takes a slot only while its light is lit, and for MIRROR_HOLD_MS after it goes dark,
+// so a strike's return strokes find it still seated rather than trading a lamp's slot back and forth.
+const MIRROR_HOLD_MS = 1000;
+const mirrorLit = (r, now) => r.mirror.intensity > 0 || now - (r._litAt ?? -Infinity) < MIRROR_HOLD_MS;
+
 function assign(now) {
   lastAssign = now;
-  camera.getWorldPosition(_eye);
+  camera.getWorldPosition(_eye);   // also brings camera.matrixWorld up to date for the frustum
   _lastCam.copy(_eye);
+  viewFrustum();
   assignDirty = false;
   assignSpots();
-  const ranked = [...requests.values()].filter((r) => !r.spot).map((r) => {
-    const d = worldPosOf(r, _p).distanceTo(_eye);
-    return {
-      r,
-      tier: r.keep ? 0 : r.authored ? 1 : 2,
-      d: r.slot >= 0 ? d * 0.85 : d,   // incumbents hold their ground
-    };
-  }).sort((a, b) => a.tier - b.tier || a.d - b.d || (a.r.key < b.r.key ? -1 : 1));
-  // mirrors (the adopted lightning) hold reserved slots: neither distance nor the governor's cap sheds a strike
+  const ranked = [...requests.values()].filter((r) => !r.spot && (!r.mirror || mirrorLit(r, now)))
+    .map((r) => rankOf(r, r.slot >= 0)).sort(byRank);
+  // a lit mirror holds a reserved slot: neither ranking nor the governor's cap sheds a strike
   const mirrors = ranked.filter((x) => x.r.mirror).slice(0, N_SLOTS).map((x) => x.r);
   const nonMirror = ranked.filter((x) => !x.r.mirror);
-  // `keep` is exempt from governor shedding: the cap applies to the tail only. More keeps than slots and the nearest
-  // win; the rest glow without casting.
+  // `keep` is exempt from governor shedding: the cap applies to the tail only. More keeps than slots and the best
+  // ranked win; the rest glow without casting.
   const keeps = nonMirror.filter((x) => x.r.keep)
     .slice(0, Math.max(0, N_SLOTS - mirrors.length))
     .map((x) => x.r);
@@ -540,7 +588,7 @@ function trackShadowFar(pl) {
 }
 
 // ---- the spot pool: its own light type, so its own fixed pool (?spots=N, default 2). Same ranking as the point
-// pool; no shadows.
+// pool (rankOf, against the frustum assign() just built); no shadows.
 const _spotRaw = CONFIG.params.get('spots');   // null when absent: Number(null) is 0
 const _spotParam = _spotRaw == null || _spotRaw === '' ? NaN : Number(_spotRaw);
 const N_SPOT = Number.isFinite(_spotParam) && _spotParam >= 0 ? Math.min(8, Math.round(_spotParam)) : 2;
@@ -552,9 +600,7 @@ for (let i = 0; i < N_SPOT; i++) {
   spotSlots.push(sl);
 }
 function assignSpots() {
-  const ranked = [...requests.values()].filter((r) => r.spot).map((r) => ({ r, tier: r.keep ? 0 : r.authored ? 1 : 2,
-    d: worldPosOf(r, _p).distanceTo(_eye) * (r.sslot >= 0 ? 0.85 : 1) }))
-    .sort((a, b) => a.tier - b.tier || a.d - b.d || (a.r.key < b.r.key ? -1 : 1));
+  const ranked = [...requests.values()].filter((r) => r.spot).map((r) => rankOf(r, r.sslot >= 0)).sort(byRank);
   const win = new Set(ranked.slice(0, N_SPOT).map((x) => x.r));
   for (const r of requests.values()) if (r.sslot >= 0 && (!win.has(r) || !r.spot)) r.sslot = -1;
   const used = new Set([...win].map((r) => r.sslot).filter((i) => i >= 0));
@@ -587,6 +633,12 @@ export function updateRig(now) {
   updateShadow();
   stepFades(now);   // before the pass: a fade begun this frame is drawn at its start amount first
   if (now - lastCasterPass > 300) { lastCasterPass = now; casterPass(); }
+  // the sky system (wx.update) runs before the rig each frame: a strike that just lit takes its slot this frame
+  for (const r of requests.values()) {
+    if (!r.mirror || !(r.mirror.intensity > 0)) continue;
+    r._litAt = now;
+    if (r.slot < 0 && N_SLOTS > 0) assignDirty = true;
+  }
   if (assignDirty || now - lastAssign > 600 || _lastCam.distanceToSquared(camera.getWorldPosition(_eye)) > 2.25) {
     assign(now);
   }
