@@ -2814,8 +2814,7 @@ export class WorldAgent {
 
   /** Where a thing ACTUALLY is right now: the mount chain and any whole-entity
    *  motion, composed by effective.ts with the renderer's closed forms. Numeric
-   *  spatial claims in perception go through this, never `e.pos` (one exception:
-   *  look's room-of, agent-senses localizePoint, still reads the saved pose). */
+   *  spatial claims in perception go through this, never `e.pos`. */
   eff(id: string, nowMs: number): Effective {
     return effectiveWorldTransform(id, {
       entity: (eid) => this.entities.get(eid),

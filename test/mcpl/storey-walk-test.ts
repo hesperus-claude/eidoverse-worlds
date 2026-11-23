@@ -42,6 +42,7 @@ const HOUSE = {
   ],
 };
 const plan = planStructure(HOUSE);
+const groundRoomAt05 = () => describeHere(plan, 0.5, 0.5, 0.1)!;
 const upperY = plan.levels[1].y;      // the upstairs walk surface, grid-local == world here (building at origin, scale 1)
 
 function agentIn(y: number, opts: { pos?: number[]; scale?: number; before?: Record<string, any>; house?: any } = {}) {
@@ -1195,6 +1196,16 @@ console.log("\nGreptile's review of October 19: a floor walk's lowest ground, th
   lying.clip = "ragdoll"; lying.heldPose = { hips: [0, 0, 0, 1] }; lying.heldPoseAuthored = false; lying.pos.y = upperY - 0.7;
   const told = String(lying.look()).split("\n").find((l: string) => l.includes("(inside [house]")) ?? "";
   check("a body laid down upstairs is told the upper floor's room, as a standing one is", told.startsWith(upstairsRoom), told);
+}
+{
+  // G2-056: look's room-of reads where the house IS (eff: its mount chain and motion), not its saved pose. The house is
+  // saved at (20, 0, 20) but carried to the origin, where the body stands in its kitchen.
+  const ag = agentIn(0.1, { pos: [20, 0, 20] });
+  ag.pos = { x: 0.5, y: 0.1, z: 0.5 };
+  const real = ag.eff.bind(ag);
+  ag.eff = (id: string, t: number) => { const fx = real(id, t); return id === "house" && fx.ok ? { ...fx, pos: [0, 0, 0] } : fx; };
+  const told = String(ag.look()).split("\n").find((l: string) => l.includes("(inside [house]")) ?? "";
+  check("look says the room a body is in from where the house is now, not its saved pose (G2-056)", told.startsWith(groundRoomAt05()), told || "(no room line)");
 }
 console.log(failures ? `\n${failures} failed` : "\nall passed");
 process.exit(failures ? 1 : 0);

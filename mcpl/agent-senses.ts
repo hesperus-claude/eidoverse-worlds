@@ -609,7 +609,9 @@ export class AgentSenses {
         const data = recordComponents(e).structure;
         if (!data) continue;
         try {
-          const [lx, ly, lz] = localizePoint(e, me.x, feet, me.z);
+          const fx = this.a.eff(e.id, nowMs);   // where the house IS (its mount chain, its motion), as the ground reads it
+          if (!fx.ok) continue;
+          const [lx, ly, lz] = localizePoint({ pos: fx.pos, yaw: fx.yaw, scale: fx.scale > 0 ? fx.scale : 1 }, me.x, feet, me.z);
           const here = describeHere(this.a.ground.planFor(e.id, data), lx, lz, ly);
           if (here) { L.push(`${here} (inside [${this.a.handle(e.id)}]; sides are the building's own compass.)`); break; }
         } catch { /* one malformed house must not cost the whole percept */ }
