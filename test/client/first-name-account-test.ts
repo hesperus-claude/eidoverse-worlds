@@ -28,5 +28,14 @@ Object.defineProperty(localStorage, "setItem", { value: () => { throw new Error(
 let threw: unknown = null;
 try { setName("Hare"); setToken("tok"); } catch (e) { threw = e; }
 check("a store that throws on write doesn't make a rename (or a token) throw", threw === null && CONFIG.name === "Hare" && CONFIG.token === "tok", String(threw));
+// …and on a browser with no account yet, so the first-name write (ew-account) is tried too: a fresh base.js, same store
+{
+  localStorage.clear();   // no remembered name or account: this load is a first visit
+  const fresh = await import("../../client/lib/base.js?fresh-account");
+  let threw2: unknown = null;
+  const premise = /^guest-/.test(fresh.CONFIG.name) && fresh.CONFIG.account == null;
+  try { fresh.setName("Fox"); } catch (e) { threw2 = e; }
+  check("a first name on a store that throws still becomes the account, without throwing", premise && threw2 === null && fresh.CONFIG.account === "Fox", JSON.stringify({ premise, threw: String(threw2), account: fresh.CONFIG.account }));
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
