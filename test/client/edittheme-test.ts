@@ -141,6 +141,17 @@ const E = paint("edit");
   check("tiles: one full-height target per option, side by side", tiles.length === 3 && tiles.every((r: any) => r.h >= EDIT_VR.minHit) && new Set(tiles.map((r: any) => r.y)).size === 1, JSON.stringify(tiles));
 }
 
+// G3-032: an enum option wider than the panel fits it (its label truncates), never overruns the quad
+{
+  REC = { texts: [], strokes: [], hairlines: [] };
+  const c = document.createElement("canvas");
+  const long = "a very long option name that is wider than the whole panel can ever hold on one line";
+  const regions = renderCanvas(c, [{ t: "enum", k: "wide", label: "mode", value: "a", options: [{ v: "a", label: "a" }, { v: "long", label: long }] }] as any, { width: 522, title: "inspector", theme: "edit" });
+  const pills = regions.filter((r: any) => r.action === "wide");
+  check("G3-032 an enum option wider than the panel stays inside it", pills.length === 2 && pills.every((r: any) => r.x >= 0 && r.x + r.w <= c.width), JSON.stringify({ width: c.width, pills }));
+  check("G3-032 …its label is truncated to fit, not painted whole", !REC.texts.some((t) => t.s === long) && REC.texts.some((t) => t.s.endsWith("…")), JSON.stringify(REC.texts.map((t) => t.s).filter((x) => x.length > 20)));
+}
+
 console.log("\nC. the same dispatch as the legacy painter:");
 {
   const L = paint(null);

@@ -83,11 +83,12 @@ export function paintEdit(canvas, fields, { width = 522, title = '' } = {}) {
   }
 }
 
-/** Enum pills laid out in lines that fit `avail`; a single option wider than `avail` gets a line of its own and overruns it. */
+/** Enum pills laid out in lines that fit `avail`; a single option wider than `avail` gets a line of its own, `avail` wide
+ *  (its label truncates: text() ellipsizes to the pill). */
 function enumLines(g, f, avail) {
   const lines = [[]]; let x = 0;
   for (const o of f.options ?? []) {
-    const w = Math.max(56, g.measureText(String(o.label ?? o.v)).width + 24);
+    const w = Math.min(avail, Math.max(56, g.measureText(String(o.label ?? o.v)).width + 24));   // never past the panel (G3-032)
     if (x > 0 && x + w > avail) { lines.push([]); x = 0; }
     lines.at(-1).push({ o, x, w }); x += w + 6;
   }
