@@ -11,14 +11,23 @@ const said = [];
 mock.module(fileURLToPath(new URL('../../client/lib/net.js', import.meta.url)), () => ({
   say: (text) => { said.push(text); }, sendTyping: () => {}, sendRequest: async () => ({ ok: true }), net: {},
 }));
-mock.module(fileURLToPath(new URL('../../client/lib/ui/ui.js', import.meta.url)), () => ({ flashHint: () => {} }));
+const hints = [];
+mock.module(fileURLToPath(new URL('../../client/lib/ui/ui.js', import.meta.url)), () => ({ flashHint: (m) => { hints.push(m); } }));
 
 // the recognizer: `running` is whether it holds the mic; final() delivers a result as Chrome would
 let rec = null;
 class FakeSR {
+  // lateEnd: stop() holds onend until endNow(), as Chrome fires it asynchronously; failStart: start() throws
+  static lateEnd = false; static failStart = false;
   constructor() { rec = this; this.running = false; this.starts = 0; }
-  start() { if (this.running) throw new Error('already started'); this.running = true; this.starts++; this.onstart?.(); }
-  stop() { if (!this.running) return; this.running = false; this.flush?.(); this.flush = null; this.onend?.(); }
+  start() {
+    if (FakeSR.failStart) throw new Error('InvalidStateError');
+    if (this.running) throw new Error('already started'); this.running = true; this.starts++; this.onstart?.();
+  }
+  stop() {
+    if (!this.running) return; this.running = false; this.flush?.(); this.flush = null;
+    if (FakeSR.lateEnd) this.endNow = () => this.onend?.(); else this.onend?.();
+  }
   abort() { if (!this.running) return; this.running = false; this.flush = null; this.onend?.(); }
   final(text) { const r = [{ transcript: text }]; r.isFinal = true; this.onresult?.({ resultIndex: 0, results: [r] }); }
 }
@@ -67,6 +76,29 @@ vc.setPttMode(false);
 t('VAD again: the recognizer listens', rec.running);
 rec.final('vad again');
 t('VAD again: a final result is posted', posted('vad again'));
+
+// G2-039: a recognizer replaced while its onend is still pending must not clear the new one's `listening`,
+// else arming PTT skips the stop() and the new recognizer keeps the mic with the key up
+FakeSR.lateEnd = true;
+const old = rec;
+vc.setSttConsent(false);
+vc.setSttConsent(true);
+const fresh = rec;
+t('race setup: a new recognizer replaced the old one and listens', fresh !== old && fresh.running);
+old.endNow();
+vc.setPttMode(true);
+t('race: arming PTT after the old onend still stops the new recognizer', !fresh.running);
+fresh.endNow?.();
+vc.setPttMode(false);
+FakeSR.lateEnd = false;
+
+// G2-010: a start() that throws says so in chat, not only in the console
+vc.setSttConsent(false);
+FakeSR.failStart = true;
+hints.length = 0;
+vc.setSttConsent(true);
+FakeSR.failStart = false;
+t('start() throws: a hint names the failure', hints.some((m) => /captions/.test(m) && /InvalidStateError/.test(m)));
 
 console.log(`\n${ok} ok, ${bad} failed`);
 process.exit(bad ? 1 : 0);

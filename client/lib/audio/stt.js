@@ -52,7 +52,7 @@ export function setSTT(on) {
   if (!on) { try { rec?.stop(); } catch { /* already stopped */ } rec = null; listening = draining = false; return; }
   const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition;
   if (!SR) { const m = 'no speech recognition in this browser — voice works, captions don’t'; flashHint(m); logChat('*', m); wanted = false; return; }
-  rec = new SR();
+  const me = rec = new SR();
   rec.continuous = true;
   rec.interimResults = false;
   // a wrong-language recognizer returns confident nothing, so the language is surfaced
@@ -81,6 +81,7 @@ export function setSTT(on) {
   // Chrome ends recognition on silence: restart while wanted AND the mic is live
   // (SpeechRecognition holds its own capture, so the mic toggle must govern it; fails closed).
   rec.onend = () => {
+    if (rec !== me) return;   // a replaced recognizer's late onend must not touch the current one's state
     listening = false;
     const secs = ((performance.now() - firstStart) / 1000).toFixed(0);
     draining = false;
@@ -93,8 +94,8 @@ export function setSTT(on) {
     }
     else if (wanted) { wanted = false; rec = null; mark('stopped: mic is off'); report('stt', 'stopped: mic is off'); }
   };
-  // a caption engine that starts but hears nothing must say so in chat (report() is console-only); a start() that
-  // throws (below) only reports
+  // a caption engine that starts but hears nothing must say so in chat (report() is console-only), as does a start()
+  // that throws (below)
   let sawAudio = false;
   rec.onaudiostart = () => { sawAudio = true; mark('audio reached the recognizer', 'audiostart'); };
   rec.onstart = () => {
@@ -138,7 +139,11 @@ export function setSTT(on) {
     flashHint(m); logChat('*', m);
   };
   if (!keyAllows()) return;   // PTT key up: the press starts it (pttSync)
-  try { rec.start(); listening = true; } catch (e) { report('stt', e); wanted = false; }
+  try { rec.start(); listening = true; } catch (e) {
+    report('stt', e); wanted = false;
+    const m = `captions couldn’t start: ${e?.message ?? e}`;
+    flashHint(m); logChat('*', m);
+  }
 }
 
 // PTT key or mode changed: listen only while the key allows; a release stop()s so held speech still finalizes
