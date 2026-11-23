@@ -144,6 +144,8 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
   renderer.value = 'webgpu'; fire(renderer, 'change');
   check('force WebGPU writes PREF_BACKEND', localStorage.getItem(stub.PREF_BACKEND) === 'webgpu');
   check('the reload button is not duplicated', row(renderer).querySelectorAll('button.reload').length === 1);
+  { const t = (row(renderer).querySelector('button.reload') as HTMLElement).title;
+    check('its reload title names the renderer\'s own override (?webgl=1 / ?webgpu=1), not ?msaa= (G2-050)', t.includes('?webgl=1 or ?webgpu=1') && !t.includes('msaa'), t); }
   renderer.value = 'auto'; fire(renderer, 'change');
   check('auto removes the key', localStorage.getItem(stub.PREF_BACKEND) === null);
   check('force WebGPU is greyed on a machine without WebGPU (stub: WEBGPU_POSSIBLE=false)', (renderer.querySelector('option[value=webgpu]') as HTMLOptionElement).disabled);
@@ -175,6 +177,8 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
   msaa.checked = false; fire(msaa, 'change');
   check('unchecking writes PREF_MSAA=0', localStorage.getItem(stub.PREF_MSAA) === '0', String(localStorage.getItem(stub.PREF_MSAA)));
   check('…and the row needs a reload', !!row(msaa).querySelector('button.reload'));
+  { const t = (row(msaa).querySelector('button.reload') as HTMLElement).title;
+    check('its reload title names ?msaa=, not the renderer\'s parameters (G2-050)', t.includes('?msaa=') && !t.includes('webgl'), t); }
 
   console.log('VIDEO — the same dials as a VR quad');
   const quad = xrPanels.get('settings');

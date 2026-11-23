@@ -43,11 +43,11 @@ function checkRow(label, hint, checked, onChange) {
   return row;
 }
 // a control that only applies next load grows a house button to do it now
-function needsReload(row) {
+function needsReload(row, override) {   // override: the address parameter that beats this row's stored choice
   if (row.querySelector('.reload')) return;
   const b = document.createElement('button');
   b.className = 'reload'; b.textContent = 'reload';
-  b.title = 'this setting applies when the renderer is built — reload now to apply it (a ?msaa= or ?webgl= in the address overrides it)';
+  b.title = `this setting applies when the renderer is built — reload now to apply it (a ${override} in the address overrides it)`;
   b.style.padding = '2px 7px';
   b.onclick = () => location.reload();
   const ctl = row.querySelector('.ctl');
@@ -121,7 +121,7 @@ export function initVideoPanel() {
       rpref,
       (val, row) => {
         if (val === 'auto') lsDel(PREF_BACKEND); else lsSet(PREF_BACKEND, val);
-        needsReload(row);
+        needsReload(row, '?webgl=1 or ?webgpu=1');
         const w = row.querySelector('.rwarn'); if (w) w.remove();
         if (val === 'webgpu' && headsetSeen && !WEBGPU_XR) {
           const warn = document.createElement('div'); warn.className = 'note rwarn';
@@ -183,7 +183,7 @@ export function initVideoPanel() {
     body.appendChild(checkRow('antialiasing',
       '4× MSAA smooths edges; off measured about +10 fps on a 2× screen (core.js §22n). Set when the renderer is built, so it applies on reload'
         + (CONFIG.params.has('msaa') ? ' (this page’s ?msaa= overrides it until you drop it from the address).' : '.'),
-      msaaOn, (on, row) => { lsSet(PREF_MSAA, on ? '1' : '0'); needsReload(row); }));
+      msaaOn, (on, row) => { lsSet(PREF_MSAA, on ? '1' : '0'); needsReload(row, '?msaa='); }));
   }, { id: 'video', host: 'settings' });
   // 🛡 safety: what this browser may fetch from other websites. One row, off by default: VRChat's
   // "Allow Untrusted URLs" (Comfort & Safety). Its own section so it can't be mistaken for a graphics dial.
