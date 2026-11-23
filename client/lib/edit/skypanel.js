@@ -41,17 +41,17 @@ export function paintSky(body) {
   const lines = stateLines();
   lines.el.classList.add('sky-state');
   body.appendChild(lines.el);
-  let lastLogged = null;
+  let lastLogged;   // undefined = never read; null = read, and no sky logged yet
   const readState = () => {
     const L = loggedSky();
+    if (L !== lastLogged) {
+      // someone (maybe you) logged a sky, the world's first included: follow it, unless you're mid-edit
+      const first = lastLogged === undefined;
+      lastLogged = L;
+      if (L && !first && !commit.classList.contains('dirty')) body._sync?.();
+    }
     if (!L) { lines.set('no sky logged yet', skyRendering() ? 'loading…' : null); return; }
     const a = L.args;
-    if (L !== lastLogged) {
-      // someone (maybe you) logged a sky: follow it, unless you're mid-edit
-      const first = lastLogged === null;
-      lastLogged = L;
-      if (!first && !commit.classList.contains('dirty')) body._sync?.();
-    }
     const parts = [];
     if (a.system === 'skymesh') parts.push('basic sky');
     // what actually drives the sun (shared/forecast.js effectiveClock): a tz is the wall clock; one that doesn't resolve leaves the authored hours/rate

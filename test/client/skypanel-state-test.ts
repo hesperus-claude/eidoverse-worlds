@@ -197,7 +197,8 @@ for (const ok of [true, false]) {
 S.reply = { ok: true };
 // G2-084 races: a reply that isn't ok but comes after a log landed: a timed-out write that landed (its own echo), or a
 // refusal while someone else's sky arrived. Either way the log speaks now: never marked unsaved over it.
-for (const [what, echo] of [["a timed-out write that landed (its own echo first)", "own"], ["a refusal while someone else's sky lands", "theirs"]] as const) {
+for (const [what, echo] of [["a timed-out write that landed (its own echo first)", "own"], ["a refusal while someone else's sky lands", "theirs"], ["a refusal while the world's first sky lands", "first"]] as const) {
+  if (echo === "first") S.logged = null;   // a world with no sky logged yet: the panel has read none
   const b = fresh();
   S.reply = echo === "own" ? { ok: false, refused: { code: "timeout", reason: "no answer in 15 s", mayHaveLanded: true } } : { ok: false, refused: { code: "rights", reason: "no" } };
   S.beforeReply = () => { logSky(echo === "own" ? { ...S.sent.at(-1)[1] } : { hours: 3, rate: 0, weather: "rain", clouds: "stratus" }); };
@@ -206,7 +207,9 @@ for (const [what, echo] of [["a timed-out write that landed (its own echo first)
   const btn = b.querySelector("button.dirty") as HTMLButtonElement;
   btn.click();
   await pause("one macrotask: the stub's reply and the click handler behind it", 0);
-  check(`G2-084 ${what}: not marked unsaved`, !btn.classList.contains("dirty") && btn.textContent !== "✓ logged", `${btn.textContent} dirty=${btn.classList.contains("dirty")}`);
+  // the log speaks now: the sliders follow it (a refused value left in them would read as the world's), nothing unsaved
+  check(`G2-084 ${what}: not marked unsaved, and the panel follows the log`, !btn.classList.contains("dirty") && btn.textContent !== "✓ logged" && (echo === "own" || sl.value === "3"),
+    `${btn.textContent} dirty=${btn.classList.contains("dirty")} slider=${sl.value}`);
   S.beforeReply = undefined;
   b.remove();
 }
