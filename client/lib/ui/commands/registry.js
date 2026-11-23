@@ -23,7 +23,7 @@ export const COMMANDS = [
   { name: 'pushable', help: '/pushable on|off — your “Allow being moved” switch: whether people may shove, blast, drag, carry or seat you (on by default; Settings ▸ body has Allow being posed and touched and your allow/block lists)' },
   { name: 'kick', help: '/kick <name> [reason] — moderation: remove someone from this world (moderators and owners). Objects fly with /punt' },
   { name: 'punt', aliases: ['boot'], help: '/punt [thing|person] [power] — kick a thing at your feet into flight (Q); a person\'s name is the ragdoll shove (their consent decides)' },
-  { name: 'boom', aliases: ['blast'], help: '/boom [power] [radius] — a blast at your feet (builders): knocks over everyone who lets it and sends loose things flying where the world has physics on (power 0.2–12 m/s, default 3; radius 0.5–30 m, default 4)' },
+  { name: 'boom', aliases: ['blast'], help: '/boom [power] [radius] — a blast at your feet (builders): knocks over everyone who lets it and sends loose things flying where the world has physics on (power 0.2–12 m/s, default 3, and below 0.3 nothing is moved; radius 0.5–30 m, default 4)' },
   { name: 'sculpt', help: '/sculpt raise|lower|flatten|smooth [radius] [strength] — one brush stroke on the ground where you stand (builders): raise and lower take strength in metres (0.25 unless you say), flatten and smooth 0–1 (all the way unless you say); radius in metres (3 unless you say). Ctrl+Z takes a stroke back' },
   { name: 'grab', aliases: ['pickup', 'take'], help: '/grab [thing] — pick up the nearest thing you can carry, or the one named (T)' },
   { name: 'put', help: '/put — set down what you hold, straight down from your hand (T)' },
