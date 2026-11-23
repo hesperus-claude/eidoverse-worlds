@@ -1173,6 +1173,15 @@ export class Avatar {
   get _plateRest() { return this.plate._plateRest; }
   get _seatApprox() { return this.plate._seatApprox; }
 
+  /** vrm.update, with three-vrm's springBoneManager held off while ammodoll owns the hair (__simHair): one author
+   *  per bone, or its write inside vrm.update would win. */
+  _vrmUpdate(dt) {
+    const sbm = this.__simHair ? this.vrm.springBoneManager : null;
+    if (sbm) this.vrm.springBoneManager = null;
+    this.vrm.update(dt);
+    if (sbm) this.vrm.springBoneManager = sbm;
+  }
+
   /** One frame of the eased crossfade (see _setAction): smoothstep in (linear for a cut landing inside an ease), its
    *  complement out. */
   _stepXfade(dt) {
@@ -1248,13 +1257,10 @@ export class Avatar {
     // freezes too while limp. Anything that ends a tumble without setLimp releases it here.
     if (this.__simHair && !this._limp) { this._releaseHair(); this._combHair(); }
     this._springsLimp(this._limp && !this.__simHair);   // a limp body with no sim hangs its hair on the world
-    const sbm = this.__simHair ? this.vrm.springBoneManager : null;
-    if (sbm) this.vrm.springBoneManager = null;
     this.onBeforeVrmUpdate?.(dt);   // the seam for tracked-body writes (xrbody.js): posed, not yet copied to raw
     // the body runtime's own limits get the final word over every writer above (bodyruntime_core.js)
     if (this.bodyRuntime && !this._limp) { BC('av:body-runtime'); this.bodyRuntime.beforeVrmUpdate(this.vrm, dt); }
-    this.vrm.update(dt);
-    if (sbm) this.vrm.springBoneManager = sbm;
+    this._vrmUpdate(dt);
     if (this._anchorWant) this._measureAnchor();   // the posed anchor (hips/feet/head) where the seat put the root
 
     // ---- wings, after vrm.update: wing bones are raw, but their parent clavicle only gets this frame's pose in

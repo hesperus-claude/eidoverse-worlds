@@ -753,12 +753,8 @@ console.log('\nwings:');
       },
     };
     // the slice of Avatar.update that decides the question
-    self.tick = function (dt = 1 / 60) {
-      const sbm = this.__simHair ? this.vrm.springBoneManager : null;
-      if (sbm) this.vrm.springBoneManager = null;
-      this.vrm.update(dt);
-      if (sbm) this.vrm.springBoneManager = sbm;
-    };
+    self._vrmUpdate = (Avatar.prototype as any)._vrmUpdate;
+    self.tick = function (dt = 1 / 60) { this._vrmUpdate(dt); };
     return { self, calls };
   };
   const a = mk();
