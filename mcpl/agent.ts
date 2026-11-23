@@ -702,7 +702,7 @@ export class WorldAgent {
           case "warned":
             // a moderator's warning, to this body alone (server/requestwire.ts): the browser's notice to dismiss, here a
             // line in the inbox for the next look
-            this.inbox.push({ ts: Date.now(), kind: "act", who: String(msg.by ?? "a moderator"), text: `warned you: ${String(msg.reason ?? "")}` });
+            this.inbox.push({ ts: Date.now(), kind: "act", who: String(msg.by ?? "a moderator"), text: String(msg.reason ?? "").trim() ? `warned you: ${String(msg.reason).trim()}` : "warned you" });
             break;
           // ── media signalling (see onMedia) ─────────────────────────────
           // Forwarded verbatim to whoever holds this identity's audio; the door
