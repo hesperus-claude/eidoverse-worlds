@@ -92,7 +92,7 @@ function approvalFor(D: string, name: string, words = name): { approval: Approva
   if (!approved) die(`translating "${name}" needs the operator's approval of its dry-run report first:
   1. bun tools/world.ts translate ${words} --dry-run --no-founder-key${CLAIM ? " --claim" : ""}   (writes no world, only this host's custody key on first use; prints the report and its hash)
   2. read it: what is dropped by design, what would be refused, how many entries, guards, models
-  3. translate ${words} --no-founder-key --approved <hash> --operator-only-no-owner${CLAIM ? " --claim" : ""}   (no owner can sign: ${NO_FOUNDER}; this host's custody operator key countersigns, and the act records that no owner was attested)
+  3. bun tools/world.ts translate ${words} --no-founder-key --approved <hash> --operator-only-no-owner${CLAIM ? " --claim" : ""}   (no owner can sign: ${NO_FOUNDER}; this host's custody operator key countersigns, and the act records that no owner was attested)
 Nothing was changed.`);
   if (!/^[0-9a-f]{64}$/.test(approved!)) die(`--approved ${approved}: not a report hash (64 hex, as --dry-run prints it). Nothing was changed.`);
   const { report, hash } = reportNow(D, name);

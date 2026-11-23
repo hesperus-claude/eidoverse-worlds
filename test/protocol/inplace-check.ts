@@ -55,7 +55,8 @@
 //        countersignature, an absent owner without NO_OWNER's exact text → refused by name; makeApproval makes the one form
 //   IP31 FOUNDING a brand-new world is a different path: create-world still takes the founder's own ownerKey for tier 0, and
 //        `world.ts found` still founds
-//   IP33 the two-name form's advice (no approval; the dry run's to-translate line) names old and new, and the command works as printed
+//   IP33 the two-name form's advice (no approval; the dry run's to-translate line) names old and new, and the command works as printed;
+//        the advice's step 3 is a whole command (bun tools/world.ts translate …), as step 1 is
 //   IP33b …and so does the refusal for a missing --operator-only-no-owner
 //   IP38 a log the translator can't import (a lone surrogate) is refused by the dry run in words, never as a stack trace
 //   IP39 a poses.json that can't be read is said in the translation's report (no place carried over)
@@ -701,7 +702,7 @@ fs.rmSync = (p, x) => { log("rm " + p); return rm(p, x); };\n`);
   const bare = await tool(["translate", src, dest, "--no-founder-key"]), dr = await tool(["translate", src, dest, "--dry-run", "--no-founder-key"]);
   const said = /^to translate: approve exactly this report\. translate (.+?) (--no-founder-key --approved [0-9a-f]{64} --operator-only-no-owner)/m.exec(dr.out);
   const r = said ? await tool(["translate", ...said[1].split(" "), ...said[2].split(" ")]) : { code: -1, out: "no advice line" };
-  ok(/translate advised advised-new --dry-run/.test(bare.out) && said?.[1] === `${src} ${dest}` && r.code === 0 && isWorldDir(path.join(W, dest)) && !isWorldDir(path.join(W, src)),
+  ok(/translate advised advised-new --dry-run/.test(bare.out) && /^\s*3\. bun tools\/world\.ts translate advised advised-new --no-founder-key --approved <hash>/m.test(bare.out) && said?.[1] === `${src} ${dest}` && r.code === 0 && isWorldDir(path.join(W, dest)) && !isWorldDir(path.join(W, src)),
     "IP33 `translate old new`: the approval refusal and the dry run's 'to translate' line both name old and new, and the advised command translates old into new", { advice: said?.[0], code: r.code, out: r.out.slice(-300), bare: bare.out.slice(0, 200) }); }
 // IP33b the missing --operator-only-no-owner refusal names both worlds too
 { const src = "advised2", dest = "advised2-new"; oldWorld(src); const h = await dryHash([src, dest]);
