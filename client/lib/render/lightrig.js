@@ -259,6 +259,15 @@ export const isCasting = (key) => (requests.get(key)?.slot ?? -1) >= 0;
 // A body that glows sheds light: each emissive mesh (≤2) gets a lamp request at its centre. A placed model infers
 // none (its lights are light components). A request costs nothing until it wins a slot.
 
+/** How strongly a material glows as an emitter, or 0 when it doesn't. An emitter, not MToon's unlit trick (emissive ≈
+ *  white + a map at strength 1): a flat emissive colour with no map above 0.5, or a map driven above strength 1. The
+ *  lamps and the caster budget (a thing that is all emitter casts no shadow) share this one test. */
+function emitterGlow(m) {
+  const glow = (m?.emissiveIntensity ?? 1) * Math.max(m?.emissive?.r ?? 0, m?.emissive?.g ?? 0, m?.emissive?.b ?? 0);
+  if ((!m?.emissiveMap && glow > 0.5) || (m?.emissiveMap && (m?.emissiveIntensity ?? 1) > 1)) return Math.max(glow, m?.emissiveIntensity ?? 1);
+  return 0;
+}
+
 /** Request a light at each emissive mesh's centre (<=2 per object). `opts.shadows` claims the ONE casting slot and
  *  defaults to FALSE: only avatar.js passes true.
  *  @returns {{key:string, intensity:number}[]} the requests made (a caller animating a lamp needs both). */
@@ -267,14 +276,8 @@ export function attachLamps(root, owner, { shadows = false } = {}) {
   const emissive = [];
   root.traverse((o) => {
     if (!o.isMesh) return;
-    const m = o.material;
-    const glow = (m?.emissiveIntensity ?? 1) *
-      Math.max(m?.emissive?.r ?? 0, m?.emissive?.g ?? 0, m?.emissive?.b ?? 0);
-    // an emitter, not MToon's unlit trick (emissive ≈ white + a map at strength 1): a flat emissive colour with no
-    // map, or a map driven above strength 1
-    if ((!m?.emissiveMap && glow > 0.5) || (m?.emissiveMap && (m?.emissiveIntensity ?? 1) > 1)) {
-      emissive.push({ mesh: o, glow: Math.max(glow, m?.emissiveIntensity ?? 1) });
-    }
+    const glow = emitterGlow(o.material);
+    if (glow > 0) emissive.push({ mesh: o, glow });
   });
   emissive.slice(0, 2).forEach(({ mesh, glow }, i) => {
     mesh.geometry.computeBoundingSphere();
@@ -529,11 +532,14 @@ function updateShadow() {
 }
 
 // ---- the caster budget ------------------------------------------------------
-// object.castShadow is in no pipeline cache key, so the caster set is a live distance budget: the nearest K cast (plus up
-// to 4 already casting inside the hysteresis edge, casterPass), the rest keep receiving. Depth pipelines are pre-warmed (warmqueue.warmDepth) before castShadow flips, ≤2 flips per
-// pass; a disable fades out and castShadow clears when the fade ends (endFade). docs/research/shadow-depth-prewarm.md.
+// object.castShadow is in no pipeline cache key, so the caster set is a live budget: the K that look largest from the
+// camera cast (bounding radius / distance, roughly the angle subtended, plus up to 4 already casting inside the
+// hysteresis edge, casterPass), the rest keep receiving. A thing whose every mesh is an emitter (emitterGlow) is never
+// offered: a glowing bulb's shadow is not wanted, and fifteen fairy-light beads must not outrank the sofa. Depth
+// pipelines are pre-warmed (warmqueue.warmDepth) before castShadow flips, ≤2 flips per pass; a disable fades out and
+// castShadow clears when the fade ends (endFade). docs/research/shadow-depth-prewarm.md.
 
-const casters = new Map();   // id -> { obj, meshes, casting, warm, released }
+const casters = new Map();   // id -> { obj, meshes, casting, warm, released, centre, radius }
 // how many things may cast at most: a Video setting; the governor sheds below it under load and climbs back to it
 export const CASTER_CHOICES = [6, 12, 24, 48, 96];
 let casterCeiling = (() => { try { const v = +localStorage.getItem('ew-shadow-casters'); return CASTER_CHOICES.includes(v) ? v : 24; } catch { return 24; } })();
@@ -542,12 +548,35 @@ export const getCasterCeiling = () => casterCeiling;
 export function setCasterCeiling(k) { if (!CASTER_CHOICES.includes(+k)) return; casterCeiling = +k; casterBudget = casterCeiling; try { localStorage.setItem('ew-shadow-casters', String(k)); } catch { /* private window */ } }
 let lastCasterPass = 0;
 
+// A thing with no measurable bounds (no position data yet) ranks as one this size: by distance among its kind.
+const SIZELESS_RADIUS = 0.05;
+const _bRel = new THREE.Matrix4(), _bS = new THREE.Sphere();
+/** The bounding sphere of `meshes` in obj's OWN frame (obj's transform excluded, so a later move or scale of obj is
+ *  read per pass from its matrixWorld). Measured once, at registration: meshes added later are not this record's
+ *  meshes either (a realizer re-registers when a thing's drawn geometry changes, models.js partsChanged). */
+function localBounds(obj, meshes) {
+  obj.updateWorldMatrix(false, true);   // the descendants' local matrices
+  const all = new THREE.Sphere();       // empty (radius -1) until a mesh with data joins
+  for (const m of meshes) {
+    let s;
+    if (m.isInstancedMesh) { if (!m.boundingSphere) m.computeBoundingSphere(); s = m.boundingSphere; }   // all its instances
+    else if (m.geometry) { if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); s = m.geometry.boundingSphere; }
+    if (!s || s.isEmpty() || !Number.isFinite(s.radius)) continue;
+    if (m === obj) _bRel.identity();    // obj is itself a mesh: its own transform is read per pass
+    else { _bRel.copy(m.matrix); for (let p = m.parent; p && p !== obj; p = p.parent) _bRel.premultiply(p.matrix); }
+    all.union(_bS.copy(s).applyMatrix4(_bRel));
+  }
+  return all.isEmpty() ? { centre: null, radius: SIZELESS_RADIUS } : { centre: all.center.clone(), radius: all.radius };
+}
+
 /** The models realizer registers every realized model here; retire releases. */
 export function registerCaster(id, obj) {
   const meshes = [];
   // start not casting (a realizer may hand meshes in casting): the pass flips only where want !== casting
   obj.traverse((o) => { if (o.isMesh) { o.castShadow = false; meshes.push(o); } });
-  casters.set(id, { id, obj, meshes, casting: false, warm: 'none', released: false, fade: 0 });
+  // all emitter: not offered (a re-register drops the old record); partly emitter: offered whole, every mesh casts
+  if (meshes.length && meshes.every((m) => emitterGlow(m.material) > 0)) { releaseCaster(id); return; }
+  casters.set(id, { id, obj, meshes, casting: false, warm: 'none', released: false, fade: 0, ...localBounds(obj, meshes) });
 }
 export function releaseCaster(id) {
   const c = casters.get(id);
@@ -598,17 +627,26 @@ function stepFades(now) {
 }
 export const fadingCount = () => fading.size;
 
+// the apparent size, squared: (world radius / distance from the eye to the bounds' centre)²
+function sizeScore(c, eye) {
+  c.obj.updateWorldMatrix(true, false);
+  const mw = c.obj.matrixWorld;
+  const at = c.centre ? _p.copy(c.centre).applyMatrix4(mw) : _p.setFromMatrixPosition(mw);
+  const r = c.radius * mw.getMaxScaleOnAxis();
+  return (r * r) / Math.max(1e-4, at.distanceToSquared(eye));   // 1 cm: the eye inside a thing ranks it first, finitely
+}
 function casterPass() {
+  const eye = camera.getWorldPosition(_cw);
   const ranked = [...casters.values()]
-    .map((c) => ({ c, d: c.obj.getWorldPosition(_p).distanceToSquared(camera.getWorldPosition(_cw)) }))
-    .sort((a, b) => a.d - b.d);
+    .map((c) => ({ c, s: sizeScore(c, eye) }))
+    .sort((a, b) => b.s - a.s);
   let enables = 0;
-  // hysteresis: a caster keeps casting until 1.25× the last caster's distance (squared: 1.5625), so a row of crates
-  // doesn't blink at the boundary. A budget of 0 keeps nothing.
-  const edge = casterBudget === 0 ? -1 : ranked.length >= casterBudget ? ranked[casterBudget - 1].d * 1.5625 : Infinity;
+  // hysteresis: a caster keeps casting until its size score falls 1.25× below the last winner's (squared: 1.5625), so
+  // a row of crates doesn't blink at the boundary. A budget of 0 keeps nothing.
+  const edge = casterBudget === 0 ? Infinity : ranked.length >= casterBudget ? ranked[casterBudget - 1].s / 1.5625 : 0;
   for (let i = 0; i < ranked.length; i++) {
-    const { c, d } = ranked[i];
-    const want = i < casterBudget || (c.casting && d <= edge && i < casterBudget + 4);
+    const { c, s } = ranked[i];
+    const want = i < casterBudget || (c.casting && s >= edge && i < casterBudget + 4);
     if (want === c.casting) continue;
     if (!want) {                          // the draw is shed when the fade-out ends
       c.casting = false;
