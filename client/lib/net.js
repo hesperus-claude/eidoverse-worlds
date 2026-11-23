@@ -41,8 +41,6 @@ export const net = {
 };
 
 let restoredPose = false;
-let hydrating = false;
-let pendingLive = [];
 let lastSeq = -1;
 // when to dial again after a close (shared/redial.js); reset only by a join the server accepted (the snapshot)
 const redial = redialer();
@@ -312,8 +310,7 @@ function onLog(msg) {
   for (const x of r.says) {
     const e = { seq: x.seq * 1000, ts: x.ts, actor: x.actor, verb: 'say', args: { text: x.text, ...(x.to ? { to: x.to } : {}), ...(x.spoken ? { spoken: true, utt: x.utt, ...(x.t0 !== undefined ? { t0: x.t0 } : {}) } : {}) } };
     hear(shadowState.st, { actor: e.actor, text: x.text, ts: e.ts, seq: e.seq });
-    if (hydrating) pendingLive.push(e);
-    else if (e.seq > lastSeq) { lastSeq = e.seq; bus.emit('live-entry', e); noteSpeaking(e.actor); }
+    if (e.seq > lastSeq) { lastSeq = e.seq; bus.emit('live-entry', e); noteSpeaking(e.actor); }
   }
   if (r.changed) narrate(applyView(replica.view(shadowState.st), { ts: r.ts ?? undefined }), r.actor);
   if (r.changed && !worldSaved) rememberWorld();   // a new world, the moment something is built in it
@@ -1048,15 +1045,6 @@ async function onSnapshot(msg) {
   shadowHydrate(replica.view(msg.chat), typeof msg.throughSeq === 'number' ? msg.throughSeq : -1);
   rememberWorld();   // the door said yes, and the shadow now holds what is here
   forgetEmptyWorld();   // …or holds nothing, and a bare link should stop leading here
-
-  hydrating = true; pendingLive = [];
-  // chat lines that raced us land below the arrival chat window, in order
-  const backlog = pendingLive.filter((e) => (e.seq ?? -1) > lastSeq).sort((a, b) => a.seq - b.seq);
-  pendingLive = []; hydrating = false;
-  for (const e of backlog) {
-    lastSeq = e.seq;
-    bus.emit('live-entry', e);
-  }
 
   const rc = msg.chat?.recentChat ?? [];
   noteHistoryContext({
