@@ -39,7 +39,8 @@
  *   groundY?:(x:number,z:number)=>number,
  *   lift?:(x:number,y:number,z:number)=>number,
  *   input?:{bank?:number,pitch?:number,yawRate?:number,flap?:boolean,spoil?:boolean},
- *   consent?:{canLandAt:(flier:any,target:any)=>boolean}
+ *   consent?:{canLandAt:(flier:any,target:any)=>boolean},
+ *   box?:{min:number[],max:number[]}|null
  * }} FlightEnv */
 
 // ---------------------------------------------------------------- config
