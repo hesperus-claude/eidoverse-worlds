@@ -953,7 +953,9 @@ export function updateXR(dtSec = 1 / 72) {
     const eye = renderer.xr.getCamera();
     for (const side of ['right', 'left']) {
       const G = side === 'right' ? R : L; const hand = hands[side];
-      if (!G || !hand) { panelPress[side] = null; sticky[side] = null; dwells[side].reset(); if (hand) { hand.laser.visible = false; hideSurfaceDot(hand.dot); } continue; }   // a controller dropped mid-press: forget it
+      if (!G || !hand) { panelPress[side] = null; sticky[side] = null; dwells[side].reset(); if (hand) { hand.laser.visible = false; hideSurfaceDot(hand.dot); }
+        if (held?.hand === side) releaseGrab(); if (resizing?.hand === side) endResize();   // a lost hand lets go: put down where it is
+        continue; }   // a controller dropped mid-press: forget it
       const grip = !!G.buttons[1]?.pressed, trig = !!G.buttons[0]?.pressed;
       // the ray every pick below uses, and the beam is drawn along: the controller's, low-passed (xrpointer.js), then
       // bent onto the target it holds while the hand drifts a little off it (stickTo)

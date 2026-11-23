@@ -466,6 +466,32 @@ try {
   check('stage: the right controller is disconnected (only a left input source)', solo.only === 'left', J(solo));
   check('the left hand alone: its laser holds a panel control and its trigger clicks it (G2-005)', solo.beam && solo.heldBefore?.kind === 'panel' && solo.clicked === 1, J(solo));
 
+  // ---- 6c. the right hand drops while carrying a panel: the panel is put down, and the left hand can grab it ----------
+  const drop = await ev(pg, async ({ bg }) => {
+    const H = __h, dq = H.dq, dev = window.__iwerDevice, sess = EW.renderer.xr.getSession(), out = {};
+    const sides = () => [...sess.inputSources].map((s) => s.handedness).sort().join(',');
+    for (const q of dq.domQuadIds()) dq.domQuadShow(q, q === 'settings');
+    await new Promise((r) => setTimeout(r, 400)); await H.frames(3);
+    const mesh = H.meshOf('settings');
+    H.down('left'); H.aimAt('right', 'settings', bg.x, bg.y); await H.frames(8);
+    H.btn('right', 'squeeze', 1); await H.frames(5); out.carried = H.held();
+    dev.controllers.right.connected = false;
+    const t0 = performance.now(); while (sides() !== 'left' && performance.now() - t0 < 5000) await H.frames(1);
+    await H.frames(3); out.only = sides(); out.afterDrop = H.held(); out.onRig = mesh.parent === H.xr.xrRig();
+    H.aimAt('left', 'settings', bg.x, bg.y); await H.frames(8);
+    H.btn('left', 'squeeze', 1); await H.frames(5); out.leftTook = H.held(); out.inLeft = mesh.parent === H.xr.xrHands().left.grip;
+    H.btn('left', 'squeeze', 0); await H.frames(5); out.leftPut = H.held();
+    H.btn('right', 'squeeze', 0); H.down('left');
+    dev.controllers.right.connected = true;
+    const t1 = performance.now(); while (sides() !== 'left,right' && performance.now() - t1 < 5000) await H.frames(1);
+    await new Promise((r) => setTimeout(r, 1200));   // a re-added source is untrusted for 700 ms (xr.js inputsSettledAt)
+    return out;
+  }, { bg: spots.bg }, 90000);
+  console.log('  · right dropped while carrying', J(drop));
+  check('stage: the right hand carried the panel, then only a left input source', drop.carried === 'settings' && drop.only === 'left', J(drop));
+  check('a right controller dropped while carrying a panel puts it down (back on the rig)', drop.afterDrop === null && drop.onRig, J(drop));
+  check('…and the left hand can then grab and place it', drop.leftTook === 'settings' && drop.inLeft && drop.leftPut === null, J(drop));
+
   // ---- 7. leave VR; the setting survives a reload --------------------------------------------------------------------
   await ev(pg, () => { __h.prefs.setXrPref('pointerVisibility', 'always'); __h.xr.leaveVR('probe'); });
   await pg.waitForFunction(() => !EW.renderer.xr.isPresenting, null, { timeout: 30000, polling: 250 });
