@@ -8,8 +8,8 @@
 // (Scribe, AssemblyAI, the test's fake). Settle policy: a caption is emitted
 // when its utterance is `final` and no revision has arrived for `settleMs`
 // (a revision before then replaces it, segment ended or not). A revision of an
-// emitted caption is counted and dropped once the segment has ended, never
-// applied (the world log is append-only); while it is open, it is a new caption.
+// emitted caption is counted and dropped, segment open or ended, never applied
+// (the world log is append-only).
 import { EnergyVad } from '@animalabs/voice-kit';
 import type { SttProvider, SttSession, SttTranscript } from '@animalabs/voice-kit';
 import type { PcmConsumer } from './tap.ts';
@@ -109,7 +109,7 @@ export class Captioner implements PcmConsumer {
   private onTranscript(seg: Segment, t: SttTranscript): void {
     if (seg.sealed) { this.lateRevisions++; return; }
     const cur = seg.pending.get(t.utteranceId);
-    if (cur === undefined && seg.t1 !== undefined && seg.emitted.has(t.utteranceId)) { this.lateRevisions++; return; }
+    if (cur === undefined && seg.emitted.has(t.utteranceId)) { this.lateRevisions++; return; }
     if (cur?.timer) clearTimeout(cur.timer);
     const entry = { t, timer: null as ReturnType<typeof setTimeout> | null };
     seg.pending.set(t.utteranceId, entry);
