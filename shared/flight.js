@@ -241,9 +241,8 @@ export function airspeedAfter(cfg, airspeed, pitch, dt) {
   return clamp(v, p.minSpeed * 0.6, p.maxSpeed);
 }
 
-/** How far this altitude can carry you at best glide, in metres: `glide_to` beyond range lands SHORT of the target
- *  (T2), never rubber-banded to it. The agent passes its y (mcpl/agent-flight.ts), not its height over the ground, so
- *  over ground below 0 the real reach is longer than this says. */
+/** How far this altitude (height over the ground) can carry you at best glide, in metres: `glide_to` beyond range
+ *  lands SHORT of the target (T2), never rubber-banded to it. */
 export function glideRange(cfg, altitude) {
   return Math.max(0, altitude) * bestGlide(cfg).ratio;
 }

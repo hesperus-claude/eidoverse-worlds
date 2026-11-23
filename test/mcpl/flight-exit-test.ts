@@ -645,5 +645,19 @@ console.log('\nreview 2026-11-10: with the colliders loaded (last: once loaded t
   await removeSupport('flight-exit-test', `${W}/deck`);
 }
 
+console.log('\nthe 2026-11-23 sweep');
+{
+  // G2-004: best glide reaches as far as the height over the ground under the body, not its y: over a valley below 0
+  // a body at y 10 is 60 m over the floor
+  const ag = bench('valley');
+  ag.ground.terrain = { heightAt: () => -50 };
+  await ag.takeOff(); toAir(ag, 10);
+  const { bestGlide, glideRange } = await import('../../shared/flight.js');
+  const want = glideRange(ag.flightCfg, 60).toFixed(0), said = /best glide reaches (\d+)m/.exec(ag.flightStatus())?.[1];
+  check('flight_status reckons best glide from the height over the ground, not y (G2-004)', said === want, `${said} m, want ${want} (from y: ${(10 * bestGlide(ag.flightCfg).ratio).toFixed(0)})`);
+  const far = answerOf(ag.glideTo(ag.flight.pos.x + 2000, ag.flight.pos.z));
+  for (let i = 0; i < 3000 && far.r == null; i++) await tick(ag);
+  check('...and so does a glide that lands short, from the height it set out at', /From 60\.0m over the ground best glide reaches/.test(far.r?.text) && new RegExp(`reaches ${want}m`).test(far.r?.text), far.r?.text ?? 'no answer');
+}
 for (const a of agents) { try { a.close(); } catch {} }
 done();

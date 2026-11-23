@@ -326,7 +326,7 @@ export class AgentFlight {
     // A down is involuntary: no flight verb flies a body out of one (downRefusal says what does).
     if (isDown(this.a.flight.phase)) return refused(downRefusal(this.a.flight));
     const f = this.a.flight;
-    const reach = glideRange(this.a.flightCfg, f.pos.y);
+    const up = f.pos.y - this.a.heightAt(f.pos.x, f.pos.z), reach = glideRange(this.a.flightCfg, up);   // height over the ground, not y
     const need = Math.hypot(x - f.pos.x, z - f.pos.z);
     f.phase = "PILOT"; f.mode = "live";
     f.airspeed = bestGlide(this.a.flightCfg).speed;
@@ -360,7 +360,7 @@ export class AgentFlight {
     if (arrived === "landed") {
       const short = Math.hypot(x - p.x, z - p.z);
       return refused(`landed short at ${here} — ${short.toFixed(1)}m short. `
-        + `From ${f.pos.y.toFixed(1)}m best glide reaches ${reach.toFixed(0)}m; you needed ${need.toFixed(0)}m.`);
+        + `From ${up.toFixed(1)}m over the ground best glide reaches ${reach.toFixed(0)}m; you needed ${need.toFixed(0)}m.`);
     }
     if (arrived === "taken over") return refused(`taken over at ${here} by a later call`);
     // Out of time, the glide stops steering, as a climb does: the body flies on.
@@ -565,7 +565,7 @@ export class AgentFlight {
     return [
       `${f.phase.toLowerCase()} at ${f.pos.y.toFixed(1)}m, heading ${((f.yaw * 180 / Math.PI + 360) % 360).toFixed(0)}deg, ${f.airspeed.toFixed(1)} m/s`,
       `stamina ${f.stamina.toFixed(0)}/100 (refills on the ground: ${cfg.stamina.refillGroundPerSec}/s; perches are not implemented)`,
-      `from here best glide reaches ${glideRange(cfg, f.pos.y).toFixed(0)}m at ${bg.speed.toFixed(1)} m/s`,
+      `from here best glide reaches ${glideRange(cfg, f.pos.y - this.a.heightAt(f.pos.x, f.pos.z)).toFixed(0)}m at ${bg.speed.toFixed(1)} m/s`,
       `wings ${f.wings} - mode ${f.mode}`,
     ].join("\n");
   }
