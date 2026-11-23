@@ -207,5 +207,55 @@ for (const [name, st, wantNote, wantDim] of [
   report = null; gate.resolve(); await flush(12);
 }
 
+{ // G2-041: marking voice B while TTS is off, then ticking, speaks B (the tick loads the voice the radio shows), not A
+  await reset({ list: ['va', 'vb'] });
+  row('va').click(); await flush();
+  await tick(true); await flush(10);
+  t('re-tick setup: the first tick loaded and enabled va', loaded.at(-1) === 'va.onnx+va.onnx.json' && tts.isTtsEnabled() && tts.ttsVoiceName() === 'va', `${loaded} / ${tts.ttsVoiceName()}`);
+  await tick(false);
+  row('vb').click(); await flush();
+  await tick(true); await flush(10);
+  t('re-tick: the voice marked while off is the one that speaks', tts.isTtsEnabled() && tts.ttsVoiceName() === 'vb' && loaded.at(-1) === 'vb.onnx+vb.onnx.json', `${loaded} / ${tts.ttsVoiceName()}`);
+  const n = loaded.length;
+  await tick(false); await tick(true); await flush(10);
+  t('re-tick: an untick and tick with the mark unchanged does not reload', loaded.length === n && tts.isTtsEnabled() && tts.ttsVoiceName() === 'vb', `loads ${n} → ${loaded.length}`);
+}
+
+{ // G2-014: an untick during an import is the last word; an import nobody unticked still enables, as before
+  const handle = (name) => ({ getFile: async () => new File(['x'], name) });
+  let answers = [];
+  window.showOpenFilePicker = async () => answers.shift() ?? null;
+  await reset({});
+  answers = [[handle('imp.onnx'), handle('imp.onnx.json')]];
+  host.querySelector('.vl-add').click(); await flush(12);
+  t('import: an untouched import enables TTS (unchanged)', tts.isTtsEnabled() === true, `enabled=${tts.isTtsEnabled()}`);
+  voices = [];
+  await reset({});
+  gate = deferred();
+  answers = [[handle('late.onnx'), handle('late.onnx.json')]];
+  host.querySelector('.vl-add').click(); await flush(12);
+  await tick(false);
+  gate.resolve(); await flush(12);
+  t('import: unticked mid-import → the import does not turn TTS back on', tts.isTtsEnabled() === false && tts.ttsVoiceName() === 'late', `enabled=${tts.isTtsEnabled()} voice=${tts.ttsVoiceName()}`);
+}
+
+{ // G2-040: an earlier failure's clear timer must not wipe a newer load's loading row
+  const handle = (name) => ({ getFile: async () => new File(['x'], name) });
+  let answers = [];
+  window.showOpenFilePicker = async () => answers.shift() ?? null;
+  await reset({ list: ['w1'] });
+  loadFails = true;
+  answers = [[handle('bad.onnx'), handle('bad.onnx.json')]];
+  host.querySelector('.vl-add').click(); await flush(12);
+  loadFails = false;
+  gate = deferred();
+  const pending = tick(true); await flush(10);
+  t('timer setup: the newer load shows its loading row, not the old error', !!host.querySelector('.vl-loading') && /^loading w1/.test(note()), `note="${note()}"`);
+  report?.({ text: 'warming w1' }); await flush();
+  await pause('the failed import\'s 3 s clear timer', 3_200); await flush();
+  t('timer: the old failure\'s timer leaves the newer load\'s row and progress note alone', (host.querySelector('.vl-loading .vl-note')?.textContent ?? '').startsWith('warming w1') && /^(loading w1|warming w1)/.test(note()), `row note="${host.querySelector('.vl-loading .vl-note')?.textContent}" head="${note()}"`);
+  gate.resolve(); await pending; await flush(10);
+}
+
 console.log(`\n${ok} ok, ${bad} failed`);
 process.exit(bad ? 1 : 0);

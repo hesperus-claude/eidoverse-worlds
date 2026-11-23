@@ -19,6 +19,11 @@ let _tickPending = false;
 let _wantSpeech = false;
 let _inFlight = null;      // one load at a time: a click during a load is a no-op
 let _pending = null;       // a pick missing its other half, kept as a row so it can be resumed (addFile)
+let _loadGen = 0;          // bumped by every load start, so an older load's clear timer leaves a newer load's status alone
+let _untickSeq = 0;        // bumped by every untick, so an import that finishes after one does not re-enable
+// the voice this row last loaded, and whether a voice was marked while TTS was off: then the tick loads the mark
+let _loadedId = null, _markedOff = false;
+const markIsStale = () => _markedOff && _selected !== _loadedId;
 /** Everything we can speak with: remembered files + this session's endpoints. */
 async function collectVoices() {
   const out = [];
@@ -64,17 +69,20 @@ const saveEndpoints = (list) => {
  *  the panel repaint sibling rows whose state we just changed. */
 export function ttsSection(host, onPaint = () => {}) {
   const repaint = () => { build(); onPaint(); };
+  // a status note clears itself, unless a newer load has started and owns it
+  const clearBusyLater = (ms) => { const gen = _loadGen; setTimeout(() => { if (gen === _loadGen) { _busy = null; repaint(); } }, ms); };
     /** Every pick of a listed voice goes through here (the checkbox path too): one busy guard, one loading row. An import
      *  (addFile, resumePending → finishImport) loads on its own path.
      *  Returns false on refusal or failure, so the tick handler can undo itself. */
     async function pick(id) {
       if (id === '__pending') return resumePending();
-      if (id === _selected && ttsAvailable()) return true;   // already live
+      if (id === _selected && ttsAvailable() && !markIsStale()) return true;   // already live
       if (_inFlight) {
         console.log(`[voice] already loading ${_inFlight}; ignoring ${id}`);
         return false;
       }
       _inFlight = id;
+      _loadGen++; _busy = null;   // this load owns the status now
       _loadingId = id;
       // stored voices are keyed by content digest (voicestore.js), so ask the list for the human name
       _loadingName = id.replace(/^file:/, '').replace(/^ep:/, '');
@@ -109,7 +117,7 @@ export function ttsSection(host, onPaint = () => {}) {
         if (!liveStatus(_busy)) build();
       });
       }
-      _selected = id;
+      _selected = _loadedId = id; _markedOff = false;
     try { localStorage.setItem('eido.tts.lastVoice', id); } catch { /* private mode */ }
     _needVoice = false;
       // choosing is not enabling: the tick decides whether, the list decides which
@@ -118,7 +126,7 @@ export function ttsSection(host, onPaint = () => {}) {
       report('tts voice', e);
       _busy = String(e?.message || e).slice(0, 80);
       build();
-      setTimeout(() => { _busy = null; repaint(); }, 2500);
+      clearBusyLater(2500);
       return false;
     }
     _busy = null;
@@ -134,7 +142,7 @@ export function ttsSection(host, onPaint = () => {}) {
       await forgetVoice(id);
     }
     // removing the voice that is speaking also stops it
-    if (id === _selected) { setTtsSource(null); setTtsEnabled(false); _selected = null; }
+    if (id === _selected) { setTtsSource(null); setTtsEnabled(false); _selected = _loadedId = null; }
     repaint();
   }
   /** Finish an import once both halves are in hand (addFile and resumePending). */
@@ -143,6 +151,7 @@ export function ttsSection(host, onPaint = () => {}) {
     await import('./engines.js');
     const shown = (files.find((f) => /\.onnx$/i.test(f.name)) || files[0])?.name || 'voice';
     const name = shown.replace(/\.onnx$/i, '');
+    const unticks = _untickSeq; _loadGen++;
       _busy = `loading ${name}…`;   // cleared on every exit, or the add button stays grey (ttslist.js)
       _loadingId = `file:${name}`; _loadingName = name; _loadingSince = Date.now();
       build();
@@ -163,13 +172,13 @@ export function ttsSection(host, onPaint = () => {}) {
           if (canRemember()) await rememberVoice(id, name, handles, identity);
         } catch (e) { console.warn('[voice] not remembered:', e); }
         _pending = null;
-        _selected = id;
-        setTtsEnabled(true);
+        _selected = _loadedId = id; _markedOff = false;
+        if (_untickSeq === unticks) setTtsEnabled(true);   // an untick during the import is the last word
       } catch (e) {
         report('tts voice', e);
         _busy = String(e?.message || e).slice(0, 80);
         build();
-        setTimeout(() => { _busy = null; _loadingId = null; repaint(); }, 3000);
+        clearBusyLater(3000);   // the finally below already cleared _loadingId
         return;
       } finally {
         _loadingId = null;
@@ -232,7 +241,7 @@ export function ttsSection(host, onPaint = () => {}) {
       await import('./engines.js');
       if (!window.showOpenFilePicker) {
         _busy = 'this browser cannot pick files here — use a speech server';
-        build(); setTimeout(() => { _busy = null; repaint(); }, 3000);
+        build(); clearBusyLater(3000);
         return;
       }
       let handles = await window.showOpenFilePicker({
@@ -284,7 +293,7 @@ export function ttsSection(host, onPaint = () => {}) {
       if (e?.name === 'AbortError') { _busy = null; build(); return; }
       report('add voice file', e);
       _busy = String(e?.message || e).slice(0, 80);
-      build(); setTimeout(() => { _busy = null; repaint(); }, 3000);
+      build(); clearBusyLater(3000);
     }
   }
   function addEndpoint() {
@@ -375,7 +384,7 @@ function headDimmed() {
           select: (id) => {
             if (id === '__pending') return pick(id);
             if (isTtsEnabled()) return pick(id);
-            _selected = id;
+            _selected = id; _markedOff = true;
             try { localStorage.setItem('eido.tts.lastVoice', id); } catch { /* private mode */ }
             build();
           },
@@ -410,15 +419,16 @@ function headDimmed() {
       `${headNote()}</span>` +
       `</span>`;
     head.querySelector('input').onchange = async (e) => {
-      _wantSpeech = e.target.checked;   // the last click wins for this tick's own load (below); finishImport enables regardless
+      _wantSpeech = e.target.checked;   // the last click wins, for this tick's own load (below) and for an import (_untickSeq)
       if (!e.target.checked) {
+        _untickSeq++;
         _needVoice = false; setTtsEnabled(false);
         if (!syncHead()) repaint(); else onPaint();
         return;
       }
       if (_tickPending) return;   // a load this tick started is running; its completion honours the box
       // ticking means "speak": no voices → refuse and say why; else load the marked voice (last used, else first)
-      if (ttsAvailable()) {
+      if (ttsAvailable() && !markIsStale()) {   // a voice marked while off is loaded below instead
         _needVoice = false; setTtsEnabled(true);
         if (!syncHead()) repaint(); else onPaint();
         return;
@@ -479,7 +489,7 @@ function headDimmed() {
           select: (id) => {
             if (id === '__pending') return pick(id);
             if (isTtsEnabled()) return pick(id);
-            _selected = id;
+            _selected = id; _markedOff = true;
             try { localStorage.setItem('eido.tts.lastVoice', id); } catch { /* private mode */ }
             build();
           },
