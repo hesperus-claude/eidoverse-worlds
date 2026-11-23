@@ -120,14 +120,14 @@ export function nameFromJoinAck(you, { renderer = false, spectate = false, verif
 /** Rename in place (the front-door panel calls this before connecting). */
 export function setName(name) {
   CONFIG.name = name;
-  store?.setItem('ew-name', name);
+  remember('ew-name', name);   // a store that throws on write must not make a rename throw (G2-017)
   // the first real name this browser uses is its account, as at load: a first visit loads as a guest, and the door's name
   // is that first name (a later rename never moves the account)
-  if (!CONFIG.account && name && !/^guest-/.test(name)) { CONFIG.account = name; store?.setItem('ew-account', name); }
+  if (!CONFIG.account && name && !/^guest-/.test(name)) { CONFIG.account = name; remember('ew-account', name); }
 }
 export function setToken(token) {
   CONFIG.token = token;
-  store?.setItem('ew-key', token);
+  remember('ew-key', token);
 }
 
 // ------------------------------------------------------------ error routing

@@ -21,5 +21,12 @@ setName("Rab");
 check("the door's name becomes the account", CONFIG.account === "Rab" && localStorage.getItem("ew-account") === "Rab", JSON.stringify([CONFIG.account, localStorage.getItem("ew-account")]));
 setName("Rabbit");
 check("…and a later rename leaves the account where it is", CONFIG.name === "Rabbit" && CONFIG.account === "Rab" && localStorage.getItem("ew-account") === "Rab", JSON.stringify([CONFIG.name, CONFIG.account]));
+// a store whose writes throw (a full or blocked storage): renaming still renames, as load's remember() does (G2-017)
+const { setToken } = await import("../../client/lib/base.js");
+// happy-dom's Storage is a proxy: assigning .setItem stores a key named "setItem", so define it instead
+Object.defineProperty(localStorage, "setItem", { value: () => { throw new Error("QuotaExceededError"); }, configurable: true });
+let threw: unknown = null;
+try { setName("Hare"); setToken("tok"); } catch (e) { threw = e; }
+check("a store that throws on write doesn't make a rename (or a token) throw", threw === null && CONFIG.name === "Hare" && CONFIG.token === "tok", String(threw));
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
