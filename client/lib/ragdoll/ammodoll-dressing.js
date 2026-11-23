@@ -117,7 +117,7 @@ export function buildHair(doll, avatar, { H, keep, localOf, mkBody, boxFor }) {
         // a kinematic anchor per lock, re-driven from the head before each step: one-way, so lock torques never
         // feed back into the head
         const rootW = list[0].node.getWorldPosition(new THREE.Vector3());
-        const aShape = keep(new AMMO.btBoxShape(new AMMO.btVector3(R, R, R)));
+        const aShape = keep(new AMMO.btBoxShape(keep(new AMMO.btVector3(R, R, R))));
         _bt1.setIdentity();
         _bv1.setValue(rootW.x, rootW.y, rootW.z); _bt1.setOrigin(_bv1);
         const aMs = keep(new AMMO.btDefaultMotionState(_bt1));
@@ -236,7 +236,7 @@ export function buildWings(doll, avatar, { H, keep, localOf, mkBody, boxFor }) {
       for (const [, list] of wchains) {
         list.sort((x2, y2) => x2.i - y2.i);
         const rootW = list[0].node.getWorldPosition(new THREE.Vector3());
-        const aShape = keep(new AMMO.btBoxShape(new AMMO.btVector3(0.01, 0.01, 0.01)));
+        const aShape = keep(new AMMO.btBoxShape(keep(new AMMO.btVector3(0.01, 0.01, 0.01))));
         _bt1.setIdentity();
         _bv1.setValue(rootW.x, rootW.y, rootW.z); _bt1.setOrigin(_bv1);
         const aMs = keep(new AMMO.btDefaultMotionState(_bt1));

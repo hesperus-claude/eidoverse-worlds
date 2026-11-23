@@ -945,7 +945,15 @@ const { G_FINGER } = await import('../../client/lib/ragdoll/ammodoll-tuning.js')
     av.root.updateMatrixWorld(true);
   }
 
-  const rd: any = new AmmoRagdoll(av, toppleLean(), av.restBonePositions());
+  // every btVector3 the build allocates (the box shapes' half-extents too) is tracked for dispose()'s destroy
+  const ammoNs: any = await import('../../client/lib/ragdoll/ammo-load.js');
+  const RealV3 = ammoNs.AMMO.btVector3, madeV3: any[] = [];
+  ammoNs.AMMO.btVector3 = function (...a: any[]) { const v = new RealV3(...a); madeV3.push(v); return v; };
+  let rd: any;
+  try { rd = new AmmoRagdoll(av, toppleLean(), av.restBonePositions()); } finally { ammoNs.AMMO.btVector3 = RealV3; }
+  const untracked = madeV3.filter((v) => !rd._refs.includes(v)).length;
+  check('every btVector3 the build makes is tracked for dispose (hair, wing and body boxes too)',
+    madeV3.length > 0 && untracked === 0, `${untracked} of ${madeV3.length} untracked`);
   check('the fixture builds hair as well as wings (both families present)',
     (rd._hairSegs?.length ?? 0) > 0 && (rd._wingSegs?.length ?? 0) > 0,
     `hair ${rd._hairSegs?.length ?? 0}, wings ${rd._wingSegs?.length ?? 0}`);

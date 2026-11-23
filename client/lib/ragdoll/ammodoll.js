@@ -231,7 +231,7 @@ export class AmmoRagdoll extends BodyEngineBase {
 
     this._statics = [];
     const addStatic = (halfX, halfY, halfZ, pos, quat, friction) =>
-      addStaticShape(keep(new AMMO.btBoxShape(new AMMO.btVector3(halfX, halfY, halfZ))), pos, quat, friction);
+      addStaticShape(keep(new AMMO.btBoxShape(keep(new AMMO.btVector3(halfX, halfY, halfZ)))), pos, quat, friction);
     const addStaticShape = (shape, pos, quat, friction) => {
       _bt1.setIdentity();
       _bv1.setValue(pos.x, pos.y, pos.z); _bt1.setOrigin(_bv1);
@@ -369,7 +369,7 @@ export class AmmoRagdoll extends BodyEngineBase {
     const mkBody = (mass, originLive, orient, boxes, isFinger) => {
       const compound = keep(new AMMO.btCompoundShape());
       for (const bx of boxes) {
-        const shape = keep(new AMMO.btBoxShape(new AMMO.btVector3(bx.he.x, bx.he.y, bx.he.z)));
+        const shape = keep(new AMMO.btBoxShape(keep(new AMMO.btVector3(bx.he.x, bx.he.y, bx.he.z))));
         _bt1.setIdentity();
         _bv1.setValue(bx.t.x, bx.t.y, bx.t.z); _bt1.setOrigin(_bv1);
         _bq1.setValue(bx.q.x, bx.q.y, bx.q.z, bx.q.w); _bt1.setRotation(_bq1);
