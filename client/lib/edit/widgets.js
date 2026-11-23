@@ -173,7 +173,7 @@ const ROW = {
     regions.push({ x: pad, y, w: width * 0.6, h: rowH, action: parent.k ?? 'row', payload: r.id });
     if (tree && r.kids) {   // the disclosure: its own target ahead of the row's (legacy order)
       icon(g, r.open === false ? 'chevronRight' : 'chevronDown', pad + ind + 9, y + rowH / 2, 18, T.dim);
-      regions.unshift({ x: pad + ind - 8, y, w: Math.max(28, 16), h: rowH, action: 'open', payload: r.id });
+      regions.unshift({ x: pad + ind - 8, y, w: 28, h: rowH, action: 'open', payload: r.id });
     }
     if (tree && r.enabled != null) {   // ☑ ahead of the row's own target (and after the disclosure's)
       const s = 24, bx = pad + ind + 24, by = y + rowH / 2 - s / 2;
