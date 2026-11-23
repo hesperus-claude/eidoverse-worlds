@@ -40,7 +40,7 @@ export const COMMANDS = [
   { name: 'access', help: '/access invite-only|watch|public|open — who may come into this world (owner); /access alone shows it. World Settings › Access does this with buttons' },
   { name: 'members', help: 'who can come into this world, and until when' },
   { name: 'ban', help: '/ban <name> [reason] — ban someone from this world, here or not (moderators and owners)' },
-  { name: 'unban', help: '/unban <name> — lift a ban here (moderators and owners: one you made, or one by someone you outrank)' },
+  { name: 'unban', help: '/unban <name> — lift a ban here (moderators: one you made, or one by someone you outrank; owners: any)' },
   { name: 'bans', help: 'who is banned or muted here right now (moderators)' },
   // the table is the dispatch: a handler with no row here is unreachable ("unknown command")
   { name: 'mute', help: '/mute <name> [minutes, default 60] [voice|chat] [reason] — quiet someone ranked below you' },
