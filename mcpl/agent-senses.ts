@@ -47,6 +47,9 @@ export function voiceNote(pose: unknown): string {
   return parts.length ? `; ${parts.join("; ")}` : "";
 }
 
+/** How many lines the inbox keeps, newest last (trimInbox, each tick): history and look read only the newest. */
+export const INBOX_MAX = 2000;
+
 export class AgentSenses {
   constructor(readonly a: WorldAgent) {}
 
@@ -489,7 +492,7 @@ export class AgentSenses {
   }
 
   /** Recent pings, for a plain-MCP host that polls (takePings) instead of
-   *  subscribing (onPing). A ring (the inbox is not one: it is the unread log, and inboxCursor indexes it). */
+   *  subscribing (onPing). A ring (the inbox is a trimmed log instead: inboxCursor indexes it, trimInbox). */
   private static readonly PING_RING = 64;
 
   ping(p: { ts: number; kind: "mention" | "approach" | "depart" | "reach" | "touch"; who: string; text?: string }) {
@@ -502,6 +505,14 @@ export class AgentSenses {
     const out = this.a.pings;
     this.a.pings = [];
     return out;
+  }
+
+  /** Keep the inbox's newest INBOX_MAX lines; the unread cursor moves with the lines it indexes. */
+  trimInbox() {
+    const over = this.a.inbox.length - INBOX_MAX;
+    if (over <= 0) return;
+    this.a.inbox.splice(0, over);
+    this.inboxCursor = Math.max(0, this.inboxCursor - over);
   }
 
   /** Advance the unread cursor past replayed history at or before `seq` (chat

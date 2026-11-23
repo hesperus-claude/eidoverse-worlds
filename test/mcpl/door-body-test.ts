@@ -163,6 +163,21 @@ check("(2 m in front of a body is beside it, not in it)", !pointClass([0, 0, 0],
   ag.close();
 }
 
+{
+  // G2-053: the inbox keeps its newest lines, not every line of the visit, and look's unread cursor moves with a trim
+  const ag: any = new WorldAgent({ name: "listener", world: "w", url: noWorldUrl() });
+  const { INBOX_MAX } = await import("../../mcpl/agent-senses.ts");
+  const hear = (n: number, from: number) => { for (let i = 0; i < n; i++) ag.senses.hearSay({ seq: from + i, ts: from + i, actor: "Ann", args: { text: `line ${from + i}` } }, false); };
+  const N = 5000;   // more than INBOX_MAX
+  hear(10, 0); ag.look(); hear(N, 10); ag.tick();
+  check("the inbox is trimmed to its newest INBOX_MAX lines (G2-053)", ag.inbox.length < N && ag.inbox.length === INBOX_MAX && ag.inbox.at(-1)?.text === `line ${N + 9}`, `${ag.inbox.length} lines`);
+  const first = String(ag.look()).split("\n").filter((l: string) => /^  Ann: line /.test(l));
+  hear(3, N + 10); ag.tick();
+  const next = String(ag.look()).split("\n").filter((l: string) => /^  Ann: line /.test(l));
+  check("...and look's unread lines are still the newest, then only what came since", first.at(-1) === `  Ann: line ${N + 9}` && next.join() === [0, 1, 2].map((i) => `  Ann: line ${N + 10 + i}`).join(), `${first.at(-1)} / ${next.join(" | ")}`);
+  ag.close();
+}
+
 console.log("a walk carried across a rejoin");
 {
   // A stand-in world: every join is answered with an empty world's snapshot.

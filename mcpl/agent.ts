@@ -1356,6 +1356,7 @@ export class WorldAgent {
   }
   private tickInWorld() {
     this.watchAnim();
+    this.senses.trimInbox();
     if (!this.joined) return;
     const dt = TICK_MS / 1000;
     // a heightmap terrain waiting on its grid: ask again (requestGrid backs off by itself), and build the
