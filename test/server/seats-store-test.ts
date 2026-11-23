@@ -216,6 +216,61 @@ try {
     const broke = breaker.propose(profile("seatdummy"), "after-crash") as any;
     check("a dead writer's lock is broken (pid-verified, fresh stamp and all) and the write proceeds", broke.ok === true, JSON.stringify(broke));
 
+    // G2-074: a dead holder whose lock can't be claimed (the rename keeps failing) is waited on only until the deadline,
+    // like a live one. The injected rename fails until well past the deadline, then lets the claim through.
+    writeFileSync(join(seatsDir, ".write-lock"), JSON.stringify({ pid: 999_999_999, nonce: "stuck-corpse", ts: Date.now() }));
+    const t0 = Date.now(); let lateTries = 0;
+    const stuck = new SeatStore(OPT, LIB, {}, { lockTimeoutMs: 200, lockFs: {
+      renameSync: (from: any, to: any) => {
+        if (String(from).endsWith(".write-lock") && Date.now() - t0 < 1200) throw new Error("EPERM (injected)");
+        if (String(from).endsWith(".write-lock")) lateTries++;
+        return fs.renameSync(from, to);
+      },
+    } });
+    const st = stuck.propose(profile("seatdummy"), "stuck-breaker") as any;
+    check("G2-074: an unclaimable dead lock times out at the deadline (503), not past it",
+      !st.ok && st.status === 503 && lateTries === 0 && Date.now() - t0 < 1200, JSON.stringify({ st, lateTries, ms: Date.now() - t0 }));
+    rmSync(join(seatsDir, ".write-lock"), { force: true });
+
+    // G3-085: the claim's rename caught a NEWER lock (it replaced the corpse after we read it), and a newcomer took the
+    // free name before the put-back. The put-back must not clobber the newcomer's lock.
+    writeFileSync(join(seatsDir, ".write-lock"), JSON.stringify({ pid: 999_999_999, nonce: "corpse-2", ts: Date.now() }));
+    let raced = false;
+    const putBack = new SeatStore(OPT, LIB, {}, { lockTimeoutMs: 200, lockFs: {
+      renameSync: (from: any, to: any) => {
+        if (!raced && String(from).endsWith(".write-lock") && String(to).includes(".tomb-")) {
+          raced = true;
+          writeFileSync(from, JSON.stringify({ pid: process.pid, nonce: "newer", ts: Date.now() }));
+          fs.renameSync(from, to);
+          writeFileSync(from, JSON.stringify({ pid: process.pid, nonce: "newcomer", ts: Date.now() }));
+          return;
+        }
+        return fs.renameSync(from, to);
+      },
+    } });
+    const pb = putBack.propose(profile("seatdummy"), "put-back") as any;
+    const lockNow = JSON.parse(readFileSync(join(seatsDir, ".write-lock"), "utf8")).nonce;
+    check("G3-085: the put-back leaves the newcomer's lock in place (it refuses to clobber)",
+      raced && !pb.ok && lockNow === "newcomer", JSON.stringify({ raced, pb, lockNow }));
+    check("G3-085: …and leaves no tomb behind", !fs.readdirSync(seatsDir).some((f) => f.includes(".tomb-")), fs.readdirSync(seatsDir).join(","));
+    rmSync(join(seatsDir, ".write-lock"), { force: true });
+    // …while with no newcomer, the newer lock the claim caught is put back as it was
+    writeFileSync(join(seatsDir, ".write-lock"), JSON.stringify({ pid: 999_999_999, nonce: "corpse-3", ts: Date.now() }));
+    let caught = false;
+    const restorer = new SeatStore(OPT, LIB, {}, { lockTimeoutMs: 200, lockFs: {
+      renameSync: (from: any, to: any) => {
+        if (!caught && String(from).endsWith(".write-lock") && String(to).includes(".tomb-")) {
+          caught = true; writeFileSync(from, JSON.stringify({ pid: process.pid, nonce: "newer", ts: Date.now() }));
+        }
+        return fs.renameSync(from, to);
+      },
+    } });
+    const rs = restorer.propose(profile("seatdummy"), "restorer") as any;
+    check("G3-085: with no newcomer, the caught lock is put back (and the writer waits on it)",
+      caught && !rs.ok && JSON.parse(readFileSync(join(seatsDir, ".write-lock"), "utf8")).nonce === "newer"
+      && !fs.readdirSync(seatsDir).some((f) => f.includes(".tomb-")), JSON.stringify({ caught, rs }));
+    rmSync(join(seatsDir, ".write-lock"), { force: true });
+
     // #105 round 3 — release-safety + commit gate: the lock is swapped to a
     // successor's mid-transaction (inside A's provenance append, after the
     // first gate). A must ABORT at the second gate — snapshot withheld, its
