@@ -15,6 +15,7 @@
 //   MI8  the backups and the replacement logs are fsynced before the renames that publish them, the directory after
 //        (POSIX; Windows skips a directory fsync: server/durable.ts syncDir)
 //   MI9  a dry run mints nothing: a worlds dir without a custody file is skipped, and none is written
+//   MI10 a 24-letter directory id (PERSON_ID allows 20 or 24) is left as it is
 // MIGRATE_TOOL=<path> runs another copy of the tool (a base, for the rows' red).
 // @ts-nocheck
 import fs from "node:fs";
@@ -136,5 +137,13 @@ fs.renameSync = (a, b) => { log("rename " + a + " " + b); return rn(a, b); };\n`
 { const root = scratch("migdry"); const d = oldWorld(root, "loft"); const cf = path.join(root, "worlds", ".custody.json"); fs.rmSync(cf);
   const r = tool([d]);
   ok(r.code === 0 && /sequencer key/.test(r.o?.skipped ?? "") && !fs.existsSync(cf), "MI9 a dry run on a worlds dir with no custody file is skipped (no sequencer key here) and writes no custody file", { code: r.code, o: r.o, minted: fs.existsSync(cf) }); }
+
+// ================= MI10: an id of either length is already a person's =================
+{ const root = scratch("mig24"); const d = oldWorld(root, "attic"); const f = path.join(d, "world.jsonl"); const L = logOf(d);
+  const long = "u-" + "a".repeat(24);   // PERSON_ID (shared/protocol/ids.js) allows 20 or 24 letters
+  L.push({ world: L[1].world, ts: L.at(-1).ts + 1000, kind: "say", actor: long, body: { text: "already migrated" } });
+  fs.writeFileSync(f, L.map((e: any) => JSON.stringify(e)).join("\n") + "\n");
+  const r = tool(["--apply", d]); const said = logOf(d).find((e: any) => e.kind === "say" && e.body?.text === "already migrated");
+  ok(r.code === 0 && r.o?.written === true && said?.actor === long, "MI10 a 24-letter directory id is left as it is, as a 20-letter one is (PERSON_ID), while the names around it migrate", { code: r.code, actor: said?.actor, tail: r.out.slice(-300) }); }
 
 done();
