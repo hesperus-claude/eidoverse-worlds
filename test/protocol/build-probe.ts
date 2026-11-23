@@ -220,7 +220,10 @@ try {
     if (at) await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: at.x + 80, y: at.y, button: "left", clickCount: 1 });
     check("SD2 the release is ONE act, a set of the box's transform", await waitDisk(() => myActs().length === n0 + 1 && myActs().at(-1).e.verb === "set" && myActs().at(-1).e.body?.args?.id === box), myActs().slice(n0).map((x) => x.e.body?.args));
     bob.removeEventListener("message", onDrag);
-    await evalJson(`import('/lib/edit/myview.js').then((v) => (v.setIsolate(null), true))`);
+    // off WITH every id, as the product's own turn-off does (layout.js): without them only the kept box is re-shown
+    await evalJson(`Promise.all([import('/lib/edit/myview.js'), import('/lib/world.js')]).then(([v, w]) => (v.setIsolate(null, () => null, [...w.entities.keys()]), true))`);
+    check("SD (teardown) the isolate is off: nothing is left hidden in this view", await waitFor(`import('/lib/world.js').then((m) => [...m.entities.values()].every((o) => !o || o.visible))`, 3000),
+      await evalJson(`import('/lib/world.js').then((m) => [...m.entities].filter(([, o]) => o && !o.visible).map(([id]) => id))`));
     await page(`(await import('/lib/edit/build.js')).setTool('move'); return true;`);
   }
 
