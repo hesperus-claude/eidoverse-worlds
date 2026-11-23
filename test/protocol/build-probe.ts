@@ -182,6 +182,21 @@ try {
     check("SC4 …and the card closes", await waitFor(`!document.querySelector('#script-new')`));
     const used = await bobReq("use", { id: thing });
     check("SC5 another builder's use runs it (Bob's): the counter it keeps is on the record, and it spoke", used.ok && await waitDisk(() => disk().entities[thing]?.c["local/counter"]?.n === 1) && entries().some((e) => e.kind === "say" && /used me \(1\)/.test(e.body?.text ?? "")), [used.refused, disk().entities[thing]?.c["local/counter"]]);
+    // a roleless person uses it too (G4-135): a fresh socket with no roles: entry, holding the default role, which is
+    // member for the while (a founded world's default is builder); the default goes back after
+    const dr0 = disk().entities["@world"]?.c?.["default-role"];
+    const setDefault = (v: any) => page(`const m = await import('/lib/net.js'); return (await m.sendRequest(${v == null ? `'delete', { id: '@world', component: 'default-role' }` : `'set', { id: '@world', component: 'default-role', value: ${JSON.stringify(v)} }`})).ok;`);
+    check("(setup) the default role is member for now", (await setDefault({ ...(dr0 ?? {}), role: "member" })) === true);
+    const carol = new WebSocket(BASE.replace("http", "ws") + "/ws"); const cr = new Map(); let cn = 0; let CAROL = "", CROLE = "";
+    carol.onmessage = (ev) => { const m = JSON.parse(String(ev.data)); if (m.type === "reply") cr.get(m.id)?.(m.reply); if (m.type === "snapshot" && m.actor) { CAROL = m.actor; CROLE = m.yourRights?.role ?? ""; } };
+    await new Promise((r, j) => { carol.onopen = r; carol.onerror = j; });
+    carol.send(JSON.stringify({ type: "join", hello: helloOf(), world: WORLD, id: "carol", avatar: "", replica: true }));
+    const carolIn = await waitDisk(() => !!CAROL, 6000);
+    const cUsed = await new Promise<any>((res) => { const id = `c${++cn}`; cr.set(id, res); carol.send(JSON.stringify({ type: "request", id, verb: "use", args: { id: thing } })); setTimeout(() => res({ ok: false, refused: { code: "timeout" } }), 6000); });
+    check("SC5b a roleless member's use runs it too (Carol: no role given, the default member): the counter is 2, and it spoke", carolIn && CROLE === "member" && cUsed.ok && await waitDisk(() => disk().entities[thing]?.c["local/counter"]?.n === 2) && entries().some((e) => e.kind === "say" && /used me \(2\)/.test(e.body?.text ?? "")),
+      [CAROL, CROLE, cUsed.refused, disk().entities[thing]?.c["local/counter"]]);
+    carol.close();
+    check("(setup) the default role is put back", (await setDefault(dr0 ?? null)) === true);
     check("SC6 the Inspector lists it under Scripts", await waitFor(`[...document.querySelectorAll('[data-frame="inspector"]')].some((f) => /greeter/.test(f.textContent))`, 6000));
   }
   check("errors: no page error", await evalJson(`__errs.length === 0`), await evalJson(`__errs`));
