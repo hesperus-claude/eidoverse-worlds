@@ -1,4 +1,4 @@
-import { helloOf } from "../../shared/protocol/hello.js";
+import { helloOf, refusalWords } from "../../shared/protocol/hello.js";
 // Chat bridge: mirrors a world's spoken chat into one Discord text channel,
 // and carries that channel's messages back in as speech.
 //
@@ -172,6 +172,8 @@ let lastSeq = -Infinity; // dedupe guard across reconnects (a log re-delivery ov
 let myId: string | null = null; // the bridge's own identity (opaque), from the snapshot
 const names: Record<string, string> = {}; // identity → display name (the door's directory, as the world sends it)
 
+let helloRefused: string | null = null;   // the server won't speak this build's hello: said, and never redialed
+
 function connectWorld() {
   const ws = new WebSocket(WORLD_URL);
   worldWs = ws;
@@ -179,6 +181,7 @@ function connectWorld() {
     ws.send(JSON.stringify({ type: "join", hello: helloOf(), world: WORLD_NAME, id: BRIDGE_ID, token: WORLD_TOKEN, replica: true }));
   ws.onclose = () => {
     joined = false;
+    if (helloRefused) { log(`world refused the join: ${helloRefused} — not redialing`); process.exit(1); }
     log("world socket closed — reconnecting in 1.5s");
     setTimeout(connectWorld, 1500);
   };
@@ -186,6 +189,7 @@ function connectWorld() {
     let msg: any;
     try { msg = JSON.parse(String(ev.data)); } catch { return; }
     if (msg.type === "error") { log(`world says: ${msg.error}`); return; }
+    if (msg.type === "refused") { helloRefused = refusalWords(msg); return; }
     if (msg.type === "reply") {
       const line = inFlight.get(msg.id); inFlight.delete(msg.id);
       const refused = msg.reply?.refused;

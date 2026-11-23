@@ -31,7 +31,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { helloOf } from "../../shared/protocol/hello.js";
+import { helloOf, refusalWords } from "../../shared/protocol/hello.js";
 
 const WORLD_URL = process.env.WORLD_URL ?? "ws://127.0.0.1:8940/ws";
 const WORLD_TOKEN = process.env.WORLD_TOKEN ?? "";
@@ -134,14 +134,18 @@ async function connectDiscord() {
 
 const names: Record<string, string> = {}; // identity → display name, as the world sends them
 let head = -1;                             // the log's head at join: lines at or before it are history
+let helloRefused: string | null = null;    // the server won't speak this build's hello: said, and never redialed
 
 function connectWorld() {
   const ws = new WebSocket(WORLD_URL);
   ws.onopen = () => ws.send(JSON.stringify({ type: "join", hello: helloOf(), world: WORLD_NAME, id: "voice", avatar: "", spectate: true, token: WORLD_TOKEN, replica: true }));
-  ws.onclose = () => { log("world socket closed — reconnecting"); setTimeout(connectWorld, 1500); };
+  ws.onclose = () => {
+    if (helloRefused) { log(`world refused the join: ${helloRefused} — not redialing`); process.exit(1); }
+    log("world socket closed — reconnecting"); setTimeout(connectWorld, 1500); };
   ws.onmessage = (ev) => {
     const msg = JSON.parse(String(ev.data));
     if (msg.type === "error") { log(`world says: ${msg.error}`); return; }
+    if (msg.type === "refused") { helloRefused = refusalWords(msg); return; }
     if (msg.type === "snapshot") {
       Object.assign(names, msg.names ?? {});
       head = Number.isInteger(msg.seq) ? msg.seq : -1;
