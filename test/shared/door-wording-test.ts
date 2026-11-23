@@ -742,6 +742,8 @@ try {
       ws.send(snapshot()); setTimeout(() => ws.close(1001, "restarting"), 300);
     },
     grounded: (ws) => ws.send(snapshot({ yourRights: { role: "builder", fly: false } })),
+    // a ban refused before the join (no until): its words, then moderation's close (G2-058)
+    "banned-at-join": (ws) => { ws.send(JSON.stringify({ type: "error", error: "you are banned from this world." })); ws.close(4006, "banned"); },
     full: (ws) => ws.close(4005, "full"),
   };
   const wsWorld = Bun.serve({
@@ -772,6 +774,13 @@ try {
     const a = body(name);
     const got = await outcome(a.connect());
     check(`a join the world refuses says so, in its words if it gave any (${name})`, got === want && a.closed === true, got);
+  }
+  {
+    // G2-058: a 4006 close before the join answers the join with moderation's words at once, not at the 8 s timer
+    const t0 = Date.now(), a = body("banned-at-join");
+    const got = await outcome(a.connect()), took = Date.now() - t0;
+    check("a join refused by moderation (4006, no until) is answered at once, in the world's words (G2-058)",
+      got === "the world refused the join: you are banned from this world" && took < 3000 && a.closed === true, `${got} after ${took} ms, closed ${a.closed}`);
   }
   {
     // G2-057: a full world's rejection keeps the world's words apart from the body's own "trying again" clause, so a door

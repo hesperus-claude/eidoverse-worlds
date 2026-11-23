@@ -612,6 +612,8 @@ export class WorldAgent {
             setTimeout(() => { if (!this.closed) this.connect().catch(() => {}); }, wait + 1000);
             return;
           }
+          // a join still waiting hears moderation's words now, not at the 8 s timer (a join already answered ignores it)
+          clearTimeout(timeout); reject(new Error(this.joinRefused ?? "the world's moderation removed this body before its join finished")); this.joinRefused = null;
           this.close(); return;
         }
         // 4005 = the sequencer REFUSED the join (bad or reserved name, bad token, no such world, access refused…). A
@@ -656,8 +658,8 @@ export class WorldAgent {
             // instead of retrying the identical join.
             if (!this.joined) {
               // a cooldown isn't final: onclose 4006 dials again after it. Any other refusal's close says whether it is
-              // final (4005 "full" is not: onclose dials again); onclose answers this connect() with these words (after a 4006
-              // close only the 8 s timer does). The world's own words, as the cause inside whatever sentence carries this
+              // final (4005 "full" is not: onclose dials again); onclose answers this connect() with these words. The world's
+              // own words, as the cause inside whatever sentence carries this
               // (travel's, for one)
               const said = String(msg.error ?? "").trim().replace(/\.+$/, "");
               const base = said ? `the world refused the join: ${said}` : "the world refused the join without giving a reason";
