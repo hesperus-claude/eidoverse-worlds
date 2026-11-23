@@ -323,8 +323,11 @@ export function paintSky(body) {
   commit.onclick = async () => {
     // clean at once, so the write's own echo (which can beat its reply) forgets `local`; a refusal makes it unsaved again
     commit.classList.remove('dirty');
+    const before = loggedSky();
     const r = await sendOps([{ verb: 'sky', args: gather() }], { what: 'the sky', expect: false });
-    if (!r?.ok) { commit.classList.add('dirty'); return; }   // writes.js said why; never "logged" (G2-084)
+    // writes.js said why; never "logged" (G2-084). Unsaved again only if no log landed meanwhile (a timeout that landed,
+    // or someone else's sky): then the log speaks, and an unsaved mark would sit over its values
+    if (!r?.ok) { if (loggedSky() === before) commit.classList.add('dirty'); return; }
     commit.textContent = '✓ logged';
     setTimeout(() => { commit.textContent = '✓ log to world'; }, 1200);
   };

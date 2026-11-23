@@ -6,7 +6,7 @@
 // by sky, clock and headset. The sky is test/stubs/skypanel-stub.mjs.
 
 import { fileURLToPath } from "node:url";
-import { tryUntil } from "../gate/wait.ts";
+import { tryUntil, pause } from "../gate/wait.ts";
 import { plugin } from "bun";
 import { stubResolve } from "../harness/stub.ts";
 const stub = fileURLToPath(new URL("../stubs/skypanel-stub.mjs", import.meta.url));
@@ -192,6 +192,22 @@ for (const ok of [true, false]) {
   await tryUntil("the commit's reply is handled", () => (ok ? btn.textContent === "✓ logged" : btn.classList.contains("dirty")) || null, { ms: 1000 });
   if (ok) check("G2-084 control: a write the authority took reads ✓ logged", btn.textContent === "✓ logged" && !btn.classList.contains("dirty"), `${btn.textContent} dirty=${btn.classList.contains("dirty")}`);
   else check("G2-084 a refused write never reads ✓ logged, and stays unsaved", btn.textContent !== "✓ logged" && btn.classList.contains("dirty"), `${btn.textContent} dirty=${btn.classList.contains("dirty")}`);
+  b.remove();
+}
+S.reply = { ok: true };
+// G2-084 races: a reply that isn't ok but comes after a log landed: a timed-out write that landed (its own echo), or a
+// refusal while someone else's sky arrived. Either way the log speaks now: never marked unsaved over it.
+for (const [what, echo] of [["a timed-out write that landed (its own echo first)", "own"], ["a refusal while someone else's sky lands", "theirs"]] as const) {
+  const b = fresh();
+  S.reply = echo === "own" ? { ok: false, refused: { code: "timeout", reason: "no answer in 15 s", mayHaveLanded: true } } : { ok: false, refused: { code: "rights", reason: "no" } };
+  S.beforeReply = () => { logSky(echo === "own" ? { ...S.sent.at(-1)[1] } : { hours: 3, rate: 0, weather: "rain", clouds: "stratus" }); };
+  const sl = b.querySelector('input[type="range"]') as HTMLInputElement;
+  sl.value = "10"; sl.dispatchEvent(new Event("input"));
+  const btn = b.querySelector("button.dirty") as HTMLButtonElement;
+  btn.click();
+  await pause("one macrotask: the stub's reply and the click handler behind it", 0);
+  check(`G2-084 ${what}: not marked unsaved`, !btn.classList.contains("dirty") && btn.textContent !== "✓ logged", `${btn.textContent} dirty=${btn.classList.contains("dirty")}`);
+  S.beforeReply = undefined;
   b.remove();
 }
 S.reply = { ok: true };

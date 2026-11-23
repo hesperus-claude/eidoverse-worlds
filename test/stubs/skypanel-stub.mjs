@@ -8,7 +8,7 @@ export const bus = {
 export const report = (what, e) => { throw new Error(`${what}: ${e}`); };
 export const defsRegistry = async () => ({ skyPresets: {}, skyClocks: { paris: { tz: 'Europe/Paris', label: 'Paris' } } });   // one clock, so the clock select has a real option to try
 // edit/writes.js: the panel's commit is ONE request (sendOps([{verb: 'sky', args}])), recorded as [verb, args]
-export const sendOps = async (ops) => { for (const o of [].concat(ops)) S.sent.push([o.verb, o.args]); return S.reply; };   // S.reply: the authority's answer
+export const sendOps = async (ops) => { for (const o of [].concat(ops)) S.sent.push([o.verb, o.args]); S.beforeReply?.(); return S.reply; };   // S.reply: the authority's answer; S.beforeReply: a log that lands first
 export const flashHint = () => {};
 
 export const S = { logged: null, args: {}, previewing: false, impl: 'eidoverse', cloudQuality: 'medium', choice: null, sent: [], reply: { ok: true },
