@@ -8,7 +8,6 @@ import { setTtsSource } from './tts.js';
 import { decodeWavToPcm } from './wavpcm.js';
 
 let engine = null;
-let _phonCost = 0;   // measured once: see speak()
 const runtime = async () => (engine ??= await import('@mintplex-labs/piper-tts-web'));
 
 registerEngine({
