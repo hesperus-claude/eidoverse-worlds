@@ -254,9 +254,10 @@ export function domQuadsDrag(handRay, press) {
   if (press.dragging && dPx) map.scrollAt?.(press.data.x, press.data.y, -dPx);   // content follows the laser
 }
 
-/** Trigger up: a press that never dragged is a click where it began. `cancel` (a grab took over) drops it. */
+/** Trigger up: a press that never dragged is a click where it began. `cancel` (a grab took over) drops it, and so does
+ *  a panel hidden meanwhile (B/Y, a close): a hidden button is not clicked. */
 export function domQuadsRelease(press, cancel = false) {
-  if (!press || cancel || press.dragging || !press.mesh.parent) return;
+  if (!press || cancel || press.dragging || !press.mesh.parent || !press.mesh.visible) return;
   // the click goes to what was PRESSED: if the content moved under the point meanwhile (a chat line arrived), the
   // element there now is something else, and a release over it is no click (as a mouse up off its button isn't)
   const now = press.mesh.material.map?.elementAt?.(press.data.x, press.data.y);

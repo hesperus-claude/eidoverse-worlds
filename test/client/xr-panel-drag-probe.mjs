@@ -87,6 +87,12 @@ try {
     const pr3 = dq.domQuadsPress(rayAt(id, spot.x, spot.y));
     dq.domQuadsRelease(pr3.press, true);
     const clicksAfterCancel = clicks;
+    // 3b. B/Y (the quick hide) while the trigger is held: the release must not click the button it hid (G2-020)
+    const pr3b = dq.domQuadsPress(rayAt(id, spot.x, spot.y));
+    const hid = dq.domQuadsHideToggle();
+    dq.domQuadsRelease(pr3b.press);
+    const clicksAfterHide = clicks;
+    if (hid) dq.domQuadsHideToggle();   // and back, for the rows below
     dom.removeEventListener('click', onClick, true);
     // 4. a checkbox is a press like anything else (review P2): it toggles on RELEASE, exactly once, and a drag that
     //    starts on it scrolls instead of toggling (the debug panel is mostly checkbox rows)
@@ -137,7 +143,7 @@ try {
     // rounded corners: the raster leaves a frame's border-radius corners clear, and the material cuts them out
     let corner = null;
     { const t = dq.domQuadTexture(id), c = t.image; try { corner = { a: c.getContext('2d').getImageData(1, 1, 1, 1).data[3], test: meshOf(id).material.alphaTest, radius: getComputedStyle(t.dom).borderTopLeftRadius }; } catch (e) { corner = { err: String(e) }; } }
-    return { corner, dbg: globalThis.__dbg, id, spot, s0, s1, s2, clicksAfterDrag, clicksAfterTap, clicksAfterCancel, cbMoved, cb: !!cb, cbFlip, cbClicks, cbDragClicks, cbEarly, cbPending: cbPress !== null && cbPress !== 'n/a', cbDragFlip, cbScrolled, cbDragging, dragging: pr.press?.dragging };
+    return { corner, dbg: globalThis.__dbg, id, spot, s0, s1, s2, clicksAfterDrag, clicksAfterTap, clicksAfterCancel, hid, clicksAfterHide, cbMoved, cb: !!cb, cbFlip, cbClicks, cbDragClicks, cbEarly, cbPending: cbPress !== null && cbPress !== 'n/a', cbDragFlip, cbScrolled, cbDragging, dragging: pr.press?.dragging };
   });
   console.log('  ·', JSON.stringify(r));
   check('a VR panel has a scrollable box to test', !r.none && !r.nospot, JSON.stringify(r));
@@ -145,6 +151,7 @@ try {
   check('…and that drag is not a click', r.clicksAfterDrag === 0, r.clicksAfterDrag);
   check('a tap (jitter under the threshold) is a click, and does not scroll', r.clicksAfterTap === 1 && r.s2 === 0, JSON.stringify({ clicks: r.clicksAfterTap, moved: r.s2 }));
   check('a grab that takes over a press cancels its click', r.clicksAfterCancel === 1, r.clicksAfterCancel);
+  check('B/Y hiding the panels under a held press cancels its click (G2-020)', r.hid === true && r.clicksAfterHide === r.clicksAfterCancel, JSON.stringify({ hid: r.hid, before: r.clicksAfterCancel, after: r.clicksAfterHide }));
   check('a trigger on a checkbox toggles it on release, exactly once (not on the press)', r.cb && r.cbEarly === false && r.cbPending && r.cbFlip === true && r.cbClicks === 1, JSON.stringify({ cb: r.cb, early: r.cbEarly, pending: r.cbPending, flip: r.cbFlip, clicks: r.cbClicks }));
   check('a drag that starts on a checkbox scrolls and never toggles it', r.cb && r.cbDragging && r.cbScrolled >= 40 && r.cbDragFlip === false && r.cbDragClicks === 0, JSON.stringify({ dragging: r.cbDragging, scrolled: r.cbScrolled, flipped: r.cbDragFlip, clicks: r.cbDragClicks }));
   check('content moving under a held press cancels the click (the release lands on what was pressed, or nothing)', r.cbMoved?.pressed && r.cbMoved.clicks === 0 && !r.cbMoved.flipped, JSON.stringify(r.cbMoved));
