@@ -195,12 +195,13 @@ export function sinkRate(cfg, airspeed) {
   return p.sinkAtMinSink + k * d * d * p.curvature;
 }
 
+// bestGlide's answer per config object
+const _bestCache = new WeakMap();
 /** The polar's ACTUAL best-glide point, found by searching the curve: anything that predicts range consults this, not
  *  a config literal. Memoised per config object (the search is ~1,230 evaluations; glideRange is called per verb).
  *
  *  @returns {{speed:number, ratio:number, sink:number}}
  */
-const _bestCache = new WeakMap();
 export function bestGlide(cfg) {
   const hit = _bestCache.get(cfg);
   if (hit) return hit;
