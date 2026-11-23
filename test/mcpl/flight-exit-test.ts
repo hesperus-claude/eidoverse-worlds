@@ -659,5 +659,14 @@ console.log('\nthe 2026-11-23 sweep');
   for (let i = 0; i < 3000 && far.r == null; i++) await tick(ag);
   check('...and so does a glide that lands short, from the height it set out at', /From 60\.0m over the ground best glide reaches/.test(far.r?.text) && new RegExp(`reaches ${want}m`).test(far.r?.text), far.r?.text ?? 'no answer');
 }
+{
+  // G3-063: flight_status's heading is a compass bearing (0 = north, -z; 90 = east, +x), as body_state promises
+  const ag = bench('compass');
+  await ag.takeOff(); toAir(ag, 20);
+  const { intYaw } = await import('../../mcpl/agent-result.ts');
+  const headingOf = (worldYaw: number) => { ag.flight.yaw = intYaw(worldYaw); return /heading (\d+)deg/.exec(ag.flightStatus())?.[1]; };
+  const got = [Math.PI, Math.PI / 2, 0, -Math.PI / 2].map(headingOf);   // world yaw atan2(dx, dz): facing -z, +x, +z, -x
+  check('flight_status says a heading as a compass bearing: north 0, east 90, south 180, west 270 (G3-063)', got.join() === '0,90,180,270', got.join());
+}
 for (const a of agents) { try { a.close(); } catch {} }
 done();

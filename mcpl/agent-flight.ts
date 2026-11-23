@@ -562,8 +562,9 @@ export class AgentFlight {
     if (!this.a.flight) return this.a.aloft() ? `falling at ${at}, ${this.a.pos.y.toFixed(1)}m` : `on the ground at ${at}`;
     const f = this.a.flight, cfg = this.a.flightCfg;
     const bg = bestGlide(cfg);
+    // heading: a compass bearing (0 north, -z; 90 east, +x), from the integrator's yaw (forward = (cos, sin) in x, z)
     return [
-      `${f.phase.toLowerCase()} at ${f.pos.y.toFixed(1)}m, heading ${((f.yaw * 180 / Math.PI + 360) % 360).toFixed(0)}deg, ${f.airspeed.toFixed(1)} m/s`,
+      `${f.phase.toLowerCase()} at ${f.pos.y.toFixed(1)}m, heading ${(((f.yaw + Math.PI / 2) * 180 / Math.PI % 360 + 360) % 360).toFixed(0)}deg, ${f.airspeed.toFixed(1)} m/s`,
       `stamina ${f.stamina.toFixed(0)}/100 (refills on the ground: ${cfg.stamina.refillGroundPerSec}/s; perches are not implemented)`,
       `from here best glide reaches ${glideRange(cfg, f.pos.y - this.a.heightAt(f.pos.x, f.pos.z)).toFixed(0)}m at ${bg.speed.toFixed(1)} m/s`,
       `wings ${f.wings} - mode ${f.mode}`,
