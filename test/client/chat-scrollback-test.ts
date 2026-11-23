@@ -425,6 +425,29 @@ console.log("a walk that ended at the present opens again once a trim makes hist
     shown[0] === "#1" && shown.length === 401 && isSorted(shown), `${shown[0]}, ${shown.length}`);
 }
 
+console.log("…and so does one whose end marker /clear took away (trimLog's cursor-null branch, G4-049)");
+{
+  // as above, but /clear empties the log, end marker and all, without reopening the walk. The end marker is then
+  // never trimmed, so only trimLog's own "a walk that ended at the present has passed everything" can reopen it
+  const { logChat, logEl } = await freshChat();
+  const t0 = Date.now() - 500_000;
+  const log = Array.from({ length: 401 }, (_, i) => say(i + 1, voices[(i + 1) % 3], t0 + (i + 1) * 1000));
+  setLog([]);
+  await scrollUp(logEl);
+  check("precondition: the empty world's first page ended the walk", logEl.textContent!.includes("beginning of this world"));
+  const inp = frameStub.body!.querySelector("#chatline") as HTMLInputElement;
+  inp.value = "/clear"; inp.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  check("precondition: /clear took the end marker with it", logEl.children.length === 0 && !logEl.textContent!.includes("beginning"), logEl.textContent);
+  setLog(log);
+  for (const e of log) logChat(e.actor, e.args.text, "", { seq: e.seq, ts: e.ts });
+  check("precondition: the trim took #1 off the top", shownIn(logEl)[0] === "#2" && rowsOf(logEl).length === 400,
+    `${shownIn(logEl)[0]}, ${rowsOf(logEl).length} rows`);
+  await scrollUp(logEl);
+  const shown = shownIn(logEl);
+  check("scrolling up brings #1 back after a /clear: every say once, in order",
+    shown[0] === "#1" && shown.length === 401 && isSorted(shown), `${shown[0]}, ${shown.length}`);
+}
+
 console.log("a trim while a page is in flight does not send the walk past the new hole");
 {
   // #601–#1000 arrive live, and one scroll-up pages #561–#600 in on top. The

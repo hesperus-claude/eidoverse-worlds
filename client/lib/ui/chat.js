@@ -138,7 +138,7 @@ function trimLog() {
     for (const seq of seqsOf(row)) {
       renderedSeqs.delete(seq);
       if (seq > trimmedThrough) trimmedThrough = seq;
-      const passed = pageCursor === null ? noMoreHistory : seq >= pageCursor;
+      const passed = pageCursor === null ? noMoreHistory : seq >= pageCursor;   // null + ended: only after /clear took the end marker (G4-049)
       if (passed) restartWalk(null);
     }
     row.remove();
