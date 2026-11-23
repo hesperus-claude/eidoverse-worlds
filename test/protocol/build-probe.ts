@@ -228,14 +228,16 @@ try {
   { const thing = ghThing;
     await page(`(await import('/lib/scenegraph.js')).sceneSelect('${thing}'); return true;`);
     const btn = `[...document.querySelectorAll('[data-frame="inspector"] button')].find((b) => /Add Script/.test(b.textContent))`;
-    check("SC1 the Inspector offers 'Add Script…' on the selected thing", await waitFor(`!!(${btn}) && !(${btn}).disabled`), await evalJson(`[...document.querySelectorAll('[data-frame="inspector"] button')].map((b) => b.textContent).slice(0, 30)`));
+    // the Inspector is the crate's (its #handle, a prefix of its id), not the last subject's still painted
+    const mine = `[...document.querySelectorAll('[data-frame="inspector"] button')].some((b) => /^#\\w+$/.test(b.textContent.trim()) && '${thing}'.startsWith(b.textContent.trim().slice(1)))`;
+    check("SC1 the Inspector offers 'Add Script…' on the selected thing", await waitFor(`${mine} && !!(${btn}) && !(${btn}).disabled`), await evalJson(`[...document.querySelectorAll('[data-frame="inspector"] button')].map((b) => b.textContent).slice(0, 30)`));
     await evalJson(`(${btn})?.click(), true`);
     check("SC2 …it opens the card, a template that runs as it stands already in it", await waitFor(`!!document.querySelector('#script-new .sn-src') && /world\\.on\\("use"/.test(document.querySelector('#script-new .sn-src').value)`));
     const n0 = myActs().length;
     await evalJson(`(() => { const n = document.querySelector('#script-new .sn-name'); if (!n) return false; n.value = 'Greeter'; document.querySelector('#script-new .sn-ok').click(); return true; })()`);
     const made = await waitDisk(() => myActs().length === n0 + 1);
     const b = myActs().at(-1)?.e; const ops = b?.body?.args?.requests ?? [];
-    check("SC3 Create: ONE act, script:greeter + its use reaction (the upload isn't an act)", made && b.verb === "batch" && ops.some((o: any) => o.args?.component === "script:greeter") && ops.some((o: any) => o.args?.component === "reactions"),
+    check("SC3 Create: ONE act, script:greeter + its use reaction on the crate (the upload isn't an act)", made && b.verb === "batch" && ops.some((o: any) => o.args?.component === "script:greeter") && ops.some((o: any) => o.args?.component === "reactions") && ops.every((o: any) => o.args?.id === thing),
       { acts: myActs().slice(n0).map((x) => x.e.verb), refused: await evalJson(`__refused.map((r) => r.text)`), card: await evalJson(`document.querySelector('#script-new .sn-err')?.textContent ?? null`) });
     check("SC4 …and the card closes", await waitFor(`!document.querySelector('#script-new')`));
     const used = await bobReq("use", { id: thing });
