@@ -73,5 +73,13 @@ await tryUntil("the whole burst lands", () => landed().length >= N, { ms: 40_000
 check(`a burst of ${N} Discord lines all enter the world, in order`, JSON.stringify(landed()) === JSON.stringify(burst), `${landed().length} landed: ${landed().slice(-3).join(" | ")}`);
 check("…none dropped: no refusal but the rate one, which is retried in place", !/refused/.test(out), out.split("\n").filter((l) => /refused/.test(l)).slice(0, 3).join(" | "));
 check("…paced under the limit: the world never had to ask the bridge to slow down (the rate retry path is not exercised here)", !/slow down/.test(out), out.split("\n").filter((l) => /slow down/.test(l)).slice(0, 2).join(" | "));
+// the world goes away: Discord lines keep coming, and the bridge's queue toward the world stays bounded (MAX_BACKLOG 50)
+srv.kill(); await srv.exited;
+await tryUntil("the bridge sees the world go", () => /world socket closed/.test(out), { ms: 8000 });
+const drops0 = (out.match(/world backlog — dropped/g) ?? []).length;
+for (let i = 0; i < 60; i++) bridge.stdin.write(`Off: offline line ${i}\n`); bridge.stdin.flush();
+await tryUntil("the offline overflow is dropped", () => (out.match(/world backlog — dropped/g) ?? []).length - drops0 >= 10, { ms: 3000 });
+const dropped = (out.match(/world backlog — dropped/g) ?? []).length - drops0;
+check("while the world is down, 60 Discord lines leave 50 queued: the 10 oldest are dropped, out loud, not held", dropped === 10 && /dropped "Off: offline line 0/.test(out), `${dropped} dropped`);
 cleanup();
 S.done();
