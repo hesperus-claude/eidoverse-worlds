@@ -92,12 +92,6 @@ export function noteReachEvents(r, pose) {
   r.lastReachEvt = bag;
 }
 
-/** A body left or was replaced: its arms let go and its edge state resets. */
-export function dropRemoteReach(r) {
-  if (r.lastReach) for (const limb of Object.keys(r.lastReach)) r.avatar?.clearReach(limb);
-  r.lastReach = undefined;
-}
-
 // ---------------------------------------------------------------- sending
 
 let myBag = null;          // { limb: entry } | null — what rides the wire

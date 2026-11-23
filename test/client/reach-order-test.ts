@@ -1,6 +1,6 @@
 import {THREE,frameBody,rigNamed,frame} from '../fixtures/reach-frame-fixture.ts';
 import {tryUntil} from '../gate/wait.ts';
-const {initReachNet,setMyReach,clearMyReach,myReachBag,applyRemoteReach,dropRemoteReach}=await import('../../client/lib/player/reachnet.js');
+const {initReachNet,setMyReach,clearMyReach,myReachBag,applyRemoteReach}=await import('../../client/lib/player/reachnet.js');
 let current:any=null;const messages:string[]=[];
 const dispatch=await(await import('../fixtures/reach-command-fixture.ts')).commandsFor(()=>current,messages);
 let fail=0;function check(n:string,v:boolean){console.log(v?'PASS':'FAIL',n);if(!v)fail++;}
@@ -68,8 +68,8 @@ for(const order of ['left-first','right-first'])for(const warmed of [false,true]
  applyRemoteReach(r,{reach:descriptor});for(let f=0;f<30;f++)frame(remote,f);
  applyRemoteReach(r,{reach:{rightHand:descriptor.rightHand}});for(let f=0;f<200;f++)frame(remote,f);
  check(`${label}: remote descriptor removal unblocks survivor`,!remote._reach.has('leftHand')&&Number.isFinite(remote.reachStatus().rightHand?.gap)&&!remote.reachStatus().rightHand?.bound.includes('cyclic-reach'));
- dropRemoteReach(r);for(let f=0;f<200;f++)frame(remote,f);
- check(`${label}: remote departure removes remaining private entry`,remote._reach.size===0);
+ applyRemoteReach(r,{});for(let f=0;f<200;f++)frame(remote,f);
+ check(`${label}: a sample with no reach removes the remaining private entry`,remote._reach.size===0);
  // Recreate through the human door, then clear all without first breaking
  // the cycle. Absence, rather than zero weight, is the release contract.
  const all=body();for(const command of commands)dispatch('touch',command);frame(all,0);
