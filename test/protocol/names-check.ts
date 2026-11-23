@@ -56,7 +56,7 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["the door takes shove again", "shared/protocol/verbspec.js", "(occupied, or sliding into them)\" } }, was: {", "(occupied, or sliding into them)\" }, shove: { type: \"bool\", doc: \"old spelling of contact\" } }, was: {", ["P2", "P3"]],
   ["the refusal doesn't name contact", "shared/protocol/verbspec.js", ", shove: \"contact: true (a moving body's push)\" }", " }", ["P2"]],
   ["the punt doc kicks again", "shared/protocol/verbspec.js", "send a loose thing beside your body (low by it", "kick a thing at your feet (low by it", ["P4"]],
-  ["the browser sends shove", "client/lib/thingphysics.js", "sendRequest('punt', { id, v, contact: true });", "sendRequest('punt', { id, v, shove: true });", ["P5"]],
+  ["the browser sends shove", "client/lib/thingphysics.js", "sendRequest('punt', { id, v, contact: true }, { noTeleport: true });", "sendRequest('punt', { id, v, shove: true }, { noTeleport: true });", ["P5"]],
   ["the registry says trusted", "shared/protocol/componentspec.js", "  \"trusted-components\": { on: \"world\",", "  trusted: { on: \"world\",", ["T1"]],
   ["drafts reads only the new key", "shared/drafts.js", "(worldC?.[TRUSTED] ?? worldC?.[OLD_TRUSTED])?.components", "worldC?.[TRUSTED]?.components", ["T3"]],
   ["drag is move again", "shared/protocol/consent.js", "drag: \"displace\", occupy: \"displace\", carry: \"displace\"", "drag: \"move\", occupy: \"displace\", carry: \"displace\"", ["C1"]],
@@ -295,7 +295,7 @@ const cases: Case[] = [
     good: (o) => !o.d && !!o.punt && !/kick|feet/.test(o.punt) && !!o.ag && !/kick a|feet/.test(o.ag) && !o.t && !o.a },
   { id: "P5", what: "…the browser and the agent send contact (never shove: true)", run() {
       const tp = readText("client/lib/thingphysics.js"), ag = readText("mcpl/agent.ts");
-      return { tp: /sendRequest\('punt', \{ id, v, contact: true \}\)/.test(tp) && !/shove: true \}\)/.test(tp), ag: /request\("punt", \{ id, v, contact: true \}\)/.test(ag) && !/"punt", \{ id, v, shove: true/.test(ag) }; },
+      return { tp: /sendRequest\('punt', \{ id, v, contact: true \}, \{ noTeleport: true \}\)/.test(tp) && !/shove: true \}/.test(tp), ag: /request\("punt", \{ id, v, contact: true \}\)/.test(ag) && !/"punt", \{ id, v, shove: true/.test(ag) }; },
     good: (o) => o.tp && o.ag },
   // ---------------- T: trusted-components ----------------
   { id: "T1", what: "(R 14:34) @world trusted-components {components} is the owner's; @world trusted is no registered name any more (refused)", run(s) {
