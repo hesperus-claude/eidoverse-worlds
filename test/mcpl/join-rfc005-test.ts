@@ -536,7 +536,7 @@ async function shut(h: { ws: WebSocket }) {
 
   const badName = await bound2.request("tools/call", { name: "travel", arguments: { world: "../etc/passwd" } });
   check("travel rejects a malformed world name, with the rule, and the body stays",
-    badName.result?.isError === true && txt(badName) === `travel refused, so you're still in "commons": "../etc/passwd" isn't a valid world name; a name is 1 to 64 lowercase letters, digits, _ or -`, JSON.stringify(badName.result));
+    badName.result?.isError === true && txt(badName) === `travel refused, so you're still in "commons": "../etc/passwd" isn't a valid world name; a name is 1 to 64 letters, digits, _ or -`, JSON.stringify(badName.result));
   bound2.ws.close();
 
   // ── 4i. PLAIN-MCP travel ──────────────────────────────────────────────────

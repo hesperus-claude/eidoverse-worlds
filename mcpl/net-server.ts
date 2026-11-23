@@ -834,7 +834,7 @@ class Session {
     // every refusal before the detach leaves the body where it was
     const stayed = `travel refused, so you're still in "${this.agent.world}": `;
     if (!WORLD_NAME_RE.test(target))
-      return { content: [{ type: "text", text: `${stayed}${shown(target)} isn't a valid world name; a name is 1 to 64 lowercase letters, digits, _ or -` }], isError: true };
+      return { content: [{ type: "text", text: `${stayed}${shown(target)} isn't a valid world name; a name is 1 to 64 letters, digits, _ or -` }], isError: true };
     if (target === this.agent.world) return text(`Already in "${target}".`);
     const gate = await this.travelGate(target);
     if (!gate.ok) return { content: [{ type: "text", text: `${stayed}${gate.why}` }], isError: true };
