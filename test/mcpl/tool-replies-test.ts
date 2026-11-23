@@ -161,4 +161,9 @@ const creator = (reply: any = { ok: true, after: {} }) => { const sent: any[] = 
     await handleTool(ctxOf(mk()), "anim", { tracks: { hips: [{ t: 0, q: [0, 0, 0, 1] }] }, dur: 1, target: "Moss" })];
   ok(outs.every((r) => r?.isError === true && /refused/.test(textOf(r))), "462 stop, ragdoll and tracks on a target each report its refusal", outs.map(textOf)); }
 
+// G5-017: act's force text says which bodies a blast gates (its push at least BLAST.min, not every body in radius)
+{ const { TOOLS } = await import("../../mcpl/tools.ts"); const { BLAST } = await import("../../shared/protocol/physconst.js");
+  const force = (TOOLS.find((t) => t.name === "act")?.description ?? "").match(/force \{at[^|]*/)?.[0] ?? "";
+  ok(!/each body in radius/.test(force) && force.includes(`${BLAST.min} m/s`) && force.includes(`nearest ${BLAST.things}`), "G5-017 act's force text names the push floor and the loose-thing cap", force); }
+
 console.log(`tool-replies-test: ${fails ? `${fails} failed` : "all ok"}`); process.exit(fails ? 1 : 0);
