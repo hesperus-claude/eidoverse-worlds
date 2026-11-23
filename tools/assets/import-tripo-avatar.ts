@@ -3,8 +3,8 @@
 // Stages, each detect-and-repair (a clean export passes through untouched):
 //   1. STRIP: the BODY_PROXY collision hull some exports carry.
 //   2. MATERIALS: tripo_* materials that lost their textures get a known-good donor's set (same mesh, UVs hold);
-//      PORCELAIN/RAVEN/GOLD get factor materials; one with its own colour factor or extensions keeps it (a texture
-//      alone doesn't count: PORCELAIN drops it).
+//      PORCELAIN/RAVEN get factor materials, GOLD only double-sided; one with its own colour factor or extensions keeps
+//      it (a texture alone doesn't count: PORCELAIN drops it).
 //   3. DIET: weld + meshopt-simplify toward --max-verts; skipped when under budget.
 //   4. VRMIFY: a VRMC_vrm 1.0 humanoid map (Tripo→VRM; twist bones and finger metacarpals stay unmapped), hair and
 //      wing chains as VRMC_springBone (each on its own: --no-hair-springs, --no-wing-springs).
