@@ -173,7 +173,7 @@ export function ttsSection(host, onPaint = () => {}) {
         } catch (e) { console.warn('[voice] not remembered:', e); }
         _pending = null;
         _selected = _loadedId = id; _markedOff = false;
-        if (_untickSeq === unticks) setTtsEnabled(true);   // an untick during the import is the last word
+        if (_untickSeq === unticks || _wantSpeech) setTtsEnabled(true);   // the box's last word during the import wins
       } catch (e) {
         report('tts voice', e);
         _busy = String(e?.message || e).slice(0, 80);
