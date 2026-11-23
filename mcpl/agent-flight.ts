@@ -222,12 +222,14 @@ export class AgentFlight {
 
   /** take_off (spec §1). Refuses folded wings, a limp body, or no capability. */
   async takeOff(): Promise<ActResult> {
-    const live = this.a.joined, ws = this.a.ws;
+    // a body with a link, up or redialling (a bench has none, and flies)
+    const live = this.a.joined || this.a.ws != null, ws = this.a.ws;
     await this.a.loadBodyBones();
-    // the link dropped or the body closed during the read: a flight installed now would have nothing ticking it (#300)
-    if (this.a.closed || (live && (!this.a.joined || this.a.ws !== ws))) {
-      return refused(`still standing — this body's connection to the world ${this.a.closed ? "ended" : "dropped"} while it got ready to take off${this.a.closed ? "" : "; try again once it has rejoined"}`);
-    }
+    // the body closed, its link is down, or it redialled during the read: a flight installed on a link that dropped
+    // would have nothing ticking it (#300), and the one the old link had was ended with it
+    if (this.a.closed) return refused("still standing — this body's connection to the world has ended");
+    if (live && !this.a.joined) return refused("still standing — this body is reconnecting to the world; take off once it has rejoined");
+    if (live && this.a.ws !== ws) return refused("still standing — this body reconnected to the world while it got ready to take off; take off again");
     const cap = this.flightAllowed();
     if (!cap.ok) return refused(`you cannot fly here — ${cap.why}`);
     // Wing posture is carried independently of an active flight state. A body

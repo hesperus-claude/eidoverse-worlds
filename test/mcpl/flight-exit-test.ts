@@ -674,11 +674,22 @@ console.log('\nthe 2026-11-23 sweep');
   ag.ws = { readyState: 1, send() {} };
   ag.loadBodyBones = async () => { ag.joined = false; ag.ws = null; return WINGED; };
   const r = await ag.takeOff();
-  check('a take_off whose link dropped during the bone read is refused, and installs no flight (G6-036)', !r.ok && ag.flight == null && /connection/.test(r.text), `${r.text}; flight ${ag.flight?.phase ?? 'none'}`);
+  check('a take_off whose link dropped during the bone read is refused, and installs no flight (G6-036)', !r.ok && ag.flight == null && /reconnecting/.test(r.text), `${r.text}; flight ${ag.flight?.phase ?? 'none'}`);
   const closing = bench('closed-launch');
   closing.loadBodyBones = async () => { closing.close(); return WINGED; };
   const c = await closing.takeOff();
   check('...and so is one whose body closed meanwhile', !c.ok && closing.flight == null, `${c.text}; flight ${closing.flight?.phase ?? 'none'}`);
+  // the link already down when take_off is asked (a redial window: joined false, the socket still set)
+  const down = bench('down-launch');
+  down.joined = false; down.ws = { readyState: 0, send() {} };
+  const d = await down.takeOff();
+  check('...and so is one asked while the link is down and the body redialling, saying it is reconnecting', !d.ok && down.flight == null && /reconnecting/.test(d.text), `${d.text}; flight ${down.flight?.phase ?? 'none'}`);
+  // the body redialled and rejoined during the read: the flight the old link had was ended, so it says to take off again
+  const redial = bench('redial-launch');
+  redial.ws = { readyState: 1, send() {} };
+  redial.loadBodyBones = async () => { redial.ws = { readyState: 1, send() {} }; return WINGED; };
+  const rd = await redial.takeOff();
+  check('...and so is one whose body redialled during the read, told to take off again', !rd.ok && redial.flight == null && /take off again/.test(rd.text), `${rd.text}; flight ${redial.flight?.phase ?? 'none'}`);
 }
 
 for (const a of agents) { try { a.close(); } catch {} }
