@@ -47,6 +47,8 @@ import { LAB_CATALOGUE, MODELS as LAB_MODELS } from "../harness/labmodels.js";
 const BASE = "a6d05a6b";
 const EM = "em" + "ote";   // the old word, built so this file never spells it (row E3 scans every file, this one too)
 const argv = process.argv.slice(2);
+// P5: any spelling of a shove flag (shove:true, 'shove': 1, shove: !0, ...); `physicsApi.shove: {` is not one
+const SHOVE_FLAG = /\bshove['"]?\s*:\s*(true|!0|1)\b/;
 const opt = (k: string) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined; };
 
 // [name, file under the tree, find, replace, rows]
@@ -295,7 +297,7 @@ const cases: Case[] = [
     good: (o) => !o.d && !!o.punt && !/kick|feet/.test(o.punt) && !!o.ag && !/kick a|feet/.test(o.ag) && !o.t && !o.a },
   { id: "P5", what: "…the browser and the agent send contact (never shove: true)", run() {
       const tp = readText("client/lib/thingphysics.js"), ag = readText("mcpl/agent.ts");
-      return { tp: /sendRequest\('punt', \{ id, v, contact: true \}, \{ noTeleport: true \}\)/.test(tp) && !/shove: true \}/.test(tp), ag: /request\("punt", \{ id, v, contact: true \}\)/.test(ag) && !/"punt", \{ id, v, shove: true/.test(ag) }; },
+      return { tp: /sendRequest\('punt', \{ id, v, contact: true \}, \{ noTeleport: true \}\)/.test(tp) && !SHOVE_FLAG.test(tp), ag: /request\("punt", \{ id, v, contact: true \}\)/.test(ag) && !SHOVE_FLAG.test(ag) }; },
     good: (o) => o.tp && o.ag },
   // ---------------- T: trusted-components ----------------
   { id: "T1", what: "(R 14:34) @world trusted-components {components} is the owner's; @world trusted is no registered name any more (refused)", run(s) {
