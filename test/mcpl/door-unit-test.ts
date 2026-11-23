@@ -264,4 +264,15 @@ for (const [status, err] of [["ran", false], ["nothing", false], ["would-run", f
   ok(said(m) && slowHits >= 1 && /^measure: nothing was measured/.test(m.content[0].text), "…and measure, whose answer's body stalls after the headers (the server sent them), says the server didn't send it in time (not 'isn't geometry')", m?.content?.[0]?.text ?? m);
   hung.stop(true); slow.stop(true); }
 
+// worlds: a list whose body stalls after the headers, or isn't JSON, is said as a list that isn't known (G2-063), not
+// as the bare timeout or parse error the generic catch would pass on
+{ const stalled = Bun.serve({ port: 0, fetch: () => new Response(new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode("{")); } }), { headers: { "content-type": "application/json" } }) });
+  const html = Bun.serve({ port: 0, fetch: () => new Response("<html>sign in</html>", { headers: { "content-type": "text/html" } }) });
+  const agOf = (s: { port: number }): any => ({ httpBase: `http://127.0.0.1:${s.port}`, readHeaders: {}, world: "w" });
+  const [st, ht]: any[] = await Promise.all([handleTool({ agent: agOf(stalled) } as any, "worlds", {}), handleTool({ agent: agOf(html) } as any, "worlds", {})]);
+  stalled.stop(true); html.stop(true);
+  const unknown = (o: any) => o?.isError && /^worlds: .*so the list isn't known/.test(o.content?.[0]?.text ?? "");
+  ok(unknown(st) && /within 4 s/.test(st.content[0].text), "worlds whose body stalls after the headers says the list isn't known and why (not the bare timeout)", st?.content?.[0]?.text);
+  ok(unknown(ht), "worlds whose body isn't JSON says the list isn't known (not the bare parse error)", ht?.content?.[0]?.text); }
+
 console.log(`door-unit-test: ${fails ? `${fails} failed` : "all ok"}`); process.exit(fails ? 1 : 0);

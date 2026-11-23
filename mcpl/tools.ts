@@ -1208,8 +1208,11 @@ export const HANDLERS: Record<string, ToolHandler> = {
       try { r = await fetch(`${ag.httpBase}/worlds`, { signal: AbortSignal.timeout(4_000), headers: ag.readHeaders }); }
       catch (e) { return { content: [{ type: "text", text: `worlds: the world server didn't answer (${(e as Error).message}), so the list isn't known; try again in a moment` }], isError: true }; }
       if (!r.ok) return { content: [{ type: "text", text: `worlds: the world server answered ${r.status}, so the list isn't known; try again in a moment` }], isError: true };
-      const body = (await r.json()) as { worlds?: { name: string; loaded?: boolean; access?: string; you?: string; people?: ({ id: string; declares?: string } | string)[]; agents?: string[] }[] };
-      const list = Array.isArray(body.worlds) ? body.worlds : [];
+      // the body read has the same bound as the headers: a stall or a body that isn't JSON is an unknown list (door-unit-test)
+      let body: { worlds?: { name: string; loaded?: boolean; access?: string; you?: string; people?: ({ id: string; declares?: string } | string)[]; agents?: string[] }[] } | null;
+      try { body = await r.json(); }
+      catch (e) { return { content: [{ type: "text", text: (e as Error)?.name === "TimeoutError" ? "worlds: the world server didn't send the list within 4 s, so the list isn't known; try again in a moment" : "worlds: the world server answered with something that isn't JSON, so the list isn't known" }], isError: true }; }
+      const list = Array.isArray(body?.worlds) ? body.worlds : [];
       if (!list.some((w) => w.name === ag.world)) list.push({ name: ag.world, loaded: true, people: [] });
       list.sort((x, y) => (x.name === ag.world ? -1 : y.name === ag.world ? 1 : x.name.localeCompare(y.name)));
       const pol = ctx.worldPolicy;
