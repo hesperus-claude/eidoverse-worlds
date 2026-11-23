@@ -252,7 +252,10 @@ export const MESSAGES: Record<string, (ctx: MsgCtx, msg: any) => void> = {
     }
     const seq = Number(msg.seq);
     const digest = String(msg.digest ?? "").slice(0, 64);
-    if (!Number.isSafeInteger(seq) || !digest) return;
+    if (!Number.isSafeInteger(seq) || !digest) {   // answered like every other refusal, so the leg can see it (G2-073)
+      ws.send(JSON.stringify({ type: "error", error: "attest is malformed (it needs an integer seq and a digest)" }));
+      return;
+    }
     // attest under the generation the leg holds now, so a retired leg's receipt isn't relabelled as the live one
     if (msg.gen !== c.gen) {
       ws.send(JSON.stringify({ type: "error", error: "attest surface-generation mismatch" }));
