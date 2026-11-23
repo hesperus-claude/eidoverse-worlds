@@ -75,6 +75,24 @@ console.log('\nthe loaded engine answers:');
   check('makeRagdoll now answers with the bullet engine', rd instanceof AmmoRagdoll);
   check('...which extends the shared spine', rd instanceof BodyEngineBase);
   rd.dispose?.();
+
+  // a Bullet constructor that throws falls back to verlet for that fall and the status says so; Bullet is still tried
+  // on the next fall, and a success clears the note (G2-032)
+  const ammoNs: any = await import('../../client/lib/ragdoll/ammo-load.js');
+  const Real = ammoNs.AMMO.btDefaultCollisionConfiguration;
+  ammoNs.AMMO.btDefaultCollisionConfiguration = function () { throw new Error('rig-specific'); };
+  let fb: any;
+  const err = console.error, warn = console.warn; console.error = () => {}; console.warn = () => {};
+  try { const av2 = makeAvatar(rig.P); fb = bs.makeRagdoll(av2, null, av2.restBonePositions()); }
+  finally { ammoNs.AMMO.btDefaultCollisionConfiguration = Real; console.error = err; console.warn = warn; }
+  check('a Bullet constructor that throws falls back to verlet', fb instanceof Ragdoll);
+  check('...and the status says the last fall fell back', /fell back to verlet/.test(bs.bodyEngine()), bs.bodyEngine());
+  fb?.dispose?.();
+  const av3 = makeAvatar(rig.P);
+  const again: any = bs.makeRagdoll(av3, null, av3.restBonePositions());
+  check('...the next fall tries Bullet again, and its success clears the note',
+    again instanceof AmmoRagdoll && bs.bodyEngine() === 'ammo', bs.bodyEngine());
+  again?.dispose?.();
 }
 
 console.log('\nthe stored choice wins:');

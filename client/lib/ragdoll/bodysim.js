@@ -13,12 +13,12 @@ const KEY = 'ew-bodysim';
 // wasm door, and every other engine's failure lands on it. Order here is the
 // order the 🧩 panel cycles through.
 const ENGINES = new Map([
-  ['verlet', { load: null, cls: Ragdoll, failed: false }],
+  ['verlet', { load: null, cls: Ragdoll, failed: false, fellBack: false }],
   ['ammo', {
     load: async () => {
       const [mod, load] = await Promise.all([import('./ammodoll.js'), import('./ammo-load.js')]);
       return (await load.ensureAmmo()) ? mod.AmmoRagdoll : null;
-    }, cls: null, failed: false,
+    }, cls: null, failed: false, fellBack: false,   // fellBack: the last fall's constructor threw (makeRagdoll)
   }],
 ]);
 
@@ -43,12 +43,12 @@ async function loadEngine(name) {
 if (engine !== 'verlet') loadEngine(engine);   // warm the wasm before the first fall
 
 /** Status string, not a bare id: while a wasm engine loads (or after it fails)
- *  the string says which engine answers the next fall (a loaded engine whose constructor throws still falls back to
- *  verlet in makeRagdoll, and this still names it). */
+ *  the string says which engine answers the next fall. A loaded engine whose constructor threw on the last fall is
+ *  still tried on the next (one rig's throw shouldn't turn it off for everyone); the string says that last fall fell back. */
 export const bodyEngine = () => {
   if (engine === 'verlet') return 'verlet';
   const e = ENGINES.get(engine);
-  if (e?.cls) return engine;
+  if (e?.cls) return e.fellBack ? `${engine} (last fall fell back to verlet)` : engine;
   return e?.failed ? `${engine} FAILED TO LOAD — running verlet`
                    : `${engine} (loading — verlet meanwhile)`;
 };
@@ -77,8 +77,8 @@ export function makeRagdoll(avatar, lean = null, rest = null, seedVel = null) {
   if (avatar.bakeHipsIntoRoot?.() && rest) rest = avatar.restBonePositions();
   const e = ENGINES.get(engine);
   if (e?.cls && e.cls !== Ragdoll) {
-    try { return new e.cls(avatar, lean, rest, seedVel); }
-    catch (err) { report(`${engine} construct — verlet fallback`, err); }
+    try { const rd = new e.cls(avatar, lean, rest, seedVel); e.fellBack = false; return rd; }
+    catch (err) { e.fellBack = true; report(`${engine} construct — verlet fallback`, err); }
   }
   return new Ragdoll(avatar, lean, rest, seedVel);
 }
