@@ -103,7 +103,7 @@ const MUTANTS: [string, string, string | [string, string][], string, string[]][]
   ["modlog is for moderation powers", "protocol/authority/moderation.js", "modlog: (w, actor, a) => { const st = w.state(); if (!modHolder(st, actor) && roleOf(st, actor) !== \"owner\") refuse(", "modlog: (w, actor, a) => { const st = w.state(); if (false) refuse(", ["M9"]],
   ["guests rank by their guest role", "protocol/roles.js", "let r = isObj(wc[`roles:${id}`]) ? wc[`roles:${id}`].role : anon ? guestRoleOf(wc) : base;", "let r = isObj(wc[`roles:${id}`]) ? wc[`roles:${id}`].role : anon ? \"visitor\" : base;", ["M10", "R6"]],
   // S5, S6
-  ["translation: v1 fly/gen → can.fly/can.generate", "../tools/import-v1/translate-v1.js", "return Object.keys(can).length ? { ...rest, can } : rest; };\n  // upstream #258", "return v; };\n  // upstream #258", ["T1"]],
+  ["translation: v1 fly/gen → can.fly/can.generate", "../tools/import-v1/translate-v1.js", "return Object.keys(can).length ? { ...rest, can } : rest; };\nconst ownedIn", "return v; };\nconst ownedIn", ["T1"]],
   ["the menu: only below you", "protocol/roles.js", "const below = them.rank < me.rank;", "const below = them.rank <= me.rank;", ["P3"]],
   ["the menu: acts follow permissions", "protocol/roles.js", "if (has(\"ban\")) out.push({ id: \"ban\", label: \"Ban…\" });", "out.push({ id: \"ban\", label: \"Ban…\" });", ["P1"]],
   ["the menu: unmute when muted", "protocol/roles.js", "out.push(state.muted ? { id: \"unmute\", label: \"Unmute\" } : { id: \"mute\", label: \"Mute…\" });", "out.push({ id: \"mute\", label: \"Mute…\" });", ["P2"]],
