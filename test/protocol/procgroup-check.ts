@@ -214,4 +214,43 @@ check("PG5 a zombie in the group is not counted as left running", suiteMembers(7
   }
 }
 
+{ // PG24: a deploy starts again an optional bot unit that stopped itself with 78 (EX_CONFIG: a refused join; its unit has
+  // RestartPreventExitStatus=78), and checks it is up; a unit the operator stopped, or one that failed another way, stays as it is.
+  // Runs the script's own restart block with systemctl and sudo shims on PATH that record each call and report the states set here.
+  const dv = fs.readFileSync(new URL("../../deploy/deploy-vps.sh", import.meta.url), "utf8").split("\n");
+  const i0 = dv.indexOf("sudo systemctl restart eidoverse eidoverse-mcpl"), i1 = dv.findIndex((l, i) => i > i0 && l.startsWith('for name in "${units[@]}"'));
+  if (win || i0 < 0 || i1 < 0) { if (win) na("PG24 deploy revives a bot that exited 78", "bash"); else check("PG24 deploy-vps.sh's restart block is found", false, { i0, i1 }); }
+  else {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pg24-")), bin = path.join(dir, "bin"), st = path.join(dir, "state"); fs.mkdirSync(bin); fs.mkdirSync(st);
+    // state/<unit> = "active" | "inactive" | "failed <status>"; calls.log = every systemctl call
+    fs.writeFileSync(path.join(bin, "sudo"), '#!/usr/bin/env bash\nexec "$@"\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, "sleep"), "#!/usr/bin/env bash\n", { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, "systemctl"), `#!/usr/bin/env bash
+S=${JSON.stringify(st)}; echo "$*" >> ${JSON.stringify(path.join(dir, "calls.log"))}
+get() { cat "$S/$1" 2>/dev/null || echo inactive; }
+case "$1" in
+  restart) shift; for u in "$@"; do echo active > "$S/$u"; done ;;
+  try-restart) shift; for u in "$@"; do [ "$(get "$u")" = active ] && echo active > "$S/$u"; done; exit 0 ;;
+  start) echo active > "$S/$2" ;;
+  reset-failed) echo inactive > "$S/$2" ;;
+  is-active) u="\${@: -1}"; [ "$(get "$u")" = active ] ;;
+  is-failed) u="\${@: -1}"; s=$(get "$u"); [ "\${s%% *}" = failed ] && { echo failed; exit 0; }; echo "\${s%% *}"; exit 1 ;;
+  show) u="\${@: -1}"; s=$(get "$u"); [ "\${s%% *}" = failed ] && echo "\${s#* }" || echo 0 ;;
+esac
+`, { mode: 0o755 });
+    for (const [u, v] of Object.entries({ "eido-chatbridge": "failed 78", "eido-stopped": "inactive", "eido-crashed": "failed 1" })) fs.writeFileSync(path.join(st, u), v + "\n");
+    const block = dv.slice(i0, i1 + 1).join("\n");
+    const r = spawnSync("bash", ["-c", `set -euo pipefail\nunits=(eidoverse eidoverse-mcpl); optional=(eido-chatbridge eido-stopped eido-crashed)\n${block}\necho "units: \${units[*]}"`],
+      { cwd: dir, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
+    const calls = fs.existsSync(path.join(dir, "calls.log")) ? fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split("\n") : [];
+    const state = (u: string) => fs.readFileSync(path.join(st, u), "utf8").trim();
+    const got = { status: r.status, calls, bridge: state("eido-chatbridge"), stopped: state("eido-stopped"), crashed: state("eido-crashed"), out: (r.stdout + r.stderr).slice(-300) };
+    fs.rmSync(dir, { recursive: true, force: true });
+    check("PG24 a deploy reset-fails and starts an optional unit that exited 78, checks it is up, and leaves an operator-stopped or otherwise-failed unit alone",
+      r.status === 0 && calls.includes("reset-failed eido-chatbridge") && calls.includes("start eido-chatbridge") && got.bridge === "active"
+      && /units: .*eido-chatbridge/.test(r.stdout) && calls.some((c) => /^is-active .*eido-chatbridge$/.test(c))
+      && !calls.some((c) => /^(start|reset-failed) eido-(stopped|crashed)$/.test(c)) && got.stopped === "inactive" && got.crashed === "failed 1", got);
+  }
+}
+
 done();

@@ -57,7 +57,7 @@ if changed services/chatbridge/package.json services/chatbridge/bun.lock; then
 fi
 
 # Each deploy/*.service the box has installed is re-installed when it differs (docs/operator/RUNNING-A-SERVER.md);
-# its env files were checked before the reset. Those optional units are only try-restarted: one the operator stopped stays stopped.
+# its env files were checked before the reset. Those optional units are only try-restarted (or started again after a refused join's 78, below): one the operator stopped stays stopped.
 units=(eidoverse eidoverse-mcpl); optional=(); reload=0
 for unit in deploy/*.service; do
   name=$(basename "$unit" .service); dest=/etc/systemd/system/$name.service
@@ -82,6 +82,14 @@ if [ -d node_modules/ndarray-pixels/node_modules/sharp ] \
 fi
 sudo systemctl restart eidoverse eidoverse-mcpl
 [ "${#optional[@]}" = 0 ] || sudo systemctl try-restart "${optional[@]}"
+# an optional bot that exited 78 (EX_CONFIG: the server refused its join; its unit doesn't restart on 78) is failed, which
+# try-restart skips: this build may be the fix, so it starts again and is checked below. A unit the operator stopped
+# (inactive), or one that failed another way, stays as it is.
+for name in "${optional[@]}"; do
+  [ "$(systemctl is-failed "$name" 2>/dev/null)" = failed ] && [ "$(systemctl show -p ExecMainStatus --value "$name")" = 78 ] || continue
+  sudo systemctl reset-failed "$name"; sudo systemctl start "$name"; echo "unit: $name had stopped on a refused join (78); started again"
+  [[ " ${units[*]} " == *" $name "* ]] || units+=("$name")
+done
 sleep 2
 # one unit at a time: `is-active a b` exits 0 when any one of them is up
 for name in "${units[@]}"; do systemctl is-active --quiet "$name" || { echo "deploy: $name is not running after the restart (journalctl -u $name)" >&2; exit 1; }; done
