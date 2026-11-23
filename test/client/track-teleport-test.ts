@@ -60,4 +60,10 @@ await tp.physicsApi.request('punt', { id: 'ball', v: [1, 0, 0], contact: true },
 check('a shove\'s punt refused not-here re-arrives without teleporting', teleports() === 2 && S.sent.slice(nP).some(([v, a]: any) => v === 'move' && !a.teleport),
   `${teleports()} teleports; ${JSON.stringify(S.sent.slice(nP))}`);
 
+// shove() is the caller that sends a punt with noTeleport; it runs off the walking frame, so its call site is anchored in
+// source (driving it needs a world of dynamic things and a walk)
+{ const src = (await import('node:fs')).readFileSync(new URL('../../client/lib/thingphysics.js', import.meta.url), 'utf8');
+  const body = src.slice(src.indexOf('async function shove('), src.indexOf('\n}\n', src.indexOf('async function shove(')));
+  check('shove sends its punt with noTeleport, so the not-here re-arrive cannot teleport', /sendRequest\('punt', \{[^}]*\}, \{ noTeleport: true \}\)/.test(body), body.slice(0, 200)); }
+
 SU.done();
