@@ -19,14 +19,12 @@ const MIN_LEN = 20;
 const SOFT_LEN = 90;
 const SOFT_MIN = 35;
 
-/** Text → what the larynx gets. ``` fenced code and a ~~~ fence line's block are dropped entirely; URLs become "link" (espeak spells
+/** Text → what the larynx gets. ``` fenced code is dropped entirely (a ~~~ fence isn't); URLs become "link" (espeak spells
  *  them out) and [label](url) keeps its label; symbols espeak would name aloud become the pause
  *  they meant. Times (6:04) keep their colon. */
 export function spokenForm(text) {
   return text
     .replace(/```[\s\S]*?(?:```|$)/g, ' ')                     // fenced code never speaks
-    // a ~~~ fence only as a whole line (a mid-line ~~~ is a wave, spoken), closed by its own line or the end
-    .replace(/(?:^|\n)[ ]{0,3}~~~[\w.+-]*[ \t]*(?=\n|$)[\s\S]*?(?:\n[ ]{0,3}~~~[ \t]*(?=\n|$)|$)/g, ' ')
     .replace(/\[([^\]]{1,80})\]\((?:[^)]+)\)/g, '$1')           // [label](url) → label
     .replace(/\bhttps?:\/\/\S+/gi, 'link')                     // bare URLs → "link"
     .replace(/[*_`#]+/g, '')
