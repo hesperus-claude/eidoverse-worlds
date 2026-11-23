@@ -275,15 +275,17 @@ for (const [status, err] of [["ran", false], ["nothing", false], ["would-run", f
   ok(unknown(st) && /within 4 s/.test(st.content[0].text), "worlds whose body stalls after the headers says the list isn't known and why (not the bare timeout)", st?.content?.[0]?.text);
   ok(unknown(ht), "worlds whose body isn't JSON says the list isn't known (not the bare parse error)", ht?.content?.[0]?.text); }
 
-// worlds: a server that resets mid-body (headers sent, then the socket destroyed) is a read cut off, not a body that
-// isn't JSON: it says it stopped sending and that a retry may work
+// a server that resets mid-body (headers sent, then the socket destroyed) is a read cut off, not a body that isn't
+// JSON or geometry: worlds and measure say it stopped sending and that a retry may work
 { const { createServer } = await import("node:net");
-  const cut = createServer((c) => c.once("data", () => { c.write('HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 1000\r\n\r\n{"worlds":['); setTimeout(() => c.destroy(), 50); }));
+  const cut = createServer((c) => c.once("data", (d) => { const geom = String(d).startsWith("GET /geom");
+    c.write(`HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 1000\r\n\r\n${geom ? '{"bbox":' : '{"worlds":['}`); setTimeout(() => c.destroy(), 50); }));
   await new Promise<void>((r) => cut.listen(0, "127.0.0.1", r));
-  const ag: any = { httpBase: `http://127.0.0.1:${(cut.address() as any).port}`, readHeaders: {}, world: "w" };
-  const w: any = await handleTool({ agent: ag } as any, "worlds", {});
+  const ag: any = { httpBase: `http://127.0.0.1:${(cut.address() as any).port}`, readHeaders: {}, world: "w", entities: new Map() };
+  const [w, m]: any[] = await Promise.all([handleTool({ agent: ag } as any, "worlds", {}), handleTool({ agent: ag } as any, "measure", { lib: "x.glb" })]);
   cut.close();
   const t = (o: any) => String(o?.content?.[0]?.text ?? "");
-  ok(w?.isError && /^worlds: the world server stopped sending the list \(.+\), so the list isn't known; try again in a moment$/.test(t(w)), "worlds whose body is cut off mid-stream says it stopped sending and to try again (not 'isn't JSON')", t(w)); }
+  ok(w?.isError && /^worlds: the world server stopped sending the list \(.+\), so the list isn't known; try again in a moment$/.test(t(w)), "worlds whose body is cut off mid-stream says it stopped sending and to try again (not 'isn't JSON')", t(w));
+  ok(m?.isError && /^measure: nothing was measured; the world server stopped sending the geometry \(.+\); try again in a moment$/.test(t(m)), "measure whose body is cut off mid-stream says it stopped sending and to try again (not 'isn't geometry')", t(m)); }
 
 console.log(`door-unit-test: ${fails ? `${fails} failed` : "all ok"}`); process.exit(fails ? 1 : 0);

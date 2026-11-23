@@ -1254,7 +1254,9 @@ export const HANDLERS: Record<string, ToolHandler> = {
       try { const r = await fetch(`${base}/geom?${q}`, { headers: ag.readHeaders, ...READ() }); status = r.status;
         // who this body is, which calling again doesn't change: say who can
         if (r.status === 401 || r.status === 403) return fail(`measure: nothing was measured; ${keyRefused(r.status)}`);
-        try { d = await r.json(); } catch (e) { return fail((e as Error)?.name === "TimeoutError" ? `measure: nothing was measured; ${readWhy(e, "the geometry")}` : `measure: the world server answered ${r.status} with something that isn't geometry, so nothing was measured`); } }
+        try { d = await r.json(); } catch (e) { const n = (e as Error)?.name; return fail(n === "TimeoutError" ? `measure: nothing was measured; ${readWhy(e, "the geometry")}`
+          : n === "SyntaxError" ? `measure: the world server answered ${r.status} with something that isn't geometry, so nothing was measured`
+            : `measure: nothing was measured; the world server stopped sending the geometry (${(e as Error)?.message || "no reason given"}); try again in a moment`); } }
       catch (e) { return fail((e as Error)?.name === "TimeoutError" ? `measure: nothing was measured; ${readWhy(e, "the geometry")}` : `measure: the world server didn't answer (${String((e as Error)?.message ?? e)}), so nothing was measured; try again in a moment`); }
       if (d.error || status < 200 || status > 299) return fail(`measure: the world server answered ${status}${d.error ? ` (${d.error})` : ""}, so nothing was measured`);
       const g = d.geometry ?? d;
