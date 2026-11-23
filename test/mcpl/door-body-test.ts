@@ -138,6 +138,18 @@ check("(2 m in front of a body is beside it, not in it)", !pointClass([0, 0, 0],
     !ag.reaches.has("rightHand") && ag.reaches.has("leftHand") && dropped.length === 1, JSON.stringify(dropped));
 }
 
+{
+  // G3-067: a world point is held to the bodies it lands in by each body's capsule turned by its pose's q, as the relay's
+  // bodiesAt unturns it (server/reachgate.ts): Ann lying back (pitched a quarter about x) has her chest 1.2 m along -z
+  const ag = reacher([5, 0, 0], { q: [-Math.SQRT1_2, 0, 0, Math.SQRT1_2] });
+  const chest = [0, 0.05, -1.2];
+  check("(upright, that point is beside Ann, not in her)", !pointClass([0, 0, 0], chest));
+  check("a world point in a lying body's turned capsule is held to her, as the relay holds it (G3-067)",
+    ag.reaching.reachHolders({ p: chest }).some((h: any) => h.name === "Ann"), JSON.stringify(ag.reaching.reachHolders({ p: chest })));
+  const standing = reacher([5, 0, 0]);
+  check("...and one beside an upright body is held to nobody", standing.reaching.reachHolders({ p: chest }).length === 0, JSON.stringify(standing.reaching.reachHolders({ p: chest })));
+}
+
 console.log("a walk carried across a rejoin");
 {
   // A stand-in world: every join is answered with an empty world's snapshot.

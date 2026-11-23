@@ -10,6 +10,7 @@ import { clampBodyScale } from "../shared/presencewire.js";
 import { canonicalLimb, normalizeReachTarget, normalizeReachBag, describeTarget, diffReach, TOUCH_GAP, sameReach } from "../shared/reachwire.js";
 import { shown } from "../shared/shown.js";
 import { DEFAULT_BODY } from "../shared/avatardefs.js";
+import { qConj, qNorm, qRotate } from "../shared/rot.js";
 
 /** reach and reach {release} refuse a limb in the same words. */
 const unknownLimb = (raw: unknown, done: string) =>
@@ -66,14 +67,15 @@ export class AgentReach {
     return out;
   }
   /** The other bodies a world point lands in, each with its class there: server/reachgate.ts's bodiesAt, read from the
-   *  presence this body holds (each body's capsule, scaled to its size). Unlike the relay's, the capsule is not turned by `q`. */
+   *  presence this body holds (each body's capsule, scaled to its size, turned by its pose's `q` as the relay's is). */
   private bodiesAtPoint(pt: number[]): { name: string; cls: string }[] {
     const out: { name: string; cls: string }[] = [];
     for (const [name, person] of this.a.people) {
       const at = (person.pose as any)?.p;
       if (name === this.a.name || !Array.isArray(at) || at.length !== 3 || !at.every(Number.isFinite)) continue;
-      const sc = clampBodyScale((person.pose as any)?.scale);
-      const cls = pointClass([0, 0, 0], [(pt[0] - at[0]) / sc, (pt[1] - at[1]) / sc, (pt[2] - at[2]) / sc]);
+      const sc = clampBodyScale((person.pose as any)?.scale), q = qNorm((person.pose as any)?.q);
+      const d = [pt[0] - at[0], pt[1] - at[1], pt[2] - at[2]], l = q ? qRotate(qConj(q), d) : d;   // into their frame (reachgate unturn)
+      const cls = pointClass([0, 0, 0], [l[0] / sc, l[1] / sc, l[2] / sc]);
       if (cls) out.push({ name, cls });
     }
     return out;
