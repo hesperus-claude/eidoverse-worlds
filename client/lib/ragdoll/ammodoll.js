@@ -1248,7 +1248,8 @@ export class AmmoRagdoll extends BodyEngineBase {
     this.done = true;
     // hand the hair back adopting the pose it is in (dishevelled, deliberately): three-vrm resumes from the fallen
     // shape, and the authored shape returns when she gets up (avatar.js _combHair)
-    this.avatar?._releaseHair?.({ adopt: true });
+    // a hand-back that throws must not stop the frees below (nor mask the error a failed build is rethrowing)
+    try { this.avatar?._releaseHair?.({ adopt: true }); } catch (e) { console.warn('[ammodoll] hair hand-back failed', e); }
     // every body leaves the world before anything is destroyed (`?? []`: a half-built doll lacks the later lists)
     if (this.world) {
       try {

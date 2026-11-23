@@ -135,6 +135,16 @@ console.log('\nthe loaded engine answers:');
   check('a throw mid-build empties the world before destroying it (no freed body left inside)',
     mid instanceof Ragdoll && leftAtWorldDestroy === 0, `${leftAtWorldDestroy} bodies still in the world when it was destroyed`);
   mid?.dispose?.();
+
+  // a hair hand-back that throws must not stop the Bullet frees (or replace the error a failed build is rethrowing)
+  const av6: any = makeAvatar(rig.P);
+  const live6: any = bs.makeRagdoll(av6, null, av6.restBonePositions());
+  av6._releaseHair = () => { throw new Error('hair hand-back failed'); };
+  let threw6: any = null;
+  console.warn = () => {};
+  try { live6.dispose(); } catch (e) { threw6 = e; } finally { console.warn = warn; }
+  check('a throwing hair hand-back still frees the doll, and dispose does not throw',
+    live6 instanceof AmmoRagdoll && !threw6 && live6._refs.length === 0 && live6.world === null, String(threw6?.message ?? ''));
 }
 
 console.log('\nthe stored choice wins:');
