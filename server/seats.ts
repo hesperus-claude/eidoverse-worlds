@@ -12,6 +12,7 @@ import { OPT_DIR, LIBRARY_DIR, PATCH_DIR } from "./config.ts";
 import { worlds } from "./world.ts";
 import { sha256Bytes } from "../shared/protocol/hash.js";
 import { atomicWrite } from "./fsutil.ts";
+import { syncFile } from "./durable.ts";
 import { avatarDefs } from "./defs.ts";
 import { resolveLibFile } from "./libfile.ts";
 
@@ -239,7 +240,7 @@ export class SeatStore {
 
   private persistSnapshotOnly() {
     mkdirSync(this.dir, { recursive: true });
-    atomicWrite(this.file, JSON.stringify(this.store), { fs: this.fs });
+    atomicWrite(this.file, JSON.stringify(this.store), { fs: this.fs, durable: true });
     try { this.fileMtime = statSync(this.file).mtimeMs; } catch { /* next poll reloads harmlessly */ }
   }
 
@@ -260,11 +261,14 @@ export class SeatStore {
     } catch (e) {
       return { ok: false, why: `provenance append failed — nothing was written: ${(e as Error).message}` };
     }
+    // the receipt is synced before the snapshot that relies on it is (else a power loss could leave the snapshot ahead: quarantine)
+    try { syncFile(this.logFile); }
+    catch (e) { return { ok: false, why: `provenance append not synced — snapshot withheld; recovery will reconcile the receipt: ${(e as Error).message}` }; }
     if (!this.ownsLock())
       // the receipt stands; the snapshot must not race a successor (recovery folds it forward, or quarantines)
       return { ok: false, why: "lock ownership lost after provenance append — snapshot withheld; recovery will reconcile the receipt" };
     try {
-      atomicWrite(this.file, JSON.stringify(next), { fs: this.fs });
+      atomicWrite(this.file, JSON.stringify(next), { fs: this.fs, durable: true });
     } catch (e) {
       // the log holds the receipt; the live store stays unchanged and the next load folds it forward
       return { ok: false, why: `snapshot write failed (receipted in the log; recovery will fold it forward): ${(e as Error).message}` };
