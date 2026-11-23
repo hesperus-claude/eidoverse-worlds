@@ -19,6 +19,7 @@ import path from "node:path";
 import { readLog, fold, digest } from "../shared/protocol/fold.js";
 import { seal } from "../shared/protocol/authority.js";
 import { dec } from "../shared/protocol/names.js";
+import { PERSON_ID } from "../shared/protocol/ids.js";
 import { directoryFor, mintId, type Entry } from "../server/directory.ts";
 import { custodyAt, modLogAt } from "../server/custody.ts";
 import { custodyFileIn } from "../server/keyfiles.ts";
@@ -29,7 +30,7 @@ import { ENGINE } from "../test/gate/common.ts";
 const apply = process.argv.includes("--apply"), trust = process.argv.includes("--trust-names");
 const dirs = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 const SYSTEM = new Set(["system", "world", "sim"]);
-const isMinted = (s: string) => /^u-[a-z2-7]{20}$/.test(s);
+const isMinted = (s: string) => PERSON_ID.test(s);   // 20 or 24 letters (shared/protocol/ids.js)
 // who is left as they are: not a person this migration names
 const keeps = (s: string) => SYSTEM.has(s) || isMinted(s) || s.startsWith("script:") || s.startsWith("addr:");
 const PERSON_KEY = /^(roles|imported-bans):(.+)$/;
@@ -83,7 +84,7 @@ for (const dir of dirs) {
   const text = sealed.map((e: any) => JSON.stringify(e)).join("\n") + "\n";
   const newSt = fold(readLog(text));
   // ---- the gate: the old and new logs read side by side, never through who()/keyOf (nor keeps: its own list) ----
-  const leftAlone = (s: string) => /^(system|world|sim)$|^u-[a-z2-7]{20}$|^script:|^addr:/.test(s);
+  const leftAlone = (s: string) => /^(system|world|sim)$|^script:|^addr:/.test(s) || PERSON_ID.test(s);
   const pairs = new Map<string, string>(); const problems: string[] = [];
   const pair = (a: unknown, b: unknown, where: string) => { if (typeof a !== "string") return; if (typeof b !== "string") { problems.push(`${where}: ${a} became ${JSON.stringify(b)}`); return; }
     const was = pairs.get(a); if (was !== undefined && was !== b) problems.push(`${a} became two ids (${was}, ${b}) (${where})`); else pairs.set(a, b); };
@@ -98,7 +99,7 @@ for (const dir of dirs) {
   oldMod.forEach((m, k) => { pair(m.who, nextMod[k].who, `moderator record ${k} who`); pair(m.actor, nextMod[k].actor, `moderator record ${k} actor`); });
   for (const [a, b] of pairs) {
     if (leftAlone(a) && a !== b) problems.push(`${a} should have been left as it was but became ${b}`);
-    if (!leftAlone(a) && !/^u-[a-z2-7]{20}$/.test(b)) problems.push(`${a} is still named by a legacy identity (${b})`); }
+    if (!leftAlone(a) && !PERSON_ID.test(b)) problems.push(`${a} is still named by a legacy identity (${b})`); }
   // a role's account is held by the id its role went to (the id the person signs in as holds their role)
   for (const [c, v] of Object.entries<any>(oldSt.entities["@world"]?.c ?? {})) { const m = /^roles:(.+)$/.exec(c); if (!m || typeof v?.sub !== "string") continue;
     const id = pairs.get(m[1]); const holds = id && (planned[id]?.subs.includes(v.sub) || directory.idOfSub(v.sub) === id);

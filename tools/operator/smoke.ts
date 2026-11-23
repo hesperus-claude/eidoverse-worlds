@@ -20,6 +20,7 @@ import { join } from "node:path";
 import { foundWorlds, freePort } from "../../test/harness/harness.ts";
 import { idAliases } from "../../test/harness/idalias.ts";
 import { helloOf } from "../../shared/protocol/hello.js";
+import { PERSON_ID } from "../../shared/protocol/ids.js";
 const IDS = idAliases();
 
 const EXTERNAL = process.env.URL;
@@ -157,7 +158,7 @@ try {
   check("the snapshot is a cut (version, head, the fold's state) and carries no history",
     alice.snapshot.dialect === "eidoverse-log" && alice.snapshot.v === 4 && Number.isInteger(alice.snapshot.seq) && !!alice.snapshot.state && !("entries" in alice.snapshot),
     JSON.stringify(Object.keys(alice.snapshot ?? {})));
-  check("you are told your identity: an opaque directory id, not your name", /^u-[a-z2-7]{20}$/.test(alice.me ?? ""), alice.me);
+  check("you are told your identity: an opaque directory id, not your name", PERSON_ID.test(alice.me ?? ""), alice.me);
   check("the founder, joining by name, is the world's owner", alice.snapshot.yourRights?.role === "owner", JSON.stringify(alice.snapshot.yourRights));
   const head0 = alice.snapshot.seq;
 
