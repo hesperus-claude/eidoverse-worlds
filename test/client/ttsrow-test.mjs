@@ -221,6 +221,28 @@ for (const [name, st, wantNote, wantDim] of [
   t('re-tick: an untick and tick with the mark unchanged does not reload', loaded.length === n && tts.isTtsEnabled() && tts.ttsVoiceName() === 'vb', `loads ${n} → ${loaded.length}`);
 }
 
+{ // G2-041: a newer voice from outside the row (an agent's window.setVoice) wins over a mark made before it, as on main
+  await reset({ list: ['va', 'vb'] });
+  row('va').click(); await flush();
+  await tick(true); await flush(10);
+  await tick(false);
+  row('vb').click(); await flush();
+  tts.setTtsSource(async () => ({ pcm: new Int16Array(1), sampleRate: 22050 }), 'agent-voice'); tts.setTtsEnabled(true);   // what setVoice does
+  const n = loaded.length;
+  await tick(false); await tick(true); await flush(10);
+  t('re-tick: an outside voice newer than the mark keeps speaking (no row load)', tts.isTtsEnabled() && tts.ttsVoiceName() === 'agent-voice' && loaded.length === n, `${tts.ttsVoiceName()} loads ${n} → ${loaded.length}`);
+}
+{ // the row knows what it loaded: marking away and back while off is no change
+  await reset({ list: ['va', 'vb'] });
+  row('va').click(); await flush();
+  await tick(true); await flush(10);
+  await tick(false);
+  row('vb').click(); await flush(); row('va').click(); await flush();
+  const n = loaded.length;
+  await tick(true); await flush(10);
+  t('re-tick: mark vb then va back while off → no reload, va speaks', loaded.length === n && tts.isTtsEnabled() && tts.ttsVoiceName() === 'va', `${tts.ttsVoiceName()} loads ${n} → ${loaded.length}`);
+}
+
 { // G2-014: an untick during an import is the last word; an import nobody unticked still enables, as before
   const handle = (name) => ({ getFile: async () => new File(['x'], name) });
   let answers = [];

@@ -21,9 +21,10 @@ let _inFlight = null;      // one load at a time: a click during a load is a no-
 let _pending = null;       // a pick missing its other half, kept as a row so it can be resumed (addFile)
 let _loadGen = 0;          // bumped by every load start, so an older load's clear timer leaves a newer load's status alone
 let _untickSeq = 0;        // bumped by every untick, so an import that finishes after one does not re-enable
-// the voice this row last loaded, and whether a voice was marked while TTS was off: then the tick loads the mark
-let _loadedId = null, _markedOff = false;
-const markIsStale = () => _markedOff && _selected !== _loadedId;
+// the voice this row last loaded (id, and the source name it set), and whether a voice was marked while TTS was off: then
+// the tick loads the mark, unless a newer source from outside the row (an agent's window.setVoice) is live, which wins
+let _loadedId = null, _loadedName = null, _markedOff = false;
+const markIsStale = () => _markedOff && _selected !== _loadedId && ttsVoiceName() === _loadedName;
 /** Everything we can speak with: remembered files + this session's endpoints. */
 async function collectVoices() {
   const out = [];
@@ -117,7 +118,7 @@ export function ttsSection(host, onPaint = () => {}) {
         if (!liveStatus(_busy)) build();
       });
       }
-      _selected = _loadedId = id; _markedOff = false;
+      _selected = _loadedId = id; _loadedName = ttsVoiceName(); _markedOff = false;
     try { localStorage.setItem('eido.tts.lastVoice', id); } catch { /* private mode */ }
     _needVoice = false;
       // choosing is not enabling: the tick decides whether, the list decides which
@@ -142,7 +143,7 @@ export function ttsSection(host, onPaint = () => {}) {
       await forgetVoice(id);
     }
     // removing the voice that is speaking also stops it
-    if (id === _selected) { setTtsSource(null); setTtsEnabled(false); _selected = _loadedId = null; }
+    if (id === _selected) { setTtsSource(null); setTtsEnabled(false); _selected = _loadedId = _loadedName = null; }
     repaint();
   }
   /** Finish an import once both halves are in hand (addFile and resumePending). */
@@ -172,7 +173,7 @@ export function ttsSection(host, onPaint = () => {}) {
           if (canRemember()) await rememberVoice(id, name, handles, identity);
         } catch (e) { console.warn('[voice] not remembered:', e); }
         _pending = null;
-        _selected = _loadedId = id; _markedOff = false;
+        _selected = _loadedId = id; _loadedName = ttsVoiceName(); _markedOff = false;
         if (_untickSeq === unticks || _wantSpeech) setTtsEnabled(true);   // the box's last word during the import wins
       } catch (e) {
         report('tts voice', e);
