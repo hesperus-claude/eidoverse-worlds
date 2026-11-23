@@ -133,8 +133,9 @@ export const DEFAULT_CONFIG = {
 };
 
 /** Named leaf characters, so "too slow" is a word rather than a patch. `spec` is the authored default; `heavy` is a
- *  real-weight fall that still wanders and rolls; `brisk` sits between. The period shortens as the fall speeds up (at
- *  12 m/s a 3.4 s swing is barely one and a half from 30 m): the one place the body isn't on the breath. */
+ *  real-weight fall that still wanders and rolls; `brisk` sits between. The period shortens as the fall speeds up (from
+ *  30 m a 12 m/s fall lasts 2.5 s, under one 3.4 s swing; heavy's 1.5 s gives it one and a half): the one place the
+ *  body isn't on the breath. */
 export const LEAF_PRESETS = {
   spec:  { terminalV: 2.5,  period: BREATH, lateralAmplitudeM: 0.8, bankAmplitudeDeg: 35, spinUpTime: 0.9 },
   brisk: { terminalV: 6.5,  period: 2.2,    lateralAmplitudeM: 1.1, bankAmplitudeDeg: 40, spinUpTime: 0.8 },
