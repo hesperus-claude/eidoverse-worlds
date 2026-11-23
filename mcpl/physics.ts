@@ -388,7 +388,10 @@ function within<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 async function readSkeleton(httpBase: string, path: string, key: string): Promise<Record<string, any> | null> {
   const m = await loadSim();
   if (!m) return null;
-  const res = await within(fetch(`${httpBase}/library/${path}`, { signal: AbortSignal.timeout(SKELETON_READ.totalMs) }), SKELETON_READ.stallMs, "the world server didn't answer");
+  // a stall before the headers aborts the fetch too: left running, late headers would pull the whole file unread
+  const stalled = new AbortController();
+  const fetched = fetch(`${httpBase}/library/${path}`, { signal: AbortSignal.any([AbortSignal.timeout(SKELETON_READ.totalMs), stalled.signal]) });
+  const res = await within(fetched, SKELETON_READ.stallMs, "the world server didn't answer").catch((e) => { stalled.abort(e); throw e; });
   if (res.status >= 500) throw new Error(`the world server answered ${res.status}`);   // its trouble, not the file's
   if (!res.ok) { console.error(`[physics] no skeleton in ${path}: ${res.status} — this body will slump`); return null; }
   const parts: Uint8Array[] = [];

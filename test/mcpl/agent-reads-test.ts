@@ -19,6 +19,9 @@ const readOf = (part: string) => seen.find((s) => s.url.includes(part));
 // of at most a minute: an hour-long one is no deadline for an agent's turn
 const timed = new WeakMap<AbortSignal, number>(); const realTimeout = AbortSignal.timeout.bind(AbortSignal);
 AbortSignal.timeout = ((ms: number) => { const s = realTimeout(ms); timed.set(s, ms); return s; }) as typeof AbortSignal.timeout;
+// ...and so is a signal that combines one (AbortSignal.any), at its shortest timeout
+const realAny = AbortSignal.any.bind(AbortSignal);
+AbortSignal.any = ((ss: AbortSignal[]) => { const s = realAny(ss), ms = Math.min(...ss.map((x) => timed.get(x) ?? Infinity)); if (ms < Infinity) timed.set(s, ms); return s; }) as typeof AbortSignal.any;
 const bounded = (s: Seen | undefined) => s?.signal instanceof AbortSignal && (timed.get(s.signal) ?? Infinity) <= 60_000;
 
 try {
@@ -163,6 +166,14 @@ try {
       answer = async () => new Response(vrm);
       const again = await HeadlessBody.create("http://slow.test", "store/stall.vrm");
       check("...while one that stops sending fails at its stall deadline, and isn't kept", stalled === null && took < 1500 && again !== null && seen.length === 2, `${stalled} after ${took} ms, then ${again}`);
+      // a server that never answers: past the stall deadline the fetch itself is aborted, not left to pull the file later
+      if (SKELETON_READ) SKELETON_READ.stallMs = 200;
+      seen.length = 0;
+      answer = (() => { const sig = seen.at(-1)?.signal as AbortSignal | undefined; return new Promise<Response>((_, no) => sig?.addEventListener("abort", () => no(sig.reason))); }) as any;
+      const silent = await HeadlessBody.create("http://slow.test", "store/silent.vrm");
+      if (SKELETON_READ) SKELETON_READ.stallMs = stallWas;
+      const sig = seen.at(-1)?.signal as AbortSignal | undefined;
+      check("...and one whose server never answers aborts its fetch at the stall deadline", silent === null && sig?.aborted === true, `${silent}, signal aborted ${sig?.aborted}`);
     } finally { AbortSignal.timeout = ((ms: number) => { const sig = realTimeout(ms); timed.set(sig, ms); return sig; }) as typeof AbortSignal.timeout; } }
 
   // G6-034: a posture clip roster (/animations) that failed to load isn't kept as empty for the body's life: the next
