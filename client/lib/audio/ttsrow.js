@@ -20,7 +20,6 @@ let _wantSpeech = false;
 let _inFlight = null;      // one load at a time: a click during a load is a no-op
 let _pending = null;       // a pick missing its other half, kept as a row so it can be resumed (addFile)
 let _loadGen = 0;          // bumped by every load start, so an older load's clear timer leaves a newer load's status alone
-let _untickSeq = 0;        // bumped by every untick, so an import that finishes after one does not re-enable
 // the voice this row last loaded (id, and the source name it set), and whether a voice was marked while TTS was off: then
 // the tick loads the mark, unless a newer source from outside the row (an agent's window.setVoice) is live, which wins
 let _loadedId = null, _loadedName = null, _markedOff = false;
@@ -152,7 +151,7 @@ export function ttsSection(host, onPaint = () => {}) {
     await import('./engines.js');
     const shown = (files.find((f) => /\.onnx$/i.test(f.name)) || files[0])?.name || 'voice';
     const name = shown.replace(/\.onnx$/i, '');
-    const unticks = _untickSeq; _loadGen++;
+    _loadGen++;
       _busy = `loading ${name}…`;   // cleared on every exit, or the add button stays grey (ttslist.js)
       _loadingId = `file:${name}`; _loadingName = name; _loadingSince = Date.now();
       build();
@@ -174,7 +173,7 @@ export function ttsSection(host, onPaint = () => {}) {
         } catch (e) { console.warn('[voice] not remembered:', e); }
         _pending = null;
         _selected = _loadedId = id; _loadedName = ttsVoiceName(); _markedOff = false;
-        if (_untickSeq === unticks || _wantSpeech) setTtsEnabled(true);   // the box's last word during the import wins
+        setTtsEnabled(true);
       } catch (e) {
         report('tts voice', e);
         _busy = String(e?.message || e).slice(0, 80);
@@ -420,9 +419,8 @@ function headDimmed() {
       `${headNote()}</span>` +
       `</span>`;
     head.querySelector('input').onchange = async (e) => {
-      _wantSpeech = e.target.checked;   // the last click wins, for this tick's own load (below) and for an import (_untickSeq)
+      _wantSpeech = e.target.checked;   // the last click wins for this tick's own load (below); finishImport enables regardless
       if (!e.target.checked) {
-        _untickSeq++;
         _needVoice = false; setTtsEnabled(false);
         if (!syncHead()) repaint(); else onPaint();
         return;

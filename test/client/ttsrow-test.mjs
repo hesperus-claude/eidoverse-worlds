@@ -243,32 +243,6 @@ for (const [name, st, wantNote, wantDim] of [
   t('re-tick: mark vb then va back while off → no reload, va speaks', loaded.length === n && tts.isTtsEnabled() && tts.ttsVoiceName() === 'va', `${tts.ttsVoiceName()} loads ${n} → ${loaded.length}`);
 }
 
-{ // G2-014: an untick during an import is the last word; an import nobody unticked still enables, as before
-  const handle = (name) => ({ getFile: async () => new File(['x'], name) });
-  let answers = [];
-  window.showOpenFilePicker = async () => answers.shift() ?? null;
-  await reset({});
-  answers = [[handle('imp.onnx'), handle('imp.onnx.json')]];
-  host.querySelector('.vl-add').click(); await flush(12);
-  t('import: an untouched import enables TTS (unchanged)', tts.isTtsEnabled() === true, `enabled=${tts.isTtsEnabled()}`);
-  voices = [];
-  await reset({});
-  gate = deferred();
-  answers = [[handle('late.onnx'), handle('late.onnx.json')]];
-  host.querySelector('.vl-add').click(); await flush(12);
-  await tick(false);
-  gate.resolve(); await flush(12);
-  t('import: unticked mid-import → the import does not turn TTS back on', tts.isTtsEnabled() === false && tts.ttsVoiceName() === 'late', `enabled=${tts.isTtsEnabled()} voice=${tts.ttsVoiceName()}`);
-  voices = [];
-  await reset({});
-  gate = deferred();
-  answers = [[handle('again.onnx'), handle('again.onnx.json')]];
-  host.querySelector('.vl-add').click(); await flush(12);
-  await tick(false); await tick(true);
-  gate.resolve(); await flush(12);
-  t('import: unticked then ticked again mid-import → the last word, speak, enables', tts.isTtsEnabled() === true && tts.ttsVoiceName() === 'again', `enabled=${tts.isTtsEnabled()} voice=${tts.ttsVoiceName()}`);
-}
-
 { // G2-040: an earlier failure's clear timer must not wipe a newer load's loading row
   const handle = (name) => ({ getFile: async () => new File(['x'], name) });
   let answers = [];
