@@ -490,7 +490,8 @@ const cases: Case[] = [
       const r = [BM.bodyModeOf({ flying: true, chosen: "sit" }), BM.bodyModeOf({ swimming: true }), BM.bodyModeOf({ falling: true }), BM.bodyModeOf({ chosen: "lie" })];
       const { call: c2, sent } = await animAgent2(ag); const d = await c2("anim", { bodyMode: "fly" }); ag.clip = "walk"; ag.joined = true; ag.tick(); ag.joined = false;
       const pk = sent.filter((m: any) => m.type === "pose").at(-1)?.pose ?? null;
-      ag.myRights = { role: "member", fly: false }; const t = (await ag.takeOff()).text;
+      // the bench stands in for a joined body (its socket is a recorder, never connected): joined for the take-off too
+      ag.myRights = { role: "member", fly: false }; ag.joined = true; const t = (await ag.takeOff()).text; ag.joined = false;
       const md = readText("spec/PROTOCOL.md");
       return { r, declared: pk?.bodyMode ?? null, clip: pk?.clip ?? null, t: t.slice(0, 120), flying: !!ag.flight, spec: /self-declared\s+description/.test(md) && /MUST\s+NOT\s+grant or relax/.test(md.slice(md.indexOf("pose.bodyMode"), md.indexOf("pose.bodyMode") + 1600)) }; },
     good: (o) => JSON.stringify(o.r) === '["fly","swim","fall","lie"]' && o.declared === "fly" && o.clip === "walk" && !o.flying && /cannot fly|not granted|no wings/.test(o.t) && o.spec },
