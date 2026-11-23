@@ -90,6 +90,6 @@ check("while the world is down, 60 Discord lines leave 50 queued: the 10 oldest 
   let said = ""; (async () => { for await (const c of p.stdout) said += Buffer.from(c).toString(); })();
   await tryUntil("the refused bot stops", () => p.exitCode !== null, { ms: 5000 });
   const stopped = p.exitCode !== null; try { p.kill(); } catch {} fake.stop(true);
-  check("a hello refusal is said and the bot stops: one join, no redial", stopped && joins === 1 && /update the client/.test(said) && /not redialing/.test(said), `exited ${stopped}, ${joins} joins: ${said.slice(-300)}`); }
+  check("a hello refusal is said and the bot stops with 78 (EX_CONFIG, which its unit does not restart): one join, no redial", stopped && p.exitCode === 78 && joins === 1 && /update the client/.test(said) && /not redialing/.test(said), `exited ${stopped} (${p.exitCode}), ${joins} joins: ${said.slice(-300)}`); }
 cleanup();
 S.done();

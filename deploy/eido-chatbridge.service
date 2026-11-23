@@ -19,6 +19,8 @@ WorkingDirectory=/home/ubuntu/eidoverse-worlds/services/chatbridge
 ExecStart=/home/ubuntu/.bun/bin/bun index.ts
 Restart=always
 RestartSec=5
+# a refused join (the server won't speak this build's hello) exits 78: the bridge stays stopped until someone updates it
+RestartPreventExitStatus=78
 Environment=WORLD_URL=ws://127.0.0.1:8940/ws
 Environment=WORLD_NAME=commons
 Environment=BRIDGE_ID=discord
