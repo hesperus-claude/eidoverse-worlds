@@ -37,7 +37,8 @@ const BODY_R = MOVER.body.radius, THIN_R = MOVER.body.radius * 0.6, TALL = MOVER
 /** Smallest unreachable floor area reported — smaller is a pocket behind furniture. */
 const MIN_AREA = 2.5;
 const NUDGE = 0.05;   // navgrid NAV_NUDGE
-/** How far (cells) a room grows past its eroded core — the erosion's own depth. */
+/** How far (cells) a room grows back past its eroded core (one more than the two cells a core erodes), and how far a
+ *  room's standing room spreads beside furniture. */
 const GROW = 3;
 const AREA = NAV_CELL * NAV_CELL;
 /** The most lattice columns (footprint plus margin) a check walks: ~100m square. */
@@ -293,7 +294,7 @@ export async function checkModel(file: string, C: any, THREE: any, { scale = 1 }
   }
 
   // ---- suggested rooms: the space walls enclose on each floor
-  // Rooms are read from room space: columns under cover, with floor at this level, and no wall (something solid at 1.4–2.0 m
+  // Rooms are read from room space: columns under cover, with floor at this level, and no wall (something solid at 1.5–1.9 m
   // above the floor within a body's radius: above chair backs and tables, below lamps and beams). Furniture narrows a
   // floor's standing room but not its walls.
   const rooms: CheckReport["suggested"]["rooms"] = [];
