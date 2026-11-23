@@ -100,8 +100,11 @@ export function openWorldCard(key) {
   if (key) openEnvCard(key);
   if (buildFolds.world) buildFolds.world = false;
   selectWorld(key);
+  if (key) scrollToEnvCard(key);   // as the Hierarchy's environment row does (G2-067)
 }
 const openEnvCard = (key) => { const g = `c:${key}`; if (!isOpen(WORLD_ID, g)) toggleFold(WORLD_ID, g); };   // a card folds under c:<its key> (pushCards)
+/** After the repaint, the world card's header for `key` scrolled into view. */
+const scrollToEnvCard = (key) => { const title = schemaFor(WORLD_ID)?.sections?.list?.find((x) => x.key === key)?.title ?? key; requestAnimationFrame(() => cardHeader(title)?.scrollIntoView?.({ block: 'nearest' })); };
 /** An Inspector card's header, found by its title. */
 const cardHeader = (title) => [...document.querySelectorAll('[data-frame="inspector"] .sp-group')].find((b) => b.textContent.replace(/^[▸▾]\s*/, '').trim().startsWith(title));
 function selectWorld(env = null) {
@@ -347,7 +350,7 @@ function hierarchyDispatch(action, payload, _field, opts = {}) {
       const env = String(payload ?? '').startsWith('env:') ? String(payload).slice(4) : null;
       if (env) openEnvCard(env);
       selectWorld(env);
-      if (env) { const title = schemaFor(WORLD_ID)?.sections?.list?.find((x) => x.key === env)?.title ?? env; requestAnimationFrame(() => cardHeader(title)?.scrollIntoView?.({ block: 'nearest' })); }
+      if (env) scrollToEnvCard(env);
       return;
     }
     case 'envdel': removeEnv(String(payload ?? '').slice(4)); return;   // ✕ on an environment row

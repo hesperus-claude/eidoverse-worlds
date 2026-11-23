@@ -1,11 +1,11 @@
 // world-card-probe — Create ▸ Environment and the Hierarchy's environment rows open the world's card for that component
-// (333-cm bug a5); the Hierarchy's row also scrolls its header into view (a5 below), Create ▸ Environment does not.
+// (333-cm bug a5), and both scroll its header into view (a5 and G2-067 below).
 // A real browser against an owned world.
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/world-card-probe.ts
 //
 // Mutations (must go red): in client/lib/edit/panels.js fold key `sky` instead of `c:sky` in openWorldCard or in the
-// 'wsel' case; or scroll by the old `[data-group=…]` selector.
+// 'wsel' case; or scroll by the old `[data-group=…]` selector; or drop the scroll from openWorldCard (G2-067).
 import { scratchBench, mkCheck } from '../harness/harness.ts';
 import { tryUntil } from '../gate/wait.ts';
 
@@ -40,6 +40,10 @@ try {
   await evalJson(`${E}.then((m) => { m.editPanelsDebug().hierDo('wsel', 'env:sky'); return true; })`);
   check('a5 the Hierarchy Sky row opens the folded Sky card', (await skyOpen()) === true, String(await skyOpen()));
   check('a5 …and scrolls the Sky card header into view', await becomes(`window.__scrolled.some((t) => /^[▸▾]\\s*Sky/.test(t))`, 3000), JSON.stringify(await evalJson(`({ scrolled: window.__scrolled, build: ${inBuild}, heads: ${HEADS} })`)));
+  check('setup: the Sky card folded shut a third time', await shut());
+  await evalJson(`window.__scrolled = []; true`);
+  await evalJson(`${E}.then((m) => { m.openWorldCard('sky'); return true; })`);
+  check('G2-067 Create ▸ Environment ▸ Sky scrolls the Sky card header into view too', await becomes(`window.__scrolled.some((t) => /^[▸▾]\\s*Sky/.test(t))`, 3000), JSON.stringify(await evalJson(`window.__scrolled`)));
   check('no page errors', (await evalJson(`window.__errs`))?.length === 0, JSON.stringify(await evalJson(`window.__errs`)));
 } finally {
   console.log(`\n${tally.passed} passed, ${tally.failed} failed`);
