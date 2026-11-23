@@ -81,5 +81,15 @@ for (let i = 0; i < 60; i++) bridge.stdin.write(`Off: offline line ${i}\n`); bri
 await tryUntil("the offline overflow is dropped", () => (out.match(/world backlog — dropped/g) ?? []).length - drops0 >= 10, { ms: 3000 });
 const dropped = (out.match(/world backlog — dropped/g) ?? []).length - drops0;
 check("while the world is down, 60 Discord lines leave 50 queued: the 10 oldest are dropped, out loud, not held", dropped === 10 && /dropped "Off: offline line 0/.test(out), `${dropped} dropped`);
+// a server that refuses the hello (this build's dialect is not its own): the bot says why and stops; it never redials
+{ let joins = 0;
+  const fake = Bun.serve({ port: 0, fetch: (req, s) => (s.upgrade(req) ? undefined : new Response("ws only", { status: 400 })),
+    websocket: { message(ws, m) { if (JSON.parse(String(m))?.type !== "join") return; joins++;
+      ws.send(JSON.stringify({ type: "refused", code: "update-required", need: { dialect: "eidoverse", v: 999 } })); ws.close(4005, "update-required"); } } });
+  const p = Bun.spawn([process.execPath, BRIDGE], { cwd: ROOT, env: { ...process.env, DRY_RUN: "1", WORLD_URL: `ws://127.0.0.1:${fake.port}/ws`, BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+  let said = ""; (async () => { for await (const c of p.stdout) said += Buffer.from(c).toString(); })();
+  await tryUntil("the refused bot stops", () => p.exitCode !== null, { ms: 5000 });
+  const stopped = p.exitCode !== null; try { p.kill(); } catch {} fake.stop(true);
+  check("a hello refusal is said and the bot stops: one join, no redial", stopped && joins === 1 && /update the client/.test(said) && /not redialing/.test(said), `exited ${stopped}, ${joins} joins: ${said.slice(-300)}`); }
 cleanup();
 S.done();
