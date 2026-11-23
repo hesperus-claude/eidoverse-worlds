@@ -408,6 +408,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["shadow-fade", "client/shadow-fade-test.mjs", 1], // registered shadow casters start not casting
   ["shadow-fade-mutants", "client/shadow-fade-test.mjs --mutants", 1], // each of its mutation controls goes red
   ["lamp-slot-policy", "client/lamp-slot-policy-test.mjs", 1], // who may claim the one casting slot (lightrig.js attachLamps)
+  ["light-pool", "client/light-pool-test.mjs", 1], // the point pool lights what is on screen; a dark mirror holds no slot, a strike gets one the frame it fires (lightrig.js assign)
   ["lamp-skin", "client/lamp-skin-test.mjs", 1], // a lamp inside a skinned body is located through the skeleton
   ["transmission", "client/transmission-test.mjs", 1], // a transmissive glTF material becomes a node material with its transmission, ior and thickness; nothing else is upgraded
   ["body-shadow-gate", "client/body-shadow-gate-test.mjs", 1], // only a lamped body (or the own-body pref) casts and receives; a remote never casts
