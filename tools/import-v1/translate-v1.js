@@ -1,4 +1,4 @@
-// v1/v2 → v4 translator (lab). Runs the REAL v1 fold (anima/main shared/fold.js, extracted to legacy/) one entry at a
+// v1/v2 → v4 translator (lab). Runs the REAL v1 fold (anima/main shared/fold.js, now ./fold.js beside this file) one entry at a
 // time, projects its state into v4 entity/component form, and emits, per old entry:
 //   - the old entry nearly as sent (account subs mapped or dropped, noAcct; a backwards ts clamped): a `request` (verb
 //     "imported", body {verb, args, from: old seq}, ts: old ts), or a `say`, and
