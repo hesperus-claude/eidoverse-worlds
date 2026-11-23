@@ -69,13 +69,15 @@ if (CASE) {
   }
 
   const out = (o) => console.log(`__RESULT__${JSON.stringify(o)}`);
-  // `slotIsCaster`, not a per-request row: the boot/flip cases make no lamp
-  // request, so what is under test is the casting SLOT's own wiring following
-  // the resident's switch. (The contend case below is the one that asks the
-  // other question -- whether the lamp actually HOLDS that slot.)
+  // `slotIsCaster`, not a per-request row: what is under test is the casting
+  // SLOT's own wiring following the resident's switch. The slot draws only for
+  // a holder that asked (11-23), so `held` puts the body lamp's request on it.
+  // (The contend case below asks the other question -- whether the lamp
+  // actually HOLDS that slot.)
   const snap = () => { const d = rig.rigDebug(); return { pref: d.shadows.pref, map: renderer.shadowMap.enabled, sun: d.shadows.sunCasting, lamp: d.shadows.slotIsCaster, shapeOn: renderer.shadowMap.enabled && sun.castShadow }; };   // sun/lamp = EFFECTIVE casting: the switch is uniform-level since 09-27
 
-  if (CASE === 'boot-on' || CASE === 'boot-off') { out({ boot: snap() }); }
+  const holdLamp = () => { rig.requestLight('lamp:body:janus:1', { keep: true, intensity: 8, range: 10, shadows: true, pos: [0, 1, 0] }); updateRig(1000); };
+  if (CASE === 'boot-on' || CASE === 'boot-off') { const boot = snap(); holdLamp(); out({ boot, held: snap() }); }
   if (CASE === 'res') {   // Video › shadow resolution governs every caster: the sun takes n, the lamp slot scales from its tuned 256
     const at = () => ({ sun: sun.shadow.mapSize.x, lamp: rig.lampShadowState()?.map });
     const boot = at(); rig.setShadowRes(1024); const low = at(); rig.setShadowRes(2048);
@@ -144,6 +146,7 @@ if (CASE) {
     out({ born, tight, wide });
   }
   if (CASE === 'flip') {
+    holdLamp();
     const boot = snap();
     setShadows(false); const off = snap();
     setShadows(true); const on = snap();
@@ -355,7 +358,8 @@ async function runCase(name, mutate = null) {
 const bootOnChecks = (r, c = check) => {
   c('preference default is ON', r.boot.pref === true);
   c('shadow map enabled at boot', r.boot.map === true);
-  c('the lamp slot casts at boot', r.boot.lamp === true);
+  c('an empty casting slot draws nothing at boot (nobody asked)', r.boot.lamp === false);
+  c('the lamp slot casts once the body lamp holds it', r.held.lamp === true);
 };
 const bootOffChecks = (r, c = check) => {
   c('preference OFF is read at boot', r.boot.pref === false);
@@ -364,6 +368,8 @@ const bootOffChecks = (r, c = check) => {
   // not "off" -- a lamp that casts while the switch is off is a lamp pretending.
   c('the lamp slot does NOT cast when the preference is off', r.boot.lamp === false,
     'slot 0 born casting with shadows off — boot disagrees with the switch');
+  c('...nor once the body lamp holds it', r.held.lamp === false,
+    'the holder\'s ask overrode the resident\'s switch');
 };
 const flipChecks = (r, c = check) => {
   c('setShadows(false) keeps the pipeline shape (no scene recompile)', r.off.shapeOn === true);
