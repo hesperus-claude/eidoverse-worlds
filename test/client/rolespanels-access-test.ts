@@ -52,6 +52,11 @@ for (const door of ["open", "public"]) {
   const n2 = b.querySelector("[data-k=name]") as any, t2 = b.querySelector("[data-k=text]") as any;
   check("G2-047 a refused save keeps the draft in both fields", sent.length === 1 && n2.value === "Draft name" && t2.value === "é".repeat(2001), JSON.stringify({ sent: sent.length, name: n2.value, text: t2.value.length }));
   reply = { ok: true };
+  // …and an accepted save repaints from the fold: new nodes showing what the authority now holds
+  replica.st.entities["@world"].c = { about: { name: "Folded name", text: "folded blurb" } };
+  (b.querySelector("[data-save]") as any).click(); await settle();
+  const n3 = b.querySelector("[data-k=name]") as any, t3 = b.querySelector("[data-k=text]") as any;
+  check("G2-047 an accepted save repaints the card from the fold", n3 !== n2 && t3 !== t2 && n3.value === "Folded name" && t3.value === "folded blurb", JSON.stringify({ fresh: n3 !== n2, name: n3?.value, text: t3?.value }));
   b.remove();
 }
 S.done();
