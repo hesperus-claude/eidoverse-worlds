@@ -11,6 +11,7 @@ import { isStoreOriginal, ktx2VariantPath, lodVariantPath, storeShadowsMissing, 
 import { agentTokens, aid1JoinIdentity, sessionOfRequest } from "./auth.ts";
 import { worlds } from "./world.ts";
 import { atomicWrite } from "./fsutil.ts";
+import { replaceDurable } from "./durable.ts";
 import { ingestHeightmap } from "./heightmap.ts";
 import { readCappedBytes } from "./request-body.ts";
 import { checkFile } from "./buildcheck-queue.ts";
@@ -403,6 +404,13 @@ const warnedQuery = new Set<string>();
 // handed on), so what is being read AT ONCE is bounded too: two caps' worth. Past that an upload is asked to come back;
 // one alone always proceeds. A body that states no length counts as a whole cap.
 let inFlight = 0;
+/** A content-addressed blob, written only when absent, through a synced temp renamed into place (G3-088): a crash mid-write
+ *  can't leave a torn file under the name every later upload trusts. Whether it wrote (new to the store). */
+function storeBlob(abs: string, body: Uint8Array): boolean {
+  if (existsSync(abs)) return false;
+  replaceDurable(abs, body);
+  return true;
+}
 export async function handleUpload(req: Request, url: URL, srv: UploadSrv): Promise<Response> {
   const stated = Number(req.headers.get("content-length")), holds = stated > 0 ? Math.min(stated, UPLOAD_CAP) : UPLOAD_CAP;
   if (inFlight > 0 && inFlight + holds > 2 * UPLOAD_CAP)
@@ -472,7 +480,7 @@ async function uploadBy(req: Request, url: URL, srv: UploadSrv): Promise<Respons
     const idir = join(OPT_DIR, "store", "images");
     mkdirSync(idir, { recursive: true });
     const irel = `store/images/${ihash}.${kind}`;
-    if (!existsSync(join(OPT_DIR, irel))) writeFileSync(join(OPT_DIR, irel), body);
+    storeBlob(join(OPT_DIR, irel), body);
     // the human name lives only here, same as models: content-addressed
     // means the catalog would otherwise know this picture as a hash
     const iname = (url.searchParams.get("name") ?? "").replace(/\.[a-z0-9]+$/i, "").replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 64).trim();
@@ -510,7 +518,7 @@ async function uploadBy(req: Request, url: URL, srv: UploadSrv): Promise<Respons
     const adir = join(OPT_DIR, "store", "audio");
     mkdirSync(adir, { recursive: true });
     const arel = `store/audio/${ahash}.${kind}`;
-    if (!existsSync(join(OPT_DIR, arel))) writeFileSync(join(OPT_DIR, arel), body);
+    storeBlob(join(OPT_DIR, arel), body);
     const aname = (url.searchParams.get("name") ?? "").replace(/\.[a-z0-9]+$/i, "").replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 64).trim();
     {
       // first arrival is the provenance; a later upload only fills a missing name
@@ -592,8 +600,7 @@ async function uploadBy(req: Request, url: URL, srv: UploadSrv): Promise<Respons
   const dir = join(OPT_DIR, "store");
   mkdirSync(dir, { recursive: true });
   const rel = `store/${hash}.glb`;
-  const fresh = !existsSync(join(OPT_DIR, rel));   // new to the store: only then can this upload decide it is a one-off
-  if (fresh) writeFileSync(join(OPT_DIR, rel), body);
+  const fresh = storeBlob(join(OPT_DIR, rel), body);   // new to the store: only then can this upload decide it is a one-off
   queueOptimize(join(OPT_DIR, rel)); // draco+webp shadow, built off the request path
   // content-addressed: the human name arrives ONLY here, so record it (or the catalog lists a hash)
   const upName = (url.searchParams.get("name") ?? "").replace(/\.glb$/i, "").replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 64).trim();

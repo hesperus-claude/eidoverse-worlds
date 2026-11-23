@@ -66,4 +66,24 @@ check("the door key proves no identity, enrolled or not: its uploads count again
 const keyElsewhere = await upload(key, "198.51.100.9");
 check("...and the same key from another address is taken (that address's own window)", keyElsewhere.status === 200, `${keyElsewhere.status} ${keyElsewhere.text}`);
 check("every upload stored the one file its bytes name (content-addressed)", stored() === 1, stored());
+// G3-088: a new blob lands through a synced temp renamed into place, never written in place under its final name (a crash
+// mid-write would leave a torn file that "exists" from then on); a blob already stored isn't written again
+{ const fs = require("node:fs"), real = fs.fsyncSync, synced: string[] = [];
+  fs.fsyncSync = (fd: number) => { try { synced.push(fs.readlinkSync(`/proc/self/fd/${fd}`)); } catch { synced.push("?"); } return real(fd); };
+  const blob = async (as: string, body: Uint8Array) => { const url = new URL(`http://x/upload?as=${as}&name=g3088`);
+    const r = await handleUpload(new Request(url, { method: "POST", headers: key, body }), url, { requestIP: () => ({ address: "198.51.100.88" }) });
+    return { status: r.status, path: r.status === 200 ? (await r.json()).path : await r.text() }; };
+  const log = console.log; console.log = () => {};
+  let img: any, aud: any, again: any, n0 = 0;
+  try {
+    img = await blob("image", new Uint8Array([...png, 0]));   // a PNG with a trailing byte: new bytes, a new name
+    aud = await blob("audio", new TextEncoder().encode("ID3 g3088 not really an mp3"));
+    n0 = synced.length; again = await blob("image", new Uint8Array([...png, 0]));
+  } finally { console.log = log; fs.fsyncSync = real; }
+  const blobSynced = (rel: string) => synced.slice(0, n0).some((p) => p === "?" || (p.includes(rel) && p.endsWith(".tmp")));
+  check("G3-088 a new image and a new sound are each written to a synced temp, then renamed to their name",
+    img.status === 200 && aud.status === 200 && blobSynced(img.path) && blobSynced(aud.path), { img, aud, synced });
+  check("G3-088 …and an image already stored isn't rewritten (only its manifest moves)", again.status === 200 && again.path === img.path
+    && !synced.slice(n0).some((p) => p.includes(img.path)), synced.slice(n0));
+}
 S.done();
