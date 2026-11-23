@@ -19,32 +19,6 @@ export function retireEmitter(handle, autos) {
   } catch { /* a failed teardown must not strand the registry entry */ }
 }
 
-/** Give back a raw system (mesh in the scene, hook registered) not yet owned by a handle: what `adoptSystem`
- *  unwinds to when an attach step throws. Disposes geometry and material, never the texture (emitters.js's cache). */
-export function retireRawSystem(sys, autos) {
-  if (!sys || sys.__retired) return;
-  sys.__retired = true;
-  releaseHook(sys.update, autos);
-  const mesh = sys.mesh;
-  if (!mesh) return;
-  try {
-    mesh.parent?.remove?.(mesh);
-    mesh.geometry?.dispose?.();
-    const m = mesh.material;
-    if (Array.isArray(m)) m.forEach((x) => x?.dispose?.()); else m?.dispose?.();
-  } catch { /* a failed teardown must not mask the error that caused it */ }
-}
-
-/** Run the host's attach steps over a fresh upstream system; unwind the raw allocation if one throws. */
-export function adoptSystem(sys, autos, attach) {
-  try {
-    return attach(sys);
-  } catch (e) {
-    retireRawSystem(sys, autos);
-    throw e;
-  }
-}
-
 /** The world's emitter registry. `build(emitter, {id})` is the host's (THREE-bound) half: it returns, or resolves
  *  to, a handle `{mesh?, update?, hooks?, dispose()}`. `autos` is the per-frame hook array the frame loop drains.
  *  `apply(id, emitter)` is the only entry point the fold uses: the normalized emitter to attach or replace, `null`

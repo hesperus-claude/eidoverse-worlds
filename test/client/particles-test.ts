@@ -17,7 +17,7 @@ import {
 } from "../../shared/particles.js";
 import { resolveParticles, instanceOf, ESSENTIALS } from "../../shared/particle_effects.js";
 import {
-  makeEmitterRegistry, retireEmitter, retireRawSystem, adoptSystem,
+  makeEmitterRegistry, retireEmitter,
 } from "../../client/lib/realize/emitter_field.js";
 import {
   autoHooks, ownHook, pushHostHook, releaseHook, isHostOwned, claimUnowned,
@@ -196,54 +196,6 @@ function makeUpstreamStub(autos: (() => void)[]) {
   check("retiring twice is a no-op", autos.length === 1 && autos[0] === skyHook);
 }
 
-// ---- 2b. a throw AFTER upstream allocation --------------------------------
-console.log("\npost-allocation faults — the window between makeParticles() and a handle\n");
-
-{
-  // The exact shape of the leak: makeParticles has already added its mesh to
-  // the scene and pushed its update; a host step after that throws, so no
-  // handle is ever returned and the registry's catch has nothing to retire.
-  const autos: (() => void)[] = [];
-  const parent = { children: [] as unknown[], remove(o: unknown) { this.children = this.children.filter((c) => c !== o); } };
-  let geoDisposed = 0, matDisposed = 0, texDisposed = 0;
-  const texture = { dispose() { texDisposed++; } };            // BORROWED, cached, shared
-  const makeRaw = () => {
-    const update = () => {};
-    const mesh: any = {
-      parent, geometry: { dispose() { geoDisposed++; } },
-      material: { dispose() { matDisposed++; }, map: texture },
-      userData: {}, position: { set() {} },
-    };
-    parent.children.push(mesh);
-    autos.push(update);                                        // upstream registers itself
-    return { mesh, update };
-  };
-
-  for (const [name, failing] of [
-    ["parenting", (s: any) => { throw new Error("parent.add failed"); }],
-    ["the tier dial", (s: any) => { s.mesh.count = 1; throw new Error("setTier failed"); }],
-    ["handle construction", (_s: any) => { throw new Error("handle failed"); }],
-  ] as const) {
-    const sys = makeRaw();
-    const before = { autos: autos.length, kids: parent.children.length };
-    let threw = false;
-    try { adoptSystem(sys, autos, failing); } catch { threw = true; }
-    check(`a throw in ${name} propagates`, threw);
-    check(`...unhooks the raw system (${name})`, autos.length === before.autos - 1);
-    check(`...detaches its mesh (${name})`, parent.children.length === before.kids - 1);
-  }
-  check("...and disposes the geometry and material it owns", geoDisposed === 3 && matDisposed === 3);
-  check("...but NEVER the borrowed texture", texDisposed === 0);
-
-  // and the happy path is untouched
-  const good = makeRaw();
-  const handle = adoptSystem(good, autos, (s: any) => ({ update: s.update, dispose() {} }));
-  check("a build that succeeds keeps its hook and its mesh",
-    autos.length === 1 && parent.children.length === 1 && handle.update === good.update);
-  retireRawSystem(good, autos);
-  check("retireRawSystem is idempotent", (retireRawSystem(good, autos), autos.length === 0));
-}
-
 // ---- 2c. hook OWNERSHIP across an async build ------------------------------
 console.log("\nhook ownership — a subsystem that claims by diff must not adopt someone else's\n");
 
@@ -274,7 +226,7 @@ console.log("\nhook ownership — a subsystem that claims by diff must not adopt
   check("releasing drops the mark too", !isHostOwned(emitterHook) && !autos.includes(emitterHook));
   check("releasing twice is a no-op", releaseHook(emitterHook, autos) === false);
 
-  // ownHook marks a hook upstream registered on our behalf (makeParticles)
+  // ownHook marks a hook an upstream library registered on our behalf
   const upstreamRegistered = () => {}; autos.push(upstreamRegistered);
   ownHook(upstreamRegistered);
   check("a hook upstream pushed for us can still be claimed as ours",
