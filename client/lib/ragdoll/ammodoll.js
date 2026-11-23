@@ -1249,12 +1249,15 @@ export class AmmoRagdoll extends BodyEngineBase {
     // hand the hair back adopting the pose it is in (dishevelled, deliberately): three-vrm resumes from the fallen
     // shape, and the authored shape returns when she gets up (avatar.js _combHair)
     this.avatar?._releaseHair?.({ adopt: true });
-    try {
-      for (const c of this._constraints) this.world.removeConstraint(c);
-      for (const [, pin] of this._pinCons) this.world.removeConstraint(pin.con);
-      for (const b of this._bodies) this.world.removeRigidBody(b);
-      for (const b of this._statics) this.world.removeRigidBody(b);
-    } catch { /* half-built world */ }
+    // every body leaves the world before anything is destroyed (`?? []`: a half-built doll lacks the later lists)
+    if (this.world) {
+      try {
+        for (const c of this._constraints ?? []) this.world.removeConstraint(c);
+        for (const [, pin] of this._pinCons ?? []) this.world.removeConstraint(pin.con);
+        for (const b of this._bodies ?? []) this.world.removeRigidBody(b);
+        for (const b of this._statics ?? []) this.world.removeRigidBody(b);
+      } catch { /* half-built world */ }
+    }
     const refs = this._refs ?? [];
     for (let i = refs.length - 1; i >= 0; i--) {
       try { AMMO.destroy(refs[i]); } catch { /* already gone */ }

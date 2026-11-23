@@ -114,6 +114,27 @@ console.log('\nthe loaded engine answers:');
     `world ${!!world}, ${destroyed.size} destroyed`);
   check('...and hands the hair back for the verlet fall', av4.__simHair === false);
   late?.dispose?.();
+
+  // a throw MID-build (the first dynamic body's add, after the static ground is in the world and before any joint)
+  // takes every body out of the world before anything is destroyed: a body freed while still in the world is read
+  // by ~btCollisionWorld after it is gone
+  const inWorld = new Set<any>(); let leftAtWorldDestroy = -1, w2: any = null;
+  A.btDiscreteDynamicsWorld = function (...a: any[]) {
+    w2 = new RealWorld(...a);
+    const add = w2.addRigidBody.bind(w2), rem = w2.removeRigidBody.bind(w2);
+    w2.addRigidBody = (b: any, g: number, m: number) => { if (m !== -1) throw new Error('mid-build, rig-specific'); inWorld.add(b); return add(b, g, m); };
+    w2.removeRigidBody = (b: any) => { inWorld.delete(b); return rem(b); };
+    return w2;
+  };
+  A.destroy = (o: any) => { if (o === w2) leftAtWorldDestroy = inWorld.size; return RealDestroy(o); };
+  const av5: any = makeAvatar(rig.P);
+  let mid: any;
+  console.error = () => {}; console.warn = () => {};
+  try { mid = bs.makeRagdoll(av5, null, av5.restBonePositions()); }
+  finally { A.destroy = RealDestroy; A.btDiscreteDynamicsWorld = RealWorld; console.error = err; console.warn = warn; }
+  check('a throw mid-build empties the world before destroying it (no freed body left inside)',
+    mid instanceof Ragdoll && leftAtWorldDestroy === 0, `${leftAtWorldDestroy} bodies still in the world when it was destroyed`);
+  mid?.dispose?.();
 }
 
 console.log('\nthe stored choice wins:');
