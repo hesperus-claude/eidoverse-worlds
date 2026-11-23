@@ -1,6 +1,6 @@
 // groundpanel — the ground section of the world panel. Unlike the sky panel's live sliders, every control here is a
-// deliberate pick (terrain and grass are authored: they persist and fold). The grass pickers recommit at once only
-// after 🌱 grow on this page (st.grass, not read from the world); before that they wait for grow.
+// deliberate pick (terrain and grass are authored: they persist and fold). The grass pickers recommit at once while the
+// world has grass (st.grass: set by 🌱 grow and mow here, and read from the world at each readout); else they wait for grow.
 //
 // The vocabulary (tints, shapes, grass dials, plantings) is a def (defs/ground/_palette.json): a pick writes concrete
 // verb args, so the log never stores a palette name. No fallback vocabulary: a world serving no palette says so.
@@ -94,6 +94,7 @@ export function paintGround(body) {
     lines.el.classList.add('ground-now');
     const readNow = () => {
       const g = state.st?.grass;
+      st.grass = !!g && !g.clear;   // the pickers recommit while the world has grass (G2-023)
       let world;
       if (!g || g.clear) world = 'no grass';
       else {

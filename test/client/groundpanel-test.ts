@@ -19,7 +19,8 @@ mock.module(L + "world.js", () => ({ currentTerrainArgs: () => null, terrainEdit
 mock.module(L + "defs.js", () => ({ defsRegistry: async () => reg }));
 mock.module(L + "edit/writes.js", () => ({ send: async (r: any) => { sent.push(r); return { ok: true }; } }));
 mock.module(L + "ui/ui.js", () => ({ flashHint: (s: string) => hints.push(s) }));
-mock.module(L + "state.js", () => ({ state: { st: { entities: {} } }, onWorldChange: () => () => {} }));
+const world: any = { st: { entities: {} } };
+mock.module(L + "state.js", () => ({ state: world, onWorldChange: () => () => {} }));
 mock.module(L + "terrain.js", () => ({ getGrassQuality: () => "high", getGrassShed: () => 0, getGrassDensity: () => 1 }));
 (globalThis as any).fetch = async () => new Response("null", { status: 404 });
 const { paintGround } = await import(L + "edit/groundpanel.js");
@@ -43,6 +44,19 @@ for (const drop of ["grassHeight", "grassDensity"]) {
   check("a6 grow with no planting sends nothing (never a delete)", !sent.some((r) => r.verb === "delete"), JSON.stringify(sent));
   b.remove();
 }
+// G2-023: a world that already has grass recommits a picker at once (st.grass seeds from the world, not only from grow
+// here); a bare world still waits for grow. Before the control below: its grow sets the module's st.grass.
+const pick = async (b: any) => { const d = [...b.querySelectorAll("select")].find((s: any) => [...s.options].some((o: any) => o.value === "thick")) as any;
+  d.value = d.value === "thick" ? "normal" : "thick"; d.dispatchEvent(new Event("change")); await settle(); };
+for (const grassed of [false, true]) {
+  world.st = grassed ? { entities: {}, grass: { kind: "blades", density: 1 } } : { entities: {} };
+  const b = await mount({ ...PAL, grassDensity: { normal: 1, thick: 2 } }); sent.length = 0;
+  await pick(b);
+  if (grassed) check("G2-023 a density pick on a grassed world regrows at once", sent.length === 1 && sent[0].verb === "set" && sent[0].args.component === "grass", JSON.stringify(sent));
+  else check("G2-023 control: a density pick on a bare world waits for grow", sent.length === 0, JSON.stringify(sent));
+  b.remove();
+}
+world.st = { entities: {} };
 // control: the real palette grows a grass set
 {
   const b = await mount(PAL); sent.length = 0;
