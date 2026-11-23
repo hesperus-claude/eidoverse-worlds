@@ -172,7 +172,7 @@ export function describeWorld(st, now = 0, { presets = null, clock = true } = {}
 export function worldSchema(st, live = {}) {
   const { sky, terrain, grass } = worldState(st);
   const now = live.now ?? 0;
-  const ro = live.mayShape === false ? { disabled: true, hint: 'the world\'s look is the owner\'s: sky, weather and grass take the editWorld permission' } : {};
+  const ro = live.mayShape === false ? { disabled: true, hint: 'sky, weather and grass take the editWorld permission (an owner\'s; an owner can grant it to a role)' } : {};
   const rg = live.mayGround === false ? { disabled: true, hint: 'shaping the ground takes the build permission' } : {};   // the terrain card's
   const groups = [];
 
@@ -342,7 +342,7 @@ export function worldEditOps(st, edits, live = {}) {
 export function worldPick(st, kind, v, ctx = {}) {
   const { sky, terrain, grass } = worldState(st);
   if (kind === 'shape' || kind === 'tint') { if (ctx.mayGround === false) return { ops: [], errors: ['shaping the ground takes the build permission'] }; }
-  else if (ctx.mayShape === false) return { ops: [], errors: ['the world\'s look is the owner\'s: sky, weather and grass take the editWorld permission'] };
+  else if (ctx.mayShape === false) return { ops: [], errors: ['sky, weather and grass take the editWorld permission (an owner\'s; an owner can grant it to a role)'] };
   const pal = ctx.pal; const def = paletteDefaults(pal);
   let op = null;
   switch (kind) {

@@ -599,7 +599,7 @@ function worldFields() {
     { t: 'info', label: 'name', value: worldName(), hint: 'the world itself: its sky, weather, ground and grass are its components' },
     { t: 'info', label: 'id', value: WORLD_ID, dim: true, hint: 'the world entity\'s permanent id: agents and scripts name it @world' },
   ];
-  if (mayShape() === false) f.push({ t: 'info', label: '', value: mayGround() === false ? 'shaping the world is the owner\'s — read-only for you' : 'the sky, weather and grass are the owner\'s — read-only for you; the ground is yours to shape' });
+  if (mayShape() === false) f.push({ t: 'info', label: '', value: mayGround() === false ? 'shaping the world needs editWorld, and the ground build (an owner\'s; an owner can grant them to a role) — read-only for you' : 'the sky, weather and grass need editWorld (an owner\'s; an owner can grant it to a role) — read-only for you; the ground is yours to shape' });
   pushCards(f, schema, WORLD_ID);
   // no terrain yet: the card's only row pointed elsewhere; put Build ▸ World's ground shapes in it
   if (!state.st.terrain) {
@@ -1027,7 +1027,7 @@ function worldBuildFields() {
   const f = [
     { t: 'group', k: 'world', label: 'World', open: !buildFolds.world },
     worldRowFields(),
-    ...(owner ? [] : [{ t: 'info', label: '', value: builder ? 'the sky, grass and weather are the owner\'s — read-only for you; the ground is yours to shape' : 'shaping the world is the owner\'s — these are read-only for you' }]),
+    ...(owner ? [] : [{ t: 'info', label: '', value: builder ? 'the sky, grass and weather need editWorld (an owner\'s; an owner can grant it to a role) — read-only for you; the ground is yours to shape' : 'shaping the world needs editWorld, and the ground build (an owner\'s; an owner can grant them to a role) — these are read-only for you' }]),
     // remove what's there from the world's own section too: the same edit as the Hierarchy row's ✕ and the card's button
     ...(owner || builder ? envRows().filter((r) => r.actions.length).map((r) => ({ t: 'btn', k: `envdel-${r.id.slice(4)}`, label: `✕ remove ${r.label.toLowerCase()}`, icon: r.icon, hint: `remove: ${ENV.find((e) => e.key === r.id.slice(4))?.gone} (Ctrl+Z brings it back)` })) : []),
     { t: 'info', label: 'sky', value: ch.sky ? `${ch.sky} — a pick replaces the sky; the weather stays` : 'custom — a pick replaces the sky; the weather stays' },
