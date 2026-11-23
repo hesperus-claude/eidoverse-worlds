@@ -894,9 +894,9 @@ export class Avatar {
     this._limp = on;
     // A body with its own runtime hands the sim back the nodes it was solving (bodyruntime_core.js setLimp).
     this.bodyRuntime?.setLimp?.(this.vrm, on);
-    // eyes close when the body goes slack and open when it gets up; _limpEyes remembers that setEyes(true) took (it says
-    // whether the rig has lids, not whether they were open), so eyes already closed by /eyes open on getting up too
-    if (on) { this._limpEyes = this.setEyes(true); }
+    // eyes close when the body goes slack and open when it gets up; _limpEyes is set only when the fall shut them,
+    // so eyes already closed by /eyes-closed stay closed
+    if (on) { this._limpEyes = !this.face.eyesShut() && this.setEyes(true); }
     else if (this._limpEyes) { this._limpEyes = false; this.setEyes(false); }
     // getting up is when the hair goes back to three-vrm, and when the flap captures where the sim left the wings
     if (!on) { this._releaseHair(); this._combHair(); }

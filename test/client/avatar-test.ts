@@ -192,6 +192,19 @@ console.log('\ngetting up:');
   check('...and stays inside its clamp', Math.abs(nodes.head.rotation.x) < 1.6,
     `${nodes.head.rotation.x.toFixed(2)} rad`);
 }
+{
+  // eyes: a fall closes open eyes and getting up reopens them, but eyes the player shut (/eyes-closed) stay shut
+  const { self } = stand();
+  self.face._lids = [];                          // a rig with lids (the list's contents don't matter to setEyes)
+  self.setLimp(true);
+  check('going limp closes open eyes', self.face._eyesGoal === 1);
+  self.setLimp(false);
+  check('...and getting up opens them again', self.face._eyesGoal === 0);
+  self.setEyes(true);                            // /eyes-closed
+  self.setLimp(true); self.setLimp(false);
+  check('eyes closed before the fall stay closed after getting up', self.face._eyesGoal === 1,
+    `goal ${self.face._eyesGoal}`);
+}
 
 console.log('\ncomposing on a clip that holds still:');
 for (const constant of [false, true]) {

@@ -145,6 +145,9 @@ export class Face {
     return true;
   }
 
+  /** True while the eyes are held shut (setEyes(true)); a blink doesn't count. */
+  eyesShut() { return this._eyesGoal === 1; }
+
   /** Find the eyelid bones (L_/R_Eyelid_Upper, _Lower) once and remember where open is. The closing angle comes
    *  from the rig as a node extra; BLINK.closed is the fallback. */
   _findLids() {
