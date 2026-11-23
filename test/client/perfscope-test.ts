@@ -127,6 +127,15 @@ let receipt: any = null;
   check('the label carries the model\'s word (shared/eido.js modelWord: its file name, no extension)', sub('fountain')?.label === 'fountain  (fountain)', sub('fountain')?.label);
   check('the mode select reflects the live mode', (stack.querySelector('select') as HTMLSelectElement).value === 'tex');
   check('the receipt never carries the page query (join key)', receipt?.page && !String(receipt.page).includes('?'));
+  // a clipboard that refuses: the receipt goes to the console and the toast says so, not "copied"
+  let defined = false;
+  try { Object.defineProperty(navigator, 'clipboard', { value: { writeText: async () => { throw new Error('denied'); } }, configurable: true }); defined = true; } catch {}
+  toasts.length = 0; let logged = '';
+  console.log = (...a: any[]) => { if (typeof a[0] === 'string' && a[0].startsWith('{')) logged = a[0]; else _log(...a); };
+  btn.click(); await tick(); await tick();
+  console.log = _log;
+  check('a refused clipboard logs the receipt and the toast says so', defined && !!logged
+    && toasts.some((t) => t.includes('logged to the console')) && !toasts.some((t) => t.includes('copied')), toasts.join(' | '));
 }
 
 // ============================================================ solid

@@ -631,10 +631,11 @@ async function copyReceipt() {
           .map((x) => `${x.w}x${x.h}${x.raw ? ' raw' : ''} ${(x.b / 1e6).toFixed(1)}MB`) })),
   };
   const text = JSON.stringify(receipt, null, 1);
-  try { await navigator.clipboard.writeText(text); } catch { console.log(text); }
+  let copied = true;
+  try { await navigator.clipboard.writeText(text); } catch { copied = false; console.log(text); }
   const n = receipt.subjects.length;
   releaseIfIdle();
-  return n;
+  return { n, copied };
 }
 
 /** The loupe's numbers for ONE tree (every mesh visible), outside the census. */
@@ -711,7 +712,10 @@ export function buildPerfPanel(stack, { toast = console.log } = {}) {
   rescan.onclick = () => { collect(); if (mode !== 'off') applyTint(); paintTable(); refreshPinned(); toast(`perfscope: rescanned (${subjects.size} subjects)`); releaseIfIdle(); };
   const rcpt = document.createElement('button');
   rcpt.textContent = 'copy receipt';
-  rcpt.onclick = async () => toast(`perfscope: receipt copied (${await copyReceipt()} subjects)`);
+  rcpt.onclick = async () => {
+    const { n, copied } = await copyReceipt();
+    toast(`perfscope: receipt ${copied ? 'copied' : 'logged to the console (clipboard refused)'} (${n} subjects)`);
+  };
   btns.append(rescan, rcpt);
 
   // the loupe sits under the overlay lens, not among the housekeeping buttons
