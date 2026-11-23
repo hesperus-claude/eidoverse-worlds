@@ -4,6 +4,7 @@
 //   bun test/mcpl/agent-reads-test.ts
 process.env.WORLD_TOKEN = "";
 import { suite } from "../gate/suite.ts";
+import { tryUntil } from "../gate/wait.ts";
 const { WorldAgent } = await import("../../mcpl/agent.ts");
 
 const { check, done } = suite("agent-reads");
@@ -80,7 +81,7 @@ try {
     await ag5.ground.buildTerrain({ seed: 1, size: 40 }).catch(() => {});
     answer = async (u) => u.endsWith("/terrain.js") ? new Response("globalThis.makeTerrain = () => ({ heightAt: () => 7 });") : new Response("no", { status: 404 });
     ag5.joined = true;
-    for (let i = 0; i < 60 && !ag5.ground.terrain; i++) { ag5.tick(); await new Promise((r) => setTimeout(r, 100)); }
+    await tryUntil("the tick builds the ground again", () => { ag5.tick(); return !!ag5.ground.terrain; }, { ms: 6000, step: 100 });
     ag5.joined = false;
     check("a terrain.js that failed to load is fetched again by the tick, and the ground is built (G2-054)", ag5.ground.heightAt(0, 0) === 7, `ground ${ag5.ground.heightAt(0, 0)}`);
     ag5.close(); }
