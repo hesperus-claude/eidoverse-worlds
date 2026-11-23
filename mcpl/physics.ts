@@ -392,6 +392,7 @@ async function readSkeleton(httpBase: string, path: string, key: string): Promis
   const stalled = new AbortController();
   const fetched = fetch(`${httpBase}/library/${path}`, { signal: AbortSignal.any([AbortSignal.timeout(SKELETON_READ.totalMs), stalled.signal]) });
   const res = await within(fetched, SKELETON_READ.stallMs, "the world server didn't answer").catch((e) => { stalled.abort(e); throw e; });
+  if (!res.ok) res.body?.cancel().catch(() => {});   // an error page isn't read
   if (res.status >= 500) throw new Error(`the world server answered ${res.status}`);   // its trouble, not the file's
   if (!res.ok) { console.error(`[physics] no skeleton in ${path}: ${res.status} — this body will slump`); return null; }
   const parts: Uint8Array[] = [];
