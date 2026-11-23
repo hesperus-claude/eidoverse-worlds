@@ -62,7 +62,7 @@ const world = DRY_RUN ? null : new WorldClient({
   actor: env('ACTOR', 'captioner'), screenId: SCREEN_ID, title: env('TITLE') || undefined,
   spool: spool || undefined, spoolBestEffort: env('SPOOL_BEST_EFFORT') === '1',
   maxPending: Number(env('MAX_PENDING', '600')), log,
-  onRefused: () => process.exit(78),   // EX_CONFIG: a deploy unit is told not to restart on it (deploy/eido-chatbridge.service)
+  onRefused: () => process.exit(78),   // EX_CONFIG; deploy/ has no captionbot unit: whatever supervises it needs RestartPreventExitStatus=78
 });
 world?.connect();
 if (world) log(`session ${world.session}; spool ${spool ? `${spool} (${env('SPOOL_BEST_EFFORT') === '1' ? 'best effort' : 'fail-closed'})` : '(none)'}`);
