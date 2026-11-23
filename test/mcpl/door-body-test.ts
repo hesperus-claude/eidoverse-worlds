@@ -12,7 +12,7 @@
 import { WorldAgent } from "../../mcpl/agent.ts";
 import { noWorldUrl } from "../harness/no-world.ts";
 import { pointClass } from "../../shared/protocol/consent.js";
-import { wireState } from "../../shared/protocol/replica.js";
+import { wireState, makeReplica } from "../../shared/protocol/replica.js";
 import { emptyState } from "../../shared/protocol/fold.js";
 import { tryUntil } from "../gate/wait.ts";
 
@@ -148,6 +148,19 @@ check("(2 m in front of a body is beside it, not in it)", !pointClass([0, 0, 0],
     ag.reaching.reachHolders({ p: chest }).some((h: any) => h.name === "Ann"), JSON.stringify(ag.reaching.reachHolders({ p: chest })));
   const standing = reacher([5, 0, 0]);
   check("...and one beside an upright body is held to nobody", standing.reaching.reachHolders({ p: chest }).length === 0, JSON.stringify(standing.reaching.reachHolders({ p: chest })));
+}
+
+{
+  // G3-064: a rejoin's snapshot drops the supports of things deleted while the body was away (the snapshot is diffed
+  // from nothing, so no "gone" reaches them): their colliders would stay in the process's shared physics map
+  const ag: any = new WorldAgent({ name: "rejoiner", world: "w", url: noWorldUrl() });
+  ag.entities.set("shed", { id: "shed", model: "m.glb", pos: [0, 0, 0], yaw: 0 });
+  ag.ground.supportIds.set("shed", ["w/shed"]);
+  ag.replica = makeReplica();
+  ag.replica.adopt({ type: "snapshot", dialect: "eidoverse-log", v: 4, state: wireState(emptyState()), seq: 0, world: "w", entries: [], present: [] });
+  await ag.applyView(false, null, null);
+  check("a rejoin's snapshot without a thing drops the support it held up (G3-064)", !ag.ground.supportIds.has("shed") && !ag.entities.has("shed"), JSON.stringify([...ag.ground.supportIds.keys()]));
+  ag.close();
 }
 
 console.log("a walk carried across a rejoin");

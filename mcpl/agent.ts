@@ -1108,6 +1108,8 @@ export class WorldAgent {
       });
     }
     for (const id of [...this.entities.keys()]) if (!seen.has(id)) this.entities.delete(id);
+    // ...and its floors with it: a rejoin's snapshot is diffed from nothing, so a thing deleted while away gets no "gone"
+    for (const id of [...this.ground.supportIds.keys()]) if (!seen.has(id)) this.ground.dropSupport(id);
     // a structure's cached plan goes with the structure (a re-attached one is planned afresh)
     for (const id of [...this.ground.plans.keys()]) if (!(this.entities.get(id) as any)?.structure) this.ground.plans.delete(id);
     // both mount species land in one view: entity cargo rides ent.parent (the fold),
