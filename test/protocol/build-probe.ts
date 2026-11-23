@@ -179,13 +179,14 @@ try {
       const r = c.camera.matrixWorld.elements, right = new T.Vector3(r[0], 0, r[2]).normalize();
       const p = m.clone().addScaledVector(right, Math.min(h.x, h.z) * 0.75).project(c.camera);
       return { x: Math.round((p.x + 1) / 2 * innerWidth), y: Math.round((1 - p.y) / 2 * innerHeight) }; })`);
-    await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...at }); await sleep(100);
+    const frame = () => evalJson(`new Promise((r) => requestAnimationFrame(() => r(true)))`);   // one frame: the build loop reads the pointer
+    await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...at }); await frame();
     await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", ...at, button: "left", clickCount: 1 });
     const id = await evalJson(`globalThis.__gizmo?.().attached ?? null`);
     const sx = () => evalJson(`import('/lib/world.js').then((m) => m.entities.get(globalThis.__gizmo?.().attached)?.scale.x ?? null)`);
     const s0 = await sx();
-    for (let k = 1; k <= 10; k++) { await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at.x + k * 8, y: at.y, button: "left", buttons: 1 }); await sleep(60); }
-    await sleep(400);
+    for (let k = 1; k <= 10; k++) { await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: at.x + k * 8, y: at.y, button: "left", buttons: 1 }); await frame(); }
+    await waitFor(`import('/lib/world.js').then((m) => (m.entities.get(globalThis.__gizmo?.().attached)?.scale.x ?? 0) > ${s0 ?? 1e9} * 1.2)`, 4000);
     const mid = await sx();
     check("SD (setup) the press picked a thing and the drag scales it in the page", !!id && s0 != null && mid != null && mid > s0 * 1.2, { id, s0, mid, at });
     check("SD1 the drag's live samples carry its scale to the others (Bob sees it grow before the release)",

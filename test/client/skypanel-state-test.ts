@@ -189,7 +189,7 @@ for (const ok of [true, false]) {
   sl.value = "9"; sl.dispatchEvent(new Event("input"));
   const btn = b.querySelector("button.dirty") as HTMLButtonElement;
   btn.click();
-  await new Promise((r) => setTimeout(r, 0));
+  await tryUntil("the commit's reply is handled", () => (ok ? btn.textContent === "✓ logged" : btn.classList.contains("dirty")) || null, { ms: 1000 });
   if (ok) check("G2-084 control: a write the authority took reads ✓ logged", btn.textContent === "✓ logged" && !btn.classList.contains("dirty"), `${btn.textContent} dirty=${btn.classList.contains("dirty")}`);
   else check("G2-084 a refused write never reads ✓ logged, and stays unsaved", btn.textContent !== "✓ logged" && btn.classList.contains("dirty"), `${btn.textContent} dirty=${btn.classList.contains("dirty")}`);
   b.remove();
