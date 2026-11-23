@@ -93,6 +93,27 @@ console.log('\nthe loaded engine answers:');
   check('...the next fall tries Bullet again, and its success clears the note',
     again instanceof AmmoRagdoll && bs.bodyEngine() === 'ammo', bs.bodyEngine());
   again?.dispose?.();
+
+  // a constructor that throws PARTWAY (here at its last step, after the world, bodies, hair and wings) frees what it
+  // already built and hands the hair back, or a rig that throws would leak a Bullet world on every fall
+  const A = ammoNs.AMMO, RealDestroy = A.destroy, RealWorld = A.btDiscreteDynamicsWorld;
+  const destroyed = new Set<any>(); let world: any = null;
+  A.destroy = (o: any) => { destroyed.add(o); return RealDestroy(o); };
+  A.btDiscreteDynamicsWorld = function (...a: any[]) { world = new RealWorld(...a); return world; };
+  (AmmoRagdoll.prototype as any)._measureHipsLocal = function () { throw new Error('late, rig-specific'); };
+  const av4: any = makeAvatar(rig.P);
+  av4._releaseHair = () => { av4.__simHair = false; };   // the stand-in carries Avatar's one hand-back method
+  let late: any;
+  console.error = () => {}; console.warn = () => {};
+  try { av4.__simHair = true; late = bs.makeRagdoll(av4, null, av4.restBonePositions()); }   // as buildHair claims it
+  finally {
+    A.destroy = RealDestroy; A.btDiscreteDynamicsWorld = RealWorld; delete (AmmoRagdoll.prototype as any)._measureHipsLocal;
+    console.error = err; console.warn = warn;
+  }
+  check('a Bullet constructor that throws partway destroys the world it built', late instanceof Ragdoll && !!world && destroyed.has(world),
+    `world ${!!world}, ${destroyed.size} destroyed`);
+  check('...and hands the hair back for the verlet fall', av4.__simHair === false);
+  late?.dispose?.();
 }
 
 console.log('\nthe stored choice wins:');

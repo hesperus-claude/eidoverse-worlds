@@ -114,6 +114,12 @@ export class AmmoRagdoll extends BodyEngineBase {
   constructor(avatar, lean = null, rest = null, seedVel = null) {
     super(avatar);                  // lifecycle fields — see bodyengine.js
     if (!AMMO) throw new Error('ammodoll: wasm not ready — ensureAmmo() first');
+    // a throw partway frees what was built and hands the hair back: makeRagdoll retries Bullet on every fall (bodysim.js)
+    try { this._build(avatar, lean, rest, seedVel); } catch (e) { this.dispose(); throw e; }
+  }
+
+  /** The constructor's body: the world, the bodies, the joints, the dressing, the drive table. */
+  _build(avatar, lean, rest, seedVel) {
     this.pins = new Map();          // joint -> THREE.Vector3 (world) — bodydrag reads this
     this._pinCons = new Map();      // joint -> { con, body }
     this.maxW = Infinity;
@@ -1249,17 +1255,19 @@ export class AmmoRagdoll extends BodyEngineBase {
       for (const b of this._bodies) this.world.removeRigidBody(b);
       for (const b of this._statics) this.world.removeRigidBody(b);
     } catch { /* half-built world */ }
-    for (let i = this._refs.length - 1; i >= 0; i--) {
-      try { AMMO.destroy(this._refs[i]); } catch { /* already gone */ }
+    const refs = this._refs ?? [];
+    for (let i = refs.length - 1; i >= 0; i--) {
+      try { AMMO.destroy(refs[i]); } catch { /* already gone */ }
     }
-    this._refs.length = 0;
-    this._constraints.length = 0;
-    this._bodies.length = 0;
-    this._cores.length = 0;
-    this._statics.length = 0;
-    this.segs.clear();
-    this._pinCons.clear();
-    this.pins.clear();
+    // `?.`: a constructor that threw partway disposes a doll that never made some of these
+    refs.length = 0;
+    if (this._constraints) this._constraints.length = 0;
+    if (this._bodies) this._bodies.length = 0;
+    if (this._cores) this._cores.length = 0;
+    if (this._statics) this._statics.length = 0;
+    this.segs?.clear();
+    this._pinCons?.clear();
+    this.pins?.clear();
     this.world = null;
   }
 }
