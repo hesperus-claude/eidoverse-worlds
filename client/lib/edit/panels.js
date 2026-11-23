@@ -653,7 +653,7 @@ let lastAway = null;   // { id, m }: the distance the Inspector's Transform titl
 const idHandle = (id) => handleOf(id, Object.keys(state.st.entities ?? {}).filter((k) => k !== WORLD_ID));
 /** the name line's dim #handle: the shortest unique prefix of the id (an id of ≤ 12 characters shows whole), so it can grow as ids are added; clicking copies the full id */
 const idHandleRow = (id) => ({ t: 'btn', k: 'copyid', label: `#${idHandle(id)}`, bar: true, deskOnly: true, cls: 'sp-iconbtn sp-handle',
-  hint: `#${idHandle(id)} is its id (${id}), the one agents and the log use. It is permanent, minted by the world, and can't be renamed: the name is its label. Click to copy the full id.` });
+  hint: `#${idHandle(id)} is a short form of its id (${id}), the one agents and the log use; the short form can grow as things are added. The id is permanent, minted by the world, and can't be renamed: the name is its label. Click to copy the full id.` });
 function inspectorFields() {
   if (worldSel()) return worldFields();
   const id = sceneSelected();
