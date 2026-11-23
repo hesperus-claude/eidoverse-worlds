@@ -30,7 +30,7 @@ const rigGroup = new THREE.Group();
 rigGroup.name = 'lightrig';
 const slots = [];
 // ONE slot casts, and is born casting (flipping castShadow on a live slot is a recompile). A request that wants
-// shadows is assigned here (see assign).
+// shadows is assigned here (see assign), and the slot draws shadows only for a holder that asked (applyShadowPref).
 const SHADOW_SLOT = 0;
 // The lamp's shadow map, bias and bulb position, tuned by eye against a moving body: docs/research/light-rig.md.
 const SHADOW_MAP = 256;
@@ -114,13 +114,19 @@ export const lampShadowState = () => {
 // they are fixed on at boot and 'off' is shadow.intensity 0 with the depth pass stopped (autoUpdate off).
 /** Does this light actually draw shadows right now? Shape (castShadow + the map) AND the preference's uniform half. */
 const castsNow = (l) => Boolean(l?.castShadow && renderer.shadowMap.enabled && l.shadow && l.shadow.intensity > 0 && l.shadow.autoUpdate !== false);
+function gateShadow(l, on) {
+  if (!l?.shadow) return;
+  l.shadow.intensity = on ? 1 : 0;
+  l.shadow.autoUpdate = on;
+  if (on) l.shadow.needsUpdate = true;   // the held map is stale: redraw it once now
+}
+// Does the casting slot's holder want shadows (r.shadows)? Anything else that lands there (a placed lamp inside its
+// own shade, the lightning) would cast with the chest lamp's tuning; empty, it has nothing to cast for. assign() keeps
+// this current; the slot casts when this AND the preference say so.
+let _holderWants = false;
 function applyShadowPref(on) {
-  for (const l of [sun, slots[SHADOW_SLOT]]) {
-    if (!l?.shadow) continue;
-    l.shadow.intensity = on ? 1 : 0;
-    l.shadow.autoUpdate = on;
-    if (on) l.shadow.needsUpdate = true;   // the held map is stale: redraw it once now
-  }
+  gateShadow(sun, on);
+  gateShadow(slots[SHADOW_SLOT], on && _holderWants);
 }
 /** Put the shadow preference's uniform half back (after a probe held shadow maps across frames). */
 export const reassertShadowPref = () => applyShadowPref(_prefShadows);
@@ -197,7 +203,7 @@ export function requestLight(key, spec) {
 }
 /** Patch a live request. Only keys that can change the ordering dirty assignment: a breathing lamp patches
  *  intensity 60 times a second. */
-const ORDERING_KEYS = ['keep', 'authored', 'obj', 'offset', 'pos', 'mirror', 'owner', 'spot'];
+const ORDERING_KEYS = ['keep', 'authored', 'obj', 'offset', 'pos', 'mirror', 'owner', 'spot', 'shadows'];
 export function updateRequest(key, patch) {
   const r = requests.get(key);
   if (!r) return;
@@ -449,6 +455,11 @@ function assign(now) {
     if (free >= N_SLOTS) break;
     r.slot = free;
     used.add(free);
+  }
+  const wantsNow = Boolean(winners.find((r) => r.slot === SHADOW_SLOT)?.shadows);
+  if (wantsNow !== _holderWants) {
+    _holderWants = wantsNow;
+    gateShadow(slots[SHADOW_SLOT], _prefShadows && wantsNow);
   }
 }
 
