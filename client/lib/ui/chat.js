@@ -315,7 +315,7 @@ export function logChat(who, text, kind = '', meta = {}) {
       }
       const wasAtBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 48;
       body.append(' ', renderBody(text, namesForHighlight()));
-      lastAt = Date.now();
+      lastAt = meta.ts ?? Date.now();   // the server ts, as buildLine compares (G2-043)
       const newlyPinged =
         lastLineEl.dataset.kind !== 'mention' && mentionsMe(text);
       if (newlyPinged) { lastLineEl.classList.add('ping'); lastLineEl.dataset.kind = 'mention'; }

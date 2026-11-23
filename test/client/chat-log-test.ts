@@ -160,6 +160,16 @@ check("displaced anchor reprints its name when a different speaker wedges in",
   texts()[1] === "spoken wedge" && !rows()[2].classList.contains("cont"),
   JSON.stringify({ order: texts(), anchorCont: rows()[2].classList.contains("cont") }));
 
+// a merged continuation keeps the group's clock on the server's ts, as buildLine does (G2-043): with the page's clock
+// ten minutes behind the world's, a merge that stamped Date.now() broke the next line's group
+reset();
+const ahead = Date.now() + 600_000;
+logChat("keir", "said aloud,", "agent", { seq: 40, ts: ahead, spoken: true, utt: 30 });
+logChat("keir", "then finished.", "agent", { seq: 41, ts: ahead + 400, spoken: true, utt: 30 });
+logChat("keir", "and typed this", "agent", { seq: 42, ts: ahead + 1000 });
+check("a line after a merged continuation still groups under it (server ts, not the page's clock)",
+  rows().length === 2 && rows()[1].classList.contains("cont"), JSON.stringify({ rows: rows().length, cont: rows()[1]?.classList.contains("cont") }));
+
 
 // ============================================================ the People Here pane and the tab strip
 // (R, 2026-09-11 asked for DM tabs to be driven here; they left with whisper, R 10-18, and this is what remains: the
