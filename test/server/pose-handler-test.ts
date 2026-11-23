@@ -22,10 +22,16 @@ MESSAGES["pose"](ctx, { type: "pose", pose: fine });
 ok(c.lastPose === fine, "finite pose: lastPose updated");
 ok(dirty.get("c1") === fine, "finite pose: staged for the next frame");
 ok(sent.length === 0, "the pose handler answers nothing on the socket");
-// the attest handler (same file): a stale receipt is refused IN WORDS (a malformed seq or digest is dropped silently)
+// the attest handler (same file): a stale receipt is refused IN WORDS, and so is a malformed seq or digest (G2-073)
 { const v: any = { id: "c1", gen: 3, surface: "voice", auxBound: true, world: { name: "w", recentSays: [{ seq: 7, verb: "say", actor: "c1", ts: Date.now() - 24 * 3600_000, args: { text: "old" } }] } };
   MESSAGES["attest"]({ ...ctx, c: v }, { type: "attest", seq: 7, gen: 3, digest: "0".repeat(64) });
-  ok(sent.length === 1 && /stale/.test(sent[0]), "attest of a say older than ATTEST_FRESH_MS: an error frame saying it is stale, not silence"); }
+  ok(sent.length === 1 && /stale/.test(sent[0]), "attest of a say older than ATTEST_FRESH_MS: an error frame saying it is stale, not silence");
+  for (const bad of [{ seq: 7.5, digest: "0".repeat(64) }, { seq: "x", digest: "0".repeat(64) }, { seq: 7, digest: "" }]) {
+    sent.length = 0;
+    MESSAGES["attest"]({ ...ctx, c: v }, { type: "attest", gen: 3, ...bad });
+    ok(sent.length === 1 && /"type":"error"/.test(sent[0]) && /malformed/.test(sent[0]), `malformed attest ${JSON.stringify(bad)}: an error frame, not silence (got ${JSON.stringify(sent)})`);
+  }
+  sent.length = 0; }
 
 // the fence itself: what sanePose passes, drops and clamps
 const good = { p: [1, 0, 2], yaw: 0.3, speed: 0, clip: "idle", pitch: 0 };
