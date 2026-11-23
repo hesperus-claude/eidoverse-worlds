@@ -181,7 +181,7 @@ function connectWorld() {
     ws.send(JSON.stringify({ type: "join", hello: helloOf(), world: WORLD_NAME, id: BRIDGE_ID, token: WORLD_TOKEN, replica: true }));
   ws.onclose = () => {
     joined = false;
-    if (helloRefused) { log(`world refused the join: ${helloRefused} — not redialing`); process.exit(1); }
+    if (helloRefused) { log(`world refused the join: ${helloRefused} — not redialing`); process.exit(78); }   // 78 = EX_CONFIG: the unit is told not to restart on it
     log("world socket closed — reconnecting in 1.5s");
     setTimeout(connectWorld, 1500);
   };
