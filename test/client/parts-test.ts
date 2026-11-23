@@ -194,5 +194,21 @@ console.log('\n━━ a parented thing keeps its own motion, in its parent\'s fr
   comps.delete('gazer'); entities.delete('gazer');
 }
 
+// a remote look-at target is that body's head, not its root + 1.5 m: a seated body is looked down at
+{
+  const { tickLookAt } = await import('../../client/lib/realize/lookats.js');
+  const { remotes } = await import('../stubs/remotes-stub.mjs');
+  const root = new THREE.Object3D(); root.position.set(0, 0, -7);
+  remotes.set('sitter', { avatar: { root, headWorldPosition: (out: any) => out.set(0, 0.9, -7) } });
+  const gazer = new THREE.Object3D(); gazer.position.set(0, 1.2, -5); gazer.updateMatrixWorld(true);
+  new THREE.Object3D().add(gazer);
+  entities.set('gazer', gazer); comps.set('gazer', { 'look-at': { target: '@nearest', mode: 'aim', speed: 0 } });
+  tickLookAt();
+  const fwd = v(0, 0, 1).applyQuaternion(gazer.quaternion), want = v(0, -0.3, -2).normalize();
+  check('a remote look-at aims at the head (a seated body is looked down at)', fwd.angleTo(want) < 0.01,
+    `forward ${fwd.toArray().map((x: number) => x.toFixed(3))}`);
+  comps.delete('gazer'); entities.delete('gazer'); remotes.delete('sitter');
+}
+
 console.log(S.fail ? `\n\x1b[31m${S.fail} failure(s)\x1b[0m` : `\n\x1b[32mall ${S.pass} checks passed\x1b[0m`);
 S.done();

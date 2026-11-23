@@ -5,8 +5,8 @@
 //
 //   a thing's id   its world position (+ offset in its frame), as every client sees it: everyone agrees
 //   @viewer        THIS viewer's eyes: everyone sees it face themselves (Resonite's LookAtUser)
-//   @nearest       the nearest body within range: your eyes, or a remote's root + 1.5 m
-//   u-…            that person, within range (their root + 1.5 m; your eyes if it's you)
+//   @nearest       the nearest body within range: your eyes, or a remote's head (root + 1.5 m on a rig with none)
+//   u-…            that person, within range (their head; your eyes if it's you)
 // Range applies to @nearest and u-… only (@viewer and a thing are followed at any distance); out of range, or with
 // no target, it eases back to rest. It runs after motion (main.js registers it later), so an
 // oscillate or an orbit moves it and then it turns; a rotating motion on the same node is refused at the authority
@@ -21,7 +21,7 @@ import { evalLookAt } from '../../../shared/lookat.js';
 
 const live = new Map();   // `${id}\0${key}` → { node, rest: [x,y,z,w], q: [x,y,z,w] }
 export const _lookats = live;   // probes
-const _p = new THREE.Vector3(), _t = new THREE.Vector3(), _fq = new THREE.Quaternion(), _eye = new THREE.Vector3();
+const _p = new THREE.Vector3(), _t = new THREE.Vector3(), _fq = new THREE.Quaternion(), _eye = new THREE.Vector3(), _hd = new THREE.Vector3();
 let last = performance.now();
 
 function targetOf(la, from) {
@@ -33,7 +33,8 @@ function targetOf(la, from) {
     // remotes are keyed by session name, a target names an identity (u-…): compare through identityOf; my own is my eyes
     if (T === '@nearest' || T === identityOf(CONFIG.name)) consider(camera.getWorldPosition(_t).toArray());
     for (const [rid, r] of remotes) { if (!r.avatar?.root) continue; if (T !== '@nearest' && identityOf(rid) !== T) continue;
-      const p = r.avatar.root.position; consider([p.x, p.y + 1.5, p.z]); }
+      const h = r.avatar.headWorldPosition?.(_hd), p = r.avatar.root.position;
+      consider(h ? h.toArray() : [p.x, p.y + 1.5, p.z]); }
     return best;
   }
   const o = entities.get(dec(T) ?? T); if (!o) return null;   // the component names the protocol id, the scene keys decoded ones; a deleted target rests
