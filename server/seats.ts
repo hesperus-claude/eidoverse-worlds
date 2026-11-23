@@ -122,8 +122,9 @@ export class SeatStore {
           const tomb = `${this.lockFile}.tomb-${nonce}`;
           try {
             this.lockFs.renameSync(this.lockFile, tomb);
-            const claimed = JSON.parse(readFileSync(tomb, "utf8"));
-            if (claimed.nonce === holder.nonce) {
+            // a tomb that won't parse is a newer lock caught mid-create (after its "wx", before its write): put back too
+            let claimed: any = null; try { claimed = JSON.parse(readFileSync(tomb, "utf8")); } catch { /* not the corpse */ }
+            if (claimed?.nonce === holder.nonce) {
               console.error(`[seats] breaking dead writer's lock (pid ${holder.pid} no longer exists)`);
               unlinkSync(tomb);
             } else {
