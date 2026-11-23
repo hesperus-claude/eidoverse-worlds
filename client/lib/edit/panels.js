@@ -599,7 +599,7 @@ function worldFields() {
     { t: 'info', label: 'name', value: worldName(), hint: 'the world itself: its sky, weather, ground and grass are its components' },
     { t: 'info', label: 'id', value: WORLD_ID, dim: true, hint: 'the world entity\'s permanent id: agents and scripts name it @world' },
   ];
-  if (mayShape() === false) f.push({ t: 'info', label: '', value: mayGround() === false ? 'shaping the world needs editWorld, and the ground build (an owner\'s; an owner can grant them to a role) — read-only for you' : 'the sky, weather and grass need editWorld (an owner\'s; an owner can grant it to a role) — read-only for you; the ground is yours to shape' });
+  if (mayShape() === false) f.push({ t: 'info', label: '', value: mayGround() === false ? 'shaping the world needs editWorld (an owner\'s; an owner can grant it to a role), and the ground needs build — read-only for you' : 'the sky, weather and grass need editWorld (an owner\'s; an owner can grant it to a role) — read-only for you; the ground is yours to shape' });
   pushCards(f, schema, WORLD_ID);
   // no terrain yet: the card's only row pointed elsewhere; put Build ▸ World's ground shapes in it
   if (!state.st.terrain) {
@@ -1027,14 +1027,14 @@ function worldBuildFields() {
   const f = [
     { t: 'group', k: 'world', label: 'World', open: !buildFolds.world },
     worldRowFields(),
-    ...(owner ? [] : [{ t: 'info', label: '', value: builder ? 'the sky, grass and weather need editWorld (an owner\'s; an owner can grant it to a role) — read-only for you; the ground is yours to shape' : 'shaping the world needs editWorld, and the ground build (an owner\'s; an owner can grant them to a role) — these are read-only for you' }]),
+    ...(owner ? [] : [{ t: 'info', label: '', value: builder ? 'the sky, grass and weather need editWorld (an owner\'s; an owner can grant it to a role) — read-only for you; the ground is yours to shape' : 'shaping the world needs editWorld (an owner\'s; an owner can grant it to a role), and the ground needs build — these are read-only for you' }]),
     // remove what's there from the world's own section too: the same edit as the Hierarchy row's ✕ and the card's button
     ...(owner || builder ? envRows().filter((r) => r.actions.length).map((r) => ({ t: 'btn', k: `envdel-${r.id.slice(4)}`, label: `✕ remove ${r.label.toLowerCase()}`, icon: r.icon, hint: `remove: ${ENV.find((e) => e.key === r.id.slice(4))?.gone} (Ctrl+Z brings it back)` })) : []),
     { t: 'info', label: 'sky', value: ch.sky ? `${ch.sky} — a pick replaces the sky; the weather stays` : 'custom — a pick replaces the sky; the weather stays' },
     { t: 'tiles', k: 'wsky', value: ch.sky, empty: 'this world serves no sky presets (defs/sky/_presets.json)', options: names(skyPresets).map((n) => ({ v: n, label: n, hint: `the sky at ${skyPresets[n].hours ?? '?'}h${skyPresets[n].clouds ? `, ${skyPresets[n].clouds}` : ''}` })), ...ro },
     { t: 'info', label: 'ground', value: 'shape and colour — each pick changes only its own dial' },
     { t: 'tiles', k: 'wshape', value: ch.shape, empty: 'this world serves no ground palette (defs/ground/_palette.json)', options: names(groundPal?.shapes).map((n) => ({ v: n, label: n, hint: `${groundPal.shapes[n]} m of relief` })), ...rg },
-    { t: 'tiles', k: 'wtint', value: ch.tint, options: names(groundPal?.tints).map((n) => ({ v: n, label: n, hint: `${groundPal.tints[n].layer} ground; grass planted after this matches (replant to recolour what grows)` })), ...rg },
+    { t: 'tiles', k: 'wtint', value: ch.tint, options: names(groundPal?.tints).map((n) => ({ v: n, label: n, hint: `${groundPal.tints[n].layer} ground; blade grass planted after this matches (replant to recolour what grows)` })), ...rg },
     { t: 'info', label: 'grass', value: ch.plant ? `${ch.plant} growing` : state.st.grass ? 'something the palette does not name is growing' : 'nothing growing' },
     { t: 'tiles', k: 'wplant', value: ch.plant, options: [...names(groundPal?.plantings).map((n) => ({ v: n, label: n, hint: 'plant it (replaces what grows now)' })), ...(groundPal ? [{ v: '@mow', label: 'mow', hint: 'clear the field' }] : [])], ...ro },
     { t: 'info', label: 'weather', value: state.st.sky?.forecast ? 'a forecast governs — a pick holds until its next change' : 'a pick sets it' },
