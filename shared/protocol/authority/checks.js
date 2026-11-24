@@ -295,7 +295,6 @@ const DROPPED_FIX = {
   "physics.mask": "collision filters come back as named groups; leave it out",
   "physics.ccd": "eidosim sweeps every body; leave it out",
   "parent.order": "leave it out: siblings have no stored order",
-  "light.shadows": "leave it out: no light here casts its own shadows yet (important claims a light slot)",
   "picture.part": "a picture is a quad of its own; an image on a node of a model is set {id, component: 'material', value: {node, texture}}",
   "picture.flip": "an image on a node of a model is set {id, component: 'material', value: {node, texture}}",
   "terrain.water": "set {id: '@world', component: 'water', value: {level, color?, opacity?, kind?, flow?}}",

@@ -479,6 +479,7 @@ export function lightOf(ent) {
     intensity: finite(src.intensity) && src.intensity >= 0 ? src.intensity : decay === undefined ? 16 : LIGHT_DEFAULTS.intensity,   // an older light's reading (16)
     range: finite(src.range) && src.range > 0 ? src.range : LIGHT_DEFAULTS.range,
     important: src.important === true,
+    shadows: src.shadows === true,   // the owner's: this light casts (the viewer's shadowed-lamps dial caps how many do at once)
     decay: decay ?? 1.7,
     daytime: daytime ?? 'dim',
     // a spot's cone, glTF's half-angles (rad): angle = outer (default π/4), inner where the edge starts to soften

@@ -207,7 +207,8 @@
    "inner": "number",
    "decay": "number",
    "important": "bool",
-   "daytime": "string"
+   "daytime": "string",
+   "shadows": "bool"
   },
   "defaults": {
    "kind": "point",
@@ -267,7 +268,8 @@
   "absentMeans": {
    "decay": "1.7: the falloff exponent the light rig used before it was written (three.js decay); an older light is written 1.7 when its world is translated",
    "intensity": "the default; on a light with no decay (stored before 10-16) 16, the old rig's, written by the same repair",
-   "daytime": "dim: it follows the day cycle (an older value's day: false meant full)"
+   "daytime": "dim: it follows the day cycle (an older value's day: false meant full)",
+   "shadows": "no shadows: it lights through things"
   },
   "docs": {
    "kind": "point (shines every way), spot (a cone along its -Z) or directional (a sun: parallel light along its -Z everywhere, KHR_lights_punctual's; range and decay unread; the first by id is the renderer's sun)",
@@ -278,7 +280,8 @@
    "inner": "where a spot's edge starts to soften, radians",
    "decay": "how it falls off with distance, an exponent: 2 = inverse square (physical, glTF), 0 = not at all",
    "important": "first claim on a light slot, never governor-shed (more important lights than slots: the nearest cast)",
-   "daytime": "dim (it dims by day, follows the day cycle) | full (it burns at noon too)"
+   "daytime": "dim (it dims by day, follows the day cycle) | full (it burns at noon too)",
+   "shadows": "it casts shadows (Godot's shadow_enabled): the owner says which lights cast; each viewer's shadowed-lamps dial caps how many point lights cast at once, the best-ranked first"
   },
   "units": {
    "range": "m",

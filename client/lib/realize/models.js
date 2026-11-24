@@ -488,7 +488,7 @@ function dropCompLight(id) {
 /** The rig request for a light component: on its realized host, or (no host yet) parked at the fold's world pose
  *  (a child's own pos is its parent's frame), with its q for a spot. */
 export const lightSpec = (id, ent, L, host) => { const w = host ? null : worldPose(state.st.entities, id); return {
-  color: L.color, intensity: L.intensity, range: L.range, decay: L.decay, keep: L.important, dayAware: L.daytime !== 'full',   // the rig's `keep` tier is light.important
+  color: L.color, intensity: L.intensity, range: L.range, decay: L.decay, keep: L.important, shadows: L.shadows === true, dayAware: L.daytime !== 'full',   // the rig's `keep` tier is light.important; shadows asks for a casting slot
   spot: L.kind === 'spot' ? { angle: L.angle, inner: L.inner } : null,
   obj: host, pos: host ? null : [...(w?.pos ?? ent.pos ?? [0, 0, 0])], q: host ? null : (w?.q ?? null),
 }; };
