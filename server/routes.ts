@@ -983,7 +983,6 @@ const ROUTES: Route[] = [
       const dec = eh ? rel0 : libraryRel(rel0);
       if (dec === null) return new Response("forbidden", { status: 403 });
       const rel = eh ? eidoRel(eh) ?? rel0 : dec;
-      // optimized mirror first (draco+webp): same path, ~30x smaller
       const versioned = url.searchParams.has("v") || rel.startsWith("store/"); // content-addressed = immutable
       // ?native=1: provenance bytes, never the optimized shadow (native importers may lack Draco/WebP decoders)
       if (url.searchParams.get("native") === "1" && /\.(glb|vrm)$/i.test(rel)) {
@@ -1051,6 +1050,7 @@ const ROUTES: Route[] = [
         const min = normalize(join(OPT_DIR, minRel));
         if (min.startsWith(OPT_DIR) && existsSync(min)) return serveFrom(OPT_DIR, minRel, true, req, true, provisional, { headers: deepHeader });
       }
+      // the optimized mirror (draco+webp): same path, ~30x smaller
       const opt = normalize(join(OPT_DIR, rel));
       if (opt.startsWith(OPT_DIR) && existsSync(opt)) return serveFrom(OPT_DIR, rel, true, req, versioned, provisional, { headers: deepHeader });
       return serveFrom(LIBRARY_DIR, rel, true, req, versioned, provisional, { headers: deepHeader });
