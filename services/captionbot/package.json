@@ -3,7 +3,7 @@
   "private": true,
   "license": "AGPL-3.0-only",
   "type": "module",
-  "description": "The projector's captioner: stream audio → VAD + STT → a bounded captions comp on the screen entity (voicebot run backwards)",
+  "description": "The projector's captioner: stream audio → VAD + STT → one caption request per final line; the screen's captions comp holds the current line, the log the rest (voicebot run backwards)",
   "scripts": {
     "start": "bun index.ts",
     "test": "bun ../../test/services/captionbot-test.ts"
