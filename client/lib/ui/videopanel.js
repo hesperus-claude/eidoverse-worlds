@@ -4,7 +4,8 @@ import { makeSection, flashHint } from './ui.js';
 import { RENDER_SCALES, getRenderScale, setRenderScale,
   PARTICLE_TIERS, getParticleTier, setParticleTier,
   AVATAR_DETAILS, getAvatarDetail, setAvatarDetail, getFullDetail, setFullDetail } from '../render/governor.js';
-import { shadowsOn, setShadows, shadowRes, setShadowRes, SHADOW_RES, CASTER_CHOICES, getCasterCeiling, setCasterCeiling } from '../render/lightrig.js';
+import { shadowsOn, setShadows, shadowRes, setShadowRes, SHADOW_RES, CASTER_CHOICES, getCasterCeiling, setCasterCeiling,
+  LAMP_SHADOW_CHOICES, lampShadowCount, setLampShadowCount } from '../render/lightrig.js';
 import { backendName, PREF_MSAA, PREF_BACKEND, PREF_HEADSET_SEEN, WEBGPU_XR, WEBGPU_POSSIBLE, headsetSeenRecently } from '../core.js';
 import { CONFIG, bus } from '../base.js';
 import { FOLIAGE_MODES, getFoliageMode, setFoliageMode } from '../vegetation/foliage.js';
@@ -69,6 +70,7 @@ function videoFields() {
     pick('scale', RENDER_SCALES, getRenderScale(), 'render scale'),
     { t: 'check', k: 'shadows', label: 'shadows', value: shadowsOn() },
     ...(shadowsOn() ? [pick('shadowres', SHADOW_RES, shadowRes(), 'shadow resolution'), pick('casters', CASTER_CHOICES, getCasterCeiling(), 'shadow casters'),
+      pick('lampshadows', LAMP_SHADOW_CHOICES, lampShadowCount(), 'shadowed lamps (on reload)'),
       { t: 'check', k: 'myshadow', label: 'my body casts a real shadow', value: myShadowPref() }] : []),
     pick('particles', PARTICLE_TIERS, getParticleTier(), 'particles'),
     pick('foliage', FOLIAGE_MODES, getFoliageMode(), 'textured transparency'),
@@ -84,6 +86,7 @@ function videoDispatch(k, v) {
   else if (k === 'shadows') setShadows(!!v);
   else if (k === 'shadowres') setShadowRes(+v);
   else if (k === 'casters') setCasterCeiling(+v);
+  else if (k === 'lampshadows') setLampShadowCount(+v);
   else if (k === 'myshadow') setMyShadowPref(!!v);
   else if (k === 'particles') setParticleTier(v);
   else if (k === 'foliage') setFoliageMode(v);
@@ -153,15 +156,22 @@ export function initVideoPanel() {
       CASTER_CHOICES.map((v) => [v, `${v} nearest`]), getCasterCeiling(),
       (v) => { setCasterCeiling(+v); flashHint(`shadows from the ${v} nearest things`); });
     castRow.hidden = !shadowsOn();
+    // how many point lights may cast at once, of those the world asks to (light.shadows): born at boot, so on reload
+    const lampRow = selectRow('shadowed lamps',
+      'How many lamps cast shadows at once, of the ones the world asks to (the brightest in view first; the rest still light). Each costs a shadow pass of everything its light reaches, six views. Set when the renderer is built, so it applies on reload.',
+      LAMP_SHADOW_CHOICES.map((v) => [v, `${v}`]), lampShadowCount(),
+      (v, row) => { setLampShadowCount(+v); needsReload(row); flashHint(`shadowed lamps: ${v} (on reload)`); });
+    lampRow.hidden = !shadowsOn();
     const meRow = checkRow('my body casts a real shadow',
       'Your own body throws a real shadow from the sun and lamps, instead of only the soft blob under your feet (the blob stays as the contact cue). Only your body — other people keep theirs unless they wear a lamp. Costs a few shadow draws; the first switch-on compiles its lit and depth shaders off the frame, so the shadow appears a moment after the tick.',
       myShadowPref(), (on) => { setMyShadowPref(on); flashHint(`my shadow: ${on ? 'real' : 'blob only (a lamp keeps its real one)'}`); });
     meRow.hidden = !shadowsOn();
     body.appendChild(checkRow('shadows',
       'All cast shadows — the sun’s and the lamp shadow. Off is the cheapest single change on a weak GPU; flipping it recompiles nothing.',
-      shadowsOn(), (on) => { setShadows(on); resRow.hidden = !on; castRow.hidden = !on; meRow.hidden = !on; flashHint(`shadows ${on ? 'on' : 'off'}`); }));
+      shadowsOn(), (on) => { setShadows(on); resRow.hidden = !on; castRow.hidden = !on; lampRow.hidden = !on; meRow.hidden = !on; flashHint(`shadows ${on ? 'on' : 'off'}`); }));
     body.appendChild(resRow);
     body.appendChild(castRow);
+    body.appendChild(lampRow);
     body.appendChild(meRow);
 
     body.appendChild(selectRow('particles',
