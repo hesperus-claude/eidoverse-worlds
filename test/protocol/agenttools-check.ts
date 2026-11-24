@@ -458,7 +458,8 @@ const call = (name, a = {}) => handleToolDoor({ agent: ag, canPush: () => false,
   await tryUntil("the drop's dial is scheduled", () => ev.length, { ms: 1500, step: 10 });
   ok(t0 === 0 && ev[0]?.tries === 1 && ev[0].next > 0, "AT15 a dropped agent's next dial is the shared backoff's (one try counted)", { t0, ev });
   await tryUntil("Rid gets back in by itself", () => rid.joined, { ms: 4000, step: 50 });
-  ok(rid.joined && rid.redial?.tries === 0 && ev.length === 2 && ev[1]?.reset, "AT15 …it gets back in by itself, and the join resets the backoff", { joined: rid.joined, tries: rid.redial?.tries, ev });
+  // a redial that fails on a slow runner adds a next before the join: the last call must be the reset, however many came first
+  ok(rid.joined && rid.redial?.tries === 0 && ev.some((e) => e.next) && ev.at(-1)?.reset, "AT15 …it gets back in by itself, and the join resets the backoff", { joined: rid.joined, tries: rid.redial?.tries, ev });
   rid.close(); }
 
 // ---- AT16: upload puts a file in the world's store, and create places it ----
