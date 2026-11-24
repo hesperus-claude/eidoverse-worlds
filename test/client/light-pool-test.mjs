@@ -209,4 +209,69 @@ console.log('THE STRIKE — a dark mirror takes its slot on the frame it fires, 
   bolt.intensity = 0; rig.setSlotCap(4);
 }
 
+console.log('A HANDOVER — a slot passes from one lamp to another through dark, never as a one-frame swap');
+{
+  // A turn in place now changes who burns (it never did on anima/main): in the lab's furnished room, 8 slots, a slow
+  // 360 degree turn hands slots over 12 times. A slot that swapped lamps in one frame would pop a pool of light off and
+  // another on each time. Godot answers the same edge with a per-light distance fade; here the slot fades.
+  for (let i = 0; i < 5; i++) rig.releaseLight(`lamp:${i}`);
+  rig.setSlotCap(1);
+  aim([0, 1.5, 0], [0, 1.5, -1]);
+  place('north', [0, 2, -4], 6); place('south', [0, 2, 4], 6);
+  tick(); tick();
+  // what the slot drawing `key` shows (a slot that changes lamps keeps drawing the old one while it dims)
+  const st = (key) => { const d = rig.rigDebug(); const i = d.slotState.findIndex((x) => x.shown === key); return i < 0 ? { shown: null, intensity: 0, z: null } : { ...d.slotState[i], z: d._slots[i].position.z }; };
+  check('(the setup) the lamp in view burns at its full intensity', st('north').intensity === 12 && st('south').shown === null, JSON.stringify([st('north'), st('south')]));
+  aim([0, 1.5, 0], [0, 1.5, 1]);   // face the other lamp
+  tick(590); tick(16);              // the 600 ms tick re-ranks on an ordinary 16 ms frame: the request moves at once
+  check('the ranking hands the slot to the lamp now in view', slotOf('south') >= 0 && slotOf('north') < 0, `south ${slotOf('south')}, north ${slotOf('north')}`);
+  const first = [st('north'), st('south')];
+  check('on that frame the old lamp is still nearly full and the new one barely lit (no one-frame swap)', first[0].intensity > 9 && first[0].z === -4 && first[1].intensity < 3, JSON.stringify(first));
+  tick(50);
+  const out = st('north');
+  check('50 ms later the old lamp is still drawn where it stands, dimming', out.shown === 'north' && out.z === -4 && out.intensity > 0 && out.intensity < 9, JSON.stringify(out));
+  tick(60); tick(60);
+  check('once dark, its slot lets it go', st('north').shown === null, JSON.stringify(st('north')));
+  for (let i = 0; i < 3; i++) tick(60);
+  const done = st('south');
+  check('the new lamp is at its full intensity within half a second of the hand-over', done.shown === 'south' && done.z === 4 && done.intensity === 12, JSON.stringify(done));
+  // a full pool: the winner can only come up in the slot the loser is leaving, so it waits there for the dark
+  rig.setSlotCap(4);
+  for (let i = 0; i < 3; i++) rig.requestLight(`pillar:${i}`, { keep: true, intensity: 5, range: 6, pos: [i - 1, 3, 0] });   // keep: they hold three of the four slots whichever way the eye faces
+  place('north', [0, 2, -4], 6);
+  for (let i = 0; i < 4; i++) tick();
+  const lit = (k) => st(k).intensity > 0;
+  check('(the setup) four slots, four lamps: south and the three pillars', lit('south') && !lit('north') && [0, 1, 2].every((i) => lit(`pillar:${i}`)), JSON.stringify(rig.rigDebug().slotState));
+  const slotBefore = slotOf('south');
+  aim([0, 1.5, 0], [0, 1.5, -1]);
+  tick(590); tick(16);
+  let both = 0, steps = 0, dimmest = Infinity, pillarDip = false;
+  for (; steps < 40 && st('north').intensity !== 12; steps++) {
+    tick(16);
+    if (lit('north') && lit('south')) both++;
+    dimmest = Math.min(dimmest, st('north').intensity + st('south').intensity);
+    if (![0, 1, 2].every((i) => st(`pillar:${i}`).intensity === 5)) pillarDip = true;
+  }
+  check('a full pool: the new lamp comes up in the slot the old one left', slotOf('north') === slotBefore && st('north').intensity === 12, `slot ${slotBefore} -> ${slotOf('north')}, ${JSON.stringify(st('north'))}`);
+  check('...the two never burn together, and the slot passes through dark between them (under a tenth of full)', both === 0 && dimmest < 1.5, `frames with both lit ${both}, dimmest ${dimmest}, ${steps} frames`);
+  check('...and the lamps that kept their slots never flicker meanwhile', !pillarDip);
+  for (let i = 0; i < 3; i++) rig.releaseLight(`pillar:${i}`);
+  rig.setSlotCap(1); tick(16);
+  // the same lamp keeping its slot is never dimmed by a re-rank
+  let dipped = false;
+  for (let i = 0; i < 6; i++) { tick(350); if (st('north').intensity !== 12) dipped = true; }
+  check('a lamp that keeps its slot never dips across re-ranks', !dipped);
+  // a lamp that is released leaves at once: its host object may already be gone
+  rig.releaseLight('north');
+  tick(16);
+  check('a released lamp is dark on the next frame', st('north').shown === null && rig.rigDebug().slotState.every((x) => x.shown !== 'north'), JSON.stringify(rig.rigDebug().slotState));
+  // a strike never waits for a fade (THE STRIKE above pins its intensity on the frame it fires; here: over a lamp mid-fade)
+  for (let i = 0; i < 6; i++) tick(60);
+  bolt.intensity = 30; tick(16);
+  const s = slotOf(boltKey);
+  check('a strike takes its slot at full on the frame it fires, whatever was fading there', s >= 0 && rig.rigDebug().slotState[s].intensity === 30, s >= 0 ? JSON.stringify(rig.rigDebug().slotState[s]) : 'no slot');
+  bolt.intensity = 0;
+  rig.releaseLight('south'); rig.setSlotCap(4);
+}
+
 S.done();
