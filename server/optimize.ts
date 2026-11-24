@@ -574,12 +574,6 @@ export async function optimizeGlbLod(bytes: Uint8Array, encoder: string | null, 
   return { out: await io.writeBinary(doc), verdict: null, before, after, permissive, texOnly, texRatio, ...tally };
 }
 
-// ---- KTX2 for VRMs: the surgical container rewrite -------------------
-// gltf-transform drops unknown extensions on read, and a VRM is mostly unknown extensions, so a VRM never touches a
-// Document: the only mutations are image bytes → KTX2, the bufferView offsets that implies, and the JSON declaring them.
-// validateVrmRewrite checks the output and throws (CLI exit 1) rather than return anything questionable.
-
-
 // ---- output validation ------------------------------------------------------
 // An optimizer may give up, but may not emit bytes it has not checked: an intact GLB can still carry image bytes that
 // are not images (the two-libvips hazard, docs/research/optimize-design-notes.md#one-libvips-per-process), and every
@@ -618,6 +612,11 @@ export function findImageLies(bytes: Uint8Array): ImageLie[] {
   }
   return out;
 }
+
+// ---- KTX2 for VRMs: the surgical container rewrite -------------------
+// gltf-transform drops unknown extensions on read, and a VRM is mostly unknown extensions, so a VRM never touches a
+// Document: the only mutations are image bytes → KTX2, the bufferView offsets that implies, and the JSON declaring them.
+// validateVrmRewrite checks the output and throws (CLI exit 1) rather than return anything questionable.
 
 /** Slot classification from the JSON alone, folded onto IMAGES (textures sharing an image accumulate marks):
  *    - core glTF: baseColor/emissive = color; normal/occlusion/metallicRoughness = data.
