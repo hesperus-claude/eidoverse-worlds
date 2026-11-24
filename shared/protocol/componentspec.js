@@ -135,7 +135,7 @@ export const COMPONENTS = {
                  { if: { action: "lie" }, set: { anim: "lie" } }, { if: { action: "kneel" }, set: { anim: "sit" } }, { if: { action: "stand" }, set: { anim: "idle" } }, { absent: ["anim"], set: { anim: "sitchair" } }],
                enums: { anchor: ["hips", "feet", "head", "root", "surface"], leaveBy: ["jump", "menu", "script"] }, units: { exit: "m" },
                absentMeans: { exit: "set down where they got on", input: "the occupant drives nothing: movement keys leave the seat", leaveBy: "moving, jumping or getting up all leave", who: "anyone who may use the host", anim: "the action's default, materialized at write (sit/ride/drive sitchair, lie lie, kneel sit, stand idle); a value stored before 10-17 says pose, renamed anim at load" },
-               dropped: { pose: "renamed anim (R 10-17): a write of pose is refused (write anim); a stored one is renamed by the world's maintenance command" },
+               dropped: { pose: "renamed anim (R 10-17): a write of pose is refused (write anim); a stored one is still read as anim, and the v1 translator writes anim" },
                docs: { action: "the verb use calls it (sit, lie, ride, stand…): a label; at write it picks the default anim", anim: "what the body holds: a pose or clip by name (an open name: one the body doesn't know is its default); {clip, time?: loop|phase, offset?}; or a blend {by: <signal>, clips: [[key, clip], …], time?, offset?}",
                  anchor: "the body point that lands on the socket: root (where every seat put a body), hips, feet, head, or surface (the body's measured seat contact)", exit: "where they're set down, [x, y, z] or [x, y, z, yaw] in its host's frame (yaw in radians about its +y, 0 facing its +z)", leaveBy: "jump | menu | script: how the occupant may leave (script: only when the world lets go; the occupant's escape, a held get-up or a second one, always works)", who: "who may take it: a role id (this rank or above)",
                  input: "{move: 'drive'}: this seat's occupant drives its host (the host's drive); only on a drive station, one per host" },
@@ -214,7 +214,7 @@ export const COMPONENTS = {
                  throw: "number", release: "string", returnAfter: "number", fits: "array", use: "any", prompt: "string" },
     enums: { hold: ["auto", "press", "toggle"], release: ["drop", "stay", "return"] },
     // anim is an OPEN name of a pose or a clip (built in: grab.js HOLD_POSES); one the body doesn't know is held by size
-    dropped: { pose: "renamed anim (R 10-17): a write of pose is refused (write anim, and two-hand as twoHanded: true); a stored one is renamed by the world's maintenance command" },
+    dropped: { pose: "renamed anim (R 10-17): a write of pose is refused (write anim, and two-hand as twoHanded: true); a stored one is still read as anim, and the v1 translator writes anim" },
     reservedFields: ["fx"],
     absentMeans: { enabled: "true: it can be picked up", who: "member", steal: "true", range: "1.5 m", priority: "0", hold: "auto", twoHanded: "false", throw: "1 (×)", release: "drop", returnAfter: "0 s: never",
       anim: "by size: one hand under 0.5 m, both arms at or above; both hands if twoHanded", grips: "held where it was grabbed", carries: "false: what rests on it falls off when it is picked up",

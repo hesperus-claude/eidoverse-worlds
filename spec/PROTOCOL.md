@@ -452,10 +452,10 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
   holds left from before a restart are set down (`return-held`, the system's request; `settleOrphans`), the same
   request a leave writes. A v1 world comes forward through the translator (`translate-v1@51`, §14), which writes today's spelling
   (the shape audit's rules, `tools/import-v1/shapes.js`) and lifts v1's `sockets` maps into socket
-  children with its own `lift-sockets {id, made, moved}` requests. The door takes a write in a spelling renamed
+  children with its own `lift-sockets {id, made, moved}` requests. The door refuses a write in a spelling renamed
   before release (`grabbable.pose`/`station.pose` → `anim`, a grip's `fingers` → `grasp`, a motion's old type
-  word → `oscillate`, a picture's or sound's `alt`/`look` → `description`: shared/protocol/names.js `renameFields`) and stores
-  it in the new.
+  word → `oscillate`, a picture's or sound's `alt`/`look` → `description`): it takes one spelling, and the
+  translator's `renameFields` (tools/import-v1/shapes.js) writes the new one.
 - **Every defaulted parameter is written down.** The authority writes a
   component's defaults into the stored value when it is created or set, so a
   reader never supplies a default the log doesn't hold, and a later change to

@@ -383,7 +383,7 @@ const cases: Case[] = [
       const ok = s.call("olive", "set", { id: "cup", component: "grabbable", value: { anim: "torch", grips: { h: { pos: [0, 0.1, 0], grasp: "pinch" } } } });
       return { a: a.refused ?? null, f: f.refused ?? null, c: c.refused ?? null, ok: show(ok) }; },
     good: (o) => o.a?.code === "schema" && /unknown key 'pose'/.test(o.a.reason) && o.f?.code === "schema" && /unknown key 'fingers'/.test(o.f.reason) && o.c?.code === "schema" && /unknown key 'pose'/.test(o.c.reason) && o.ok === "ok" },
-  { id: "A2b", what: "…and the spec's word for each dropped field agrees with the door: none says a write of it is taken (A2: it's refused)", async run() {
+  { id: "A2b", what: "…and no dropped field's text says a one-word write of it is taken (A2: pose is refused; grass's \"old knobs\" really are mapped)", async run() {
       const { COMPONENTS } = await import(TREE + "shared/protocol/componentspec.js");
       return Object.entries(COMPONENTS).flatMap(([n, d]: any) => Object.entries(d.dropped ?? {}).filter(([, why]) => /write of \w+ is taken/.test(String(why))).map(([k]) => `${n}.${k}`)); },
     good: (o) => Array.isArray(o) && o.length === 0 },
