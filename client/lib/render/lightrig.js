@@ -6,7 +6,7 @@
 //
 // Assignment is deterministic in (requests, camera): keep/adopted → authored → inferred lamps, then whether a light
 // can reach the view at all, then what it can deliver there (intensity over the square of its distance, a light outside
-// the frustum paying for how far outside), with an incumbent bonus, then key. `keep` is top priority and escapes the
+// the frustum paying for how far outside, in distance and through its own range), with an incumbent bonus, then key. `keep` is top priority and escapes the
 // governor's cap, not the pool: more keeps than slots and the lowest-ranked glow without casting.
 //
 // The weather factory scene.add()s its own lightning PointLight, and a foreign light in the scene is a recompile
@@ -359,14 +359,26 @@ function outsideView(p) {
   return out;
 }
 // Metres of distance a metre outside the frame costs: a lamp 1.5 m behind the eye (1.6 m past the near plane) ranks as
-// if 11 m away, a lamp 0.3 m past an edge pays under 2 m.
-const OFFSCREEN_WEIGHT = 6;
+// if 6.3 m away, a lamp 0.3 m past an edge pays under 1 m. Fitted, not derived: over 32 path-traced cameras in two
+// rooms (render-lab/rank-truth.py, 11-23) anything from 1.5 to 4 loses about the same light on average (0.55 stops
+// at 4 slots, 0.12 at 8), 3 has the best worst case, and 6 drops a bright lamp the moment it leaves the frame while
+// it still lights a quarter of the picture. (What the frame sees of a lamp lies deeper in the frustum than its
+// nearest plane, which is why the charge is more than 1.)
+const OFFSCREEN_WEIGHT = 3;
+// ...and for the same reason a lamp outside the frame is dimmed, for ranking, by three's own range window taken at
+// this many times its distance outside: a short-range lamp behind the viewer has little left where the frame begins
+// (the greybox Starloft's 4 m sconces 2 m behind the eye give 0.0% of the path-traced frame), a long-range one keeps
+// nearly all of it.
+const REACH_DEPTH = 2;
+// three's punctual falloff window (getDistanceAttenuation): (1 - (d / range)^4)^2, 1 with no cutoff
+const rangeWindow = (d, range) => (range === Infinity ? 1 : Math.max(0, 1 - (d / range) ** 4) ** 2);
 // below this, nearness stops adding (a lamp at the face would otherwise outrank everything by any margin)
 const RANK_NEAR = 0.5;
 // the incumbent bonus as a ratio on the score: 1/0.85², so equal-intensity lights keep the old 15%-of-distance edge
 const INCUMBENT = 1 / (0.85 * 0.85);
 /** What a request can deliver to the view, for ranking: its intensity over the square of its distance from the eye,
- *  that distance grown by how far outside the frustum it sits. The intensity is the one last requested with its
+ *  that distance grown by how far outside the frustum it sits, and the intensity cut by what its range leaves of it
+ *  there. The intensity is the one last requested with its
  *  placement (rankIntensity), not a per-frame animation of it: avatar.js breathes the chest lamp's intensity
  *  between 3% and 100%, and a rank that read the breath would trade slots with it. A light whose range sphere lies
  *  wholly outside one plane lights nothing on screen (`miss`). */
@@ -380,7 +392,7 @@ function rankOf(r, incumbent) {
     r,
     tier: r.keep ? 0 : r.authored ? 1 : 2,
     miss: out > range ? 1 : 0,
-    score: (lum / Math.max(RANK_NEAR, d) ** 2) * (incumbent ? INCUMBENT : 1),   // incumbents hold their ground
+    score: (lum * rangeWindow(REACH_DEPTH * out, range) / Math.max(RANK_NEAR, d) ** 2) * (incumbent ? INCUMBENT : 1),   // incumbents hold their ground
     d,
   };
 }

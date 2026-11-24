@@ -166,10 +166,10 @@ console.log('A BRIGHT LAMP JUST OUT OF FRAME — measured against a path tracer,
 console.log('SPOTS — the spot pool ranks the same way (?spots default 2)');
 {
   const spot = (key, pos) => rig.requestLight(key, { authored: true, intensity: 12, range: 8, pos, spot: { angle: 0.5, inner: 0.3 } });
-  spot('spot:behind', [0, 2.5, 1.5]); spot('spot:ahead-a', [-1, 2.5, -7]); spot('spot:ahead-b', [1, 2.5, -7]);
+  spot('spot:behind', [0, 2.5, 1.5]); spot('spot:ahead-a', [-1, 2.5, -5]); spot('spot:ahead-b', [1, 2.5, -5]);
   tick(); tick();
   const sp = rig.rigDebug().spots.filter((s) => s.intensity > 0).map((s) => s.pos[2]);
-  check('the two spot slots light the spots in frame', sp.length === 2 && sp.every((z) => z < 0), `burning spots at z ${JSON.stringify(sp)}`);
+  check('the two spot slots light the spots in frame (5 m ahead against one 1.5 m behind)', sp.length === 2 && sp.every((z) => z < 0), `burning spots at z ${JSON.stringify(sp)}`);
   for (const k of ['spot:behind', 'spot:ahead-a', 'spot:ahead-b']) rig.releaseLight(k);
   tick();
 }
