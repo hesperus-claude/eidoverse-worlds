@@ -28,7 +28,7 @@ import { WORLDS_DIR } from "../server/config.ts";
 import { directoryFor } from "../server/directory.ts";
 import { foundWorld, isWorldSaved } from "../server/worldlog.ts";
 import { syncDir, syncTree } from "../server/durable.ts";
-import { translateV1World, reportV1World, warmHulls, approvalProblem, makeApproval, ownerWarning, ownerRecognised, oldOwners, ownerlessRefusal, NO_FOUNDER, translatorProvenance, type Approval } from "./import-v1/world.ts";
+import { translateV1World, reportV1World, warmHulls, approvalProblem, makeApproval, ownerWarning, forOperator, ownerRecognised, oldOwners, ownerlessRefusal, NO_FOUNDER, translatorProvenance, type Approval } from "./import-v1/world.ts";
 import { contentAddressOf } from "../server/eidoindex.ts";
 import { custodyAt } from "../server/custody.ts";
 import { custodyFileIn } from "../server/keyfiles.ts";
@@ -100,7 +100,7 @@ Nothing was changed.`);
 (The approval of ${approved} can't override this: a refusal is not a loss to approve.)`);
   if (hash !== approved) die(`the dry-run report of "${name}" is not the one that was approved: approved ${approved}, but the report of log.jsonl as it stands now hashes to ${hash} `
     + `(${report.source.size} bytes, sha256 ${report.source.sha256.slice(0, 16)}…; translator ${report.translator}, fold ${report.fold}). `
-    + `The old log, the tool, the model bytes or the spelling of WORLDS_DIR (the report's bind commands carry it: a drive letter's case or a symlinked alias hashes differently) changed since it was read, so what would be written (the report's output digest) isn't what was approved: a report reviewed under an earlier translator than ${report.translator} is never approvable (each version translates differently). Run --dry-run again, read the new report, and approve THAT hash. If log.jsonl is still being written to (an old server running), stop it first. Nothing was changed.`);
+    + `The old log, the tool or the model bytes changed since it was read, so what would be written (the report's output digest) isn't what was approved: a report reviewed under an earlier translator than ${report.translator} is never approvable (each version translates differently). Run --dry-run again, read the new report, and approve THAT hash. If log.jsonl is still being written to (an old server running), stop it first. Nothing was changed.`);
   if (!noOwner) die(`"${name}": ${NO_FOUNDER}, so no owner can sign this approval. A translation runs on the operator's countersignature alone, and only when you say so: `
     + `translate ${words} --no-founder-key --approved ${approved} --operator-only-no-owner${CLAIM ? " --claim" : ""}. The act will record that no owner was attested. Nothing was changed.`);
   // the operator's countersignature: this host's custody operator key signs the approval text (never the sequencer key)
@@ -121,7 +121,7 @@ const sha = (f: string): string => fs.statSync(f).isDirectory()   // a directory
 /** Who holds a role and whether an account is bound to them: one line each, the unbound with the command that binds them. */
 function sayPeople(people: any[] = []) {
   for (const p of people) console.log(p.account ? `${p.role} ${p.name}: bound to their account (${p.account}:…, from ${p.from})`
-    : `${p.role} ${p.name} has no account yet (${p.why}): bind with ${p.bind}`);
+    : `${p.role} ${p.name} has no account yet (${p.why}): bind with ${forOperator(p.bind)}`);
 }
 /** `--dry-run`: the report and its hash, printed; nothing written but the custody key on first use (identitySalt). Exit 1 when the translation would be refused. */
 function dryRun(D: string, name: string, words = name) {   // words: the command's own world name(s), `old new` in the two-name form
@@ -129,8 +129,8 @@ function dryRun(D: string, name: string, words = name) {   // words: the command
   console.log(`dry-run report of "${name}" (nothing written to the world; this host's custody key is minted on first use, and a key file still under its pre-2026-10-07 name is renamed once):`); console.log(JSON.stringify(report, null, 1));
   console.log(`trial period: ${report.trial}`);
   sayPeople(report.people);
-  for (const b of report.bans ?? []) console.log(b.account ? `banned ${b.name}: holds against their account (${b.account}:…, from ${b.from})${b.check ? `; check it: ${b.check}` : ""}` : `banned ${b.name} has no account yet (${b.why}), so the ban holds against no one who signs in: bind with ${b.bind}`);
-  if (report.ownerWarning) console.log(`WARNING: ${report.ownerWarning}`);
+  for (const b of report.bans ?? []) console.log(b.account ? `banned ${b.name}: holds against their account (${b.account}:…, from ${b.from})${b.check ? `; check it: ${b.check}` : ""}` : `banned ${b.name} has no account yet (${b.why}), so the ban holds against no one who signs in: bind with ${forOperator(b.bind)}`);
+  if (report.ownerWarning) console.log(`WARNING: ${forOperator(report.ownerWarning)}`);
   console.log(`report-hash ${hash}`);
   if (rest.includes("--json")) console.log(`report-json ${JSON.stringify({ report, hash })}`);   // one line for a program (the server's world-upgrade-review)
   if (report.refused) { console.error(report.refused); process.exit(1); }
@@ -152,7 +152,7 @@ function report(src: string, dest: string, r: ReturnType<typeof translateV1World
   // world's owners can be told what changed (and which entities to look at).
   sayPeople(r.people);
   if (r.claimed) console.log(`claimed: "${dest}" had no owner; ${r.claimed.name} (${r.claimed.account}:…), who upgraded it, is now its owner`);
-  { const w = ownerWarning(dest, r.people); if (w) console.log(`WARNING: ${w}`); }
+  { const w = ownerWarning(dest, r.people); if (w) console.log(`WARNING: ${forOperator(w)}`); }
   if (r.stats.guards) console.log(`NOTE for the owners: ${r.stats.guards} guarded entities in the v1 world became locked (${r.stats.guardsLive} still guarded at the end). `
     + `Now a lock binds everyone, the placer too, and any builder may lift it; the guard's "only the placer or an owner may change it" is gone (§5).`);
 }

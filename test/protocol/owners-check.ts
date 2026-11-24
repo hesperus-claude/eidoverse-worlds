@@ -13,7 +13,7 @@
 //   BN1  a main-era world ban of a name nothing else in the log names: bound to main's one account for it, so that account is
 //        still banned after the upgrade (the authority's ban check, as at join); the hashed report lists it, with "check it"
 //   BN2  …a ban-only name main recorded no account for is listed unbound, with why and the bind command
-//   BN3  the bind advice names the identity by id, never by name (shell-safe; one person), and the worlds dir bindCli reads
+//   BN3  the bind advice names the identity by id, never by name (shell-safe; one person); the hashed advice holds no path (UN4)
 //   OR1  operator-repair bind <world> <name> <account>: the imported owner is worn by that account (signing in is them, with
 //        their roles); by id too; recorded in world.mod.jsonl as an operator repair, no account printed or logged
 //   OR2  …refuses a target that isn't imported (an account's identity); OR3 a malformed account; OR4 an account already
@@ -25,6 +25,7 @@
 //   OR6  a directory another process holds (the server, running) takes the bind: its next save keeps it, its next sign-in finds it
 //   UN1  no owner bound to any account: the dry run, the report and the result warn, naming them and binding each by id, and the upgrade still runs
 //   UN2  one owner bound: no warning; UN3 no owner at all and no --claim: refused, naming --claim (every translation ends with an owner)
+//   UN4  the same worlds dir by two spellings (a symlink): the dry-run report hashes the same and holds no path; only the printed binds carry WORLDS_DIR
 //   OU1  world.ts owner-of: a signed-in account main's records bind to an owner is that owner ("bound"), whatever its name
 //   OU2  an owner main recorded NO account for is recognised by the account's name, any case ("name": provisional, R 10-28)
 //   OU3  a different name is refused; so is a bound owner's name on another account, and a builder's name
@@ -60,7 +61,6 @@ import { banOf } from "../../shared/protocol/authority/rights.js";
 import * as UV from "../../client/lib/ui/upgradeview.js";
 const { claimWords } = UV;
 import { peopleOf, bansOf } from "../../tools/import-v1/world.ts";
-import { WORLDS_DIR } from "../../server/config.ts";
 import { shellWord } from "../../server/oldworlds.ts";
 
 let pass = 0, fail = 0;
@@ -152,12 +152,20 @@ const commonsShape: [string, string, any][] = [["world", "grant", { id: "antra",
   v1(W, "attic", [["world", "grant", { id: "fable", role: "owner" }], ["fable", "grant", { id: "mica", role: "owner" }], ["fable", "grant", { id: "Digi_Rat", role: "builder" }], ["fable", "say", { text: "hi" }]]);
   v1(W, "shed", [["Pip", "say", { text: "nobody owns this" }]]);
   const a = upgrade(root, "attic"), s = upgrade(root, "shed");
-  const named = (w: any) => typeof w === "string" && /no owner of "attic" is bound to an account/.test(w) && /nobody who signs in is its owner/.test(w) && ["fable", "mica"].every((n) => new RegExp(`\\b${n}\\b`).test(w)) && w.includes(`WORLDS_DIR=${shellWord(W)} bun tools/operator/operator-repair.ts bind attic u-`) && !/bind attic <name>/.test(w) && !/Digi_Rat/.test(w);
-  row("UN1", () => ok(named(a.report?.ownerWarning) && a.dry.out.includes(`WARNING: ${a.report.ownerWarning}`) && a.up.code === 0 && fs.existsSync(path.join(W, "attic", "world.jsonl")) && named(a.result?.ownerWarning) && /^WARNING: .*"attic"/m.test(a.up.out),
+  const named = (w: any) => typeof w === "string" && /no owner of "attic" is bound to an account/.test(w) && /nobody who signs in is its owner/.test(w) && ["fable", "mica"].every((n) => new RegExp(`\\b${n}\\b`).test(w)) && /(?:^|[(; ])bun tools\/operator\/operator-repair\.ts bind attic u-/.test(w) && !w.includes(root) && !/bind attic <name>/.test(w) && !/Digi_Rat/.test(w);
+  row("UN1", () => ok(named(a.report?.ownerWarning) && a.dry.out.includes(`WARNING: ${a.report.ownerWarning.replaceAll("bun tools/operator", `WORLDS_DIR=${shellWord(W)} bun tools/operator`)}`) && a.up.code === 0 && fs.existsSync(path.join(W, "attic", "world.jsonl")) && named(a.result?.ownerWarning) && /^WARNING: .*"attic"/m.test(a.up.out),
     "UN1 no owner bound to any account: the dry run, the approved report and the upgrade's result warn, naming the owners (not the builder) and the bind; the upgrade still runs", { w: a.report?.ownerWarning, r: a.result?.ownerWarning, code: a.up.code }));
   const no = (o: string) => /"shed" has no owner, and every translation ends with one: translate it with --claim and EIDO_UPGRADER_ACCOUNT=/.test(o);
   row("UN3", () => ok(s.dry.code !== 0 && no(s.dry.out) && s.up.code !== 0 && no(s.up.out) && !fs.existsSync(path.join(W, "shed", "world.jsonl")) && fs.existsSync(path.join(W, "shed", "log.jsonl")),
     "UN3 a world with no owner and no --claim: the dry run and the upgrade refuse, naming --claim and EIDO_UPGRADER_ACCOUNT; nothing is written (LEGACY-PINS item 9)", { dry: s.dry.out.slice(-300), up: s.up.out.slice(-300), code: s.up.code }));
+  // UN4: the report is provenance a reader re-derives later, so it carries no spelling of this host's worlds dir
+  v1(W, "loft", [["world", "grant", { id: "fable", role: "owner" }], ["fable", "grant", { id: "Nemo", role: "builder" }], ["fable", "say", { text: "hi" }]]);
+  const alias = path.join(root, "alias"); fs.symlinkSync(W, alias);
+  const d1 = tool(root, ["translate", "--dry-run", "--no-founder-key", "--json", "--", "loft"]), d2 = tool(root, ["translate", "--dry-run", "--no-founder-key", "--json", "--", "loft"], { WORLDS_DIR: alias });
+  const j1 = tagged(d1.out, "report-json"), j2 = tagged(d2.out, "report-json");
+  row("UN4", () => ok(j1?.hash && j1.hash === j2?.hash && !JSON.stringify(j1.report).includes(root) && j1.report.ownerWarning?.includes("bun tools/operator/operator-repair.ts bind loft u-")
+    && d1.out.includes(`bind with WORLDS_DIR=${shellWord(W)} bun `) && d2.out.includes(`bind with WORLDS_DIR=${shellWord(alias)} bun `) && d2.out.includes(`WARNING: no owner of "loft"`) && d2.out.includes(`(WORLDS_DIR=${shellWord(alias)} bun tools/operator/operator-repair.ts bind loft u-`),
+    "UN4 the same worlds dir by two spellings (a symlinked alias): the dry-run report hashes the same and names no path; the printed bind commands and warning carry the WORLDS_DIR this run used", { h1: j1?.hash, h2: j2?.hash, w: j1?.report?.ownerWarning, out: d2.out.split("\n").filter((l) => /bind/.test(l)) }));
 }
 
 // ================= OU: who may upgrade as the world's owner (R 10-28: "owners or operators can update worlds") =================
@@ -281,12 +289,12 @@ const commonsShape: [string, string, any][] = [["world", "grant", { id: "antra",
   const live = openLive(path.join(W, "hall"), "hall", { catalogue: ENGINE_CATALOGUE, scripts: null }); const B = Object.fromEntries((u.report?.bans ?? []).map((b) => [b.name, b]));
   row("BN1", () => ok(u.up.code === 0 && banOf(live, zed)?.reason === "griefing" && B.Zed?.account === "human:test" && /principals/.test(B.Zed?.from) && /check|someone else/.test(B.Zed?.check ?? "") && /^banned Zed: holds against their account/m.test(u.dry.out),
     "BN1 banned in main (a name nothing else in the log names) → after the upgrade that account is still banned (the authority's check, as at join); the approved report and the dry run list it, saying to check a by-name binding", { code: u.up.code, ban: banOf(live, zed), B, out: u.up.code ? u.up.out.slice(-400) : undefined }));
-  row("BN2", () => ok(B.Nemo?.account === null && /no account/.test(B.Nemo?.why ?? "") && (B.Nemo?.bind ?? "") === `WORLDS_DIR=${shellWord(W)} bun tools/operator/operator-repair.ts bind hall ${B.Nemo?.id} <their account>`,
+  row("BN2", () => ok(B.Nemo?.account === null && /no account/.test(B.Nemo?.why ?? "") && (B.Nemo?.bind ?? "") === `bun tools/operator/operator-repair.ts bind hall ${B.Nemo?.id} <their account>` && u.dry.out.includes(`bind with WORLDS_DIR=${shellWord(W)} ${B.Nemo?.bind}`),
     "BN2 a ban-only name main recorded no account for is listed unbound, with why and the bind command", B.Nemo));
   // BN3: the advice is pasted into a shell and names ONE person: it carries the id, never the name (Ann and ann are two)
   const odd = "$HOME `id` it's", r = { final: { translated: { "@world": { "roles:u-odd": { role: "builder" }, "imported-bans:u-odd": true } } } };
   const said = [...peopleOf("hall", r, () => ({ name: odd })), ...bansOf("hall", r, () => ({ name: odd }))].map((p) => p.bind);
-  row("BN3", () => ok(said.length === 2 && said.every((b) => b === `WORLDS_DIR=${shellWord(WORLDS_DIR)} bun tools/operator/operator-repair.ts bind hall u-odd <their account>`), "BN3 the bind advice names the identity by id (shell-safe, and one person even when the name is two people's)", { said }));
+  row("BN3", () => ok(said.length === 2 && said.every((b) => b === "bun tools/operator/operator-repair.ts bind hall u-odd <their account>"), "BN3 the bind advice names the identity by id (shell-safe, and one person even when the name is two people's)", { said }));
 }
 
 // ================= OR: the operator binds an imported identity to an account =================

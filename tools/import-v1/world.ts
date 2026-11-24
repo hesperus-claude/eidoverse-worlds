@@ -209,8 +209,11 @@ const hostContent = (p: string) => { const h = contentAddressOf(p); return h ? `
  *  from} or {name, role, account: null, why, bind}, each with its `id` (the one the written world holds: bot #369); owners first.
  *  What the operator approves, and the upgrade's result. */
 /** The bind command for one imported identity, by its id: a name may be two people's (Ann and ann), an id is one (bot #369).
- *  It carries this host's worlds dir: bindCli reads WORLDS_DIR (operator-repair.ts usage). */
-const bindAdvice = (world: string, id: string) => `WORLDS_DIR=${shellWord(WORLDS_DIR)} bun tools/operator/operator-repair.ts bind ${world} ${id} <their account>`;
+ *  Path-free, as it is hashed in the report; forOperator adds the WORLDS_DIR bindCli reads where it is printed. */
+const BIND = "bun tools/operator/operator-repair.ts bind ";
+const bindAdvice = (world: string, id: string) => `${BIND}${world} ${id} <their account>`;
+/** A report's words as printed for the operator: each bind command leads with this run's WORLDS_DIR (operator-repair.ts usage). */
+export const forOperator = (s: string) => s.replaceAll(BIND, `WORLDS_DIR=${shellWord(WORLDS_DIR)} ${BIND}`);
 export function peopleOf(world: string, r: Any, describe: (id: string) => Any) {
   const rank = (x: string) => ["owner", "moderator", "builder", "member"].indexOf(x) >>> 0;
   const out = Object.entries<Any>(r.final?.translated?.["@world"] ?? {}).filter(([k]) => k.startsWith("roles:")).map(([k, v]) => {
