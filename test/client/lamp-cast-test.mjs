@@ -70,7 +70,7 @@ if (CASE) {
   const MAP = 256;
   const WORLD = { bias: -0.00002, normalBias: (range) => 1.5 * (2 * Math.min(3, range)) / MAP };
   const BODY = { bias: -0.0005, normalBias: 8 * (2 * 12) / MAP };
-  const near = (a, b) => Number.isFinite(a) && Math.abs(a - b) < 1e-6;
+  const near = (a, b) => Number.isFinite(a) && Math.abs(a - b) < 1e-5;   // rigDebug rounds normalBias to 5 decimals
 
   console.log(`BOOT — ew-lamp-shadows ${C.stored ?? '(absent)'}: ${N} casting slot(s)`);
   const born = d()._slots.map((pl) => pl.castShadow);
@@ -105,6 +105,11 @@ if (CASE) {
   const w0 = rowOf(ask[0]);
   check('a casting world lamp has depth bias -0.00002', !!w0 && near(w0.bias, WORLD.bias), w0);
   check('...and normalBias 1.5 texels at min(3 m, its range)', !!w0 && near(w0.normalBias, WORLD.normalBias(9)), { got: w0?.normalBias, want: WORLD.normalBias(9) });
+  rig.updateRequest(ask[0], { range: 2 });   // models.js re-syncs a changed light in place: the same request
+  tick();
+  check('...a range re-synced in place below 3 m re-derives it (the same holder, a new basis)', near(rowOf(ask[0])?.normalBias, WORLD.normalBias(2)), { got: rowOf(ask[0])?.normalBias, want: WORLD.normalBias(2) });
+  rig.updateRequest(ask[0], { range: 9 });
+  tick();
 
   console.log('AN ASKER THAT OUTRANKS A CASTING INCUMBENT TAKES ITS SLOT');
   const lastCaster = ask[N - 1];
@@ -118,6 +123,17 @@ if (CASE) {
   rig.releaseLight('complight:bright');
   tick();
   check('the newcomer gone, A' + (N - 1) + ' casts again', casts(lastCaster), slotOf(lastCaster));
+  // an asker already lit in a non-casting slot climbs past the last casting one: they TRADE slots, so neither goes dark
+  // even in a full pool (at 4 casting slots every slot is taken)
+  const climber = ask[N], climbFrom = slotOf(climber), passed = slotOf(lastCaster);
+  rig.updateRequest(climber, { intensity: 200, pos: [0.3 * N, 1.5, -3 - 0.5 * N] });   // a re-placed light re-ranks
+  tick(1);   // ONE frame: a swap that dropped the incumbent would leave it dark here, re-seated only by the next re-rank
+  check(`an asker lit elsewhere that climbs past A${N - 1} takes its casting slot, and A${N - 1} takes the climber's in the same frame`, slotOf(climber) === passed && slotOf(lastCaster) === climbFrom && casts(climber) && !casts(lastCaster) && lit(lastCaster),
+    { climber: [climbFrom, slotOf(climber)], passed: [passed, slotOf(lastCaster)], full: d().requests.filter((r) => r.slot >= 0).length });
+  rig.releaseLight(climber);
+  tick();
+  rig.requestLight(climber, { authored: true, intensity: 20, range: 9, shadows: true, pos: [0.3 * N, 1.5, -3 - 0.5 * N] });
+  tick();
 
   console.log('THE VIEWER\'S SWITCH COMPOSES WITH IT');
   rig.setShadows(false);

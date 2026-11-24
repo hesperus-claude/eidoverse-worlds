@@ -13,6 +13,10 @@
 // storm, so makeWeatherSystem is handed a Proxy of the scene whose add/remove ADOPT lights into requests (bottom of
 // file; the seam goes when upstream grows a strikeLight injection, docs/history/UPSTREAM-WRAP-ONCE.md).
 //
+// Shadows: the world says which lights cast (a request's `shadows`, light.shadows), the viewer how many at once
+// (ew-lamp-shadows: slots 0..N_CAST-1 are born casting). The best-ranked askers take the casting slots (assign), a casting
+// slot draws only for a holder that asked, and its depth tuning follows its holder (tuneSlot).
+//
 // Measurements and the chest lamp's shadow tuning: docs/research/light-rig.md.
 
 import { THREE, scene, camera, renderer, sun } from '../core.js';
@@ -29,8 +33,9 @@ const N_SLOTS = Number.isFinite(_slotsParam) ? Math.max(0, Math.min(16, Math.rou
 const rigGroup = new THREE.Group();
 rigGroup.name = 'lightrig';
 const slots = [];
-// ONE slot casts, and is born casting (flipping castShadow on a live slot is a recompile). A request that wants
-// shadows is assigned here (see assign), and the slot draws shadows only for a holder that asked (applyShadowPref).
+// The casting slots are 0..N_CAST-1 (N_CAST below), born casting (flipping castShadow on a live slot is a recompile).
+// Requests that want shadows are assigned there (see assign), and a slot draws shadows only for a holder that asked
+// (applyShadowPref). SHADOW_SLOT is the first of them.
 const SHADOW_SLOT = 0;
 // The lamp's shadow map, bias and bulb position, tuned by eye against a moving body: docs/research/light-rig.md.
 const SHADOW_MAP = 256;
@@ -41,6 +46,16 @@ const SHADOW_FORWARD = -0.02;
 const SHADOW_UP = 0.15;
 const SHADOW_SIDE = 0;
 const shadowTexel = (n = SHADOW_MAP) => (2 * SHADOW_WORK_DIST) / n;
+const BODY_DEPTH_BIAS = -0.0005;
+// A world lamp in a casting slot is tuned for a room, not a ribcage (render-tiers LAB.md 11-04). With near 0.03 the
+// perspective depth is so non-linear that the chest lamp's bias -0.0005 is ~12 cm at 2.7 m, which floated every contact
+// shadow off the floor (a chair leg visibly hovering), so its depth bias is -0.00002; its normal offset is 1.5 cube
+// texels at 3 m (a face spans 90 degrees, so a texel at distance d is about 2d/n), or at its range if that is shorter,
+// where the chest dial's 8 texels at 12 m (0.75 m at 256) pushed room shadows off by most of a metre. near stays 0.03
+// for both: a larger one clips a lamp's own shade.
+const WORLD_DEPTH_BIAS = -0.00002;
+const WORLD_BIAS_TEXELS = 1.5;
+const WORLD_BIAS_DIST = 3;
 // live-tunable copies (setLampShadow); the consts above are the defaults
 let _biasTexels = SHADOW_BIAS_TEXELS;
 let _workDist = SHADOW_WORK_DIST;
@@ -50,20 +65,34 @@ const _nudge = new THREE.Vector3(SHADOW_SIDE, SHADOW_UP, -SHADOW_FORWARD);
 // The resident's shadow preference (the video settings row); read here because the slot loop needs it.
 const SH_KEY = 'ew-shadows';
 const stored = (k) => { try { return localStorage.getItem(k); } catch { return null; } };   // storage can throw (site data blocked)
+// How many point slots are born casting: the viewer's cost dial (the video settings row 'shadowed lamps'), read once at
+// boot because castShadow is pipeline shape, so a change applies on reload. Which lights WANT to cast is the world's
+// (light.shadows; Godot's shadow_enabled, Filament's castShadows). Each casting slot is a cube shadow map: six depth
+// passes over what its light reaches.
+const LAMP_SHADOWS_KEY = 'ew-lamp-shadows';
+export const LAMP_SHADOW_CHOICES = [1, 2, 4, 8];
+export const LAMP_SHADOWS_DEFAULT = 1;   // today's one casting slot; a larger default changes how worlds look (the owner's call)
+export const lampShadowCount = () => { const v = +stored(LAMP_SHADOWS_KEY); return LAMP_SHADOW_CHOICES.includes(v) ? v : LAMP_SHADOWS_DEFAULT; };
+export function setLampShadowCount(n) {
+  if (!LAMP_SHADOW_CHOICES.includes(+n)) return;
+  try { localStorage.setItem(LAMP_SHADOWS_KEY, String(+n)); } catch { /* private window */ }
+}
+const N_CAST = Math.min(N_SLOTS, lampShadowCount());
 let _prefShadows = stored(SH_KEY) !== 'off';   // `let`: setShadows() flips it, and shadowsOn() must follow
 for (let i = 0; i < N_SLOTS; i++) {
   const pl = new THREE.PointLight(0xffffff, 0, 10, 1.7);
   pl.name = `slot${i}`;
-  pl.castShadow = i === SHADOW_SLOT;   // pipeline shape, fixed at birth; the preference is uniform-level (applyShadowPref)
-  if (i === SHADOW_SLOT) {
+  pl.castShadow = i < N_CAST;   // pipeline shape, fixed at birth; the preference is uniform-level (applyShadowPref)
+  if (i < N_CAST) {
     pl.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP);
     // depth precision is the near/far RATIO: near 0.03 (the bulb is inside the body), far = the light's own falloff
     // (trackShadowFar keeps it there)
     pl.shadow.camera.near = 0.03;
     pl.shadow.camera.far = Math.max(2, pl.distance || 10);
     pl.shadow.camera.updateProjectionMatrix();
-    // bias stays small and negative; normalBias (derived from the texel size) does the heavy lifting
-    pl.shadow.bias = -0.0005;
+    // born with the chest lamp's tuning (tuneSlot re-tunes it for whoever holds it): bias stays small and negative,
+    // normalBias (derived from the texel size) does the heavy lifting
+    pl.shadow.bias = BODY_DEPTH_BIAS;
     pl.shadow.normalBias = SHADOW_BIAS_TEXELS * shadowTexel();
     bornDrawn(pl);
   }
@@ -109,14 +138,15 @@ export const shadowsOn = () => _prefShadows;
 // The lamp's shadow dials, live (mapSize is a realloc and normalBias a uniform; neither is in a pipeline cache key).
 // Any subset of {map, texels, dist, forward, up, side}; the bias is re-derived from the resulting map size so a size
 // change keeps the look. forward/up/side move the bulb (metres, bone frame; see _nudge).
+// The map size is every casting slot's (the chest lamp tuning holds in whichever slot it lands); the bias dials are the
+// chest lamp's, so they reach a slot the chest lamp holds (or no one does) and leave a world lamp's tuning alone.
 export function setLampShadow({ map, texels, dist, forward, up, side } = {}) {
-  const pl = slots[SHADOW_SLOT];
-  if (!pl) return null;
+  if (!slots[SHADOW_SLOT] || N_CAST === 0) return null;
   if (Number.isFinite(map)) {
     const n = Math.max(16, Math.min(2048, Math.round(map)));
     // no dispose: three resizes a target at its next draw (RenderTarget.setSize disposes on a size change; a cube's faces
     // need sizeShadowMap's help), and a dispose with no size change for its observer to see was the same break
-    sizeShadowMap(pl, n);
+    for (let k = 0; k < N_CAST; k++) sizeShadowMap(slots[k], n);
   }
   if (Number.isFinite(texels)) _biasTexels = Math.max(0, texels);
   if (Number.isFinite(dist)) _workDist = Math.max(0.01, dist);
@@ -125,20 +155,47 @@ export function setLampShadow({ map, texels, dist, forward, up, side } = {}) {
   if (Number.isFinite(forward)) _nudge.z = -clamp(forward);   // forward is -z (see _nudge)
   if (Number.isFinite(up)) _nudge.y = clamp(up);
   if (Number.isFinite(side)) _nudge.x = clamp(side);
-  pl.shadow.normalBias = _biasTexels * ((2 * _workDist) / (pl.shadow.mapSize.x || SHADOW_MAP));
+  for (let k = 0; k < N_CAST; k++) tuneSlot(k, _tunedFor[k]);
   return lampShadowState();
 }
+// The request each casting slot is tuned for (the one it draws: tuneSlot from updateRig), null before any holder.
+const _tunedFor = new Array(N_CAST).fill(null);
+const bodyNormalBias = (n) => _biasTexels * ((2 * _workDist) / n);
+/** Tune casting slot k for its holder r: the chest lamp's dial for a body lamp (or no holder: the slot is born with
+ *  it), the world tuning for anything else. Uniform writes (bias and normalBias are in no pipeline key). */
+function tuneSlot(k, r) {
+  const pl = slots[k];
+  if (!pl?.castShadow) return;
+  _tunedFor[k] = r ?? null;
+  const n = pl.shadow.mapSize.x || SHADOW_MAP;
+  if (!r || r.body) {
+    pl.shadow.bias = BODY_DEPTH_BIAS;
+    pl.shadow.normalBias = bodyNormalBias(n);
+  } else {
+    pl.shadow.bias = WORLD_DEPTH_BIAS;
+    pl.shadow.normalBias = WORLD_BIAS_TEXELS * ((2 * Math.min(WORLD_BIAS_DIST, pl.distance || 10)) / n);
+  }
+}
+// the casting slot that carries the chest dial: one tuned for a body lamp, else the first not tuned for a world lamp
+function chestSlot() {
+  let idle = -1;
+  for (let k = 0; k < N_CAST; k++) { const r = _tunedFor[k]; if (r?.body) return k; if (!r && idle < 0) idle = k; }
+  return idle;
+}
+/** The chest lamp's shadow tuning, read off the slot that carries it (computed from the dial while every casting slot
+ *  holds a world lamp). */
 export const lampShadowState = () => {
-  const pl = slots[SHADOW_SLOT];
-  if (!pl) return null;
+  if (!slots[SHADOW_SLOT] || N_CAST === 0) return null;
+  const k = chestSlot();
+  const pl = slots[k >= 0 ? k : SHADOW_SLOT];
   const n = pl.shadow.mapSize.x || SHADOW_MAP;
   return {
     map: n, texels: _biasTexels, workDist: _workDist,
     texelMM: +((2 * _workDist / n) * 1000).toFixed(2),
     // where the bulb sits relative to its bone (metres, bone frame)
     forward: +(-_nudge.z).toFixed(4), up: +_nudge.y.toFixed(4), side: +_nudge.x.toFixed(4),
-    normalBias: +pl.shadow.normalBias.toFixed(5),
-    bias: pl.shadow.bias,
+    normalBias: +(k >= 0 ? pl.shadow.normalBias : bodyNormalBias(n)).toFixed(5),
+    bias: k >= 0 ? pl.shadow.bias : BODY_DEPTH_BIAS,
     near: pl.shadow.camera.near, far: pl.shadow.camera.far,
   };
 };
@@ -153,13 +210,13 @@ function gateShadow(l, on) {
   l.shadow.autoUpdate = on;
   if (on) l.shadow.needsUpdate = true;   // the held map is stale: redraw it once now
 }
-// Does the casting slot's holder want shadows (r.shadows)? Anything else that lands there (a placed lamp inside its
-// own shade, the lightning) would cast with the chest lamp's tuning; empty, it has nothing to cast for. assign() keeps
-// this current; the slot casts when this AND the preference say so.
-let _holderWants = false;
+// Does casting slot k's holder want shadows (r.shadows)? Anything else that lands there (a placed lamp inside its own
+// shade that never asked, the lightning) has not asked to cast; empty, it has nothing to cast for. assign() keeps this
+// current; the slot casts when this AND the preference say so.
+const _holderWants = new Array(N_CAST).fill(false);
 function applyShadowPref(on) {
   gateShadow(sun, on);
-  gateShadow(slots[SHADOW_SLOT], on && _holderWants);
+  for (let k = 0; k < N_CAST; k++) gateShadow(slots[k], on && _holderWants[k]);
 }
 /** Put the shadow preference's uniform half back (after a probe held shadow maps across frames). */
 export const reassertShadowPref = () => applyShadowPref(_prefShadows);
@@ -178,7 +235,7 @@ applyShadowPref(shadowsOn());
 const RES_KEY = 'ew-shadow-res';
 export const SHADOW_RES = [1024, 2048, 4096];
 export const shadowRes = () => { const v = +stored(RES_KEY); return SHADOW_RES.includes(v) ? v : 2048; };
-// one dial for every caster: the sun takes n, the lamp slot scales SHADOW_MAP by n/2048
+// one dial for every caster: the sun takes n, the casting lamp slots scale SHADOW_MAP by n/2048 (setLampShadow sizes them all)
 const lampMapFor = (n) => Math.round(SHADOW_MAP * (n / 2048));
 export function setShadowRes(n) {
   localStorage.setItem(RES_KEY, String(n));
@@ -229,7 +286,8 @@ export function requestLight(key, spec) {
     obj: null, offset: null, pos: null, mirror: null,
     color: 0xffd9a0, intensity: 16, range: 10, decay: 1.7,
     keep: false, authored: false, dayAware: false, owner: null,
-    shadows: false,   // wants the casting slot (see SHADOW_SLOT)
+    shadows: false,   // wants a casting slot (see N_CAST, assign)
+    body: false,      // a body's lamp (attachLamps for avatar.js): the chest-lamp tuning in a casting slot (tuneSlot)
     spot: null,       // {angle, inner} (glTF half-angles, rad): a spot, lit from the SPOT pool, shining along obj's -Z
     ...spec, key, slot: -1, sslot: -1,
   });
@@ -270,8 +328,8 @@ function emitterGlow(m) {
   return 0;
 }
 
-/** Request a light at each emissive mesh's centre (<=2 per object). `opts.shadows` claims the ONE casting slot and
- *  defaults to FALSE: only avatar.js passes true.
+/** Request a light at each emissive mesh's centre (<=2 per object). `opts.shadows` asks for a casting slot and
+ *  defaults to FALSE: only avatar.js passes true, and its lamps are body lamps (the chest dial's tuning, tuneSlot).
  *  @returns {{key:string, intensity:number}[]} the requests made (a caller animating a lamp needs both). */
 export function attachLamps(root, owner, { shadows = false } = {}) {
   const made = [];
@@ -295,6 +353,7 @@ export function attachLamps(root, owner, { shadows = false } = {}) {
       intensity,
       range: 12,                 // tight radius: grass fragments cost
       shadows,                   // the caller's call: a nearer glowing prop must not take the casting slot off a body
+      body: shadows,             // only avatar.js asks: a body lamp keeps the chest-lamp tuning in a casting slot
       dayAware: true, owner,
     });
     made.push({ key, intensity });
@@ -475,15 +534,21 @@ function assign(now) {
     if (r.slot >= 0 && !winnerSet.has(r)) r.slot = -1;
   }
   const used = new Set(winners.map((r) => r.slot).filter((i) => i >= 0));
-  // the first request that wants shadows takes the casting slot before the general pass; a second lights without
-  // casting (a second caster would be a recompile)
-  const wants = winners.find((r) => r.shadows);
-  if (wants && wants.slot !== SHADOW_SLOT) {
-    // SWAP with the incumbent (usually the world, realized before your avatar) rather than wait for a free slot
-    const incumbent = winners.find((r) => r !== wants && r.slot === SHADOW_SLOT);
+  // the N_CAST best-ranked requests that want shadows take the casting slots before the general pass; the rest light
+  // without casting (another caster would be a recompile). Winners are in rank order, so these are the best askers.
+  const wanting = winners.filter((r) => r.shadows).slice(0, N_CAST);
+  const castHeld = new Set(wanting.filter((r) => r.slot >= 0 && r.slot < N_CAST).map((r) => r.slot));
+  for (const wants of wanting) {
+    if (wants.slot >= 0 && wants.slot < N_CAST) continue;   // already casting where it is
+    let k = 0;
+    while (castHeld.has(k)) k++;                             // a casting slot no better asker holds
+    castHeld.add(k);
+    // SWAP with the incumbent (usually the world, realized before your avatar, or an asker ranked below N_CAST) rather
+    // than wait for a free slot: the two trade places and both stay lit
+    const incumbent = winners.find((r) => r !== wants && r.slot === k);
     const vacated = wants.slot;          // -1 if it was never assigned
-    wants.slot = SHADOW_SLOT;
-    used.add(SHADOW_SLOT);
+    wants.slot = k;
+    used.add(k);
     if (incumbent) incumbent.slot = vacated;
     else if (vacated >= 0) used.delete(vacated);
   }
@@ -495,10 +560,12 @@ function assign(now) {
     r.slot = free;
     used.add(free);
   }
-  const wantsNow = Boolean(winners.find((r) => r.slot === SHADOW_SLOT)?.shadows);
-  if (wantsNow !== _holderWants) {
-    _holderWants = wantsNow;
-    gateShadow(slots[SHADOW_SLOT], _prefShadows && wantsNow);
+  const wantsNow = new Array(N_CAST).fill(false);
+  for (const r of winners) if (r.slot >= 0 && r.slot < N_CAST && r.shadows) wantsNow[r.slot] = true;
+  for (let k = 0; k < N_CAST; k++) {
+    if (wantsNow[k] === _holderWants[k]) continue;
+    _holderWants[k] = wantsNow[k];
+    gateShadow(slots[k], _prefShadows && wantsNow[k]);
   }
 }
 
@@ -639,14 +706,17 @@ function placeOf(c) {
   return c.radius * mw.getMaxScaleOnAxis();
 }
 /** Can any shadow map hold a sphere here? The sun's map is a box around the camera in the light's frame (updateShadow
- *  wrote its axes this frame; with cascades, their far distance plus the margin up-sun), and the casting slot's cube
+ *  wrote its axes this frame; with cascades, their far distance plus the margin up-sun), and each casting slot's cube
  *  reaches as far as its light does, while it draws. */
 function inShadowReach(at, r, eye) {
   _rel.copy(at).sub(eye);
   if (csm) { if (_rel.length() - r <= CSM_FAR + CSM_MARGIN) return true; }
   else if (Math.abs(_rel.dot(_sx)) - r <= SHADOW_HALF && Math.abs(_rel.dot(_sy)) - r <= SHADOW_HALF && Math.abs(_rel.dot(_sz)) - r <= SHADOW_DEPTH) return true;
-  const pl = slots[SHADOW_SLOT];
-  return Boolean(pl && pl.intensity > 0 && castsNow(pl) && at.distanceTo(pl.position) - r <= (pl.distance || Infinity));
+  for (let k = 0; k < N_CAST; k++) {
+    const pl = slots[k];
+    if (pl.intensity > 0 && castsNow(pl) && at.distanceTo(pl.position) - r <= (pl.distance || Infinity)) return true;
+  }
+  return false;
 }
 // how far outside a glow body's bounding sphere a light still counts as inside it (a bulb at the glass)
 const GLOW_BODY_MARGIN = 0.03;
@@ -703,7 +773,7 @@ function casterPass() {
 
 // ---- the per-frame drive ----------------------------------------------------
 
-// the casting slot's shadow far plane follows its light's range (rewritten every frame by whichever request holds it)
+// a casting slot's shadow far plane follows its light's range (rewritten every frame by whichever request holds it)
 const _SHADOW_FAR_EPS = 1e-4;
 function trackShadowFar(pl) {
   if (!pl.castShadow) return;
@@ -814,6 +884,7 @@ export function updateRig(now) {
     pl.distance = r.range;
     pl.decay = r.decay;
     trackShadowFar(pl);
+    if (i < N_CAST) tuneSlot(i, r);   // the tuning follows the lamp the slot draws (and its range: a world lamp's basis)
   }
 }
 
@@ -835,14 +906,23 @@ export const rigDebug = () => ({
     pos: sl.position.toArray().map((x) => +x.toFixed(3)), dir: sl.target.position.clone().sub(sl.position).toArray().map((x) => +x.toFixed(3)) })),
   slots: N_SLOTS, cap: slotCap, dayness: dayness == null ? null : +dayness.toFixed(3),
   assignDirty,
-  // the shadow gates; `wantsShadows` follows the REQUEST, not slots[SHADOW_SLOT], so a probe answers for the lamp
+  // the shadow gates; `wantsShadows` follows the REQUEST, not a slot, so a probe answers for the lamp
   shadows: (() => {
     const want = [...requests.values()].filter((r) => r.shadows);
     const held = want.filter((r) => r.slot >= 0);
+    const holder = new Array(N_CAST).fill(null);
+    for (const r of requests.values()) if (r.slot >= 0 && r.slot < N_CAST && !r.spot) holder[r.slot] = r;
     return {
       pref: shadowsOn(), map: renderer.shadowMap.enabled, sun: sun.castShadow, sunCasting: castsNow(sun),
-      castingSlot: SHADOW_SLOT,
-      slotIsCaster: castsNow(slots[SHADOW_SLOT]),
+      castingSlot: SHADOW_SLOT,      // the first casting slot
+      castingSlots: N_CAST,          // slots 0..castingSlots-1 are born casting (ew-lamp-shadows)
+      slotIsCaster: slots.slice(0, N_CAST).some(castsNow),   // does any casting slot draw (with one: that slot)
+      // one row per casting slot: who holds it, whether it asked, whether it draws, and the tuning it draws with
+      slots: holder.map((r, k) => ({
+        slot: k, holder: r?.key ?? null, asked: _holderWants[k], body: Boolean(r?.body), drawing: castsNow(slots[k]),
+        map: slots[k].shadow.mapSize.x, bias: slots[k].shadow.bias, normalBias: +slots[k].shadow.normalBias.toFixed(5),
+        tunedFor: _tunedFor[k]?.key ?? null,
+      })),
       wantsShadows: want.map((r) => ({
         key: r.key, slot: r.slot,
         casting: r.slot >= 0 && castsNow(slots[r.slot]),
