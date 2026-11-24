@@ -191,8 +191,10 @@ if (lampMapFor(shadowRes()) !== SHADOW_MAP) setLampShadow({ map: lampMapFor(shad
 // view frustum each frame, replacing the follow box in updateShadow. N cascades = N depth passes.
 const CSM_N = Math.min(4, Math.max(0, +CONFIG.params.get('csm') || 0));
 let csm = null;
+const CSM_FAR = +CONFIG.params.get('csmfar') || 150;   // how far from the eye the cascades reach
+const CSM_MARGIN = 100;                                 // how far up-sun of them a caster is still drawn
 if (CSM_N >= 2) {
-  csm = new CSMShadowNode(sun, { cascades: CSM_N, maxFar: +CONFIG.params.get('csmfar') || 150, mode: CONFIG.params.get('csmmode') || 'practical', lightMargin: 100 });
+  csm = new CSMShadowNode(sun, { cascades: CSM_N, maxFar: CSM_FAR, mode: CONFIG.params.get('csmmode') || 'practical', lightMargin: CSM_MARGIN });
   sun.shadow.shadowNode = csm;
   addEventListener('resize', () => { if (csm.camera) csm.updateFrustums(); });   // no camera until the first compiled frame (CSMShadowNode._init): a resize before that would throw
 }
@@ -534,12 +536,15 @@ function updateShadow() {
 // ---- the caster budget ------------------------------------------------------
 // object.castShadow is in no pipeline cache key, so the caster set is a live budget: the K that look largest from the
 // camera cast (bounding radius / distance, roughly the angle subtended, plus up to 4 already casting inside the
-// hysteresis edge, casterPass), the rest keep receiving. A thing whose every mesh is an emitter (emitterGlow) is never
-// offered: a glowing bulb's shadow is not wanted, and fifteen fairy-light beads must not outrank the sofa. Depth
+// hysteresis edge, casterPass), the rest keep receiving. Two things come before size. A thing no shadow map can hold
+// (outside the sun's shadow box, and out of the casting lamp's range: inShadowReach) ranks after everything a shadow
+// can be drawn for, as a shadow distance does in Godot (directional_shadow_max_distance) and Unity (Shadow Distance).
+// And a glow body, a thing whose every mesh is an emitter (emitterGlow), does not cast while a light sits inside it:
+// a lamp's glass must not shadow its own bulb. With no light in it, it is a thing like any other. Depth
 // pipelines are pre-warmed (warmqueue.warmDepth) before castShadow flips, ≤2 flips per pass; a disable fades out and
 // castShadow clears when the fade ends (endFade). docs/research/shadow-depth-prewarm.md.
 
-const casters = new Map();   // id -> { obj, meshes, casting, warm, released, centre, radius }
+const casters = new Map();   // id -> { obj, meshes, casting, warm, released, centre, radius, glowBody }
 // how many things may cast at most: a Video setting; the governor sheds below it under load and climbs back to it
 export const CASTER_CHOICES = [6, 12, 24, 48, 96];
 let casterCeiling = (() => { try { const v = +localStorage.getItem('ew-shadow-casters'); return CASTER_CHOICES.includes(v) ? v : 24; } catch { return 24; } })();
@@ -574,9 +579,9 @@ export function registerCaster(id, obj) {
   const meshes = [];
   // start not casting (a realizer may hand meshes in casting): the pass flips only where want !== casting
   obj.traverse((o) => { if (o.isMesh) { o.castShadow = false; meshes.push(o); } });
-  // all emitter: not offered (a re-register drops the old record); partly emitter: offered whole, every mesh casts
-  if (meshes.length && meshes.every((m) => emitterGlow(m.material) > 0)) { releaseCaster(id); return; }
-  casters.set(id, { id, obj, meshes, casting: false, warm: 'none', released: false, fade: 0, ...localBounds(obj, meshes) });
+  // all emitter: a glow body (casterPass bars it while a light sits inside); partly emitter: every mesh casts
+  const glowBody = meshes.length > 0 && meshes.every((m) => emitterGlow(m.material) > 0);
+  casters.set(id, { id, obj, meshes, casting: false, warm: 'none', released: false, fade: 0, glowBody, ...localBounds(obj, meshes) });
 }
 export function releaseCaster(id) {
   const c = casters.get(id);
@@ -627,18 +632,45 @@ function stepFades(now) {
 }
 export const fadingCount = () => fading.size;
 
-// the apparent size, squared: (world radius / distance from the eye to the bounds' centre)²
-function sizeScore(c, eye) {
+// a caster's bounds now: the world centre into _at, the world radius returned
+const _at = new THREE.Vector3();
+function placeOf(c) {
   c.obj.updateWorldMatrix(true, false);
   const mw = c.obj.matrixWorld;
-  const at = c.centre ? _p.copy(c.centre).applyMatrix4(mw) : _p.setFromMatrixPosition(mw);
-  const r = c.radius * mw.getMaxScaleOnAxis();
-  return (r * r) / Math.max(1e-4, at.distanceToSquared(eye));   // 1 cm: the eye inside a thing ranks it first, finitely
+  if (c.centre) _at.copy(c.centre).applyMatrix4(mw); else _at.setFromMatrixPosition(mw);
+  return c.radius * mw.getMaxScaleOnAxis();
 }
+/** Can any shadow map hold a sphere here? The sun's map is a box around the camera in the light's frame (updateShadow
+ *  wrote its axes this frame; with cascades, their far distance plus the margin up-sun), and the casting slot's cube
+ *  reaches as far as its light does, while it draws. */
+function inShadowReach(at, r, eye) {
+  _rel.copy(at).sub(eye);
+  if (csm) { if (_rel.length() - r <= CSM_FAR + CSM_MARGIN) return true; }
+  else if (Math.abs(_rel.dot(_sx)) - r <= SHADOW_HALF && Math.abs(_rel.dot(_sy)) - r <= SHADOW_HALF && Math.abs(_rel.dot(_sz)) - r <= SHADOW_DEPTH) return true;
+  const pl = slots[SHADOW_SLOT];
+  return Boolean(pl && pl.intensity > 0 && castsNow(pl) && at.distanceTo(pl.position) - r <= (pl.distance || Infinity));
+}
+// how far outside a glow body's bounding sphere a light still counts as inside it (a bulb at the glass)
+const GLOW_BODY_MARGIN = 0.03;
+const _lightAt = [];
 function casterPass() {
   const eye = camera.getWorldPosition(_cw);
+  // where every requested light is, for the glow bodies (only when there is one to ask about)
+  let nLights = 0;
+  for (const c of casters.values()) if (c.glowBody) {
+    for (const q of requests.values()) worldPosOf(q, _lightAt[nLights++] ??= new THREE.Vector3());
+    break;
+  }
+  const holdsALight = (at, r) => { for (let i = 0; i < nLights; i++) if (_lightAt[i].distanceTo(at) <= r + GLOW_BODY_MARGIN) return true; return false; };
+  // the score: -1 barred (a glow body round its light), 0 out of every shadow map's reach, else the apparent size
+  // squared, (world radius / distance from the eye to the bounds' centre)²; 1 cm floor: the eye inside a thing ranks
+  // it first, finitely
   const ranked = [...casters.values()]
-    .map((c) => ({ c, s: sizeScore(c, eye) }))
+    .map((c) => {
+      const r = placeOf(c);
+      if (c.glowBody && holdsALight(_at, r)) return { c, s: -1 };
+      return { c, s: inShadowReach(_at, r, eye) ? (r * r) / Math.max(1e-4, _at.distanceToSquared(eye)) : 0 };
+    })
     .sort((a, b) => b.s - a.s);
   let enables = 0;
   // hysteresis: a caster keeps casting until its size score falls 1.25× below the last winner's (squared: 1.5625), so
@@ -646,7 +678,7 @@ function casterPass() {
   const edge = casterBudget === 0 ? Infinity : ranked.length >= casterBudget ? ranked[casterBudget - 1].s / 1.5625 : 0;
   for (let i = 0; i < ranked.length; i++) {
     const { c, s } = ranked[i];
-    const want = i < casterBudget || (c.casting && s >= edge && i < casterBudget + 4);
+    const want = s >= 0 && (i < casterBudget || (c.casting && s >= edge && i < casterBudget + 4));
     if (want === c.casting) continue;
     if (!want) {                          // the draw is shed when the fade-out ends
       c.casting = false;

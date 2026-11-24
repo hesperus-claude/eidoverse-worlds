@@ -108,6 +108,14 @@ console.log('OUT OF REACH — a thing no shadow map can hold takes no slot from 
   setCasterBudget(2);
   await passes();
   check('with budget to spare the far tower may cast too (it costs no draw: the shadow camera culls it)', casting().join() === 'crate,tower', JSON.stringify(casting()));
+  // a casting lamp reaches its own surroundings wherever the sun's box is: a statue beside a lamped body 150 m off
+  releaseCaster('crate'); setCasterBudget(1);
+  ids.push('statue');
+  thing('statue', [2, 1, -150], [[new THREE.SphereGeometry(1), plain()]]);
+  rig.requestLight('lamp:body:far:0', { keep: true, intensity: 8, range: 10, shadows: true, pos: [0, 1.5, -150] });
+  await passes();
+  check('a thing within the casting lamp\'s range is in reach, far outside the sun\'s box', casting().join() === 'statue', JSON.stringify(casting()));
+  rig.releaseLight('lamp:body:far:0');
   clear(); }
 
 console.log('PARTLY EMISSIVE — a lamp with a glowing bulb and a plain shade is offered, whole');
