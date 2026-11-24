@@ -449,14 +449,16 @@ const call = (name, a = {}) => handleToolDoor({ agent: ag, canPush: () => false,
 { const rid = new WorldAgent({ url: `ws://127.0.0.1:${port}/ws`, name: "Rid", world: "yard", avatar: "" });
   await rid.connect(); await tryUntil("Rid has joined", () => rid.joined, { ms: 3000, step: 50 });
   const t0 = rid.redial?.tries;
+  // G6-095: the backoff's own calls are recorded as they happen (next: a try counted, and its wait; reset: a join), not a
+  // transient count sampled between the drop and the rejoin
+  const ev: any[] = []; { const r = rid.redial, next = r.next.bind(r), reset = r.reset.bind(r);
+    r.next = (...a: any[]) => { const ms = next(...a); ev.push({ next: Math.round(ms), tries: r.tries }); return ms; }; r.reset = () => { reset(); ev.push({ reset: true }); }; }
   rid.ws.close(1000, "a drop");
   await tryUntil("Rid knows it was dropped", () => !rid.joined, { ms: 200, step: 10 });
-  // the try is counted when the close is handled, which a loaded runner may take a while to get to: watch for it, not a
-  // fixed pause. The redial waits ≥ a connect, so a 5 ms poll sees 1 before the rejoin resets it
-  await tryUntil("the drop counted one try", () => rid.redial?.tries === 1, { ms: 1500, step: 5 });
-  ok(t0 === 0 && rid.redial?.tries === 1, "AT15 a dropped agent's next dial is the shared backoff's (one try counted)", { t0, tries: rid.redial?.tries });
+  await tryUntil("the drop's dial is scheduled", () => ev.length, { ms: 1500, step: 10 });
+  ok(t0 === 0 && ev[0]?.tries === 1 && ev[0].next > 0, "AT15 a dropped agent's next dial is the shared backoff's (one try counted)", { t0, ev });
   await tryUntil("Rid gets back in by itself", () => rid.joined, { ms: 4000, step: 50 });
-  ok(rid.joined && rid.redial?.tries === 0, "AT15 …it gets back in by itself, and the join resets the backoff", { joined: rid.joined, tries: rid.redial?.tries });
+  ok(rid.joined && rid.redial?.tries === 0 && ev.length === 2 && ev[1]?.reset, "AT15 …it gets back in by itself, and the join resets the backoff", { joined: rid.joined, tries: rid.redial?.tries, ev });
   rid.close(); }
 
 // ---- AT16: upload puts a file in the world's store, and create places it ----
