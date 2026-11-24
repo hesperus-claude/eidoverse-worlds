@@ -25,6 +25,7 @@
 //   OR6  a directory another process holds (the server, running) takes the bind: its next save keeps it, its next sign-in finds it
 //   UN1  no owner bound to any account: the dry run, the report and the result warn, naming them and binding each by id, and the upgrade still runs
 //   UN2  one owner bound: no warning; UN3 no owner at all and no --claim: refused, naming --claim (every translation ends with an owner)
+//   UN5  the server's upgrade journal logs the warning with WORLDS_DIR= on each bind (the CLI's operatorWarning); the browser is sent it path-free
 //   UN4  the same worlds dir by two spellings (a symlink): the dry-run report hashes the same and holds no path; only the printed binds carry WORLDS_DIR
 //   OU1  world.ts owner-of: a signed-in account main's records bind to an owner is that owner ("bound"), whatever its name
 //   OU2  an owner main recorded NO account for is recognised by the account's name, any case ("name": provisional, R 10-28)
@@ -62,6 +63,7 @@ import * as UV from "../../client/lib/ui/upgradeview.js";
 const { claimWords } = UV;
 import { peopleOf, bansOf } from "../../tools/import-v1/world.ts";
 import { shellWord } from "../../server/oldworlds.ts";
+import * as UP from "../../server/upgrade.ts";
 
 let pass = 0, fail = 0;
 const ok = (cond: any, what: string, detail?: any) => { if (cond) { pass++; console.log(`  ok  ${what}`); } else { fail++; console.log(`  FAIL ${what}${detail !== undefined ? ` — ${JSON.stringify(detail)?.slice(0, 700)}` : ""}`); } };
@@ -155,6 +157,12 @@ const commonsShape: [string, string, any][] = [["world", "grant", { id: "antra",
   const named = (w: any) => typeof w === "string" && /no owner of "attic" is bound to an account/.test(w) && /nobody who signs in is its owner/.test(w) && ["fable", "mica"].every((n) => new RegExp(`\\b${n}\\b`).test(w)) && /(?:^|[(; ])bun tools\/operator\/operator-repair\.ts bind attic u-/.test(w) && !w.includes(root) && !/bind attic <name>/.test(w) && !/Digi_Rat/.test(w);
   row("UN1", () => ok(named(a.report?.ownerWarning) && a.dry.out.includes(`WARNING: ${a.report.ownerWarning.replaceAll("bun tools/operator", `WORLDS_DIR=${shellWord(W)} bun tools/operator`)}`) && a.up.code === 0 && fs.existsSync(path.join(W, "attic", "world.jsonl")) && named(a.result?.ownerWarning) && /^WARNING: .*"attic"/m.test(a.up.out),
     "UN1 no owner bound to any account: the dry run, the approved report and the upgrade's result warn, naming the owners (not the builder) and the bind; the upgrade still runs", { w: a.report?.ownerWarning, r: a.result?.ownerWarning, code: a.up.code }));
+  // UN5: what server/upgrade.ts logs (the operator pastes it on the host) and what it sends the world's owner, from the CLI's own --json lines
+  const rj = tagged(a.dry.out, "report-json"), paste = `(WORLDS_DIR=${shellWord(W)} bun tools/operator/operator-repair.ts bind attic u-`;
+  const wr = UP.upgradeWarning?.(rj?.report?.ownerWarning, rj?.operatorWarning), wu = UP.upgradeWarning?.(a.result?.ownerWarning, a.result?.operatorWarning);
+  row("UN5", () => ok(!!wr && !!wu && [wr, wu].every((w) => w.journal.includes(paste) && named(w.sent) && !w.sent.includes("WORLDS_DIR=")) && wr.sent === rj.report.ownerWarning
+    && UP.upgradeWarning("", "x") === null && UP.upgradeWarning(null, undefined) === null,
+    "UN5 the server's journal line of the review's and the upgrade's warning carries WORLDS_DIR= on each bind (the CLI's operatorWarning); the warning sent to the browser is the path-free one", { wr, wu, op: rj?.operatorWarning ?? null }));
   const no = (o: string) => /"shed" has no owner, and every translation ends with one: translate it with --claim and EIDO_UPGRADER_ACCOUNT=/.test(o);
   row("UN3", () => ok(s.dry.code !== 0 && no(s.dry.out) && s.up.code !== 0 && no(s.up.out) && !fs.existsSync(path.join(W, "shed", "world.jsonl")) && fs.existsSync(path.join(W, "shed", "log.jsonl")),
     "UN3 a world with no owner and no --claim: the dry run and the upgrade refuse, naming --claim and EIDO_UPGRADER_ACCOUNT; nothing is written (LEGACY-PINS item 9)", { dry: s.dry.out.slice(-300), up: s.up.out.slice(-300), code: s.up.code }));

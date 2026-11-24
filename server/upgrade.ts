@@ -72,6 +72,9 @@ async function takeUpgrade({ c, ws }: Ctx, msg: Any, type: string, shape?: () =>
   const as = operator ? "operator" : `owner (${owner!.recognised})`;
   return { id, world, account: account!, name: who?.name ?? "", refuse, as, owner: owner?.recognised ? { recognised: owner.recognised, name: owner.owner } : null };
 }
+/** A CLI answer's no-owner-bound warning: the journal's carries WORLDS_DIR= on each bind (operatorWarning: the operator pastes it on
+ *  the host); the one sent to the browser is the path-free one (the world's owner may not be an operator). null: no warning. */
+export const upgradeWarning = (plain: string | null | undefined, operator: string | null | undefined) => plain ? { journal: operator || plain, sent: plain } : null;
 const claimEnv = (a: { account: string; name: string }) => ({ EIDO_UPGRADER_ACCOUNT: a.account, EIDO_UPGRADER_NAME: a.name });
 
 export const UPGRADE_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
@@ -81,8 +84,9 @@ export const UPGRADE_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
       const got = r.accepted ? tagged(r.out, "report-json") : null;
       if (!got) { a.refuse("failed", `the dry run didn't finish${r.accepted ? "" : ` (${r.why})`}: ${(r.err || r.out).trim().slice(-1200)}`); return; }
       console.log(`[upgrade] ${a.world}: reviewed by ${a.account} as ${a.as} (report ${got.hash}${got.report?.refused ? ", refused" : ""})${r.receipt ? `; ${FORCED}` : ""}`);
-      if (got.report?.ownerWarning) console.log(`[upgrade] WARNING ${a.world}: ${got.report.ownerWarning}`);
-      ctx.ws.send(JSON.stringify({ type, id: a.id, ok: true, world: a.world, report: got.report, hash: got.hash, ...(a.owner ? { owner: a.owner } : {}), ...(got.report?.ownerWarning ? { warning: got.report.ownerWarning } : {}) }));
+      const w = upgradeWarning(got.report?.ownerWarning, got.operatorWarning);
+      if (w) console.log(`[upgrade] WARNING ${a.world}: ${w.journal}`);
+      ctx.ws.send(JSON.stringify({ type, id: a.id, ok: true, world: a.world, report: got.report, hash: got.hash, ...(a.owner ? { owner: a.owner } : {}), ...(w ? { warning: w.sent } : {}) }));
     }).catch((x) => a.refuse("failed", String(x?.message ?? x))).finally(() => running.delete(a.world)); });
   },
   "world-upgrade": (ctx, msg) => {
@@ -101,9 +105,10 @@ export const UPGRADE_MESSAGES: Record<string, (ctx: Ctx, msg: Any) => void> = {
       if (!got) { a.refuse(/is not the one that was approved/.test(said) ? "stale" : "refused", said.slice(-1500)); console.log(`[upgrade] ${a.world}: upgrade by ${a.account} refused${r.receipt ? `; ${FORCED}` : ""}`); return; }
       // the world is on disk in this protocol now: the next join opens it (nothing of it was ever loaded while it was old)
       console.log(`[upgrade] ${a.world}: upgraded by ${a.account} as ${a.as} (report ${got.report}); backup ${got.backup}${got.claimed ? `; it had no owner: ${a.account} claimed it` : ""}${r.receipt ? `; ${FORCED}` : ""}`);
-      if (got.ownerWarning) console.log(`[upgrade] WARNING ${a.world}: ${got.ownerWarning}`);
+      const w = upgradeWarning(got.ownerWarning, got.operatorWarning);
+      if (w) console.log(`[upgrade] WARNING ${a.world}: ${w.journal}`);
       ctx.ws.send(JSON.stringify({ type, id: a.id, ok: true, world: a.world, backup: got.backup, report: got.report, rollback: got.rollback, people: got.people ?? [],
-        ...(a.owner ? { owner: a.owner } : {}), ...(got.claimed ? { claimed: true, owned: "You're now this world's owner." } : {}), ...(got.ownerWarning ? { warning: got.ownerWarning } : {}) }));
+        ...(a.owner ? { owner: a.owner } : {}), ...(got.claimed ? { claimed: true, owned: "You're now this world's owner." } : {}), ...(w ? { warning: w.sent } : {}) }));
     }).catch((x) => a.refuse("failed", String(x?.message ?? x))).finally(() => running.delete(a.world)); });
   },
 };

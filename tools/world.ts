@@ -132,7 +132,8 @@ function dryRun(D: string, name: string, words = name) {   // words: the command
   for (const b of report.bans ?? []) console.log(b.account ? `banned ${b.name}: holds against their account (${b.account}:…, from ${b.from})${b.check ? `; check it: ${b.check}` : ""}` : `banned ${b.name} has no account yet (${b.why}), so the ban holds against no one who signs in: bind with ${forOperator(b.bind)}`);
   if (report.ownerWarning) console.log(`WARNING: ${forOperator(report.ownerWarning)}`);
   console.log(`report-hash ${hash}`);
-  if (rest.includes("--json")) console.log(`report-json ${JSON.stringify({ report, hash })}`);   // one line for a program (the server's world-upgrade-review)
+  // one line for a program (the server's world-upgrade-review); operatorWarning, beside the hashed report, is for the server's journal
+  if (rest.includes("--json")) console.log(`report-json ${JSON.stringify({ report, hash, ...(report.ownerWarning ? { operatorWarning: forOperator(report.ownerWarning) } : {}) })}`);
   if (report.refused) { console.error(report.refused); process.exit(1); }
   console.log(`to translate: approve exactly this report. translate ${words} --no-founder-key --approved ${hash} --operator-only-no-owner${CLAIM ? " --claim" : ""}   (no owner can sign: ${NO_FOUNDER}; this host's operator key countersigns, the act records that no owner was attested, and tier 0 stays empty)`);
 }
@@ -260,7 +261,8 @@ function translateInPlace(name: string, approval: Approval, approvedSource: { si
   console.log(`approval: report ${approval.report} ${approvalWords(approval)}, recorded in world.jsonl as the system's translation-approved act. `
     + `${MANIFEST} records what the swap did; \`rollback ${name}\` undoes it.`);
   console.log(`backup: ${backup!.dir} (${backup!.files} file(s), ${backup!.bytes} bytes, each verified against its SHA256SUMS before anything moved; nothing writes to it again, and rollback leaves it)`);
-  if (rest.includes("--json")) console.log(`result-json ${JSON.stringify({ world: name, backup: backup!.dir, report: approval.report, people: r!.people, ownerWarning: ownerWarning(name, r!.people), ...(r!.claimed ? { claimed: { name: r!.claimed.name, account: r!.claimed.account } } : {}), rollback: `WORLDS_DIR=${shellWord(WORLDS_DIR)} bun tools/world.ts rollback ${name}` })}`);
+  // operatorWarning (WORLDS_DIR= on each bind) is for the server's journal; ownerWarning, path-free, is what it sends the browser
+  if (rest.includes("--json")) { const w = ownerWarning(name, r!.people); console.log(`result-json ${JSON.stringify({ world: name, backup: backup!.dir, report: approval.report, people: r!.people, ownerWarning: w, ...(w ? { operatorWarning: forOperator(w) } : {}), ...(r!.claimed ? { claimed: { name: r!.claimed.name, account: r!.claimed.account } } : {}), rollback: `WORLDS_DIR=${shellWord(WORLDS_DIR)} bun tools/world.ts rollback ${name}` })}`); }
 }
 
 /** `rollback <world>`: undo an in-place translation from its manifest. The kept originals go back under their names
