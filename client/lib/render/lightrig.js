@@ -539,12 +539,12 @@ function updateShadow() {
 // hysteresis edge, casterPass), the rest keep receiving. Two things come before size. A thing no shadow map can hold
 // (outside the sun's shadow box, and out of the casting lamp's range: inShadowReach) ranks after everything a shadow
 // can be drawn for, as a shadow distance does in Godot (directional_shadow_max_distance) and Unity (Shadow Distance).
-// And a glow body, a thing whose every mesh is an emitter (emitterGlow), does not cast while a light sits inside it:
-// a lamp's glass must not shadow its own bulb. With no light in it, it is a thing like any other. Depth
+// And a glow body, a thing whose every mesh is an emitter (emitterGlow, read each pass), does not cast while a light
+// sits inside it: a lamp's glass must not shadow its own bulb. With no light in it, it is a thing like any other. Depth
 // pipelines are pre-warmed (warmqueue.warmDepth) before castShadow flips, ≤2 flips per pass; a disable fades out and
 // castShadow clears when the fade ends (endFade). docs/research/shadow-depth-prewarm.md.
 
-const casters = new Map();   // id -> { obj, meshes, casting, warm, released, centre, radius, glowBody }
+const casters = new Map();   // id -> { obj, meshes, casting, warm, released, centre, radius }
 // how many things may cast at most: a Video setting; the governor sheds below it under load and climbs back to it
 export const CASTER_CHOICES = [6, 12, 24, 48, 96];
 let casterCeiling = (() => { try { const v = +localStorage.getItem('ew-shadow-casters'); return CASTER_CHOICES.includes(v) ? v : 24; } catch { return 24; } })();
@@ -579,9 +579,7 @@ export function registerCaster(id, obj) {
   const meshes = [];
   // start not casting (a realizer may hand meshes in casting): the pass flips only where want !== casting
   obj.traverse((o) => { if (o.isMesh) { o.castShadow = false; meshes.push(o); } });
-  // all emitter: a glow body (casterPass bars it while a light sits inside); partly emitter: every mesh casts
-  const glowBody = meshes.length > 0 && meshes.every((m) => emitterGlow(m.material) > 0);
-  casters.set(id, { id, obj, meshes, casting: false, warm: 'none', released: false, fade: 0, glowBody, ...localBounds(obj, meshes) });
+  casters.set(id, { id, obj, meshes, casting: false, warm: 'none', released: false, fade: 0, ...localBounds(obj, meshes) });
 }
 export function releaseCaster(id) {
   const c = casters.get(id);
@@ -652,15 +650,15 @@ function inShadowReach(at, r, eye) {
 }
 // how far outside a glow body's bounding sphere a light still counts as inside it (a bulb at the glass)
 const GLOW_BODY_MARGIN = 0.03;
+/** All emitter (partly emitter: every mesh casts). Read each pass, not at registration: a thing's surface can arrive
+ *  after its mesh (the material component lands on a later pass), and a lamp can be painted glowing in edit mode. */
+const isGlowBody = (c) => c.meshes.length > 0 && c.meshes.every((m) => emitterGlow(m.material) > 0);
 const _lightAt = [];
 function casterPass() {
   const eye = camera.getWorldPosition(_cw);
-  // where every requested light is, for the glow bodies (only when there is one to ask about)
+  // where every requested light is, for the glow bodies
   let nLights = 0;
-  for (const c of casters.values()) if (c.glowBody) {
-    for (const q of requests.values()) worldPosOf(q, _lightAt[nLights++] ??= new THREE.Vector3());
-    break;
-  }
+  for (const q of requests.values()) worldPosOf(q, _lightAt[nLights++] ??= new THREE.Vector3());
   const holdsALight = (at, r) => { for (let i = 0; i < nLights; i++) if (_lightAt[i].distanceTo(at) <= r + GLOW_BODY_MARGIN) return true; return false; };
   // the score: -1 barred (a glow body round its light), 0 out of every shadow map's reach, else the apparent size
   // squared, (world radius / distance from the eye to the bounds' centre)²; 1 cm floor: the eye inside a thing ranks
@@ -668,7 +666,7 @@ function casterPass() {
   const ranked = [...casters.values()]
     .map((c) => {
       const r = placeOf(c);
-      if (c.glowBody && holdsALight(_at, r)) return { c, s: -1 };
+      if (nLights && holdsALight(_at, r) && isGlowBody(c)) return { c, s: -1 };
       return { c, s: inShadowReach(_at, r, eye) ? (r * r) / Math.max(1e-4, _at.distanceToSquared(eye)) : 0 };
     })
     .sort((a, b) => b.s - a.s);
