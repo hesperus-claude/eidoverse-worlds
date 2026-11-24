@@ -92,7 +92,19 @@ await passes();
   rig.requestLight('complight:lantern', { authored: true, intensity: 20, range: 9, pos: [2, 3, -4] });
   await passes(); await passes();
   check('…and stops again when a light is put back inside', list().lantern?.casting === false, JSON.stringify(list().lantern));
-  rig.releaseLight('complight:lantern'); }
+  rig.releaseLight('complight:lantern');
+  // Seen live 11-23 in the lab's furnished room: a lamp's glow sphere got its emissive surface AFTER it was registered
+  // (the material component lands on a later pass than the mesh), was never known as a glow body, and cast: the 40 cd
+  // lamp inside it lit nothing (3.1 stops under the path-traced reference on the wall it should light).
+  ids.push('late');
+  const late = thing('late', [3, 3, -6], [[new THREE.SphereGeometry(0.2), plain()]]);
+  rig.requestLight('complight:late', { authored: true, intensity: 40, range: 14, pos: [3, 3, -6] });
+  await passes();
+  check('(the setup) a plain sphere round a light casts', list().late?.casting === true, JSON.stringify(list().late));
+  late.children[0].material = glowing();
+  await passes(); await passes();
+  check('given a glowing surface after it was registered, it stops casting round its light', list().late?.casting === false && late.children[0].castShadow === false, JSON.stringify(list().late));
+  rig.releaseLight('complight:late'); }
 clear();
 
 console.log('OUT OF REACH — a thing no shadow map can hold takes no slot from one that casts a visible shadow');
