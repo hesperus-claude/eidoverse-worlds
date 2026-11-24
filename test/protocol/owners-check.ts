@@ -49,7 +49,7 @@
 // @ts-nocheck
 import fs from "node:fs";
 import path from "node:path";
-import { ENGINE, scratch } from "../gate/common.ts";
+import { ENGINE, scratch, linkInto } from "../gate/common.ts";
 import { mainKnowledge } from "../../server/mainknew.ts";
 import { directoryAt } from "../../server/directory.ts";
 import { directoryFileIn } from "../../server/keyfiles.ts";
@@ -168,7 +168,7 @@ const commonsShape: [string, string, any][] = [["world", "grant", { id: "antra",
     "UN3 a world with no owner and no --claim: the dry run and the upgrade refuse, naming --claim and EIDO_UPGRADER_ACCOUNT; nothing is written (LEGACY-PINS item 9)", { dry: s.dry.out.slice(-300), up: s.up.out.slice(-300), code: s.up.code }));
   // UN4: the report is provenance a reader re-derives later, so it carries no spelling of this host's worlds dir
   v1(W, "loft", [["world", "grant", { id: "fable", role: "owner" }], ["fable", "grant", { id: "Nemo", role: "builder" }], ["fable", "say", { text: "hi" }]]);
-  const alias = path.join(root, "alias"); fs.symlinkSync(W, alias);
+  const alias = path.join(root, "alias"); linkInto(W, alias);
   const d1 = tool(root, ["translate", "--dry-run", "--no-founder-key", "--json", "--", "loft"]), d2 = tool(root, ["translate", "--dry-run", "--no-founder-key", "--json", "--", "loft"], { WORLDS_DIR: alias });
   const j1 = tagged(d1.out, "report-json"), j2 = tagged(d2.out, "report-json");
   row("UN4", () => ok(j1?.hash && j1.hash === j2?.hash && !JSON.stringify(j1.report).includes(root) && j1.report.ownerWarning?.includes("bun tools/operator/operator-repair.ts bind loft u-")
