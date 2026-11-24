@@ -24,9 +24,9 @@ export function bootIncarnation(dir: string): string {
   const file = join(dir, "relay-incarnation");
   const prev = existsSync(file) ? readFileSync(file, "utf8").trim() : null;
   incarnation = nextIncarnation(prev, crypto.randomUUID().slice(0, 8));
-  const made = !existsSync(dir);
-  replaceDurable(file, incarnation);   // makes a missing dir (mkdirDurable): said, so a typo in RELAY_STATE_DIR shows
-  if (made) console.log(`[relay] created ${dir} for the relay incarnation (RELAY_STATE_DIR or OPT_DIR)`);
+  // main refused a missing dir at boot (atomicWrite's ENOENT); replaceDurable would make one, so a typo in RELAY_STATE_DIR is refused here
+  if (!existsSync(dir)) throw new Error(`the relay incarnation's directory ${dir} doesn't exist (RELAY_STATE_DIR, or OPT_DIR when it is unset): create it, or fix the path`);
+  replaceDurable(file, incarnation);
   return incarnation;
 }
 

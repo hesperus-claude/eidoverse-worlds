@@ -35,11 +35,11 @@ t("lost-file restart cannot equal prev (entropy differs)",
     S.check("the advance is fsynced (file and its directory), not only renamed", synced >= 2 * (process.platform === "win32" ? 1 : 2), `${synced} fsyncs for 2 boots`);
   } finally { (fs as any).fsyncSync = real; fs.rmSync(dir, { recursive: true, force: true }); }
 }
-{ // a RELAY_STATE_DIR that doesn't exist is made, and said once in the log (a typo in the path shows up); one that does isn't
+{ // a RELAY_STATE_DIR that doesn't exist refuses the boot, naming it, and is not made (main's refusal: a typo never makes a new dir)
   const base = fs.mkdtempSync(join(tmpdir(), "incarnation-mk-")), fresh = join(base, "no", "such");
-  const said: string[] = [], log = console.log; console.log = (...a: unknown[]) => { said.push(a.join(" ")); };
-  try { bootIncarnation(fresh); bootIncarnation(fresh); } finally { console.log = log; fs.rmSync(base, { recursive: true, force: true }); }
-  S.check("a missing incarnation dir is created and named in one log line", said.filter((l) => l.includes(fresh)).length === 1, said);
+  let why = "";
+  try { try { bootIncarnation(fresh); } catch (e) { why = String((e as Error).message); } S.check("a missing incarnation dir refuses the boot, naming it, and is not created", why.includes(fresh) && /RELAY_STATE_DIR/.test(why) && !fs.existsSync(join(base, "no")), { why, made: fs.existsSync(join(base, "no")) }); }
+  finally { fs.rmSync(base, { recursive: true, force: true }); }
 }
 
 // ── audibility: three independent states (amendment 3) ──────────────────────
