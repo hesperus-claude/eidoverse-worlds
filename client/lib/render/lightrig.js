@@ -273,7 +273,8 @@ export const glowScale = () => dayGlow();
 // lights nothing on screen), then score with an incumbent bonus (hysteresis),
 // then key (stable tiebreak). Recomputed when the request set changes, the
 // camera moves, a dark mirror lights, or 600ms passes (which is what picks up
-// a turn in place) — slot WRITES happen every frame regardless.
+// a turn in place) — slot WRITES happen every frame regardless, and a slot
+// whose request changed crosses through dark (handOver).
 
 let slotCap = N_SLOTS;
 export function setSlotCap(n) {
@@ -640,6 +641,28 @@ function writeSpots() {
   }
 }
 
+// ---- the hand-over: a slot that changes lamps crosses through dark. The ranking follows the view, so a turn of the head
+// changes who burns; a slot that swapped lamps in one frame would pop one pool of light off and another on. Each slot
+// draws `shown` at `gain`: when the request assigned to it changes, the old lamp dims out over HANDOVER_MS, then the
+// new one comes up over the same. (Godot fades a light out toward its own distance limit, Light3D.distance_fade_*;
+// here the limit is the pool, so the fade is at the slot.) Uniform writes only.
+export const HANDOVER_MS = 150;
+const shown = new Array(N_SLOTS).fill(null);
+const gain = new Array(N_SLOTS).fill(0);
+let lastWrite = 0;
+/** The request slot i draws this frame, its gain stepped by dt. A strike takes and leaves its slot at once (it cannot
+ *  wait, and dark it has nothing to fade); so does a lamp that is gone (released: its host may be gone with it). */
+function handOver(i, want, dt) {
+  let r = shown[i];
+  if (r !== want) {
+    if (!r || r.mirror || want?.mirror || requests.get(r.key) !== r) { r = shown[i] = want; gain[i] = 0; }
+    else if ((gain[i] -= dt / HANDOVER_MS) <= 0) { r = shown[i] = want; gain[i] = 0; }
+    else return r;   // still dimming the old lamp
+  }
+  if (r) gain[i] = Math.min(1, gain[i] + dt / HANDOVER_MS);   // (a mirror's slot is written verbatim: its gain is never read)
+  return r;
+}
+
 /** Call once per frame. Reassigns when needed; writes every slot's uniforms. */
 export function updateRig(now) {
   updateShadow();
@@ -657,8 +680,10 @@ export function updateRig(now) {
   writeSpots();
   const lit = new Array(N_SLOTS).fill(null);
   for (const r of requests.values()) if (r.slot >= 0 && !r.spot) lit[r.slot] = r;
+  const dt = lastWrite ? Math.max(0, now - lastWrite) : 0;
+  lastWrite = now;
   for (let i = 0; i < N_SLOTS; i++) {
-    const pl = slots[i], r = lit[i];
+    const pl = slots[i], r = handOver(i, lit[i], dt);
     if (!r) { pl.intensity = 0; continue; }
     if (r.mirror) {
       // an adopted foreign light: upstream drives its object, the slot copies it verbatim
@@ -672,7 +697,7 @@ export function updateRig(now) {
     }
     worldPosOf(r, pl.position);
     pl.color.set(r.color);   // Color.set takes a Color, a hex, or a string
-    pl.intensity = r.intensity * (r.dayAware ? dayGlow() : 1);
+    pl.intensity = r.intensity * (r.dayAware ? dayGlow() : 1) * gain[i];
     pl.distance = r.range;
     pl.decay = r.decay;
     trackShadowFar(pl);
@@ -716,6 +741,7 @@ export const rigDebug = () => ({
   })(),
   slotState: slots.map((pl, i) => ({
     i, casting: pl.castShadow, intensity: +pl.intensity.toFixed(3),
+    shown: shown[i]?.key ?? null,   // the request the slot is drawing: during a hand-over, still the old one
   })),
   _slots: slots,   // the live lights, for probes and test/client/shadow-fade-test.mjs; the fields above are the stable surface
   casters: casters.size, casterBudget,
