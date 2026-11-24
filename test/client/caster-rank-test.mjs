@@ -8,7 +8,10 @@
 // The contract:
 //   - things rank by APPARENT size (bounding radius / distance, roughly the angle they subtend), not distance alone;
 //   - a thing whose every mesh is an emitter (attachLamps' test: a flat emissive colour above 0.5, or a map driven above
-//     strength 1) is not offered: a glowing bulb's shadow is never wanted. A thing only partly emissive is offered;
+//     strength 1) is not offered WHILE A LIGHT SITS INSIDE IT: a lamp's glass must not shadow its own bulb. With no light
+//     in it, it is a thing like any other (a glowing crystal under the sun casts). A thing only partly emissive is offered;
+//   - a thing out of every shadow map's reach (outside the sun's shadow box, and no casting lamp reaches it) ranks after
+//     everything a shadow can be drawn for;
 //   - the radius is measured once, at registration, in the thing's own frame, so scaling it afterwards still counts;
 //   - the hysteresis is a ratio on that score (a caster keeps casting within 1.25x of the edge).
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
@@ -68,14 +71,44 @@ await passes();
   check('no 3 cm bead takes a slot from them', !on.some((id) => id.startsWith('bead')), JSON.stringify(on));
   check('no 3 cm pebble takes a slot from them (size ranks, not only the emitter rule)', !on.some((id) => id.startsWith('pebble')), JSON.stringify(on)); }
 
-console.log('EMITTERS — a thing whose every mesh glows is not offered at all');
+console.log('GLOW BODIES — an all-emitter thing with a light inside it is not offered; one with none is a thing like any other');
 setCasterBudget(24);
+ids.push('lantern', 'monolith');
+// a lantern glass with its point light at its centre (the lab's street lamp): the glass would shadow its own light
+thing('lantern', [2, 3, -4], [[new THREE.SphereGeometry(0.25), glowing()]]);
+rig.requestLight('complight:lantern', { authored: true, intensity: 20, range: 9, pos: [2, 3, -4] });
+// a 2 m glowing crystal with no light in it: under the sun it is a solid thing and its missing shadow reads as floating
+thing('monolith', [-2, 1, -5], [[new THREE.BoxGeometry(1, 2, 1), glowing()]]);
 await passes();
 { const l = list();
-  check('a bead is not in the caster list', !Object.keys(l).some((id) => id.startsWith('bead')), JSON.stringify(Object.keys(l)));
-  check('…and never casts, with budget to spare', !casting().some((id) => id.startsWith('bead')), JSON.stringify(casting()));
-  check('the pebbles do cast once the budget has room (the rule is about glow, not size)', l.pebble0?.casting === true && l.pebble1?.casting === true, JSON.stringify(casting())); }
+  check('the lantern glass around its own light never casts, with budget to spare', l.lantern?.casting !== true, JSON.stringify(l.lantern));
+  check('a glowing thing with no light inside it casts like any other thing', l.monolith?.casting === true, JSON.stringify(l.monolith));
+  check('a bead with no light in it casts once the budget has room (size ranks it, glow does not bar it)', l.bead0?.casting === true, JSON.stringify(l.bead0));
+  check('the pebbles do cast once the budget has room', l.pebble0?.casting === true && l.pebble1?.casting === true, JSON.stringify(casting()));
+  // the light moves out of the glass (or the lamp is switched off: models.js releases the request): the glass is a thing again
+  rig.releaseLight('complight:lantern');
+  await passes();
+  check('once no light sits in it the lantern glass casts', list().lantern?.casting === true, JSON.stringify(list().lantern));
+  rig.requestLight('complight:lantern', { authored: true, intensity: 20, range: 9, pos: [2, 3, -4] });
+  await passes(); await passes();
+  check('…and stops again when a light is put back inside', list().lantern?.casting === false, JSON.stringify(list().lantern));
+  rig.releaseLight('complight:lantern'); }
 clear();
+
+console.log('OUT OF REACH — a thing no shadow map can hold takes no slot from one that casts a visible shadow');
+{ setCasterBudget(1);
+  ids.push('tower', 'crate');
+  // The sun's shadow map is a box around the camera (46 m to each side, lightrig.js SHADOW_HALF): a tower 200 m off
+  // draws into no map, whatever the budget says. It subtends more than the crate (40/200 = 0.2 against 0.4/6 = 0.067).
+  thing('tower', [0, 0, -200], [[new THREE.SphereGeometry(40), plain()]]);
+  thing('crate', [0, 0.4, -6], [[new THREE.SphereGeometry(0.4), plain()]]);
+  await passes();
+  check('the crate inside the sun\'s shadow box takes the one slot', casting().includes('crate'), JSON.stringify(casting()));
+  check('the tower 200 m away does not hold it', !casting().includes('tower'), JSON.stringify(casting()));
+  setCasterBudget(2);
+  await passes();
+  check('with budget to spare the far tower may cast too (it costs no draw: the shadow camera culls it)', casting().join() === 'crate,tower', JSON.stringify(casting()));
+  clear(); }
 
 console.log('PARTLY EMISSIVE — a lamp with a glowing bulb and a plain shade is offered, whole');
 { ids.push('lamp');
