@@ -31,7 +31,8 @@ const v1 = (...rest: any[]) => [{ seq: 0, ts: 1, actor: 'world', verb: 'genesis'
 // ===================================================================== light: +decay, −shadows, day → daytime, on thing
 await tryRow('LI', async () => {
   const L = COMPONENTS.light;
-  check('LI1 light: on thing; fields kind, color, intensity, range, angle, inner, decay, important, daytime (no shadows, no day)', L.on === 'thing' && keys(L.fields) === keys({ kind: 1, color: 1, intensity: 1, range: 1, angle: 1, inner: 1, decay: 1, important: 1, daytime: 1 }), [L.on, Object.keys(L.fields)]);
+  check('LI1 light: on thing; fields kind, color, intensity, range, angle, inner, decay, important, daytime, shadows (no day)', L.on === 'thing' && keys(L.fields) === keys({ kind: 1, color: 1, intensity: 1, range: 1, angle: 1, inner: 1, decay: 1, important: 1, daytime: 1, shadows: 1 }), [L.on, Object.keys(L.fields)]);
+  check('LI1 …shadows is a bool with no default (absent = no shadows: a new light stores none), its meaning written, and no longer dropped', L.fields.shadows === 'bool' && !('shadows' in (L.defaults ?? {})) && !!L.absentMeans?.shadows && !!L.docs?.shadows && /shadows/.test(L.help ?? '') && !('shadows' in (L.dropped ?? {})), [L.defaults, L.absentMeans?.shadows, L.docs?.shadows, L.dropped]);
   check('LI1 …decay default 2 (inverse square: glTF, Godot), 0..4; daytime dim | full, default dim; what an older value without them meant is written', L.defaults?.decay === 2 && L.ranges?.decay?.min === 0 && L.ranges?.decay?.max === 4 && JSON.stringify(L.enums?.daytime) === '["dim","full"]' && L.defaults?.daytime === 'dim' && /1\.7/.test(L.absentMeans?.decay ?? '') && !!L.absentMeans?.daytime, [L.defaults, L.enums, L.absentMeans]);
   const W = scratchWorld('w2r-light').seed({ lamp: { pos: [0, 2, 0] }, porch: { pos: [3, 2, 0] } });
   const C = (id: string) => W.state().entities[id].c;
@@ -42,10 +43,13 @@ await tryRow('LI', async () => {
   r = W.call('set', { id: 'porch', component: 'light', value: { daytime: 'full' } });
   check('LI3 …daytime full is taken', r.ok && C('porch').light.daytime === 'full', [r.refused, C('porch')?.light]);
   r = W.call('set', { id: 'lamp', component: 'light', value: { shadows: true } });
-  check('LI4 shadows is refused (read by nothing; it returns when the rig reads it)', code(r) === 'schema' && /shadows/.test(r.refused?.reason ?? ''), r.refused);
+  check('LI4 shadows is stored as written (the rig reads it: the world says which lights cast)', r.ok && C('lamp').light.shadows === true, [r.refused, C('lamp')?.light]);
+  r = W.call('set', { id: 'lamp', component: 'light', value: { shadows: 'yes' } });
+  check('LI4 …and a non-bool is refused', !r.ok && /shadows/.test(r.refused?.reason ?? ''), [code(r), r.refused]);
   r = W.call('set', { id: '@world', component: 'light', value: {} });
   check('LI5 a light on @world is refused (on: thing)', code(r) === 'thing-only', r.refused);
   check('LI6 the old spelling day: false is read no more (S6): dim, as an absent daytime (components-corpus owns lightOf\'s defaults)', lightOf({ light: { day: false } })?.daytime === 'dim', lightOf({ light: { day: false } }));
+  check('LI13 lightOf carries shadows to the rig as the owner wrote it: true casts; absent, false or not a bool does not', lightOf({ light: { shadows: true } })?.shadows === true && lightOf({ light: {} })?.shadows === false && lightOf({ light: { shadows: false } })?.shadows === false && lightOf({ light: { shadows: 'yes' } })?.shadows === false && lightOf({ light: { shadows: 1 } })?.shadows === false, [lightOf({ light: { shadows: true } }), lightOf({ light: { shadows: 'yes' } })]);
   check('LI7 an unknown kind is that light absent (one rule with isMeshBag)', lightOf({ light: { kind: 'area' } }) === null && !isMeshBag({ shape: 'torus' }), lightOf({ light: { kind: 'area' } }));
   check('LI7b …but an unknown daytime drops only daytime: the light is there, at its meaning of absence (dim), with the rest read (PROTOCOL §9.2: a field that says what the component is goes whole; any other unknown member drops the field)', lightOf({ light: { daytime: 'twilight', intensity: 5 } })?.daytime === 'dim' && lightOf({ light: { daytime: 'twilight', intensity: 5 } })?.intensity === 5, lightOf({ light: { daytime: 'twilight', intensity: 5 } }));
   check('LI8 the realizer passes decay and daytime to the rig', /decay: L\.decay/.test(read('client/lib/realize/models.js')) && /L\.daytime/.test(read('client/lib/realize/models.js')), '');

@@ -123,6 +123,11 @@ const settle = async () => { for (let i = 0; i < 6; i++) { M.residencySweep?.();
   // live
   live('set', { id: 'pivot', component: 'light', value: { intensity: 2, color: 0x00ff00 } });
   check('live: a changed light component updates the request in place (important cleared, colour, intensity)', rq('pivot')?.intensity === 2 && rq('pivot').keep === false && rq('pivot').color === 0x00ff00 && rq('pivot').obj === piv, JSON.stringify({ ...rq('pivot'), obj: !!rq('pivot')?.obj }));
+  check('live: a light that does not ask for shadows asks the rig for none', rq('pivot')?.shadows === false, JSON.stringify({ shadows: rq('pivot')?.shadows }));
+  live('set', { id: 'pivot', component: 'light', value: { intensity: 2, color: 0x00ff00, shadows: true } });
+  check('live: light.shadows reaches the rig\'s request (the owner says which lights cast)', rq('pivot')?.shadows === true && rq('pivot').obj === piv, JSON.stringify({ shadows: rq('pivot')?.shadows }));
+  live('set', { id: 'pivot', component: 'light', value: { intensity: 2, color: 0x00ff00 } });
+  check('…and a light that stops asking stops asking the rig', rq('pivot')?.shadows === false, JSON.stringify({ shadows: rq('pivot')?.shadows }));
   live('set', at('pivot', [5, 5, 5]));
   check('live: moving the Empty moves its Group (and the request rides it)', jeq(piv.position.toArray().map((x: number) => +x.toFixed(9)), [5, 5, 5]) && rq('pivot')?.obj === piv, JSON.stringify(piv.position));
   live('set', at('farlamp', [700, 0, 0]));

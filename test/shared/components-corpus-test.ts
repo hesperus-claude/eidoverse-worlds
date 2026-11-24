@@ -88,12 +88,12 @@ for (const [name, ent, want] of cases) {
     canon(back) === canon(ent) && canon(got) === canon(['Transform:', ...want]), `got ${got.join(' + ')} / ${canon(back)}`);
 }
 check('lightOf reads comp.light with the fold\'s defaults; a v1 kind:"light" record is not a spelling the view has',
-  canon(lightOf({ model: L, light: {} })) === canon({ color: 0xffd9a0, intensity: 16, range: 10, important: false, decay: 1.7, daytime: 'dim' })   /* shape audit 10-16: an older light falls off as decay 1.7; day → daytime */
+  canon(lightOf({ model: L, light: {} })) === canon({ color: 0xffd9a0, intensity: 16, range: 10, important: false, shadows: false, decay: 1.7, daytime: 'dim' })   /* shape audit 10-16: an older light falls off as decay 1.7; day → daytime */
   && lightOf({ light: { color: 1, intensity: 2, range: 3, daytime: 'full' } })?.daytime === 'full'
   && lightOf({ kind: 'light', color: 1, intensity: 2, range: 3, day: false }) === null
   && lightOf({ model: L, light: 'on' }) === null && lightOf({ model: L }) === null);
 check('lightOf never lets a bad field reach the rig (NaN, string, negative → default)',
-  canon(lightOf({ light: { color: 'red', intensity: -1, range: NaN, important: 'yes', decay: 'x' } })) === canon({ color: 0xffd9a0, intensity: 16, range: 10, important: false, decay: 1.7, daytime: 'dim' }));
+  canon(lightOf({ light: { color: 'red', intensity: -1, range: NaN, important: 'yes', decay: 'x' } })) === canon({ color: 0xffd9a0, intensity: 16, range: 10, important: false, shadows: false, decay: 1.7, daytime: 'dim' }));
 check('lightOf keeps a sun\'s kind: directional reads as directional (models.js draws no point light for it)',
   lightOf({ light: { kind: 'directional' } })?.kind === 'directional' && lightOf({ light: { kind: 'point' } })?.kind === undefined, JSON.stringify(lightOf({ light: { kind: 'directional' } })));
 check('colliderOf: comp.collider wins (mesh, and the older exact, as the walker\'s exact), a bad shape falls back to legacy collide, absent = undefined',

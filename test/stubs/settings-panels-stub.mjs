@@ -99,6 +99,11 @@ export const CASTER_CHOICES = [6, 12, 24, 48, 96];
 let ceiling = 24;
 export const getCasterCeiling = () => ceiling;
 export const setCasterCeiling = (k) => { calls.push(['setCasterCeiling', k]); ceiling = +k; };
+// the shadowed-lamps row (light.shadows, hep/light-shadows): how many point slots are born casting, on reload
+export const LAMP_SHADOW_CHOICES = [1, 2, 4, 8];
+let lampShadows = 1;
+export const lampShadowCount = () => lampShadows;
+export const setLampShadowCount = (k) => { calls.push(['setLampShadowCount', k]); lampShadows = +k; };
 let myShadow = false;
 export const myShadowPref = () => myShadow;
 export const setMyShadowPref = (on) => { calls.push(['setMyShadowPref', on]); myShadow = !!on; };

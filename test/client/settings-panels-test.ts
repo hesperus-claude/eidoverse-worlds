@@ -172,6 +172,15 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
   check('…and hides the resolution row', row(res).hidden === true);
   shadows.checked = true; fire(shadows, 'change');
   check('re-checking shows it again', row(res).hidden === false && since(c1, 'setShadows')[1]?.[1] === true);
+  const lampSel = sel('shadowed lamps');
+  check('a "shadowed lamps" row offers 1, 2, 4, 8 and shows the stored count', !!lampSel && [...lampSel.options].map((o) => o.value).join(',') === '1,2,4,8' && lampSel.value === '1', lampSel && [...lampSel.options].map((o) => o.value));
+  shadows.checked = false; fire(shadows, 'change');
+  check('…hidden while shadows are off, like its neighbours', !!lampSel && row(lampSel).hidden === true);
+  shadows.checked = true; fire(shadows, 'change');
+  check('…and shown again with them', !!lampSel && row(lampSel).hidden === false);
+  if (lampSel) { lampSel.value = '4'; fire(lampSel, 'change'); }
+  check('choosing 4 calls setLampShadowCount with the NUMBER 4', since(c1, 'setLampShadowCount').length === 1 && since(c1, 'setLampShadowCount')[0][1] === 4, JSON.stringify(since(c1, 'setLampShadowCount')));
+  check('…and the row needs a reload (the casting slots are born at boot)', !!lampSel && !!row(lampSel).querySelector('button.reload'));
   check('antialiasing starts on', msaa.checked);
   msaa.checked = false; fire(msaa, 'change');
   check('unchecking writes PREF_MSAA=0', localStorage.getItem(stub.PREF_MSAA) === '0', String(localStorage.getItem(stub.PREF_MSAA)));
@@ -190,6 +199,10 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
   const scaleList = f.find((x: any) => x.label === 'render scale');
   check('the quad\'s scale list marks the current value active', scaleList?.rows.find((r: any) => r.active)?.id === '0.85', JSON.stringify(scaleList?.rows.map((r: any) => [r.id, r.active])));
   check('the quad\'s msaa check reads the pref', f.find((x: any) => x.k === 'msaa')?.value === false);
+  quad.dispatch('lampshadows', '2');
+  check('quad dispatch(lampshadows) is numeric', since(c2, 'setLampShadowCount')[0]?.[1] === 2, JSON.stringify(since(c2, 'setLampShadowCount')));
+  const lampList = quad.fields().find((x: any) => x.label === 'shadowed lamps (on reload)');
+  check('the quad lists shadowed lamps (on reload) with the stored count active', lampList?.rows.find((r: any) => r.active)?.id === '2', JSON.stringify(lampList));
   quad.dispatch('fulldetail', true);
   check('quad dispatch(fulldetail) reaches setFullDetail', since(c2, 'setFullDetail')[0]?.[1] === true);
   check('…and the quad\'s full-detail check reads it back', quad.fields().find((x: any) => x.k === 'fulldetail')?.value === true);
