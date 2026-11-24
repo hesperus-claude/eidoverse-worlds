@@ -269,6 +269,10 @@ ok(close.ok && removed && bob.closed === 4010 && bob.msgs.some((m) => m.type ===
   const access2 = ops2.find((o) => o.id === "@world" && o.comp === "access")?.value;
   const reset2 = own.msgs.slice(k1).some((m) => m.type === "world-reset") && first() !== g1;
   ok(reset2 && set?.ok && access2?.join === "signed-in", "A7b a reset keeps a signed-in-only world's door", [reset2, set?.ok, set?.refused, access2, own.msgs.slice(k1).map((m) => m.type + (m.error ? `: ${m.error}` : "")).slice(0, 6)]);
+  // A3b: a signed-in-only world with no watch for the rest is hidden from guests the same way (visibleTo: you see what you may watch)
+  { const anon = await worldsAs(srv.port), signed = await worldsAs(srv.port, "tok-moss"), geom = await fetch(`http://127.0.0.1:${srv.port}/geom?world=keep`);
+    ok(access2?.join === "signed-in" && !anon.some((x) => x.name === "keep") && geom.status === 404 && signed.some((x) => x.name === "keep"),
+      "A3b a signed-in-only world is on no guest's map (/geom answers as for no world); a signed-in stranger sees it", [anon.map((x) => x.name), geom.status, signed.map((x) => x.name)]); }
   // the rest of this suite reads "keep" as invite-only: its door goes back as A7 left it
   const back = await own.req("set", { id: "@world", component: "access", value: access });
   ok(back?.ok, "(A7b) keep's invite-only door is put back for what follows", back?.refused); }

@@ -1012,9 +1012,10 @@ Every role it names must be one the world defines.
 **Who may come in** is the world's own `access` on `@world` (an owner's,
 never a script's): `join` is `anyone` (absent), `signed-in`, or `listed` (only
 people the world has granted a role, unexpired); whoever `join` turns away
-may still watch, with no body, when `watch: "anyone"`, and otherwise a
-listed-only world is invisible to them (not in a listing, every read of it
-answering as for no world). `minAccountDays` and `max` refine it. Bans (the
+may still watch, with no body, when `watch: "anyone"`, and otherwise the
+world is invisible to them (not in a listing, every read of it answering as
+for no world): a listed-only world to everyone it doesn't list, a
+signed-in-only world to guests. `minAccountDays` and `max` refine it. Bans (the
 moderator log) come first (a kick bars nothing: they may come straight back); owners and holders of a
 moderation power always get in. One function decides for every door (a join,
 a listing, an HTTP read, the re-check after any change to `access`,

@@ -336,9 +336,10 @@ act {verb: "set", args: {id: "@world", component: "roles:u-…", value: {role: "
 act {verb: "delete", args: {id: "@world", component: "roles:u-…"}}                                         # take it back
 ```
 
-`join` is `anyone` (absent), `signed-in`, or `listed` (only identities with a live `roles:<id>` grant, any role, its `until` not passed); a
-listed-only world is unlisted in `worlds` and every read of it answers as if it didn't exist, for everyone it doesn't
-list — unless `watch: "anyone"` lets the rest watch (a spectator: no body). `default-role` is what everyone else holds
+`join` is `anyone` (absent), `signed-in`, or `listed` (only identities with a live `roles:<id>` grant, any role, its `until` not passed). A
+world is unlisted in `worlds`, and every read of it answers as if it didn't exist, for everyone its `join` turns away (a
+listed-only world's strangers, a signed-in-only world's guests) — unless `watch: "anyone"` lets the rest watch (a
+spectator: no body). `default-role` is what everyone else holds
 once inside. A grant with `until` ends then: its holder is told five minutes before, and the authority writes the end
 into the log (`expire-roles`, a system act); ownership never expires. When a role or access changes, whoever may no
 longer be here is removed (close code 4010, which a body doesn't redial). Anyone listed here as owner or with a moderation
