@@ -502,6 +502,10 @@ ok(TRANSLATOR !== "translate-v1@0.3" && /^eidoverse\//.test(TRANSLATOR), "T1 the
     const bad = [{ pos: [1, 2] }, { pos: [0, 0, 0], yaw: "north" }, { colour: 1 }, {}, "here", [1, 2, 3, 4], { pos: [0, 0, 0], yaw: 1, q: [0, 0, 0, 1] }];
     const codes = bad.map((at, i) => code(call("bob", "create", { id: `at-bad-${i}`, model: "crate", at })));
     ok(codes.every((c) => c === "shape") && bad.every((_, i) => !w.state().entities[`at-bad-${i}`]), "CA4 a malformed at is a shape refusal, and nothing is made", codes);
+    // each refusal names what is wrong with this at, not the general shape (C12 sweep: yaw "north" read only "at is a point")
+    const why = [/pos is three numbers/, /yaw is a number/, /'colour' isn't/, /names nothing/, /a point or/, /a point or/, /yaw or q, not both/];
+    const reasons = bad.map((at, i) => call("bob", "create", { id: `at-why-${i}`, model: "crate", at }).refused?.reason ?? "ok");
+    ok(reasons.every((r, i) => why[i].test(r)), "CA4b …and each refusal says what is wrong with that at", reasons);
     ok(code(call("bob", "create", { id: "at-both", model: "crate", at: [1, 1], place: { at: [2, 2] } })) === "shape", "CA5 at and place together is a shape refusal (one way of saying where)");
     ok(code(call("bob", "create", { from: "tbl", at: [1, 2, 3] })) === "shape", "CA6 with from, at is {pos, yaw|q}: an array is a shape refusal (never spread into the transform)");
     // #147: a bare yaw is radians, so one past ±2π (30, 90, 180: degrees typed as radians) is refused with the fix, at each door that takes one

@@ -241,9 +241,14 @@ function createAt(a, comps) {
   if (nums(at, 2)) return [at[0], at[1]];
   if (nums(at, 3)) { comps.transform = { ...(comps.transform ?? {}), pos: [...at] }; return null; }
   const keys = at && typeof at === "object" && !Array.isArray(at) ? Object.keys(at) : null;
-  if (!keys?.length || keys.some((k) => !["pos", "yaw", "q", "scale"].includes(k)) || (at.pos !== undefined && !nums(at.pos, 3))
-    || (at.yaw !== undefined && !Number.isFinite(at.yaw)) || (at.yaw !== undefined && at.q !== undefined))
-    refuse("shape", `create's at is a point or {pos, yaw}: got ${JSON.stringify(at).slice(0, 80)}`, AT_FIX);
+  const got = JSON.stringify(at)?.slice(0, 80);
+  if (!keys) refuse("shape", `create's at is a point or {pos, yaw}: got ${got}`, AT_FIX);
+  if (!keys.length) refuse("shape", `create's at {} names nothing: give pos, yaw, q or scale`, AT_FIX);
+  const odd = keys.find((k) => !["pos", "yaw", "q", "scale"].includes(k));
+  if (odd) refuse("shape", `create's at: '${odd}' isn't one of pos, yaw, q, scale`, AT_FIX);
+  if (at.pos !== undefined && !nums(at.pos, 3)) refuse("shape", `create's at: pos is three numbers [x, y, z]: got ${JSON.stringify(at.pos)?.slice(0, 60)}`, AT_FIX);
+  if (at.yaw !== undefined && !Number.isFinite(at.yaw)) refuse("shape", `create's at: yaw is a number (radians): got ${JSON.stringify(at.yaw)?.slice(0, 40)}`, AT_FIX);
+  if (at.yaw !== undefined && at.q !== undefined) refuse("shape", "create's at: yaw or q, not both", AT_FIX);
   comps.transform = { ...(comps.transform ?? {}), ...at }; return null;
 }
 function buildCreate(ctx, a) {
