@@ -902,7 +902,7 @@ export function classifyLooseImage(srcPath: string): { srgb: boolean; uastc: boo
     return { srgb: true, uastc: true };
   }
   // Data maps, loaded WITHOUT srgb (vegetation.js loadMap normal/roughness; sky_worlds.js band + solar set):
-  // linear + UASTC (§20)
+  // linear + UASTC
   if (/(normal|rough|metal|_ao\b|height|mask|bump|occlusion|displace)/.test(name)) return { srgb: false, uastc: true };
   // Color maps, loaded { srgb: true } (vegetation albedo/translucency; sky readTex(.., true)): ETC1S q128
   if (/(albedo|translucen|_color|basecolor|diffuse|emissi|_baked|starmap|kloppenheim|puresky|moon|rock_giant|rain_streak)/.test(name)) return { srgb: true, uastc: false };
@@ -920,7 +920,7 @@ export async function transcodeImageKtx2(src: Uint8Array, srcPath: string, encod
   if ("conflict" in cls) return { skip: `conflicted consumers — ${cls.conflict}` };
   const ext = srcPath.toLowerCase().match(/\.(png|jpe?g)$/)?.[1];
   if (!ext) return { skip: `not a png/jpeg (${basename(srcPath)})` };
-  // lazy imports (pure-JS decoders, §20d): other modes keep working before `bun install`; a resolve failure here
+  // lazy imports (pure-JS decoders): other modes keep working before `bun install`; a resolve failure here
   // reads as env-skip in the pump
   let w: number, h: number, data: Uint8Array;
   if (ext === "png") {

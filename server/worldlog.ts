@@ -262,7 +262,7 @@ export class WorldLog {
     }
     for (const who of this.inboxSent.keys()) if (!box[who]) this.inboxSent.delete(who);   // drained by `inbox`: what comes next is all new
   }
-  /** Who holds what (the authority's presence plane, design 20 P2): {id: {by}}. Never logged; every client draws a held thing
+  /** Who holds what (the authority's presence plane): {id: {by}}. Never logged; every client draws a held thing
    *  in its holder's hand, so it is sent whenever it changes, and in every join cut. */
   holds(): Record<string, { by: string }> {
     const out: Record<string, { by: string }> = {};
@@ -271,7 +271,7 @@ export class WorldLog {
     return out;
   }
   private holdsKey() { return JSON.stringify(this.holds()); }
-  /** A person's last connection left (not a takeover): what they held is dropped into the world (orphans, 18a), and the
+  /** A person's last connection left (not a takeover): what they held is dropped into the world, and the
    *  authority forgets their body. Their tracked body, if any, is all `leave` needs. */
   departed(actor: string) {
     if (!this.live.presence.bodies?.[actor]) return;
