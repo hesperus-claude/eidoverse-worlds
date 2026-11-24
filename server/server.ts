@@ -178,7 +178,7 @@ function expel(w: World, target: Client, why: string, until?: number | null, cod
   target.world = null;
   target.ws.close?.(code, code === 4010 ? "access ended" : "removed by moderation");
   if (wasEmbodied) { w.broadcast({ type: "leave", id: target.id }); w.scripts.onPresence("leave", target.id, target.actorId); }
-  if (wasEmbodied && target.actorId) w.log?.departed(target.actorId); // what they held drops into the world (design 20, orphans)
+  if (wasEmbodied && target.actorId) w.log?.departed(target.actorId); // what they held drops into the world
 }
 
 // Operator-log census: people are people, eyes are eyes.
