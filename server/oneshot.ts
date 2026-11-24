@@ -12,7 +12,8 @@ import { heapStats } from "bun:jsc";
 import { processTableAsync, suiteMembers, suiteMembersAsync, killSuiteAsync } from "./procgroup.ts";
 
 // ---- the child's side --------------------------------------------------------------------------------------------------
-// The event-loop handles this process holds, as Bun's heap sees them (process.getActiveResourcesInfo is a stub in Bun). Not seen: fs.watch and Worker.
+// The event-loop handles this process holds, as Bun's heap sees them (process.getActiveResourcesInfo is a stub in Bun).
+// Not seen (checked, Bun 1.4.4 on Linux and Windows): fs.watch and Worker, so HANDLE's Watcher|Worker match nothing today.
 const HANDLE = /Timeout|Immediate|Listener|Socket|Server|Watcher|Subprocess|Worker/;
 export function openHandles(): string {
   const open = Object.entries(heapStats().protectedObjectTypeCounts).filter(([k, n]) => HANDLE.test(k) && n > 0);
