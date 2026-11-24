@@ -236,20 +236,23 @@ case "$1" in
   is-active) u="\${@: -1}"; [ "$(get "$u")" = active ] ;;
   is-failed) u="\${@: -1}"; s=$(get "$u"); [ "\${s%% *}" = failed ] && { echo failed; exit 0; }; echo "\${s%% *}"; exit 1 ;;
   show) u="\${@: -1}"; s=$(get "$u"); [ "\${s%% *}" = failed ] && echo "\${s#* }" || echo 0 ;;
+  is-enabled) u="\${@: -1}"; [ "$u" = eido-disabled ] && { echo disabled; exit 1; }; echo enabled ;;
 esac
 `, { mode: 0o755 });
-    for (const [u, v] of Object.entries({ "eido-chatbridge": "failed 78", "eido-stopped": "inactive", "eido-crashed": "failed 1" })) fs.writeFileSync(path.join(st, u), v + "\n");
+    for (const [u, v] of Object.entries({ "eido-chatbridge": "failed 78", "eido-stopped": "inactive", "eido-crashed": "failed 1", "eido-disabled": "failed 78" })) fs.writeFileSync(path.join(st, u), v + "\n");
     const block = dv.slice(i0, i1 + 1).join("\n");
-    const r = spawnSync("bash", ["-c", `set -euo pipefail\nunits=(eidoverse eidoverse-mcpl); optional=(eido-chatbridge eido-stopped eido-crashed)\n${block}\necho "units: \${units[*]}"`],
+    const r = spawnSync("bash", ["-c", `set -euo pipefail\nunits=(eidoverse eidoverse-mcpl); optional=(eido-chatbridge eido-stopped eido-crashed eido-disabled)\n${block}\necho "units: \${units[*]}"`],
       { cwd: dir, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
     const calls = fs.existsSync(path.join(dir, "calls.log")) ? fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split("\n") : [];
     const state = (u: string) => fs.readFileSync(path.join(st, u), "utf8").trim();
-    const got = { status: r.status, calls, bridge: state("eido-chatbridge"), stopped: state("eido-stopped"), crashed: state("eido-crashed"), out: (r.stdout + r.stderr).slice(-300) };
+    const got = { status: r.status, calls, bridge: state("eido-chatbridge"), stopped: state("eido-stopped"), crashed: state("eido-crashed"), disabled: state("eido-disabled"), out: (r.stdout + r.stderr).slice(-300) };
     fs.rmSync(dir, { recursive: true, force: true });
     check("PG24 a deploy reset-fails and starts an optional unit that exited 78, checks it is up, and leaves an operator-stopped or otherwise-failed unit alone",
       r.status === 0 && calls.includes("reset-failed eido-chatbridge") && calls.includes("start eido-chatbridge") && got.bridge === "active"
       && /units: .*eido-chatbridge/.test(r.stdout) && calls.some((c) => /^is-active .*eido-chatbridge$/.test(c))
       && !calls.some((c) => /^(start|reset-failed) eido-(stopped|crashed)$/.test(c)) && got.stopped === "inactive" && got.crashed === "failed 1", got);
+    check("PG24 …a unit the operator disabled after it exited 78 is not started again (only enabled units are)",
+      r.status === 0 && !calls.some((c) => /^(start|reset-failed) eido-disabled$/.test(c)) && got.disabled === "failed 78" && !/units: .*eido-disabled/.test(r.stdout), got);
   }
 }
 

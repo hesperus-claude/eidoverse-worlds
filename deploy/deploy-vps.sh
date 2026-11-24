@@ -84,9 +84,10 @@ sudo systemctl restart eidoverse eidoverse-mcpl
 [ "${#optional[@]}" = 0 ] || sudo systemctl try-restart "${optional[@]}"
 # an optional bot that exited 78 (EX_CONFIG: the server refused its join; its unit doesn't restart on 78) is failed, which
 # try-restart skips: this build may be the fix, so it starts again and is checked below. A unit the operator stopped
-# (inactive), or one that failed another way, stays as it is.
+# (inactive) or disabled, or one that failed another way, stays as it is.
 for name in "${optional[@]}"; do
-  [ "$(systemctl is-failed "$name" 2>/dev/null)" = failed ] && [ "$(systemctl show -p ExecMainStatus --value "$name")" = 78 ] || continue
+  [ "$(systemctl is-failed "$name" 2>/dev/null)" = failed ] && [ "$(systemctl show -p ExecMainStatus --value "$name")" = 78 ] \
+    && [ "$(systemctl is-enabled "$name" 2>/dev/null)" = enabled ] || continue
   sudo systemctl reset-failed "$name"; sudo systemctl start "$name"; echo "unit: $name had stopped on a refused join (78); started again"
   [[ " ${units[*]} " == *" $name "* ]] || units+=("$name")
 done
