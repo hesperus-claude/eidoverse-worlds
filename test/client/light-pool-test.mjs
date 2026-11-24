@@ -111,7 +111,7 @@ console.log('PAIRS — one slot, two claims (a level camera at the origin lookin
     check(why, slotOf(a[0]) >= 0 && slotOf(b[0]) < 0, `${a[0]} slot ${slotOf(a[0])}, ${b[0]} slot ${slotOf(b[0])}`);
     rig.releaseLight(a[0]); rig.releaseLight(b[0]); tick();
   };
-  duel(['ahead-9m', [0, 1.5, -9], 6], ['behind-1.5m', [0, 1.5, 1.5], 6], 'an in-frame lamp 9 m away outranks a lamp 1.5 m behind the viewer');
+  duel(['ahead-4m', [0, 1.5, -4], 6], ['behind-2m', [0, 1.5, 2], 6], 'an in-frame lamp 4 m away outranks an equal lamp 2 m behind the viewer');
   // the left edge at 2 m deep is x = -2·tan(26°)·16/9 ≈ -1.73: this lamp sits ~0.28 m outside it
   duel(['just-off-2m', [-2.1, 1.5, -2], 4], ['ahead-9m', [0, 1.5, -9], 6], 'a lamp just off the frame edge still beats a far in-frame one');
   // 3 m behind with a 2 m range: its light reaches nothing in front of the eye
@@ -130,6 +130,37 @@ console.log('PAIRS — one slot, two claims (a level camera at the origin lookin
   rig.releaseLight('glow:2cd'); rig.releaseLight('desk:40cd'); tick();
   aim([0, 1.5, 0], [0, 1.5, -1]);
   rig.setSlotCap(4);
+}
+
+console.log('A BRIGHT LAMP JUST OUT OF FRAME — measured against a path tracer, it is a quarter of the picture');
+{
+  // The lab's furnished room (starloft-props, its 14 point lights as authored), the eye at (0.13, 1.5, -2) looking
+  // down -z, vfov 65.7. Path-traced per light (render-lab/rank-truth.py, 11-23): the 40 cd desk lamp, 3.44 m away and
+  // 1.0 m outside the left edge of the frame, supplies 28% of the frame's lamp light, second only to the stove (40%).
+  // The best four are stove, desk lamp and the two shelf lamps (84% of the light). A rule that charges a lamp six
+  // metres for every metre outside the frame drops the desk lamp for a 10 cd one (57% kept, 2.1 stops lost against
+  // 0.8). Over 32 path-traced cameras in two rooms a charge of 3 loses 0.56 / 0.12 stops at 4 / 8 slots, worst 0.27
+  // at 8; a charge of 6 loses 0.58 / 0.16, worst 1.04; nearest-the-eye (anima/main) 1.85 / 0.55.
+  const ROOM = [   // [x, y, z], candela, range
+    [[-2.43, 0.35, -5.3], 50, 14], [[-4.4, 4.4, -1.8], 40, 14], [[-4.6, 4.4, 2.6], 40, 14], [[-0.45, 0.66, -3.8], 1, 2.5],
+    [[3.2, 3, -5.8], 40, 14], [[2.74, 2.85, -3.5], 6, 4], [[2.74, 1.43, -2.7], 7.5, 6.85], [[-3, 1.25, -3.4], 40, 14],
+    [[2, 0.85, -4.6], 10, 7.9], [[1.9, 2.2, -4.6], 7.5, 6.85], [[-2.7, 1.1, -2.5], 12, 3], [[2.54, 3, -5.2], 2, 2.5],
+    [[2.54, 3, -4.2], 2, 2.5], [[2.54, 3, -3.2], 2, 2.5],
+  ];
+  const keys = ROOM.map((_, i) => `room:${String(i).padStart(2, '0')}`);
+  const fov0 = camera.fov;
+  camera.fov = 65.7; camera.updateProjectionMatrix();
+  aim([0.13, 1.5, -2], [0.13, 1.5, -6]);
+  ROOM.forEach(([pos, cd, range], i) => rig.requestLight(keys[i], { authored: true, keep: i === 0, intensity: cd, range, pos }));   // the stove is the world's `important` light
+  for (let i = 0; i < 4; i++) tick();
+  const held = keys.filter((k) => slotOf(k) >= 0);
+  check('the stove (40% of the light) holds a slot', held.includes('room:00'), JSON.stringify(held));
+  check('the 40 cd desk lamp 1 m out of frame (28% of the light) holds a slot', held.includes('room:07'), JSON.stringify(held));
+  check('no 2 cd string glow holds a slot while 40 cd lamps want one', !held.some((k) => ['room:11', 'room:12', 'room:13'].includes(k)), JSON.stringify(held));
+  for (const k of keys) rig.releaseLight(k);
+  camera.fov = fov0; camera.updateProjectionMatrix();
+  aim([0, 1.5, 0], [0, 1.5, -1]);
+  tick();
 }
 
 console.log('SPOTS — the spot pool ranks the same way (?spots default 2)');
