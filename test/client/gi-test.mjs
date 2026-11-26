@@ -12,7 +12,7 @@ import { suite } from '../gate/suite.ts';
 const HERE = import.meta.dir; const here = (p) => `${HERE}/${p.replace(/^\.\//, '')}`;
 let gridModuleLoads = 0;   // how often anything asked for three's LightProbeGrid code
 plugin({ name: 'gi-stubs', setup(build) {
-  stubResolve(build, /^(\.\.?\/)+core\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
+  stubResolve(build, /^(\.\.?\/)+core\.js$/, () => ({ path: here('../stubs/gi-core-stub.mjs') }));
   stubResolve(build, /^(\.\.?\/)+base\.js$/, () => ({ path: here('../stubs/gi-base-stub.mjs') }));
   stubResolve(build, /^(\.\.?\/)+(render\/)?loadwork\.js$/, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
   stubResolve(build, /^three\/addons\/(lighting|tsl\/lighting)\/LightProbeGrid(Node)?\.js$/, () => { gridModuleLoads++; return { path: here('../stubs/lightprobegrid-stub.mjs') }; });
@@ -83,7 +83,7 @@ if (G) {
 }
 
 // ---- the frame loop, against three's grid stand-in (test/stubs/lightprobegrid-stub.mjs) ----
-const core = await import('../stubs/core-stub.mjs'), St = await import('../../client/lib/state.js'), FB = await import('../../client/lib/render/framebudget.js'), LP = await import('../stubs/lightprobegrid-stub.mjs');
+const core = await import('../stubs/gi-core-stub.mjs'), St = await import('../../client/lib/state.js'), FB = await import('../../client/lib/render/framebudget.js'), LP = await import('../stubs/lightprobegrid-stub.mjs');
 const LR = await import('../../client/lib/render/lightrig.js');
 { // G11: what a bake lights the room with
   LR.requestLight('complight:lamp', { authored: true, pos: [1, 2, 3], intensity: 40, range: 8, decay: 2, dayAware: true, color: 0xffaa00 });
@@ -111,6 +111,8 @@ const roomMeshes = new Map();
 G?.setGiObjects?.(() => { objectReads++; return roomMeshes; });
 core.renderer.isWebGPURenderer = true;
 core.renderer.backend = { isWebGPUBackend: true };
+const regs = [];   // what gi.js registers with three's node library (G12), and how many bake steps had run by then
+core.renderer.library = { addLight: (nodeClass, lightClass) => regs.push({ nodeClass, lightClass, bakesBefore: LP.bakes.length }) };
 let now = 1e6; performance.now = () => now;
 const run = async (frames) => { for (let i = 0; i < frames; i++) { now += 20; FB.tick(now); G.updateGi(); await new Promise((r) => setImmediate(r)); } };
 const giRoom = (gi, extra = {}) => ({ entities: { walls: { pos: [0, 0, 0] }, room: { pos: [0, 1.5, 0], zone: { shape: 'box', size: [3, 3, 3] }, ...(gi ? { 'gi-volume': gi } : {}), ...extra } } });
@@ -142,6 +144,23 @@ if (G) {
   await run(120);
   check('G14 …and turned off again, the grid leaves the scene and is freed', removed.includes(grid) && grid?.disposed === true && same(G.giDebug().grids, []), [removed.length, grid?.disposed, G.giDebug().grids]);
   G.setGiPref('low');
+
+  // fix A (render-lab 11-23): three r186's LightProbeGridNode keeps the grid's box, resolution, intensity and falloff in the
+  // PER-OBJECT uniform group, and three refreshes that group for a material with no nodes of its own (every glTF model's plain
+  // MeshStandardMaterial) only when the object, its material or its geometry changes (NodeMaterialObserver.needsRefresh). gi.js
+  // dims the grid by day every frame, so a model first drawn by day kept the day's 0.0012 at night (23 of 25 model meshes;
+  // night frame luma 40.86 after a day preview, 45.55 without). The render group is three's own place for a light's values.
+  const groupsOf = (n) => Object.fromEntries(LP.GRID_UNIFORMS.map((k) => [k, n?.[k]?.group]));
+  const Node = G.sharedGridNode?.(LP.LightProbeGridNode, 'the group given'), n = Node ? new Node({ isLightProbeGrid: true }) : null;
+  check('G12 the grid\'s light node is three\'s, with every uniform three keeps per object (the box, the resolution, the intensity, the falloff) moved to the group it is given',
+    !!n && n instanceof LP.LightProbeGridNode && LP.GRID_UNIFORMS.every((k) => n[k].group === 'the group given'), groupsOf(n));
+  const r = regs[0], madeNode = r ? new r.nodeClass({ isLightProbeGrid: true }) : null;
+  check('G12 …and gi.js registers it for three\'s LightProbeGrid with the RENDER group, once, before the first bake step (three\'s bake registers its own only when none is)',
+    regs.length === 1 && r.lightClass === LP.LightProbeGrid && r.bakesBefore === 0 && LP.GRID_UNIFORMS.every((k) => madeNode[k].group === core.TSL.renderGroup),
+    [regs.length, r?.bakesBefore, groupsOf(madeNode)]);
+  const b0 = LP.bakes.length;
+  await run(250);
+  check('G12 …a rebake registers nothing more', regs.length === 1 && LP.bakes.length > b0, [regs.length, LP.bakes.length - b0]);
 }
 check('G10 Video settings carry the GI row through the dial\'s own module (videopanel.js reads render/gipref.js, not the bake)', /from '\.\.\/render\/gipref\.js'/.test(read('client/lib/ui/videopanel.js')) && /giPref\(\)/.test(read('client/lib/ui/videopanel.js')) && /setGiPref\(/.test(read('client/lib/ui/videopanel.js')), '');
 check('G10 …the frame loop steps it, hands it the world\'s objects, and EW.gi reads giDebug (main.js)', /registerSystem\('gi', updateGi\)/.test(read('client/main.js')) && /setGiObjects\(\(\) => entities\)/.test(read('client/main.js')) && /\bgi: giDebug\b/.test(read('client/main.js')), '');
