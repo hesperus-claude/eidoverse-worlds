@@ -7,7 +7,7 @@ import { suite } from "../gate/suite.ts";
 const STUB = fileURLToPath(new URL('../stubs/gputime-core-stub.mjs', import.meta.url));
 const RIG = fileURLToPath(new URL('../stubs/gputime-lightrig-stub.mjs', import.meta.url));
 plugin({ name: 'gputime-stubs', setup(b) { stubResolve(b, /^(\.\.?\/)+core\.js$/, () => ({ path: STUB })); stubResolve(b, /^(\.\.?\/)+(render\/)?lightrig\.js$/, () => ({ path: RIG })); } });
-const { pref } = await import(RIG);
+const { pref, cacheHold } = await import(RIG);
 const { lights, em } = await import(STUB);
 const G = await import('../../client/lib/debug/gputime.js');
 const S = suite("gputime");
@@ -17,8 +17,11 @@ lights.push(sun);
 const p = G.measureShadowPass(4);
 G.gpuBegin(); G.gpuEnd(); G.gpuBegin(); G.gpuEnd();       // 'drawn', then 'held'
 ok('(setup) mid-A/B the map is held', sun.shadow.autoUpdate === false, String(sun.shadow.autoUpdate));
+// a cached lamp slot sits at autoUpdate false and is handed needsUpdate on a dirty frame: the A/B holds the cache too
+ok('mid-A/B the lamp shadow cache is held (no redraw handed out on a "held" frame)', cacheHold.depth === 1, String(cacheHold.depth));
 G.setGpuTimer(false);
 ok('turning the timer off mid-A/B gives the shadow map back', sun.shadow.autoUpdate === true, String(sun.shadow.autoUpdate));
+ok('…and releases the lamp shadow cache', cacheHold.depth === 0, String(cacheHold.depth));
 const r: any = await Promise.race([p, new Promise((res) => setTimeout(() => res('pending'), 200))]);
 ok('…and the measurement answers (cancelled), never hangs', r !== 'pending' && /cancel/.test(r?.error ?? ''), JSON.stringify(r));
 ok('a new measurement can start after', G.gpuTimerState().measuring === false);
@@ -41,6 +44,7 @@ ok('a new measurement can start after', G.gpuTimerState().measuring === false);
   ok('the final "held" frame renders with its shadow map held', sun.shadow.autoUpdate === false, String(sun.shadow.autoUpdate));
   G.gpuEnd(); G.gpuBegin(); G.gpuEnd();                    // the next frame ends the A/B
   ok('…and the frame after it gets the map back', sun.shadow.autoUpdate === true, String(sun.shadow.autoUpdate));
+  ok('…and the lamp shadow cache back (an A/B that finishes releases its hold, once)', cacheHold.depth === 0, String(cacheHold.depth));
   G.setGpuTimer(false); void q; }
 // shadows switched OFF during an A/B: the A/B's restore must not resurrect the value it saved at its start (review 7, L5)
 { G.setGpuTimer(false); await pause("the GPU timer's settle window", 650);
