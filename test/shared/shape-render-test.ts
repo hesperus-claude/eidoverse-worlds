@@ -17,6 +17,7 @@ import { translate } from '../../tools/import-v1/translate-v1.js';
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail: any = '') => { if (ok) pass++; else fail++; console.log(`${ok ? '✓' : '✗'} ${name}${!ok && detail !== '' ? `  — ${JSON.stringify(detail).slice(0, 300)}` : ''}`); };
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const code = (r: any) => r?.refused?.code ?? (r?.ok ? 'ok' : 'error');
 const tryRow = async (name: string, f: () => any) => { try { await f(); } catch (e) { check(`${name} (threw)`, false, String(e?.stack ?? e).slice(0, 300)); } };
 const ENGINE = fileURLToPath(new URL('../../', import.meta.url));
@@ -286,11 +287,11 @@ await tryRow('CA', () => {
   check('CA1 captions stores {session, n, gen, title?, line}: no window, no mediaTime', keys(C.fields) === keys({ session: 1, n: 1, gen: 1, title: 1, line: 1 }), Object.keys(C.fields));
 });
 
-// ===================================================================== sky: its 20 fields, radians, stamped fields refused, defaults in the registry
+// ===================================================================== sky: its 22 fields, radians, stamped fields refused, defaults in the registry
 await tryRow('SK', async () => {
   const K = COMPONENTS.sky;
-  const want = ['hours', 'rate', 'ts', 'tz', 'clouds', 'weather', 'weatherK', 'transition', 'azimuth', 'fog', 'exposure', 'ambient', 'sun', 'fill', 'forecast', 'override', 'gradient', 'system', 'colors', 'audio'];   // gradient: OMI_environment_sky (step 3a); system, colors, audio: main's (10-28)
-  check('SK1 sky has 20 fields (gradient, system, colors, audio joined; sun and fill kept, as main stored them (R 10-30); clock, dormantRated, world cut; weatherSeconds → transition)', keys(K.fields) === keys(Object.fromEntries(want.map((k) => [k, 1]))), Object.keys(K.fields));
+  const want = ['hours', 'rate', 'ts', 'tz', 'clouds', 'weather', 'weatherK', 'transition', 'azimuth', 'fog', 'exposure', 'ambientLightColor', 'ambientLightEnergy', 'ambient', 'sun', 'fill', 'forecast', 'override', 'gradient', 'system', 'colors', 'audio'];   // gradient: OMI_environment_sky (step 3a); system, colors, audio: main's (10-28); ambientLight*: the world's constant ambient (Godot Environment.ambient_light_*)
+  check('SK1 sky has 22 fields (ambientLightColor, ambientLightEnergy, gradient, system, colors, audio joined; sun and fill kept, as main stored them (R 10-30); clock, dormantRated, world cut; weatherSeconds → transition)', keys(K.fields) === keys(Object.fromEntries(want.map((k) => [k, 1]))), Object.keys(K.fields));
   check('SK1 …azimuth in radians (default π), defaults and enums in the registry, units written', K.units?.azimuth === 'rad' && K.defaults?.azimuth === Math.PI && K.defaults?.hours === 12 && K.defaults?.clouds === 'cumulus' && K.enums?.weather?.includes('storm') && K.enums?.clouds?.includes('cirrus') && K.units?.ts === 'ms' && K.units?.transition === 's', [K.units, K.defaults]);
   const W = scratchWorld('w2r-sky');
   let r = W.call('set', { id: '@world', component: 'sky', value: { hours: 9, ts: 5 } });
@@ -321,6 +322,22 @@ await tryRow('SK', async () => {
   const a1 = Wa.call('set', { id: '@world', component: 'sky', value: { hours: 9, audio: true } }), a1v = sa()?.audio, a2 = Wa.call('sky', { audio: false }), a3 = Wa.call('set', { id: '@world', component: 'sky', value: { hours: 9, audio: 'yes' } });
   check('SK7 sky.audio (main\'s weather sounds) is a bool: set and the sky act store it, a non-bool is refused, absent means off, and the client reads it', a1.ok && a1v === true && a2.ok && sa()?.audio === false && code(a3) === 'shape'
     && K.fields.audio === 'bool' && /off/.test(K.absentMeans?.audio ?? '') && !!K.docs?.audio && /Boolean\(a\.audio\)/.test(read('client/lib/sky/sky.js')), [a1.refused, a1v, a2.refused, sa(), a3.refused]);
+  // the world's constant ambient (Godot Environment.ambient_light_color / ambient_light_energy): a colour as the sky's
+  // other colours are (linear [r, g, b] 0..1, gradient's), an energy as a light's intensity is (Godot's 0..16)
+  const Wm = scratchWorld('w2r-sky-ambient'); const sm = () => Wm.state().entities['@world'].c.sky;
+  const m1 = Wm.call('set', { id: '@world', component: 'sky', value: { hours: 22, ambientLightColor: [0.2, 0.3, 0.5], ambientLightEnergy: 0.8 } }), m1v = sm();
+  const m2 = Wm.call('sky', { ambientLightColor: [1, 0.9, 0.8], ambientLightEnergy: 16 }), m2v = sm();
+  check('SK8 sky.ambientLightColor (vec3) + sky.ambientLightEnergy (number): set and the sky act store them as sent', m1.ok && same(m1v?.ambientLightColor, [0.2, 0.3, 0.5]) && m1v?.ambientLightEnergy === 0.8
+    && m2.ok && same(m2v?.ambientLightColor, [1, 0.9, 0.8]) && m2v?.ambientLightEnergy === 16, [m1.refused, m1v, m2.refused, m2v]);
+  check('SK8 …in the registry: vec3 0..1 each, number 0..16, no default (absent stores nothing), absence and meaning written', K.fields.ambientLightColor === 'vec3' && K.fields.ambientLightEnergy === 'number'
+    && K.ranges?.ambientLightColor?.min === 0 && K.ranges?.ambientLightColor?.max === 1 && K.ranges?.ambientLightEnergy?.min === 0 && K.ranges?.ambientLightEnergy?.max === 16
+    && !('ambientLightColor' in (K.defaults ?? {})) && !('ambientLightEnergy' in (K.defaults ?? {}))
+    && /0/.test(K.absentMeans?.ambientLightEnergy ?? '') && /white/.test(K.absentMeans?.ambientLightColor ?? '') && !!K.docs?.ambientLightColor && !!K.docs?.ambientLightEnergy, [K.fields.ambientLightColor, K.ranges?.ambientLightColor, K.ranges?.ambientLightEnergy, K.absentMeans?.ambientLightEnergy]);
+  const bad = ([['colour above 1', { ambientLightColor: [1.2, 0, 0] }, 'bounds'], ['colour below 0', { ambientLightColor: [0, -0.1, 0] }, 'bounds'], ['colour of two', { ambientLightColor: [0.1, 0.2] }, 'shape'],
+    ['colour a word', { ambientLightColor: 'red' }, 'shape'], ['colour an int (the light component\'s spelling)', { ambientLightColor: 0xff8800 }, 'shape'], ['energy below 0', { ambientLightEnergy: -1 }, 'bounds'],
+    ['energy above 16', { ambientLightEnergy: 17 }, 'bounds'], ['energy a string', { ambientLightEnergy: '2' }, 'shape']] as const)
+    .map(([what, v, want]) => { const r = Wm.call('set', { id: '@world', component: 'sky', value: { hours: 22, ...v } }); return { what, want, got: code(r) }; });
+  check('SK8 …a bad value is refused at the door, as the sky\'s other numbers and colours are (bounds out of range, shape wrong type), and nothing stored', bad.every((b) => b.got === b.want) && same(sm(), m2v), bad.filter((b) => b.got !== b.want));
 });
 
 // ===================================================================== terrain: the sim's defaults, raster reserved, layer colours ints, water split out
