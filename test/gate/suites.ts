@@ -413,6 +413,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["models-field", "client/models-field-test.ts", 1], // house client I173: an override's clone is wrapped once
   ["lod-policy", "client/lod-policy-test.ts", 1], // #156: the tier is chosen before the fetch (dial, distance against the radius, pressure), never asked without a published recipe
   ["lod-client", "client/lod-client-test.ts", 1], // #170: the dial, the residency sweep, the loader's wire, an owned sequencer's answer, the in-place swap and the collider agree
+  ["texture-filter", "client/texture-filter-test.ts", 1], // texture filtering (anisotropy) is the viewer's dial: ew-anisotropy 1-16, default 4, clamped to the renderer's maximum, on a model's textures before their upload, through the real loader
   ["realized-lifecycle", "client/realized-lifecycle-test.ts", 1], // the model realizer's lifecycle over a held loader: full life, remove mid-load, re-model over a held load, demote/promote, reset, sockets
   ["components-wire", "client/components-wire-test.ts", 1], // components from the door to the realizer: an Empty is an invisible group (a light-carrying one is a light), lamps, colliders, parents, an imported lamp
   ["axes", "shared/axes-test.ts", 1], // the axis letters are one table (shared/axes.js); motion takes negative letters, look-at's door and turn don't (as before)

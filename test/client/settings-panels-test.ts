@@ -175,6 +175,15 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
   msaa.checked = false; fire(msaa, 'change');
   check('unchecking writes PREF_MSAA=0', localStorage.getItem(stub.PREF_MSAA) === '0', String(localStorage.getItem(stub.PREF_MSAA)));
   check('…and the row needs a reload', !!row(msaa).querySelector('button.reload'));
+  // texture filtering (render/anisotropy.js, real here: it reads and writes the pref itself): the viewer's dial, on reload
+  localStorage.removeItem('ew-anisotropy');
+  const aniso = sel('texture filtering');
+  check('a "texture filtering" row offers 1, 2, 4, 8, 16 (×) and shows 4 with nothing stored', !!aniso && [...aniso.options].map((o) => o.value).join(',') === '1,2,4,8,16' && aniso.value === '4' && aniso.selectedOptions[0]?.text === '4×', aniso && [...aniso.options].map((o) => [o.value, o.text]));
+  if (aniso) { aniso.value = '8'; fire(aniso, 'change'); }
+  check('choosing 8× writes ew-anisotropy=8', localStorage.getItem('ew-anisotropy') === '8', String(localStorage.getItem('ew-anisotropy')));
+  check('…and the row needs a reload (a texture takes its level at upload)', !!aniso && !!row(aniso).querySelector('button.reload'));
+  check('…and the hint says so', ui.el.hint.innerHTML.includes('texture filtering: 8×') && ui.el.hint.innerHTML.includes('on reload'), ui.el.hint.innerHTML);
+  check('the row stays shown with shadows off (it is not a shadow row)', (() => { shadows.checked = false; fire(shadows, 'change'); const h = !!aniso && row(aniso).hidden === false; shadows.checked = true; fire(shadows, 'change'); return h; })());
 
   console.log('VIDEO — the same dials as a VR quad');
   const quad = xrPanels.get('settings');
@@ -189,6 +198,11 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
   const scaleList = f.find((x: any) => x.label === 'render scale');
   check('the quad\'s scale list marks the current value active', scaleList?.rows.find((r: any) => r.active)?.id === '0.85', JSON.stringify(scaleList?.rows.map((r: any) => [r.id, r.active])));
   check('the quad\'s msaa check reads the pref', f.find((x: any) => x.k === 'msaa')?.value === false);
+  const anisoList = (fs: any[]) => fs.find((x: any) => x.label === 'texture filtering (on reload)');
+  check('the quad lists texture filtering (on reload), 1–16, the stored 8 active', anisoList(f)?.rows.map((r: any) => r.id).join(',') === '1,2,4,8,16' && anisoList(f)?.rows.find((r: any) => r.active)?.id === '8', JSON.stringify(anisoList(f)));
+  quad.dispatch('aniso', '2');
+  check('quad dispatch(aniso, "2") writes ew-anisotropy=2', localStorage.getItem('ew-anisotropy') === '2', String(localStorage.getItem('ew-anisotropy')));
+  check('…and the quad shows 2 active', anisoList(quad.fields())?.rows.find((r: any) => r.active)?.id === '2', JSON.stringify(anisoList(quad.fields())));
   quad.dispatch('fulldetail', true);
   check('quad dispatch(fulldetail) reaches setFullDetail', since(c2, 'setFullDetail')[0]?.[1] === true);
   check('…and the quad\'s full-detail check reads it back', quad.fields().find((x: any) => x.k === 'fulldetail')?.value === true);
