@@ -78,7 +78,10 @@ export function agxInverseJS(lin, exposure = 1) {
  *  ratio r is at least g(n); g grows with n, so the brightest peak a colour of ratio r can show is the n where g(n) = r:
  *  1 − u with u = 2d²w / (2dw + r + √(r(4dw + r))), d = 1 − start, w = (1 − r)·desat (start at r = 0, a fully saturated
  *  colour; → 1 at r = 1, a grey). Below start everything is on the image. Exposure plays no part (the inverse divides by it
- *  last, and the linear input is unbounded), so neither does it here. The shader's neutralInverse computes the same. */
+ *  last, and the linear input is unbounded), so neither does it here. The shader's neutralInverse computes the same.
+ *  Known limits (a hard clip, taken knowingly; see quadcolour.js neutralInverse): off-image colours of one hue and
+ *  saturation all land on this one peak, so they merge, and the peak rises as √r near r = 0, so a saturated colour's first
+ *  step off pure (min channel 0 → 1/255) brightens it by about 3 codes. */
 export function neutralPeakFor(r) {
   const d = 1 - NEUTRAL.start, w = (1 - r) * NEUTRAL.desat;
   return 1 - (2 * d * d * w) / (2 * d * w + r + Math.sqrt(r * (4 * d * w + r)));

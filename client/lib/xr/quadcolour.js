@@ -44,7 +44,8 @@ export const acesFilmicInverse = Fn(([lin]) => {
 });
 
 /** Linear working colour whose AgX (at the live exposure) is `lin` (quadgrade.js agxInverseJS's twin; the sigmoid bisected).
- *  Exact on what AgX can produce; a colour more saturated than its highlights ever are comes back as the nearest it makes. */
+ *  Exact on the whole sRGB cube: AgX, its matrices read as three means them (quadgrade.js fromCols), reaches every
+ *  displayable colour, so there is no off-image case here. */
 const agxPoly = (x) => AGX_POLY.reduce((acc, k) => (acc === null ? vec3(k) : acc.mul(x).add(k)), null);
 export const agxInverse = Fn(([lin]) => {
   const c = pow(max(mat3(...INV.toSrgb).mul(clamp(lin, 0, 1)), 0), vec3(1 / 2.2));
@@ -57,7 +58,12 @@ export const agxInverse = Fn(([lin]) => {
 /** Linear working colour whose Khronos PBR Neutral (at the live exposure) is `lin` (quadgrade.js neutralInverseJS's twin,
  *  closed form). Exact on Neutral's image; a colour off it (bright and saturated: Neutral mixes highlights toward grey) is
  *  first scaled down, all three channels by one factor, to the brightest colour of its hue and saturation the curve shows
- *  (quadgrade.js neutralPeakFor): hue and saturation kept, brightness given up (at most 24% in luma). */
+ *  (quadgrade.js neutralPeakFor): hue and saturation kept, brightness given up (at most 24% in luma).
+ *  Known limits of this hard clip, taken knowingly (the old behaviour turned every off-image colour near white): every
+ *  off-image colour of one hue and saturation shows as the same colour, so the top of a saturated ramp goes flat (#e60000
+ *  and #ff0000 both show (226,0,0)) and a bright saturated control's hover/pressed states can merge; and the ceiling's √r
+ *  shape at r = 0 gives a 3-step jump where a saturated colour's darkest channel goes 0 → 1 (#ff0000 → 226, #ff0101 → 229).
+ *  The real answer is (b), panels drawn after the output transform (see quadMaterial). */
 export const neutralInverse = Fn(([lin]) => {
   const S = float(NEUTRAL.start), d = float(1 - NEUTRAL.start);
   const y0 = clamp(lin, 0, 1), pk = max(max(y0.x, max(y0.y, y0.z)), 1e-6), r = min(y0.x, min(y0.y, y0.z)).div(pk);
