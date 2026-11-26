@@ -18,6 +18,7 @@ import { bakedDomeObject } from './sky_baked.js';
 import { BAKE_INTERCEPT, attachBakedDome, detachBakedDome, updateBakedDome, bakedActive, requestBake, holdLiveDomes, releaseLiveDomes, liveDomesHeld, takeHeldDomes,
   envTexture, adoptEnvironment, whenBakeReady, bakedRefreshing } from './sky_baked.js';
 import { beginWork } from '../render/loadwork.js';
+import { setTonemap } from '../render/tonemap.js';
 import { makeSwapChain, SHOWN_UNKNOWN } from './sky_swapchain.js';
 import { serializeBakes as serializeBakesWith, BAKE_GUARD, BAKE_AFTER, BAKE_HELD } from './sky_bakelock.js';
 import { showInterimSky, interimSkyObject, updateInterimSky, hideInterimSky, interimSkyShown } from './sky_interim.js';
@@ -1103,6 +1104,7 @@ function applyTuning(a, day, warmth = Math.pow(1 - day, 1.5), sunPos = null, sky
 
   // exposure is the world's, not the sky's: one global knob, the same on both implementations
   renderer.toneMappingExposure = (skyOwnsLights ? 1 : (1.0 - 0.22 * warmth)) * (a.exposure ?? 1);
+  setTonemap(renderer, a.tonemap);   // and so is its curve (render/tonemap.js): set together, so they change together
 
   dayness = day;
   setDayness(day);   // the light rig dims lamps and placed lights on this same clock

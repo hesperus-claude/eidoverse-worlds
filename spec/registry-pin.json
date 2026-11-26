@@ -1568,6 +1568,7 @@
    "azimuth": "number",
    "fog": "number",
    "exposure": "number",
+   "tonemap": "string",
    "ambient": "number",
    "sun": "number",
    "fill": "number",
@@ -1607,6 +1608,12 @@
    "system": [
     "eidoverse",
     "skymesh"
+   ],
+   "tonemap": [
+    "aces",
+    "agx",
+    "neutral",
+    "linear"
    ]
   },
   "ranges": {
@@ -1660,6 +1667,7 @@
    "system": "eidoverse: the detailed sky",
    "colors": "the sky's own colours",
    "audio": "off: no weather sounds (main's default)",
+   "tonemap": "aces: ACES Filmic, the curve every world had before the field",
    "sun": "1: the sun at its own strength (a multiplier, as main's sun slider)",
    "fill": "1: the bounce light opposite the sun at its own strength (main's fill slider)",
    "law": "forecast@1: per (seed, segment), drawn in the order dwell, then state, then intensity; spec/conformance/laws.json pins its segments"
@@ -1678,6 +1686,7 @@
    "azimuth": "where the sun stands round the horizon, radians (π: the default)",
    "fog": "× this renderer's own fog curve",
    "exposure": "× this renderer's tone mapping",
+   "tonemap": "the display transform, the owner's look (Godot's tonemap_mode, three's toneMapping): aces (ACES Filmic) | agx | neutral (Khronos PBR Neutral: authored colour kept) | linear (exposure, then a clamp)",
    "ambient": "× this renderer's ambient curve",
    "forecast": "a weather policy {seed, states: [name | {state, weight}], dwell: [min, max] s, k: [min, max], transition: s, epoch (stamped)}",
    "override": "a weather act inside a forecast segment {state, k?, ts} (stamped)",
