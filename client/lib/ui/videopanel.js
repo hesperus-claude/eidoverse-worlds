@@ -156,9 +156,9 @@ export function initVideoPanel() {
       CASTER_CHOICES.map((v) => [v, `${v} nearest`]), getCasterCeiling(),
       (v) => { setCasterCeiling(+v); flashHint(`shadows from the ${v} nearest things`); });
     castRow.hidden = !shadowsOn();
-    // how many point lights may cast at once, of those the world asks to (light.shadows): born at boot, so on reload
+    // how many lamps (point lights and spots) may cast at once, of those the world asks to (light.shadows): born at boot, so on reload
     const lampRow = selectRow('shadowed lamps',
-      'How many lamps cast shadows at once, of the ones the world asks to (the brightest in view first; the rest still light). Each costs a shadow pass of everything its light reaches, six views. Set when the renderer is built, so it applies on reload.',
+      'How many lamps cast shadows at once, of the ones the world asks to (the brightest in view first; the rest still light). Each costs a shadow pass of everything its light reaches: six views for a point light, one for a spot. Set when the renderer is built, so it applies on reload.',
       LAMP_SHADOW_CHOICES.map((v) => [v, `${v}`]), lampShadowCount(),
       (v, row) => { setLampShadowCount(+v); needsReload(row); flashHint(`shadowed lamps: ${v} (on reload)`); });
     lampRow.hidden = !shadowsOn();
