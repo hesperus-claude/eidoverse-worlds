@@ -607,7 +607,9 @@ function updateShadow() {
 // (outside the sun's shadow box, and out of the casting lamp's range: inShadowReach) ranks after everything a shadow
 // can be drawn for, as a shadow distance does in Godot (directional_shadow_max_distance) and Unity (Shadow Distance).
 // And a glow body, a thing whose every mesh is an emitter (emitterGlow, read each pass), does not cast while a light
-// sits inside it: a lamp's glass must not shadow its own bulb. With no light in it, it is a thing like any other. Depth
+// sits inside it: a lamp's glass must not shadow its own bulb. With no light in it, it is a thing like any other.
+// A see-through surface casts nothing, per mesh and read each pass (surfaceCasts): a lantern's frame casts and its glass
+// does not, and a thing with no mesh that casts holds no place in the budget. Depth
 // pipelines are pre-warmed (warmqueue.warmDepth) before castShadow flips, ≤2 flips per pass; a disable fades out and
 // castShadow clears when the fade ends (endFade). docs/research/shadow-depth-prewarm.md.
 
@@ -720,6 +722,19 @@ function inShadowReach(at, r, eye) {
 }
 // how far outside a glow body's bounding sphere a light still counts as inside it (a bulb at the glass)
 const GLOW_BODY_MARGIN = 0.03;
+// Godot's rule (BaseMaterial3D docs; SceneShaderForwardClustered::ShaderData::casts_shadows): a material that blends or
+// reads the screen does not cast, a cut-out (alpha scissor, alpha hash) does. three draws a caster's depth with no
+// opacity (only map.a against alphaTest), so a blended pane stamps a solid shadow. Departure: Godot's glTF importer
+// makes BLEND a depth-prepass material, which casts where alpha >= 0.1; ours casts when its see-through is in its
+// TEXTURE (opacity >= 0.99: the library's palm leaves, a mesh door, a screen), as main does and as foliage.js tells
+// foliage from glass, and not when it is uniformly see-through (glass, wrap, tint: every such library surface is
+// 0.12-0.45). Transmission is three's screen-read refraction: never casts.
+const OPAQUE_UNIFORM = 0.99;
+const materialCasts = (m) => !m || (!(m.transmission > 0) && !m.transmissionNode?.isNode
+  && !(m.transparent && !(m.alphaTest > 0) && !m.alphaHash && (m.opacity ?? 1) < OPAQUE_UNIFORM));
+/** A mesh casts if any of its material slots does (castShadow is per object: a frame slot keeps its shadow). Read each
+ *  pass: a material component lands after the mesh, and materials.js replaces a transmissive material object. */
+const surfaceCasts = (m) => (Array.isArray(m.material) ? m.material.some(materialCasts) : materialCasts(m.material));
 /** All emitter (partly emitter: every mesh casts). Read each pass, not at registration: a thing's surface can arrive
  *  after its mesh (the material component lands on a later pass), and a lamp can be painted glowing in edit mode. */
 const isGlowBody = (c) => c.meshes.length > 0 && c.meshes.every((m) => emitterGlow(m.material) > 0);
@@ -737,6 +752,7 @@ function casterPass() {
     .map((c) => {
       const r = placeOf(c);
       if (nLights && holdsALight(_at, r) && isGlowBody(c)) return { c, s: -1 };
+      if (!c.meshes.some(surfaceCasts)) return { c, s: -1 };   // nothing in it would cast: no budget place
       return { c, s: inShadowReach(_at, r, eye) ? (r * r) / Math.max(1e-4, _at.distanceToSquared(eye)) : 0 };
     })
     .sort((a, b) => b.s - a.s);
@@ -747,6 +763,8 @@ function casterPass() {
   for (let i = 0; i < ranked.length; i++) {
     const { c, s } = ranked[i];
     const want = s >= 0 && (i < casterBudget || (c.casting && s >= edge && i < casterBudget + 4));
+    // a caster that stays on follows its meshes' surfaces (one fading out is cleared whole at the fade's end)
+    if (want && c.casting) { for (const m of c.meshes) { const k = surfaceCasts(m); if (m.castShadow !== k) m.castShadow = k; } continue; }
     if (want === c.casting) continue;
     if (!want) {                          // the draw is shed when the fade-out ends
       c.casting = false;
@@ -766,7 +784,7 @@ function casterPass() {
     enables++;
     c.casting = true;
     writeFade(c);                         // amount 0 before the first depth draw
-    for (const m of c.meshes) m.castShadow = true;
+    for (const m of c.meshes) m.castShadow = surfaceCasts(m);
     beginFade(c);
   }
 }
