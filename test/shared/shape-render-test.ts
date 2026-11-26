@@ -332,10 +332,10 @@ await tryRow('SK', async () => {
   const Wo = scratchWorld('w2r-sky-ao'); const so = () => Wo.state().entities['@world'].c.sky;
   const o1 = Wo.call('set', { id: '@world', component: 'sky', value: { hours: 9, ao: 1.5 } }), o1v = so()?.ao, o2 = Wo.call('sky', { ao: 3 }), o2v = so()?.ao;
   const obad = [Wo.call('sky', { ao: 3.5 }), Wo.call('sky', { ao: -0.1 }), Wo.call('set', { id: '@world', component: 'sky', value: { hours: 9, ao: 'dark' } })];
-  check('SK9 sky.ao (the world\'s ambient occlusion strength, Godot ssao_intensity) is a number 0..3 with no default: set and the sky act store it, past 3, below 0 and a non-number are refused, nothing stored',
+  check('SK8-ao sky.ao (the world\'s ambient occlusion strength, Godot ssao_intensity) is a number 0..3 with no default: set and the sky act store it, past 3, below 0 and a non-number are refused, nothing stored',
     o1.ok && o1v === 1.5 && o2.ok && o2v === 3 && obad.every((x) => !!x.refused) && so()?.ao === 3
     && K.fields.ao === 'number' && K.ranges?.ao?.min === 0 && K.ranges?.ao?.max === 3 && !('ao' in (K.defaults ?? {})), [o1.refused, o1v, o2.refused, o2v, obad.map((x) => x.refused?.code ?? x.ok), so()]);
-  check('SK9 …absent means none, its doc says indirect light only and that the viewer decides the cost, and the client hands it to the post pipeline', /none/.test(K.absentMeans?.ao ?? '') && /indirect/i.test(K.docs?.ao ?? '') && /viewer|setting/i.test(K.docs?.ao ?? '')
+  check('SK8-ao …absent means none, its doc says indirect light only and that the viewer decides the cost, and the client hands it to the post pipeline', /none/.test(K.absentMeans?.ao ?? '') && /indirect/i.test(K.docs?.ao ?? '') && /viewer|setting/i.test(K.docs?.ao ?? '')
     && /setAo\(a\.ao\)/.test(read('client/lib/sky/sky.js')), [K.absentMeans?.ao, K.docs?.ao]);
 });
 
