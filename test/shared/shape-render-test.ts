@@ -286,11 +286,11 @@ await tryRow('CA', () => {
   check('CA1 captions stores {session, n, gen, title?, line}: no window, no mediaTime', keys(C.fields) === keys({ session: 1, n: 1, gen: 1, title: 1, line: 1 }), Object.keys(C.fields));
 });
 
-// ===================================================================== sky: its 20 fields, radians, stamped fields refused, defaults in the registry
+// ===================================================================== sky: its 21 fields, radians, stamped fields refused, defaults in the registry
 await tryRow('SK', async () => {
   const K = COMPONENTS.sky;
-  const want = ['hours', 'rate', 'ts', 'tz', 'clouds', 'weather', 'weatherK', 'transition', 'azimuth', 'fog', 'exposure', 'ambient', 'sun', 'fill', 'forecast', 'override', 'gradient', 'system', 'colors', 'audio'];   // gradient: OMI_environment_sky (step 3a); system, colors, audio: main's (10-28)
-  check('SK1 sky has 20 fields (gradient, system, colors, audio joined; sun and fill kept, as main stored them (R 10-30); clock, dormantRated, world cut; weatherSeconds → transition)', keys(K.fields) === keys(Object.fromEntries(want.map((k) => [k, 1]))), Object.keys(K.fields));
+  const want = ['hours', 'rate', 'ts', 'tz', 'clouds', 'weather', 'weatherK', 'transition', 'azimuth', 'fog', 'exposure', 'bloom', 'ambient', 'sun', 'fill', 'forecast', 'override', 'gradient', 'system', 'colors', 'audio'];   // gradient: OMI_environment_sky (step 3a); system, colors, audio: main's (10-28); bloom: the world's glow (render lab 11-02)
+  check('SK1 sky has 21 fields (bloom, gradient, system, colors, audio joined; sun and fill kept, as main stored them (R 10-30); clock, dormantRated, world cut; weatherSeconds → transition)', keys(K.fields) === keys(Object.fromEntries(want.map((k) => [k, 1]))), Object.keys(K.fields));
   check('SK1 …azimuth in radians (default π), defaults and enums in the registry, units written', K.units?.azimuth === 'rad' && K.defaults?.azimuth === Math.PI && K.defaults?.hours === 12 && K.defaults?.clouds === 'cumulus' && K.enums?.weather?.includes('storm') && K.enums?.clouds?.includes('cirrus') && K.units?.ts === 'ms' && K.units?.transition === 's', [K.units, K.defaults]);
   const W = scratchWorld('w2r-sky');
   let r = W.call('set', { id: '@world', component: 'sky', value: { hours: 9, ts: 5 } });
@@ -321,6 +321,14 @@ await tryRow('SK', async () => {
   const a1 = Wa.call('set', { id: '@world', component: 'sky', value: { hours: 9, audio: true } }), a1v = sa()?.audio, a2 = Wa.call('sky', { audio: false }), a3 = Wa.call('set', { id: '@world', component: 'sky', value: { hours: 9, audio: 'yes' } });
   check('SK7 sky.audio (main\'s weather sounds) is a bool: set and the sky act store it, a non-bool is refused, absent means off, and the client reads it', a1.ok && a1v === true && a2.ok && sa()?.audio === false && code(a3) === 'shape'
     && K.fields.audio === 'bool' && /off/.test(K.absentMeans?.audio ?? '') && !!K.docs?.audio && /Boolean\(a\.audio\)/.test(read('client/lib/sky/sky.js')), [a1.refused, a1v, a2.refused, sa(), a3.refused]);
+  const Wb = scratchWorld('w2r-sky-bloom'); const sb = () => Wb.state().entities['@world'].c.sky;
+  const b1 = Wb.call('set', { id: '@world', component: 'sky', value: { hours: 9, bloom: 1.5 } }), b1v = sb()?.bloom, b2 = Wb.call('sky', { bloom: 3 }), b2v = sb()?.bloom;
+  const bad = [Wb.call('sky', { bloom: 3.5 }), Wb.call('sky', { bloom: -0.1 }), Wb.call('set', { id: '@world', component: 'sky', value: { hours: 9, bloom: 'bright' } })];
+  check('SK8 sky.bloom (the world\'s glow strength, Godot glow_intensity / Filament BloomOptions.strength) is a number 0..3 with no default: set and the sky act store it, past 3, below 0 and a non-number are refused, nothing stored',
+    b1.ok && b1v === 1.5 && b2.ok && b2v === 3 && bad.every((x) => !!x.refused) && sb()?.bloom === 3
+    && K.fields.bloom === 'number' && K.ranges?.bloom?.min === 0 && K.ranges?.bloom?.max === 3 && !('bloom' in (K.defaults ?? {})), [b1.refused, b1v, b2.refused, b2v, bad.map((x) => x.refused?.code ?? x.ok), sb()]);
+  check('SK8 …absent means none (every world\'s look before the field), its doc says the viewer decides the cost, and the client hands it to the post pipeline', /none/.test(K.absentMeans?.bloom ?? '') && /viewer|setting/i.test(K.docs?.bloom ?? '')
+    && /setBloom\(a\.bloom\)/.test(read('client/lib/sky/sky.js')), [K.absentMeans?.bloom, K.docs?.bloom]);
 });
 
 // ===================================================================== terrain: the sim's defaults, raster reserved, layer colours ints, water split out

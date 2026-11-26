@@ -177,6 +177,14 @@ try {
   check('(setup) the real sky arrives on the fake system: medium, baked dome attached, no gradient',
     sky.getCloudQuality() === 'medium' && !!SB.baked && !interim && !sky.skyBusy(), { q: sky.getCloudQuality(), baked: !!SB.baked, interim, log: log.slice(-4) });
 
+  // ---- 0. THE WORLD'S GLOW: sky.bloom rides the same tuning as its exposure (post.js); every apply sets it, absent = none
+  { const post = await import(lib('render/post.js')).catch((e) => ({ error: e?.message ?? String(e) }));
+    await sky.applySky({ ...ARGS, bloom: 1.5, ts: ++T }); await settle();
+    const on = post.postDebug?.().bloom;
+    await sky.applySky({ ...ARGS, ts: ++T }); await settle();
+    const off = post.postDebug?.().bloom;
+    check('SB1 a sky with bloom 1.5 hands the post pipeline 1.5; the next sky without it hands it none (every world\'s look before the field)', on === 1.5 && off === 0, { on, off, error: post.error }); }
+
   // ---- 1. ENTRY WHILE `high` IS PENDING -----------------------------------------------------------------------------
   // high chosen on the desktop while the sky is still arriving is only PENDING at entry. The cap takes it: the session
   // runs medium (baked), the live march never shows in the headset, and the choice still reads high.

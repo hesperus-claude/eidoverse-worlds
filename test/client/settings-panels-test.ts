@@ -13,7 +13,7 @@ import { stubResolve } from '../harness/stub.ts';
 const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
 plugin({ name: 'settings-stubs', setup(b) {
   const OLD_ROOT = /\/client\/lib\/((ui|render|player)\/)?[^/]+$/;   // the importers these stubs were written for: files of the lib root before tier two
-  for (const m of ['core', 'base', '(render/)?governor', '(render/)?lightrig', '(render/)?materials', '(xr/)?xrpanels', 'net', 'edit/catalog', '(avatar/)?avatar(-thumbnail)?', '(player/)?controller', '(audio/)?mictoggle'])
+  for (const m of ['core', 'base', '(render/)?governor', '(render/)?lightrig', '(render/)?materials', '(render/)?post', '(xr/)?xrpanels', 'net', 'edit/catalog', '(avatar/)?avatar(-thumbnail)?', '(player/)?controller', '(audio/)?mictoggle'])
     stubResolve(b, new RegExp(`^(\\.\\.?/)+${m}\\.js$`), (a) => (OLD_ROOT.test(a.importer.replace(/\\/g, '/')) ? { path: here('../stubs/settings-panels-stub.mjs') } : undefined));
   // vegetation/foliage.js asks for core one folder up
   stubResolve(b, /^\.\.\/core\.js$/, (a) => (/\/vegetation\/foliage\.js$/.test(a.importer.replace(/\\/g, '/')) ? { path: here('../stubs/settings-panels-stub.mjs') } : undefined));
@@ -171,6 +171,11 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
   check('…and hides the resolution row', row(res).hidden === true);
   shadows.checked = true; fire(shadows, 'change');
   check('re-checking shows it again', row(res).hidden === false && since(c1, 'setShadows')[1]?.[1] === true);
+  const glow = boxes.find((b) => row(b).textContent?.includes('glow (bloom)'));
+  check('a "glow (bloom)" check shows the viewer\'s ew-bloom (on by default), its hint saying the world decides how strongly and a headset draws none', !!glow && glow.checked === true && /world/.test(glow.title) && /headset/.test(glow.title), glow?.title);
+  if (glow) { glow.checked = false; fire(glow, 'change'); }
+  check('unchecking it calls setBloomPref(false) once and says so in the hint bar', since(c1, 'setBloomPref').length === 1 && since(c1, 'setBloomPref')[0][1] === false && /glow: off/.test(ui.el.hint.innerHTML), JSON.stringify(since(c1, 'setBloomPref')));
+  check('…live: no reload button (the pipeline is built and dropped as it goes)', !!glow && !row(glow).querySelector('button.reload'));
   check('antialiasing starts on', msaa.checked);
   msaa.checked = false; fire(msaa, 'change');
   check('unchecking writes PREF_MSAA=0', localStorage.getItem(stub.PREF_MSAA) === '0', String(localStorage.getItem(stub.PREF_MSAA)));
@@ -189,6 +194,9 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
   const scaleList = f.find((x: any) => x.label === 'render scale');
   check('the quad\'s scale list marks the current value active', scaleList?.rows.find((r: any) => r.active)?.id === '0.85', JSON.stringify(scaleList?.rows.map((r: any) => [r.id, r.active])));
   check('the quad\'s msaa check reads the pref', f.find((x: any) => x.k === 'msaa')?.value === false);
+  check('the quad\'s glow (bloom) check reads the pref', f.find((x: any) => x.k === 'bloom')?.value === false && f.find((x: any) => x.k === 'bloom')?.label === 'glow (bloom)', JSON.stringify(f.find((x: any) => x.k === 'bloom')));
+  const e3 = emitted.length; quad.dispatch('bloom', true);
+  check('quad dispatch(bloom) reaches setBloomPref and repaints', since(c2, 'setBloomPref')[0]?.[1] === true && emits(e3, 'xr:repaint') === 1, JSON.stringify(since(c2, 'setBloomPref')));
   quad.dispatch('fulldetail', true);
   check('quad dispatch(fulldetail) reaches setFullDetail', since(c2, 'setFullDetail')[0]?.[1] === true);
   check('…and the quad\'s full-detail check reads it back', quad.fields().find((x: any) => x.k === 'fulldetail')?.value === true);

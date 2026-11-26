@@ -101,3 +101,7 @@ let myShadow = false;
 export const myShadowPref = () => myShadow;
 export const setMyShadowPref = (on) => { calls.push(['setMyShadowPref', on]); myShadow = !!on; };
 export const applyOwnBodyShadow = async () => false;
+// the glow (bloom) row (render/post.js): the viewer's ew-bloom, on by default
+let bloomOn = true;
+export const bloomPref = () => bloomOn;
+export const setBloomPref = (on) => { calls.push(['setBloomPref', on]); bloomOn = !!on; };

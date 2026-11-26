@@ -280,6 +280,8 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["skypanel", "client/skypanel-state-test.ts", 1], // the sky panel's state lines; R 10-28: every shared select commits what it shows (the world select saved nothing)
   ["sky-bakelock", "client/sky-bakelock-test.mjs", 1], // the sky's one-bake-at-a-time lock (sky_bakelock.js): a queued prebuild waits, BAKE_AFTER runs inside the lock, no deadlock
   ["sky-env-upright", "client/sky-env-upright-test.mjs", 1], // scene.environment is the right way up: the env blit copies the bake upright for three's equirect lookup (v = 1 at the zenith), on both backends
+  ["post", "client/post-test.mjs", 1], // the post-processing pipeline (render/post.js): sky.bloom absent or ew-bloom off is main's plain frame with no pipeline built; a world's strength lives in one pipeline, edited live; XR draws plain; a failing pipeline drops to plain and says why
+  ["post-pixels", "client/post-pixels-check.ts", 1], // …and as pixels in headless Chromium (WebGL 2): nothing above threshold draws the plain frame's picture (tone mapping once, after bloom), an emitter glows, the targets live only with the pipeline
   ["sky-swapchain", "client/sky-swapchain-test.mjs", 1], // the sky's tier swaps (sky_swapchain.js): a superseded swap records nothing shown, a return after one acts, a stand-down keeps the dome
   ["sky-lifecycle", "client/sky-lifecycle-test.mjs", 1], // the sky's quality lifecycle on a scaled clock: held in the headset and applied once at exit, the cap takes the pending choice, a failed bake puts the live clouds back
   ["sky-degrade", "client/sky-degrade-test.mjs", 1], // 333-cm b2: a storage-texture build failure retries with the light cache off (degrade 1), even at quality high
@@ -472,7 +474,7 @@ export const CORE = ["kernel", "trig", "laws", "engine", "normative", "gov-reser
 // every suite that launches a Chromium (directly, through playwright, or through test/harness/harness.ts scratchBench). The
 // gate checks this list against the files themselves (browserLauncher), so a new browser suite can't hide in MAIN:
 // a host without Chromium would fail it there, and a host with one would run Chromes it didn't budget for.
-export const BROWSER = ["browser", "comps-parity", "world-card", "level-dive", "water-cross", "toast-group", "client", "refusedjoin", "client-b2", "build-client", "access-panel", "lock-strength", "swim-lists", "shiplist-probe", "xss-probe", "party-probe", "colour-picker", "vrmic-exec", "xr-nullfb", "client-tools", "harness"];
+export const BROWSER = ["browser", "comps-parity", "world-card", "level-dive", "water-cross", "toast-group", "client", "refusedjoin", "client-b2", "build-client", "access-panel", "lock-strength", "swim-lists", "shiplist-probe", "xss-probe", "party-probe", "colour-picker", "vrmic-exec", "xr-nullfb", "client-tools", "harness", "post-pixels"];
 export const laneOf = (name: string): Lane => (CORE.includes(name) ? "core" : BROWSER.includes(name) ? "browser" : "main");
 // the order the gate runs them: core (in CORE's order), then main, then browser
 export const ORDER = [...CORE, ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "main"), ...SUITES.map(([n]) => n).filter((n) => laneOf(n) === "browser")];

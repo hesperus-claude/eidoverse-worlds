@@ -225,3 +225,33 @@ console.log('draw batches: lifecycle, fallback, transforms, shadows, layers, war
   desk.dispose();
 }
 console.log('xr main-pass rule ok');
+
+// The main pass drawn through something else (render/post.js's RenderPipeline): batches.render(renderer, scene, camera,
+// draw) calls draw() in place of renderer.render, and the pipeline's own scene pass (renderer.render(scene, camera) from
+// inside it, between quad passes of other scenes) is what prepares the batches, once; the sources come back after.
+{
+  const pScene = new T.Scene(), pCam = new T.PerspectiveCamera(); pCam.position.set(7, 12, 28); pCam.lookAt(7, 0, 7); pCam.updateMatrixWorld(true);
+  const pMeshes = Array.from({ length: 20 }, (_, i) => { const m = new T.Mesh(geometry, material); m.position.set(1 + (i % 5), 1, 1 + Math.floor(i / 5)); pScene.add(m); return m; });
+  markDrawBatchSource(pScene); pScene.updateMatrixWorld(true);
+  const pb = new DrawBatches();
+  const quad = new T.Scene();
+  const rec = { render(s, c) { s.updateMatrixWorld(true); s.onBeforeRender?.(this, s, c); } };
+  let during = null, plainCalls = 0;
+  const r = pb.render({ render() { plainCalls++; } }, pScene, pCam, () => {
+    rec.render(quad, pCam);                 // a pass of another scene first (a bloom blur, the output quad)
+    rec.render(pScene, pCam);               // the pipeline's scene pass
+    during = { instanced: pb.debug().instanced, hidden: pMeshes.every((m) => m.layers.mask === 0) };
+    rec.render(pScene, pCam);               // a second pass of the same scene in one frame (a pre-pass) prepares nothing more
+    return 'drawn';
+  });
+  assert.equal(plainCalls, 0, 'with a draw, renderer.render is not called by the batches');
+  assert.equal(r, 'drawn', 'the draw\'s result is returned');
+  assert.deepEqual(during, { instanced: 20, hidden: true }, 'the pipeline\'s scene pass prepared the batches: ' + JSON.stringify(during));
+  assert(pMeshes.every((m) => m.layers.mask === 1), 'the sources come back after the pipeline');
+  // batching off (?batching=0) or a nested pass: the bypass still draws through `draw`, not around it
+  pb.enabled = false; let viaDraw = 0, around = 0;
+  pb.render({ render() { around++; } }, pScene, pCam, () => { viaDraw++; });
+  assert.deepEqual([viaDraw, around], [1, 0], 'batching off: the main pass still goes through draw');
+  pb.dispose();
+}
+console.log('main pass through a pipeline ok');
