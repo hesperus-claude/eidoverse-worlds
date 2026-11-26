@@ -152,6 +152,32 @@ console.log('WORLD — a world that sets it gets a pipeline with its strength');
   check('P2d …and on again: through a new pipeline, the strength kept', viaPipe(d) && pipelinesMade === 3 && Math.abs(live()?.glow?.strength.value - 1) < 1e-9, { pipelinesMade });
 }
 
+console.log('CAP — what feeds the bloom is clamped per channel after the threshold (Godot glow_hdr_luminance_cap 12)');
+{
+  setBloom(1); frame();
+  const p = live();
+  const { bloom: bloomNode } = await import('../../client/node_modules/three/examples/jsm/tsl/display/BloomNode.js');
+  const { vec4 } = await import('../../client/node_modules/three/build/three.tsl.js');
+  const stockNode = bloomNode(vec4(0), 1, 0, 0), stock = stockNode.highPassFn; stockNode.dispose();
+  check('P9 the cap is a named constant at Godot\'s default, 12 (scene linear units before exposure)', post.BLOOM_LUMINANCE_CAP === 12, post.BLOOM_LUMINANCE_CAP);
+  check('P9 …and the live BloomNode\'s high pass is ours (capped), not three\'s stock one', !!p?.glow && typeof p.glow.highPassFn === 'function' && p.glow.highPassFn !== stock, typeof p?.glow?.highPassFn);
+}
+
+console.log('REBUILDS — exactly which changes build a pipeline (review 11-25: structure changes are rare, strength is a uniform)');
+{
+  setBloom(0); frame(); setBloom(1); frame();
+  const steps = [
+    ['strength 1 → 2.5', () => setBloom(2.5), 0],
+    ['strength 2.5 → 3 (held)', () => setBloom(9), 0],
+    ['XR in and out', () => { renderer.xr.isPresenting = true; frame(); renderer.xr.isPresenting = false; }, 0],
+    ['batching off and on', () => { R.setDrawBatching?.(false); frame(); R.setDrawBatching?.(true); }, 0],
+    ['the world loses bloom and gains it again', () => { setBloom(0); frame(); setBloom(1); }, 1],
+    ['the viewer switches ew-bloom off and on', () => { setPref(false); frame(); setPref(true); }, 1],
+  ];
+  const got = steps.map(([name, act, want]) => { const n = pipelinesMade; act(); frame(); return [name, pipelinesMade - n, want]; });
+  check('P8 a strength edit, XR and batching build nothing; a world gaining bloom or the viewer\'s switch builds exactly one', got.every(([, n, want]) => n === want), got);
+}
+
 console.log('XR — the eye pass is plain; the pipeline waits for the desktop');
 {
   setBloom(1); frame();

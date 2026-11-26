@@ -104,12 +104,28 @@ try {
     post.setBloom(1.5); await p.postFrame();
     const pr = p.renderer.getPixelRatio(); p.renderer.setPixelRatio(pr * 0.5); await p.postFrame();
     const sz = p.renderer.getDrawingBufferSize(new p.THREE.Vector2()), rt = post.postDebug()._pipe?.scenePass?.renderTarget;
-    const r = { ofPipe, left, built, buffer: [sz.x, sz.y], target: rt ? [rt.width, rt.height] : null };
+    const r = { ofPipe, left, built, failed: post.postDebug().failed, buffer: [sz.x, sz.y], target: rt ? [rt.width, rt.height] : null };
     p.renderer.setPixelRatio(pr); post.setBloom(0); await p.postFrame();
     return r;`);
   console.log(`  · ${JSON.stringify(after)}`);
   check("PX3 …and at strength 0 they are gone: every render-target texture the pipeline made (its scene pass, colour and depth, and its bloom mips) is destroyed, nothing held", after.ofPipe >= 12 && after.left.length === 0 && after.built === false, JSON.stringify(after));
   check("PX4 a pixel-ratio change (the render-scale governor's lever): the scene pass's target follows the drawing buffer", !!after.target && after.target[0] === after.buffer[0] && after.target[1] === after.buffer[1], JSON.stringify(after));
+
+  // PX6: an emitter at 60× white: the bloom's bright target (BloomNode's high-pass output, half resolution, half float) holds
+  // 12 at its centre, Godot's glow_hdr_luminance_cap, per channel after the threshold; uncapped it would hold 60
+  const cap = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js'), T = p.THREE;
+    const hot = new T.Mesh(new T.SphereGeometry(0.8, 32, 16), new T.MeshStandardNodeMaterial({ color: 0x000000, emissive: 0xffffff, emissiveIntensity: 60 }));
+    p.S.add(hot); await p.renderer.compileAsync(p.S, p.cam);
+    post.setBloom(1.5); await p.settle(p.postFrame);
+    const rt = post.postDebug()._pipe?.glow?._renderTargetBright; if (!rt) return { error: 'no bright target' };
+    const [cx, cy] = p.proj(hot), x = Math.round(cx * rt.width / p.W), y = Math.round(rt.height / 2);   // the emitter sits at the vertical centre: either y origin reads it
+    const raw = await p.renderer.readRenderTargetPixelsAsync(rt, x - 1, y - 1, 3, 3);
+    const v = [...raw].map((h) => (raw instanceof Uint16Array ? T.DataUtils.fromHalfFloat(h) : h));
+    const rgb = []; for (let i = 0; i < v.length; i += 4) rgb.push(Math.max(v[i], v[i + 1], v[i + 2]));
+    p.S.remove(hot); post.setBloom(0); await p.postFrame();
+    return { failed: post.postDebug().failed, size: [rt.width, rt.height], at: [x, y], max: Math.max(...rgb), rgb, type: raw?.constructor?.name };`);
+  console.log(`  · ${JSON.stringify(cap)}`);
+  check("PX6 an emitter at 60× white feeds the bloom 12 per channel, not 60 (Godot's glow_hdr_luminance_cap, clamped after the threshold)", !cap.error && Math.abs(cap.max - 12) < 0.05, JSON.stringify(cap));
 
   const real = errors.filter((e) => !/popErrorScope|sky finish/.test(e));
   check("PX5 no page errors", real.length === 0, JSON.stringify(real.slice(0, 4)));
