@@ -24,7 +24,7 @@ const argOf = (f) => { const i = ARGV.indexOf(f); return i < 0 ? null : ARGV[i +
 const CASE = argOf('--case');
 
 // main: four casting slots; default: today's dial (one); nocache: ?shadowcache=0, the lab's A/B switch
-const CASES = { main: { dial: '4', url: '' }, default: { dial: null, url: '' }, nocache: { dial: '4', url: '?shadowcache=0' } };
+const CASES = { main: { dial: '4', url: '' }, default: { dial: null, url: '' }, nocache: { dial: '4', url: '?shadowcache=0' }, convert: { dial: null, url: '' } };
 
 if (CASE) {
   const C = CASES[CASE];
@@ -80,6 +80,24 @@ if (CASE) {
     const pl = slots[slotOf('room:a')];
     check('N1 ?shadowcache=0: a casting slot redraws every frame as before (autoUpdate on)', pl.shadow.autoUpdate === true && rig.shadowCacheOn?.() === false, { autoUpdate: pl.shadow.autoUpdate });
     check('N2 ...and it is casting', d().shadows.slots[slotOf('room:a')].drawing === true);
+    out();
+  }
+
+  if (CASE === 'convert') {
+    // at the default dial no spot slot is born casting-shaped; the first spot that asks converts one, and the cache and
+    // the budget cover it from then on
+    const down = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+    rig.requestLight('spot:desk', { authored: true, intensity: 30, range: 5, shadows: true, pos: [1, 3, -5], q: down, spot: { angle: 0.6, inner: 0.4 } });
+    const chair = box([1.2, 0.25, -5.2]);
+    settle();
+    const srow = () => d().shadows.spotSlots?.find((r) => r.holder === 'spot:desk') ?? null;
+    const sho = () => srow()?.cache?.handoffs ?? NaN;
+    check('CV1 (setup) the asking spot converted a slot and casts', (d().shadows.spotConversions ?? []).length === 1 && srow()?.drawing === true, { c: d().shadows.spotConversions, row: srow() });
+    const h0 = sho(); frames(30);
+    check('CV2 a converted spot is cached: still, no redraw over 30 frames', sho() - h0 === 0, srow());
+    chair.position.x += 0.2; const h1 = sho(); frame();
+    check('CV3 ...a caster moved in its range: one redraw, reason matrix', sho() - h1 === 1 && srow().cache.reason === 'matrix', srow());
+    check('CV4 ...inside the update budget (it counts with the point slots)', d().shadows.cache?.budget === 2 && srow().cache.deferred === 0, srow());
     out();
   }
 

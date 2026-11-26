@@ -33,6 +33,8 @@ const CASES = {
   n8: { stored: '8', n: 8 },         // every one of the 8 default slots
   spot1: { stored: null, n: 1, spots: true },   // spots: one dial over both kinds, at today's default
   spot2: { stored: '2', n: 2, spots: true },
+  spot1on: { stored: null, n: 1, spots: 'on', url: '?spotshadows=1' },    // the A/B override: born casting-shaped at the default
+  spot1off: { stored: null, n: 1, spots: 'off', url: '?spotshadows=0' },  // the A/B override: no spot ever casts
 };
 // the full scenario runs at these; the others only check the boot shape
 const FULL = ['n1', 'n2', 'n4'];
@@ -45,6 +47,7 @@ if (CASE) {
     stubResolve(build, /^(\.\.?\/)+(render\/)?warmqueue\.js$/, () => ({ path: here('../stubs/lod-client-stub.mjs') }));   // warmDepth resolves at once
   } });
   const C = CASES[CASE];
+  if (C.url) globalThis.happyDOM?.setURL?.(`http://localhost/${C.url}`);   // before the stub reads CONFIG.params
   localStorage.removeItem('ew-shadows');   // the viewer's switch: absent = on
   if (C.stored == null) localStorage.removeItem('ew-lamp-shadows'); else localStorage.setItem('ew-lamp-shadows', C.stored);
   const { THREE, camera } = await import('../stubs/core-stub.mjs');
@@ -96,12 +99,44 @@ if (CASE) {
     const spotRows = () => d().shadows.spotSlots ?? [];
     const spotRow = (k) => spotRows().find((r) => r.holder === k) || null;
     const spotCasts = (k) => Boolean(spotRow(k)?.drawing);
-    check(`S1 born: ${NS} spot slot(s) cast (rigDebug castingSpots), the same dial`, d().shadows.castingSpots === NS && spotRows().length === NS, d().shadows.castingSpots);
+    // Spot slots are born casting-shaped only above the default dial (SPOT_SHADOWS_BORN_ABOVE): one casting-shaped spot
+    // slot puts a shadow lookup in every lit material while no spot casts (the 11-26 iGPU figure for it, ~3 ms, was taken
+    // on pages still loading and is void). At the default the first spot that asks converts one.
+    const bornSpots = C.spots === 'off' ? 0 : C.spots === 'on' || N > 1 ? NS : 0;
+    const conversions = () => d().shadows.spotConversions ?? null;
+    // the lights' pipeline shape (three's LightsNode cache key: each light's id and castShadow, in scene order)
+    const rigShape = () => [...d()._slots, ...(d()._spotSlots ?? [])].map((l) => +l.castShadow).join('');
+    const PARENT_SHAPE = '1' + '0'.repeat(d()._slots.length - 1) + '0'.repeat((d()._spotSlots ?? []).length);   // hep/shadow-cache at dial 1
+    check(`S1 born: ${bornSpots} spot slot(s) casting-shaped (rigDebug castingSpots)`, d().shadows.castingSpots === bornSpots && spotRows().length === bornSpots, d().shadows.castingSpots);
+    if (!bornSpots) check('P1 at the default dial the lights\' shape is the parent branch\'s: one casting point slot, no casting-shaped spot', rigShape() === PARENT_SHAPE, { shape: rigShape(), PARENT_SHAPE });
     const down = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2];
     const spotAt = (key, pos, shadows, angle = 0.6, extra = {}) => rig.requestLight(key, { authored: true, intensity: 30, range: 6, shadows, pos, q: down, spot: { angle, inner: angle * 0.6 }, ...extra });
+    spotAt('spot:plain', [2, 3, -4], false);
+    tick();
+    const shape0 = rigShape();
+    check('P2 a lit spot that does not ask converts nothing', d().spots.some((x) => x.intensity > 0) && (conversions()?.length ?? 0) === 0 && d().shadows.castingSpots === bornSpots, { c: conversions(), shape: shape0 });
+    rig.releaseLight('spot:plain');
+    tick();
+    if (C.spots === 'off') {
+      const g = new THREE.Group(); g.position.set(0, 1, -2);
+      g.add(new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshStandardMaterial({ emissive: 0xffffff, emissiveIntensity: 2 }))); g.updateMatrixWorld(true);
+      const body = rig.attachLamps(g, 'body:me', { shadows: true })[0].key;
+      spotAt('spot:desk', [0, 3, -4], true);
+      tick();
+      check('O1 ?spotshadows=0: a spot that asks converts nothing and lights without casting', d().shadows.castingSpots === 0 && (conversions()?.length ?? 0) === 0 && d().spots.some((x) => x.intensity > 0), { c: conversions(), spots: d().spots });
+      check('O2 ...and the chest lamp keeps the one shadow', casts(body), rowOf(body));
+      out();
+      process.exit(0);
+    }
     spotAt('spot:desk', [0, 3, -4], true);
     tick();
     check('S2 a world spot that asks casts', spotCasts('spot:desk'), spotRows());
+    if (!bornSpots) {
+      const c = conversions() ?? [];
+      check('P3 the first spot that asks converts one spot slot, once, counted with when', c.length === 1 && c[0].slot === 0 && Number.isFinite(c[0].at) && d().shadows.castingSpots === 1 && d()._spotSlots?.[0]?.castShadow === true, c);
+      tick(3);
+      check('P3b ...and only once (later re-ranks convert nothing more)', (conversions() ?? []).length === 1, conversions());
+    } else check('P3 born casting-shaped: no conversion', (conversions() ?? null)?.length === 0, conversions());
     const g = new THREE.Group(); g.position.set(0, 1, -2);
     const m = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshStandardMaterial({ emissive: 0xffffff, emissiveIntensity: 2 }));
     g.add(m); g.updateMatrixWorld(true);
@@ -116,6 +151,7 @@ if (CASE) {
     rig.updateRequest('spot:desk', { shadows: false });
     tick();
     check('S4 the spot stops asking: the chest lamp casts again, the spot slot draws nothing', casts(body) && !spotCasts('spot:desk') && !spotRows().some((r) => r.drawing), { spot: spotRows(), body: rowOf(body) });
+    check('P4 ...the converted slot stays casting-shaped (never flipped back within the page)', d()._spotSlots?.[0]?.castShadow === true && (conversions() ?? []).length === (bornSpots ? 0 : 1), { c: conversions(), shape: rigShape() });
     rig.updateRequest('spot:desk', { shadows: true });
     rig.requestLight('complight:pt', { authored: true, intensity: 30, range: 6, shadows: true, pos: [1, 2, -3] });
     tick();
@@ -130,6 +166,12 @@ if (CASE) {
     const n = 512, tex = 1.5 * (2 * Math.min(3, 6) * Math.tan(0.6)) / n;
     check('S7 the spot is tuned as a world lamp in texels: bias -0.00002, normalBias 1.5 texels at min(3 m, range), a 512 map', sr && sr.bias === -0.00002 && near(sr.normalBias, tex) && sr.map === 512, { sr, tex });
     check('S7b ...near 0.03 (three\'s spot default 0.5 clips a lamp\'s own shade)', sr?.near === 0.03, sr);
+    spotAt('spot:two', [-1, 3, -4], true);
+    tick();
+    check(`P5 a second spot that asks: ${NS} spot(s) cast, ${bornSpots ? 'no' : 'still one'} conversion, no second slot converted`, spotRows().filter((r) => r.drawing).length === NS && d().shadows.castingSpots === NS
+      && (conversions() ?? []).length === (bornSpots ? 0 : 1), { rows: spotRows(), c: conversions() });
+    rig.releaseLight('spot:two');
+    tick();
     // a spot that did not ask, seated in the casting spot slot, and one that asks in the other: they trade places
     rig.releaseLight('spot:desk'); rig.releaseOwner('body:me'); tick();
     spotAt('spot:quiet', [0, 3, -3.5], false, 0.6, { intensity: 60 });   // the brighter: ranked (and seated) first
