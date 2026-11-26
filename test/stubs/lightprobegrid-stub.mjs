@@ -14,7 +14,7 @@ export class LightProbeGrid extends THREE.Object3D {
   }
   bake(renderer, baked, opts) {
     if (failNext.n > 0) { failNext.n--; throw new Error(failNext.message); }
-    bakes.push({ grid: this, scene: baked, intensity: this.intensity, ...opts });
+    bakes.push({ grid: this, scene: baked, children: [...baked.children], intensity: this.intensity, ...opts });   // children: what the proxy held at this step
   }
   dispose() { this.disposed = true; }
 }

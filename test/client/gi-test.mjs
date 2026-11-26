@@ -115,7 +115,7 @@ const regs = [];   // what gi.js registers with three's node library (G12), and 
 core.renderer.library = { addLight: (nodeClass, lightClass) => regs.push({ nodeClass, lightClass, bakesBefore: LP.bakes.length }) };
 let now = 1e6; performance.now = () => now;
 const run = async (frames) => { for (let i = 0; i < frames; i++) { now += 20; FB.tick(now); G.updateGi(); await new Promise((r) => setImmediate(r)); } };
-const giRoom = (gi, extra = {}) => ({ entities: { walls: { pos: [0, 0, 0] }, room: { pos: [0, 1.5, 0], zone: { shape: 'box', size: [3, 3, 3] }, ...(gi ? { 'gi-volume': gi } : {}), ...extra } } });
+const giRoom = (gi, things = {}) => ({ entities: { walls: { pos: [0, 0, 0] }, room: { pos: [0, 1.5, 0], zone: { shape: 'box', size: [3, 3, 3] }, ...(gi ? { 'gi-volume': gi } : {}) }, ...things } });   // things: more entities beside the room
 const quiet = () => ({ made: LP.made.length, bakes: LP.bakes.length, loads: gridModuleLoads, objectReads, added: added.length, dbg: G.giDebug?.() });
 
 if (G) {
@@ -182,6 +182,58 @@ if (G) {
     pl.length === 1 && pl[0].isPointLight && pl[0].intensity === 10 && pl.every((l) => l.castShadow === false) && pm.length > 0 && pm.every((m) => m.castShadow === false),
     [pl.map((l) => [l.type, l.intensity, l.castShadow]), pm.map((m) => m.castShadow)]);
   LR.releaseLight('complight:bulb');
+
+  // ---- the rebake storm (render-lab 11-23: "6-9 rebakes per load, one per lanes-idle, each new proxy's first step stalling
+  // the main thread 13-35 s"). A world loads, its models land one by one, the lanes drain after each: one bake, started
+  // once the room's static content has settled (the scheduler's queue at P.FAR drained: what main.js's ready gate reads),
+  // and a rebake only when what the bake sees changes. Godot never rebakes by itself (VoxelGI/LightmapGI bake on request).
+  const Sch = await import('../../client/lib/render/scheduler.js'), BUS = await import('../stubs/gi-base-stub.mjs');
+  const jobsOf = () => LP.bakes.filter((b) => b.pass === 0 && b.start === 0).length;   // each bake job starts at probe 0, pass 0
+  const meshAt = (x, z, extra) => { const w = new core.THREE.Scene(), g = new core.THREE.Group(); w.add(g); const m = new core.THREE.Mesh(new core.THREE.BoxGeometry(0.5, 0.5, 0.5), new core.THREE.MeshStandardMaterial()); m.position.set(x, 0.5, z); g.add(m); if (extra) extra(g); return g; };
+  const beat = async () => { BUS.bus.emit('lanes-idle'); await run(100); };   // the lanes drain, then 2 s pass
+  St.reset(); await run(10);
+  LR.requestLight('complight:lamp1', { authored: true, pos: [0, 2.5, 0], intensity: 20, range: 6, decay: 2 });
+  for (const k of [...roomMeshes.keys()]) if (k !== 'walls') roomMeshes.delete(k);
+  LP.bakes.length = 0;
+  const landed = [];
+  for (let i = 0; i < 4; i++) Sch.schedule({ key: `model:m${i}`, lane: 'net', priority: Sch.P.NEAR, run: () => new Promise((r) => landed.push(r)) });
+  St.hydrate(giRoom({ bounces: 1 }, { cup: { pos: [0.5, 1, 0.5], grabbable: {} } }));
+  await run(100);
+  for (let i = 0; i < 4; i++) { roomMeshes.set(`m${i}`, meshAt(-1 + i * 0.6, 0.3)); landed[i]?.(); await run(2); await beat(); }
+  await run(300);
+  const afterLoad = { jobs: jobsOf(), steps: LP.bakes.length, meshes: LP.bakes.at(-1)?.children?.filter((o) => o.isMesh).length };
+  check('R1 a load whose four models land one by one, the lanes draining after each, bakes ONCE, after the last has landed, and finishes (54 steps, every model in the proxy)',
+    afterLoad.jobs === 1 && afterLoad.steps === 54 && afterLoad.meshes === 5 && G.giDebug().baking === null, afterLoad);
+  for (let i = 0; i < 3; i++) await beat();
+  await run(300);
+  check('R1 …more lanes-idle beats with nothing changed bake nothing more', jobsOf() === 1 && LP.bakes.length === 54, [jobsOf(), LP.bakes.length]);
+  roomMeshes.set('m4', meshAt(1, -1)); await beat(); await run(300);
+  check('R1 …a model that lands later rebakes once, with it in the proxy', jobsOf() === 2 && LP.bakes.length === 108 && LP.bakes.at(-1).children.filter((o) => o.isMesh).length === 6, [jobsOf(), LP.bakes.length]);
+  { const j0 = jobsOf(), n0 = LP.bakes.length;   // the owner asks for finer probes: a bake of ~250 probes, ~10 s at a probe a frame
+    const finer = structuredClone(St.state.st); finer.entities.room['gi-volume'] = { bounces: 1, spacing: 0.5 }; St.applyView(finer);
+    await run(100);                                                                  // 1.5 s quiet, then the bake is under way
+    const mid = LP.bakes.length - n0; BUS.bus.emit('lanes-idle'); await run(800);   // a wake with nothing new, mid-bake
+    const c = G.giDebug().grids[0]?.counts ?? [0, 0, 0], n = c[0] * c[1] * c[2];
+    const steps = LP.bakes.slice(n0).map((b) => `${b.pass}:${b.start}`), want = [0, 1].flatMap((ps) => [...Array(n).keys()].map((i) => `${ps}:${i}`));
+    check('R1 …and a wake in the middle of a bake, with nothing new, lets it finish: one job, every step in order, no restart', n > 27 && mid > 0 && mid < 2 * n && jobsOf() === j0 + 1 && JSON.stringify(steps) === JSON.stringify(want) && G.giDebug().baking === null, [n, mid, jobsOf() - j0, steps.length]); }
+  const p1 = LP.bakes[0].children, p2 = LP.bakes.at(-1).children, ids = (ch) => ch.filter((o) => o.isLight).map((l) => l.id);   // what each bake's proxy held at its step
+  check('R2 a rebake lights its proxy with the SAME light objects as the last one (three keys every lit pipeline by light id: new lights rebuild every proxy material, the first-step stall)',
+    ids(p1).length === 1 && JSON.stringify(ids(p1)) === JSON.stringify(ids(p2)), [ids(p1), ids(p2)]);
+  const shared = p2.filter((o) => o.isMesh && p1.includes(o)).length;
+  check('R2 …and keeps the mesh copies of what did not change', shared === 5, shared);
+  const cupMesh = meshAt(0.5, 0.5); roomMeshes.set('cup', cupMesh);
+  const gz = (() => { const w = new core.THREE.Scene(), g = new core.THREE.Group(); w.add(g); const b = new core.THREE.Mesh(new core.THREE.SphereGeometry(0.13), new core.THREE.MeshBasicMaterial()); b.userData.isGizmo = true; b.position.set(0, 2, 0); g.add(b); return g; })();   // an Empty's bulb, nothing else
+  roomMeshes.set('bulb', gz);
+  const before = LP.bakes.length; await beat(); await run(300);
+  const p3 = LP.bakes.at(-1).children, srcOf = (m) => m.geometry;
+  check('R3 the bake leaves out editor gizmos (a light\'s bulb) and things that move (grabbable, dynamic or kinematic physics, motion, openable): Godot bakes only gi_mode static',
+    !p3.some((m) => m.isMesh && (srcOf(m) === gz.children[0].geometry || srcOf(m) === cupMesh.children[0].geometry)), [LP.bakes.length - before, p3.length]);
+  check('R3 …so a bulb appearing and a grabbable cup landing do not rebake', LP.bakes.length === before, LP.bakes.length - before);
+  const moved = structuredClone(St.state.st); moved.entities.cup.pos = [0.2, 1, 0.2];
+  St.applyView(moved); await beat(); await run(300);
+  check('R3 …nor does carrying the cup about', LP.bakes.length === before, LP.bakes.length - before);
+  LR.releaseLight('complight:lamp1');
+  for (const k of [...roomMeshes.keys()]) if (k !== 'walls') roomMeshes.delete(k);
 }
 check('G10 Video settings carry the GI row through the dial\'s own module (videopanel.js reads render/gipref.js, not the bake)', /from '\.\.\/render\/gipref\.js'/.test(read('client/lib/ui/videopanel.js')) && /giPref\(\)/.test(read('client/lib/ui/videopanel.js')) && /setGiPref\(/.test(read('client/lib/ui/videopanel.js')), '');
 check('G10 …the frame loop steps it, hands it the world\'s objects, and EW.gi reads giDebug (main.js)', /registerSystem\('gi', updateGi\)/.test(read('client/main.js')) && /setGiObjects\(\(\) => entities\)/.test(read('client/main.js')) && /\bgi: giDebug\b/.test(read('client/main.js')), '');
