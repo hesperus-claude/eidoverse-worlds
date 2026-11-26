@@ -179,6 +179,7 @@ function stepBake() {
   if (!cur || live.get(cur.l.plan.id) !== cur.l) { job.queue.shift(); if (!job.queue.length) job = null; return; }
   const g = ask('gi', { gpu: true, waited }); if (!g) { waited++; return; } waited = 0;
   const t0 = performance.now(), s = cur.steps[cur.i++], far = Math.hypot(...cur.l.plan.size) + 20;
+  cur.l.grid.intensity = cur.l.plan.intensity;   // three's bounce pass reads it (_updateBounceGrid): a bake holds the room, not the hour; updateGi dims it again below, before the frame draws
   try { cur.l.grid.bake(renderer, job.proxy, { cubemapSize: cur.l.plan.cube, near: 0.05, far, ...s }); }
   catch (e) { giOff(`bake failed: ${e?.message ?? e}`); return; }
   finally { spent('gi', performance.now() - t0, null, g); }
