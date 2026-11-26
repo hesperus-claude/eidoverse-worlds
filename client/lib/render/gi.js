@@ -3,12 +3,15 @@
 // VoxelGI: no voxels, no live relighting; only that the client bakes it resembles VoxelGI. The world owns the look (the component and its strength), each viewer's ew-gi dial the cost
 // (render/gipref.js). A grid is baked a probe a frame through the shared frame budget, from a PROXY of the room (its opaque
 // unskinned meshes at their world matrices and the placed lights near it), never the live scene: baking the live client
-// scene hung the page (render-lab 11-09, probes/gi-grid.js). Rebaked in place, debounced, once loads settle.
+// scene hung the page (render-lab 11-09, probes/gi-grid.js). Baked once the room's static content has settled (the realizers'
+// queue drained to P.FAR, the lanes idle, 1.5 s quiet), and rebaked only when what the bake sees changes (its signature):
+// Godot never rebakes by itself, and bakes only geometry flagged static, so what moves and editor gizmos stay out.
 // No gi-volume or the dial off: three's grid code never loads and nothing is built.
 import { THREE, TSL, scene, renderer, backendName } from '../core.js';
 import { bus } from '../base.js';
 import { state, onWorldChange } from '../state.js';
 import { laneBusy } from './loadwork.js';
+import { pending, P } from './scheduler.js';
 import { ask, spent } from './framebudget.js';
 import { worldLights, glowScale } from './lightrig.js';
 import { GI_LEVELS, giPref, setGiPref, onGiPref } from './gipref.js';
@@ -93,6 +96,7 @@ let objects = () => new Map();
 export function setGiObjects(fn) { objects = fn; }
 const live = new Map();          // volume id -> { grid, plan, key, added }
 let dirtyAt = 0, job = null, waited = 0, starting = false, LPG = null, failed = null;
+let baked = null;               // the signature of the static set the grids hold (or are baking)
 const QUIET_MS = 1500;           // a rebake waits for the world to stop changing
 function touch() { dirtyAt = performance.now(); }
 const boxOf = (p, pad = 0) => new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(...p.center), new THREE.Vector3(...p.size).addScalar(2 * pad));
@@ -100,7 +104,7 @@ const nearAny = (id) => { const pos = state.st.entities?.[id]?.pos; if (!v3(pos)
 // what can make or unmake a volume; anything else matters only while one is live
 const SHAPES = new Set(['gi-volume', 'zone', 'disabled']);
 onWorldChange((ev) => {
-  if (ev?.type === 'reset') { for (const id of [...live.keys()]) drop(id); job = null; }
+  if (ev?.type === 'reset') { for (const id of [...live.keys()]) drop(id); job = null; baked = null; clearProxy(); }
   if (!giTouches(ev, nearAny)) return;
   const { what, comp: name } = ev;
   if (live.size || job || ev.type !== 'change' || what === 'born' || what === 'gone' || what === 'parent' || SHAPES.has(name)) touch();
@@ -110,37 +114,76 @@ bus.on?.('lanes-idle', () => { if (live.size || job) touch(); });   // models fi
 
 function drop(id) { const l = live.get(id); if (!l) return; scene.remove(l.grid); l.grid.dispose(); live.delete(id); }
 
-// the proxy: the world's opaque, unskinned meshes near a volume at their world matrices, and every placed light near one
-function buildProxy(plans) {
-  const proxy = new THREE.Scene(); proxy.background = new THREE.Color(0, 0, 0);
-  const boxes = plans.map((p) => boxOf(p, 1)), b = new THREE.Box3();
-  for (const obj of objects().values()) {
-    if (!obj?.parent) continue;
+// What moves is no part of a static bake (Godot's gi_mode: Static bakes, Dynamic is only lit). Main has no per-thing flag, so
+// the components that move a thing decide: carryable (grabbable), simulated or animated (physics dynamic | kinematic), a
+// motion (any slot), an openable; the thing itself or anything it hangs under.
+const MOVES = (c) => !!c && ((c.grabbable !== undefined && c.grabbable?.enabled !== false) || c.openable !== undefined
+  || c.physics?.kind === 'dynamic' || c.physics?.kind === 'kinematic' || Object.keys(c).some((k) => k === 'motion' || k.startsWith('motion:')));
+function moves(id) { const es = state.st.entities ?? {}; for (let k = id, n = 0; k && n < 33; k = es[k]?.parent?.to, n++) if (MOVES(es[k])) return true; return false; }
+
+/** What a bake would see: the opaque, unskinned, static meshes near a volume (never an editor gizmo: a light's bulb) and every
+ *  placed light near one (the rig's requests, not its slots: the pool lights ~8 of a room's lamps at a time). */
+function staticSet(plans) {
+  const boxes = plans.map((p) => boxOf(p, 1)), b = new THREE.Box3(), meshes = [];
+  for (const [id, obj] of objects()) {
+    if (!obj?.parent || moves(id)) continue;
     obj.updateMatrixWorld(true);
     obj.traverseVisible((x) => {
-      if (!(x.isMesh || x.isInstancedMesh) || x.isSkinnedMesh || !x.geometry || !x.material) return;
+      if (!(x.isMesh || x.isInstancedMesh) || x.isSkinnedMesh || !x.geometry || !x.material || x.userData?.isGizmo) return;
       if ((Array.isArray(x.material) ? x.material : [x.material]).every((m) => m.transparent)) return;
       if (!boxes.some((bx) => bx.intersectsBox(b.setFromObject(x, false)))) return;
-      const m = x.isInstancedMesh ? new THREE.InstancedMesh(x.geometry, x.material, x.count) : new THREE.Mesh(x.geometry, x.material);
-      if (x.isInstancedMesh) { m.instanceMatrix.copy(x.instanceMatrix); m.instanceMatrix.needsUpdate = true; }
-      m.matrixAutoUpdate = false; m.matrix.copy(x.matrixWorld); m.matrixWorld.copy(x.matrixWorld); m.frustumCulled = false;
-      proxy.add(m);
+      meshes.push(x);
     });
   }
-  for (const L of worldLights()) {   // the rig's requests, not its slots: the pool lights ~8 of a room's lamps at a time
-    if (!boxes.some((bx) => bx.distanceToPoint(L.pos) <= L.range)) continue;
-    const l = L.spot ? new THREE.SpotLight(L.color, L.intensity, L.range, L.spot.angle, L.spot.angle > 0 ? Math.min(1, Math.max(0, (L.spot.angle - (L.spot.inner ?? 0)) / L.spot.angle)) : 0, L.decay)
-      : new THREE.PointLight(L.color, L.intensity, L.range, L.decay);
-    l.castShadow = false; l.position.copy(L.pos);
-    if (L.spot) { l.target.position.copy(L.pos).add(L.dir); proxy.add(l.target); }
-    proxy.add(l);
+  const lights = worldLights().filter((L) => boxes.some((bx) => bx.distanceToPoint(L.pos) <= L.range));
+  return { meshes, lights };
+}
+const r4 = (v) => Math.round(v * 1e4) / 1e4;
+/** The static set's signature: the plans, each mesh's geometry, materials and world matrix (an instanced one's count and
+ *  instance version), each light as it stands. Equal signatures bake the same grid, so nothing rebakes. */
+function signatureOf(plans, { meshes, lights }) {
+  return JSON.stringify([plans.map((p) => [p.id, p.center, p.size, p.counts, p.cube, p.bounces, p.intensity, p.falloff]),
+    meshes.map((x) => [x.geometry.uuid, (Array.isArray(x.material) ? x.material : [x.material]).map((m) => m.uuid), x.matrixWorld.elements.map(r4),
+      x.isInstancedMesh ? [x.count, x.instanceMatrix.version] : 0]),
+    lights.map((L) => [L.key, L.pos.toArray().map(r4), L.color, L.intensity, L.range, L.decay, L.spot?.angle ?? null, L.spot?.inner ?? null, L.dir ? L.dir.toArray().map(r4) : null])]);
+}
+
+// The proxy lives across bakes, and so do its lights and mesh copies: three keys every lit pipeline by its lights' ids
+// (LightsNode.customCacheKey), so fresh lights in a fresh proxy rebuilt every proxy material on the next bake's first step
+// (the lab's 13-35 s stall, by reading; not measured here). A rebake moves what changed and keeps the rest.
+const proxy = { scene: null, meshes: new Map(), lights: new Map() };   // source mesh -> copy; light key -> three light
+function clearProxy() { proxy.scene = null; proxy.meshes.clear(); proxy.lights.clear(); }
+function buildProxy({ meshes, lights }) {
+  if (!proxy.scene) { proxy.scene = new THREE.Scene(); proxy.scene.background = new THREE.Color(0, 0, 0); }
+  const sc = proxy.scene, want = new Set(meshes), keys = new Set(lights.map((L) => L.key));
+  for (const [src, m] of proxy.meshes) if (!want.has(src)) { sc.remove(m); proxy.meshes.delete(src); }
+  for (const x of meshes) {
+    let m = proxy.meshes.get(x);
+    if (!m || m.geometry !== x.geometry || m.material !== x.material || !!m.isInstancedMesh !== !!x.isInstancedMesh || (x.isInstancedMesh && m.count !== x.count)) {
+      if (m) sc.remove(m);
+      m = x.isInstancedMesh ? new THREE.InstancedMesh(x.geometry, x.material, x.count) : new THREE.Mesh(x.geometry, x.material);
+      m.matrixAutoUpdate = false; m.frustumCulled = false; proxy.meshes.set(x, m); sc.add(m);
+    }
+    if (x.isInstancedMesh) { m.instanceMatrix.copy(x.instanceMatrix); m.instanceMatrix.needsUpdate = true; }
+    m.matrix.copy(x.matrixWorld); m.matrixWorld.copy(x.matrixWorld);
   }
-  proxy.updateMatrixWorld(true);
-  return proxy;
+  for (const [k, l] of proxy.lights) if (!keys.has(k)) { sc.remove(l); if (l.target) sc.remove(l.target); proxy.lights.delete(k); }
+  for (const L of lights) {
+    let l = proxy.lights.get(L.key);
+    if (!l || !!l.isSpotLight !== !!L.spot) {
+      if (l) { sc.remove(l); if (l.target) sc.remove(l.target); }
+      l = L.spot ? new THREE.SpotLight() : new THREE.PointLight();
+      l.castShadow = false; proxy.lights.set(L.key, l); sc.add(l); if (L.spot) sc.add(l.target);
+    }
+    l.color.set(L.color); l.intensity = L.intensity; l.distance = L.range; l.decay = L.decay; l.position.copy(L.pos);
+    if (L.spot) { l.angle = L.spot.angle; l.penumbra = L.spot.angle > 0 ? Math.min(1, Math.max(0, (L.spot.angle - (L.spot.inner ?? 0)) / L.spot.angle)) : 0; l.target.position.copy(L.pos).add(L.dir); }
+  }
+  sc.updateMatrixWorld(true);
+  return sc;
 }
 
 async function startBake() {
-  dirtyAt = 0; job = null; starting = true;
+  dirtyAt = 0; starting = true;   // a running bake runs on unless what it sees has changed (replan)
   try { await replan(); } catch (e) { giOff(`bake setup failed: ${e?.message ?? e}`); } finally { starting = false; }
 }
 // off for this page, and said where the capture rig looks (giDebug().off): what throws once throws every time
@@ -148,18 +191,21 @@ function giOff(why) {
   failed = `${why} (${backendName?.() ?? '?'})`;
   console.warn(`[gi] ${failed}; bounce light off on this page`);
   for (const id of [...live.keys()]) drop(id);
-  job = null;
+  job = null; baked = null; clearProxy();
 }
 async function replan() {
   const plans = failed || giSupport(renderer) ? [] : plansOf(foldOfView(state.st), giPref());
   const keep = new Set(plans.map((p) => p.id));
   for (const id of [...live.keys()]) if (!keep.has(id)) drop(id);
-  if (!plans.length) return;
+  if (!plans.length) { job = null; baked = null; clearProxy(); return; }
   if (!LPG) {   // registered before the first bake: three's bake registers its own node only when the library has none for the class
     const Grid = (await import('three/addons/lighting/LightProbeGrid.js')).LightProbeGrid;
     const { LightProbeGridNode } = await import('three/addons/tsl/lighting/LightProbeGridNode.js');
     if (!LPG) { renderer.library.addLight(sharedGridNode(LightProbeGridNode, TSL.renderGroup), Grid); LPG = Grid; }
   }
+  const set = staticSet(plans), sig = signatureOf(plans, set);
+  if (sig === baked && plans.every((p) => live.has(p.id))) return;   // the same room, baked or baking: nothing to do
+  baked = sig; job = null;
   const queue = plans.map((plan) => {
     const key = JSON.stringify([plan.center, plan.size, plan.counts]);
     let l = live.get(plan.id);
@@ -171,7 +217,7 @@ async function replan() {
     l.plan = plan; l.grid.falloff = plan.falloff;
     return { l, steps: bakeSteps(plan.counts[0] * plan.counts[1] * plan.counts[2], plan.bounces), i: 0 };
   });
-  job = { proxy: buildProxy(plans), queue };
+  job = { proxy: buildProxy(set), queue };
 }
 
 function stepBake() {
@@ -187,10 +233,11 @@ function stepBake() {
   if (cur.i >= cur.steps.length) { if (!cur.l.added) { scene.add(cur.l.grid); cur.l.added = true; } job.queue.shift(); if (!job.queue.length) job = null; }
 }
 
-/** The frame loop's step: start a debounced rebake once loads settle, bake one probe when the frame budget allows. */
+/** The frame loop's step: start a debounced (re)bake once the room's static content settles (main.js's ready gate reads the same
+ *  queue: pending(P.FAR)), bake one probe when the frame budget allows. */
 export function updateGi() {
   if (globalThis.__gpuLost?.fired) return;   // a lost device draws nothing (gpulost.js)
-  if (dirtyAt && !starting && performance.now() - dirtyAt > QUIET_MS && !laneBusy() && state.hydrated && renderer.initialized !== false) startBake();
+  if (dirtyAt && !starting && performance.now() - dirtyAt > QUIET_MS && !laneBusy() && pending(P.FAR) === 0 && state.hydrated && renderer.initialized !== false) startBake();
   else if (job) stepBake();
   for (const { grid, plan } of live.values()) grid.intensity = plan.intensity * glowScale();   // its lamps dim by day as the rig's do
 }
