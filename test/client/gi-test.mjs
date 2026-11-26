@@ -161,6 +161,18 @@ if (G) {
   const b0 = LP.bakes.length;
   await run(250);
   check('G12 …a rebake registers nothing more', regs.length === 1 && LP.bakes.length > b0, [regs.length, LP.bakes.length - b0]);
+
+  // fix B (render-lab 11-23): three's bounce pass lights the proxy with a copy of the grid AT THE GRID'S OWN INTENSITY
+  // (LightProbeGrid._updateBounceGrid), and updateGi dims the grid by day. A bake that ran by day (any rebake does: a lamp
+  // moved, a model landed) had no second bounce and kept that at night (both passes at 0.00116; atlas L0 mean 0.298 where a
+  // night bake gives 0.319). What a bake holds is the room, not the hour.
+  St.reset(); LR.setDayness(0.966); LP.bakes.length = 0;
+  St.hydrate(giRoom({ bounces: 1, strength: 2 }));
+  await run(250);
+  const day = LR.glowScale(), shown = LP.bakes[0]?.grid?.intensity;
+  check('G13 a bake step runs with the grid at its volume\'s strength, whatever the hour (the bounce pass reads it)', day < 0.01 && LP.bakes.length === 54 && LP.bakes.every((x) => x.intensity === 2), [day, LP.bakes.length, [...new Set(LP.bakes.map((x) => x.intensity))]]);
+  check('G13 …and the frame still shows the grid dimmed by day', Math.abs(shown - 2 * day) < 1e-12, [shown, 2 * day]);
+  LR.setDayness(null);
 }
 check('G10 Video settings carry the GI row through the dial\'s own module (videopanel.js reads render/gipref.js, not the bake)', /from '\.\.\/render\/gipref\.js'/.test(read('client/lib/ui/videopanel.js')) && /giPref\(\)/.test(read('client/lib/ui/videopanel.js')) && /setGiPref\(/.test(read('client/lib/ui/videopanel.js')), '');
 check('G10 …the frame loop steps it, hands it the world\'s objects, and EW.gi reads giDebug (main.js)', /registerSystem\('gi', updateGi\)/.test(read('client/main.js')) && /setGiObjects\(\(\) => entities\)/.test(read('client/main.js')) && /\bgi: giDebug\b/.test(read('client/main.js')), '');
