@@ -15,7 +15,7 @@
 // Not measured: renders outside renderWorld (sky bakes, the desktop mirror). WebGPU backend: unavailable (needs the
 // timestamp-query device feature, requested at boot) — the row says so.
 import { renderer, scene } from '../core.js';
-import { reassertShadowPref } from '../render/lightrig.js';
+import { reassertShadowPref, holdShadowCache } from '../render/lightrig.js';
 
 const S = { on: false, supported: null, reason: null, gl: null, ext: null, active: null, pending: [], free: [],
   samples: [], ab: null, abResult: null };
@@ -36,7 +36,7 @@ export function setGpuTimer(on) {
   if (!S.on) {
     S.samples.length = 0;
     // an A/B still stepping holds some shadow maps (autoUpdate off): give them back, and answer the caller
-    if (S.ab && !S.ab.closing) { for (const [l, a] of S.ab.saved) l.shadow.autoUpdate = a; reassertShadowPref(); S.ab.resolve({ error: 'cancelled (gpu timer turned off)' }); }
+    if (S.ab && !S.ab.closing) { for (const [l, a] of S.ab.saved) l.shadow.autoUpdate = a; reassertShadowPref(); holdShadowCache(false); S.ab.resolve({ error: 'cancelled (gpu timer turned off)' }); }
     S.ab = null;
   }
   return gpuTimerState();
@@ -91,6 +91,7 @@ function finishAB() {
   const ab = S.ab;
   for (const [l, a] of ab.saved) l.shadow.autoUpdate = a;
   reassertShadowPref();   // a shadows toggle during the A/B wins over the value saved at its start
+  holdShadowCache(false);  // the lamp cache hands out redraws again (every casting slot once)
   // results for the last few frames are still in flight: settle, then summarise
   S.ab = { ...ab, closing: true };
   setTimeout(() => {
@@ -111,6 +112,9 @@ export function measureShadowPass(frames = 60) {
   if (!S.on) setGpuTimer(true);
   const saved = casters().map((l) => [l, l.shadow.autoUpdate]);
   if (!saved.length) return Promise.resolve({ error: 'no shadow-casting light (shadows off?)' });
+  // a cached lamp slot (autoUpdate false at rest) would still be handed a redraw on a dirty 'held' frame: hold the cache
+  // too, so 'held' holds every map and 'drawn' (autoUpdate true) draws every map
+  holdShadowCache(true);
   return new Promise((resolve) => { S.ab = { frames, i: 0, saved, drawn: [], held: [], resolve }; });
 }
 

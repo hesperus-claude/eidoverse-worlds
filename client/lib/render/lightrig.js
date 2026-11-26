@@ -15,7 +15,8 @@
 //
 // Shadows: the world says which lights cast (a request's `shadows`, light.shadows), the viewer how many at once
 // (ew-lamp-shadows: slots 0..N_CAST-1 are born casting). The best-ranked askers take the casting slots (assign), a casting
-// slot draws only for a holder that asked, and its depth tuning follows its holder (tuneSlot).
+// slot draws only for a holder that asked, and its depth tuning follows its holder (tuneSlot). A casting slot's map is
+// redrawn only when something it shows has changed, a few slots a frame at most (the shadow cache, shadowCacheCheck).
 //
 // Measurements and the chest lamp's shadow tuning: docs/research/light-rig.md.
 
@@ -200,15 +201,54 @@ export const lampShadowState = () => {
   };
 };
 
+// ---- the shadow cache: a casting slot's cube map is redrawn only when something it shows has changed ----------------
+// Godot's rule for positional shadows (servers/rendering/renderer_scene_cull.cpp at 8f2e46bca3: a caster pairing with a
+// light marks it dirty :230-232, a caster's update dirties every light it is paired with :1738-1746, a light whose
+// shadow drew an animated material stays dirty :2619-2620 + :3663-3664, a dirty light whose volume misses the view waits
+// :3635-3657). three has the switch (shadow.autoUpdate false; needsUpdate draws once, and ShadowNode clears it after the
+// draw). Where we depart: Godot is TOLD when an instance changes; here many writers move things (protocol edits,
+// motion, physics, grab/carry, skinning, the caster budget's fades), so the rule COMPARES what each slot would draw
+// against what it drew (shadowCacheCheck), which cannot miss an event nobody emitted. It runs at scene.onBeforeRender,
+// the seam draw_batches.js also uses: world matrices are current there, and no shadow pass has drawn yet this frame.
+// A per-frame budget bounds how many dirty slots redraw at once (PlayCanvas's light.shadowUpdateMode is the precedent):
+// the rest wait, oldest-stale first, so a moving caster's shadow is at most ceil(dirty slots / budget) frames old.
+// ?shadowcache=0 restores the every-frame redraw (the lab's A/B); ?shadowbudget=K sets the budget at boot.
+const SHADOW_CACHE = CONFIG.params.get('shadowcache') !== '0';
+export const shadowCacheOn = () => SHADOW_CACHE;
+// 2: today's default dial (one casting slot) is never delayed, and a body lamp plus one dirty room lamp are not either
+export const SHADOW_UPDATE_BUDGET = 2;
+const _budgetParam = Number(CONFIG.params.get('shadowbudget') ?? NaN);
+let _shadowBudget = Number.isFinite(_budgetParam) && _budgetParam >= 1 ? Math.round(_budgetParam) : SHADOW_UPDATE_BUDGET;
+/** How many casting slots may redraw in one frame (>= 1). A lever for the governor; nothing drives it yet. */
+export function setShadowUpdateBudget(k) { if (Number.isFinite(+k)) _shadowBudget = Math.max(1, Math.round(+k)); }
+export const shadowUpdateBudget = () => _shadowBudget;
+// per casting slot: `drawn` is what it drew last (null: never), `cur` this frame's reading, `marks` where each part of
+// the reading starts (for the reason), `force` a reason to redraw that no reading shows (first, release)
+const _sc = Array.from({ length: N_CAST }, () => ({
+  drawn: null, drawnMarks: [], cur: [], marks: [], force: 'first', staleSince: -1, reason: null, deforming: false,
+  pending: false, handoffs: 0, draws: 0, deferred: 0, outOfView: 0, times: [], deferTimes: [],
+}));
+const _cachedLights = new Set(SHADOW_CACHE ? slots.slice(0, N_CAST) : []);
+let _cacheHold = 0, _cacheArmed = false, _cacheFrame = 0, _rigNow = 0;
+/** Debug tools that hold the shadow maps across frames (gputime's A/B, overdraw) hold the cache too: no slot is handed a
+ *  redraw while held, and every slot redraws once on release (anything may have changed meanwhile). */
+export function holdShadowCache(on) {
+  if (on) { _cacheHold++; return; }
+  if (_cacheHold === 0) return;
+  if (--_cacheHold === 0) for (const c of _sc) c.force ??= 'release';
+}
+
 // The shadow switch is uniform-level: shadowMap.enabled and castShadow are in every lit material's pipeline key, so
-// they are fixed on at boot and 'off' is shadow.intensity 0 with the depth pass stopped (autoUpdate off).
+// they are fixed on at boot and 'off' is shadow.intensity 0 with the depth pass stopped. The sun's depth pass is
+// autoUpdate; a cached casting slot's autoUpdate is always false, so for it "casting" is the uniform half alone.
 /** Does this light actually draw shadows right now? Shape (castShadow + the map) AND the preference's uniform half. */
-const castsNow = (l) => Boolean(l?.castShadow && renderer.shadowMap.enabled && l.shadow && l.shadow.intensity > 0 && l.shadow.autoUpdate !== false);
+const castsNow = (l) => Boolean(l?.castShadow && renderer.shadowMap.enabled && l.shadow && l.shadow.intensity > 0 && (_cachedLights.has(l) || l.shadow.autoUpdate !== false));
 function gateShadow(l, on) {
   if (!l?.shadow) return;
   l.shadow.intensity = on ? 1 : 0;
-  l.shadow.autoUpdate = on;
-  if (on) l.shadow.needsUpdate = true;   // the held map is stale: redraw it once now
+  const cached = _cachedLights.has(l);
+  l.shadow.autoUpdate = cached ? false : on;
+  if (on) l.shadow.needsUpdate = true;   // the held map is stale: redraw it once now (the cache counts it: shadowCacheCheck)
 }
 // Does casting slot k's holder want shadows (r.shadows)? Anything else that lands there (a placed lamp inside its own
 // shade that never asked, the lightning) has not asked to cast; empty, it has nothing to cast for. assign() keeps this
@@ -791,14 +831,166 @@ function casterPass() {
 
 // ---- the per-frame drive ----------------------------------------------------
 
-// a casting slot's shadow far plane follows its light's range (rewritten every frame by whichever request holds it)
+// a casting slot's shadow far plane follows its light's range (rewritten every frame by whichever request holds it).
+// It is the far three's PointShadowNode draws with (light.distance || camera.far, renderShadow) and the one its
+// sampling reads live (shadowCameraFar), so a map held across frames is compared with the far it was drawn with.
 const _SHADOW_FAR_EPS = 1e-4;
 function trackShadowFar(pl) {
   if (!pl.castShadow) return;
-  const want = Math.max(2, pl.distance || 10);
+  const want = pl.distance || pl.shadow.camera.far;
   if (Math.abs(pl.shadow.camera.far - want) < _SHADOW_FAR_EPS) return;
   pl.shadow.camera.far = want;
   pl.shadow.camera.updateProjectionMatrix();
+}
+
+// ---- the shadow cache's rule ------------------------------------------------
+// What a casting slot's map shows, i.e. what makes it dirty (each line names the shadow-cache suite row that fails
+// without it):
+//   the holder: which request the slot draws (hand-over, swap)                                 row 4 "holder"
+//   the light's world position                                                                 row 4 "moves"
+//   its range = the far plane three draws and samples with (and the near)                      row 4 "range", row 11
+//   the map: its size (a resize applies only when it draws) and the target itself              row 8 "resolution"
+//   the gate turning on (first holder that asked, the preference back on), a hold released    rows 8, 9, 13
+//   the layers the frame camera sees (three's shadow camera borrows its mask)                  row 12 "layers"
+//   per mesh with castShadow, visible down its whole chain, on a seen layer, whose bounds reach the light's range:
+//     which meshes those are (one appearing, leaving, flipping castShadow, moving in or out)  rows 2, 3, 5
+//     its world matrix                                                                         row 2
+//     its geometry (a swap, a load finishing, positions edited in place, the draw range)      row 7 "geometry"
+//     its material(s) (a swap, needsUpdate, side, alphaTest, visible)                          row 7 "material"
+//     its dither fade (userData.shadowFade, the caster budget's 300 ms fade)                   row 5 "fade"
+//     an InstancedMesh's instance matrices and count                                           row 7 "instances"
+//     its morph influences                                                                     row 6 "morph"
+//   a mesh that deforms without its matrix changing keeps the slot dirty while in range:
+//     a SkinnedMesh, or a material with a vertex-stage position node (wind, water)             row 6
+// Not dependencies: bias and normalBias (three samples them live, the map does not hold them); a light's intensity or
+// colour; draw_batches' instancing (the same transforms, drawn while the sources' layers are off).
+// A dirty slot whose whole light sphere is outside the view waits (it stays dirty): nothing on screen samples it. The
+// pool keeps a light that misses the view in a slot when it has room, and re-ranks only every 600 ms, so it can.  row 10
+const _ckP = new THREE.Vector3(), _ckS = new THREE.Sphere(), _ckV = new THREE.Frustum(), _ckM = new THREE.Matrix4();
+const _lightP = Array.from({ length: N_CAST }, () => new THREE.Vector3());
+const _lightR = new Array(N_CAST).fill(Infinity);
+const _onK = [];
+function mark(c, tag) { c.marks.push(c.cur.length, tag); }
+function pushMaterial(c, m) {
+  if (!m) { c.cur.push(null); return; }
+  c.cur.push(m, m.version, m.side, m.shadowSide, m.visible, m.alphaTest);
+  if (m.positionNode || m.castShadowPositionNode) c.deforming = true;   // wind, waves: moves every frame in the vertex stage
+}
+/** One caster's part of slot c's reading. */
+function pushCaster(c, o) {
+  mark(c, 'casters'); c.cur.push(o);
+  const g = o.geometry, pos = g.attributes?.position;
+  mark(c, 'geometry'); c.cur.push(g, pos ? pos.version : -1, g.index ? g.index.version : -1, g.drawRange.start, g.drawRange.count);
+  mark(c, 'matrix'); const e = o.matrixWorld.elements; for (let i = 0; i < 16; i++) c.cur.push(e[i]);
+  mark(c, 'material');
+  if (Array.isArray(o.material)) { c.cur.push(o.material.length); for (const m of o.material) pushMaterial(c, m); } else pushMaterial(c, o.material);
+  mark(c, 'fade'); c.cur.push(o.userData.shadowFade);
+  if (o.isInstancedMesh) { mark(c, 'instances'); c.cur.push(o.count, o.instanceMatrix.version); }
+  if (o.morphTargetInfluences) { mark(c, 'morph'); for (const v of o.morphTargetInfluences) c.cur.push(v); }
+  if (o.isSkinnedMesh) c.deforming = true;
+}
+// a caster's world bounds into _ckS (three's own: an object's boundingSphere where it has one, else its geometry's);
+// a skinned mesh's is its bind pose, so it is doubled; no bounds yet = reaches everywhere
+function boundsOf(o) {
+  let s = o.boundingSphere;
+  if (s === null && o.computeBoundingSphere) { o.computeBoundingSphere(); s = o.boundingSphere; }
+  if (!s) { if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere(); s = o.geometry.boundingSphere; }
+  if (!s || s.isEmpty() || !Number.isFinite(s.radius)) { _ckS.radius = Infinity; return; }
+  _ckS.copy(s).applyMatrix4(o.matrixWorld);
+  if (o.isSkinnedMesh) _ckS.radius *= 2;
+}
+let _seenMask = 1, _nOn = 0;
+// three's _projectObject: an invisible object hides its subtree; layers are per object, tested against the frame camera
+function visitCasters(o) {
+  if (!o.visible || o === rigGroup) return;
+  if (o.castShadow && o.geometry && (o.isMesh || o.isLine || o.isPoints) && (o.layers.mask & _seenMask) !== 0) {
+    boundsOf(o);
+    for (let i = 0; i < _nOn; i++) {
+      const k = _onK[i];
+      if (_ckS.center.distanceTo(_lightP[k]) - _ckS.radius > _lightR[k]) continue;   // outside the cube's far: cannot show
+      pushCaster(_sc[k], o);
+    }
+  }
+  const ch = o.children;
+  for (let i = 0; i < ch.length; i++) visitCasters(ch[i]);
+}
+/** The first difference between what slot c drew and what it would draw now: a reason, or null. */
+function diffReason(c) {
+  const a = c.drawn, b = c.cur;
+  if (!a) return 'first';
+  const n = Math.min(a.length, b.length);
+  let i = 0;
+  while (i < n && a[i] === b[i]) i++;
+  if (i === n && a.length === b.length) return null;
+  let tag = 'casters';
+  for (let j = 0; j < c.marks.length && c.marks[j] <= i; j += 2) tag = c.marks[j + 1];
+  return tag;
+}
+function handOff(c, pl) {
+  pl.shadow.needsUpdate = true;
+  c.handoffs++; c.times.push(_rigNow); c.pending = true;
+  const d = c.drawn ?? [], dm = c.drawnMarks;
+  c.drawn = c.cur; c.drawnMarks = c.marks; c.cur = d; c.marks = dm;
+  c.force = null; c.staleSince = -1;
+}
+const _dirtyK = [];
+/** Once per frame, at the first render of the scene through a view camera: which casting slots redraw. */
+function shadowCacheCheck(cam) {
+  _cacheFrame++;
+  _nOn = 0;
+  for (let k = 0; k < N_CAST; k++) {
+    const pl = slots[k], c = _sc[k];
+    if (c.pending && !pl.shadow.needsUpdate) c.draws++;   // three cleared it: the map was drawn
+    c.pending = false;
+    while (c.times.length && _rigNow - c.times[0] > 1000) c.times.shift();
+    while (c.deferTimes.length && _rigNow - c.deferTimes[0] > 1000) c.deferTimes.shift();
+    if (!castsNow(pl)) continue;
+    _onK[_nOn++] = k;
+  }
+  if (!_nOn || _cacheHold > 0) return;
+  _seenMask = cam?.layers?.mask ?? 1;
+  for (let i = 0; i < _nOn; i++) {
+    const k = _onK[i], pl = slots[k], c = _sc[k];
+    c.cur.length = 0; c.marks.length = 0; c.deforming = false;
+    _lightP[k].setFromMatrixPosition(pl.matrixWorld);
+    _lightR[k] = pl.distance || pl.shadow.camera.far;
+    mark(c, 'holder'); c.cur.push(shown[k]?.key ?? null);
+    mark(c, 'light'); c.cur.push(_lightP[k].x, _lightP[k].y, _lightP[k].z);
+    mark(c, 'range'); c.cur.push(pl.distance, pl.shadow.camera.near, pl.shadow.camera.far);
+    mark(c, 'map'); c.cur.push(pl.shadow.mapSize.x, pl.shadow.mapSize.y, pl.shadow.map, renderer.shadowMap.type);
+    mark(c, 'layers'); c.cur.push(_seenMask, pl.shadow.camera.layers.mask);
+  }
+  if (scene.children) visitCasters(scene);
+  const view = cam?.projectionMatrix && cam.matrixWorldInverse;
+  if (view) _ckV.setFromProjectionMatrix(_ckM.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse), cam.coordinateSystem, cam.reversedDepth);
+  let used = 0, nDirty = 0;
+  for (let i = 0; i < _nOn; i++) {
+    const k = _onK[i], pl = slots[k], c = _sc[k];
+    const reason = c.force ?? (c.deforming ? 'deforming' : diffReason(c));
+    if (pl.shadow.needsUpdate) { c.reason = reason ?? 'gate'; handOff(c, pl); used++; continue; }   // already asked for (gateShadow): it draws
+    if (!reason) { c.staleSince = -1; continue; }        // clean, or clean again while it waited
+    c.reason = reason;
+    if (c.staleSince < 0) c.staleSince = _cacheFrame;
+    if (view && !_ckV.intersectsSphere(_ckS.set(_lightP[k], _lightR[k]))) { c.outOfView++; continue; }   // waits, dirty
+    _dirtyK[nDirty++] = k;
+  }
+  // the budget: oldest-stale first (then slot order), so a slot that waited is never passed over again
+  const order = _dirtyK.slice(0, nDirty).sort((a, b) => _sc[a].staleSince - _sc[b].staleSince || a - b);
+  for (const k of order) {
+    const c = _sc[k];
+    if (used < _shadowBudget) { handOff(c, slots[k]); used++; } else { c.deferred++; c.deferTimes.push(_rigNow); }
+  }
+}
+if (SHADOW_CACHE && N_CAST > 0) {
+  const before = scene.onBeforeRender;
+  scene.onBeforeRender = function (r, sc, cam, ...rest) {
+    if (typeof before === 'function') before.call(this, r, sc, cam, ...rest);
+    // once per frame (updateRig arms it): an XR mirror or any later pass in the frame finds the maps already decided,
+    // and a shadow pass (it renders this scene with an override material) is never the deciding one
+    if (!_cacheArmed || sc !== scene || scene.overrideMaterial) return;
+    _cacheArmed = false;
+    shadowCacheCheck(cam);
+  };
 }
 
 // ---- the spot pool: its own light type, so its own fixed pool (?spots=N, default 2). Same ranking as the point
@@ -866,6 +1058,8 @@ function handOver(i, want, dt) {
 
 /** Call once per frame. Reassigns when needed; writes every slot's uniforms. */
 export function updateRig(now) {
+  _rigNow = now;
+  _cacheArmed = true;   // the shadow cache decides at this frame's first view render (scene.onBeforeRender)
   updateShadow();
   stepFades(now);   // before the pass: a fade begun this frame is drawn at its start amount first
   if (now - lastCasterPass > 300) { lastCasterPass = now; casterPass(); }
@@ -940,7 +1134,13 @@ export const rigDebug = () => ({
         slot: k, holder: r?.key ?? null, asked: _holderWants[k], body: Boolean(r?.body), drawing: castsNow(slots[k]),
         map: slots[k].shadow.mapSize.x, bias: slots[k].shadow.bias, normalBias: +slots[k].shadow.normalBias.toFixed(5),
         tunedFor: _tunedFor[k]?.key ?? null,
+        // the cache: redraws handed to three (all time / the last second), draws three confirmed, frames deferred by the
+        // budget (all time / the last second) or waiting outside the view, and why it last went dirty
+        cache: { handoffs: _sc[k].handoffs, redraws1s: _sc[k].times.length, draws: _sc[k].draws, deferred: _sc[k].deferred,
+          deferred1s: _sc[k].deferTimes.length, outOfView: _sc[k].outOfView, reason: _sc[k].reason,
+          stale: _sc[k].staleSince >= 0, deforming: _sc[k].deforming },
       })),
+      cache: { on: SHADOW_CACHE, budget: _shadowBudget, held: _cacheHold },
       wantsShadows: want.map((r) => ({
         key: r.key, slot: r.slot,
         casting: r.slot >= 0 && castsNow(slots[r.slot]),

@@ -56,7 +56,9 @@ function onCanvas(fn) {
   return { sessionTarget: `${Math.round(was.w * pr)}x${Math.round(was.h * pr)}`, canvas: `${cw}x${ch}` };
 }
 
-// Shadow-casting lights, refreshed now and then (a light added mid-session joins within a second).
+// Shadow-casting lights that redraw by themselves (autoUpdate), refreshed now and then (a light added mid-session joins
+// within a second). A cached lamp slot (lightrig's shadow cache) is not one: its redraw is decided once a frame, at the
+// eye pass, and three cleared it there, so the desk pass samples its map without being held.
 let casterList = [], castersAt = 0;
 function casters() {
   const now = performance.now();

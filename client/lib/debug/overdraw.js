@@ -12,7 +12,7 @@
 // passes sum to the total within ~0.1 %, not exactly; `stable` checks the frame itself.
 import { THREE, TSL, renderer, scene, camera } from '../core.js';
 import { renderAside, setWorldHold } from '../render/render.js';
-import { reassertShadowPref } from '../render/lightrig.js';
+import { reassertShadowPref, holdShadowCache } from '../render/lightrig.js';
 
 const { vec4 } = TSL;
 
@@ -113,6 +113,7 @@ async function captureOnce({ mode = 'actual', w = 480, perTag = true, heat = fal
   const out = { mode, size: `${w}x${h}`, objects: draw.length, materials: new Set([...orig.values()].flat()).size };
   const rts = [];
   setWorldHold(true);
+  holdShadowCache(true);   // the lamp cache's redraws too: every pass samples the same maps
   try {
     scene.background = null;
     for (const [l] of shadowLights) l.shadow.autoUpdate = false;
@@ -145,6 +146,7 @@ async function captureOnce({ mode = 'actual', w = 480, perTag = true, heat = fal
     scene.background = saved.bg;
     for (const [l, a] of shadowLights) l.shadow.autoUpdate = a;
     reassertShadowPref();   // a shadows toggle mid-measure wins over the saved value
+    holdShadowCache(false);
     renderer.setClearColor(saved.cc, saved.ca);
     setWorldHold(false);
     for (const [, rt] of rts) rt.dispose();
