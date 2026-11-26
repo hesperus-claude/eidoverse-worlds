@@ -122,4 +122,54 @@ console.log('INVERSE AGX, NEUTRAL, LINEAR (the world\'s other display transforms
   // the shader reads the same data, no literals of its own: test/client/one-binding-test.ts
 }
 
+console.log('NEUTRAL OFF ITS IMAGE (a warning red stays red in any world look: hue and saturation kept, brightness given up)');
+{
+  // Khronos PBR Neutral maps a highlight of peak p to peak n(p) < 1 and mixes it toward grey by g(p), so its output's
+  // min/max ratio is at least g at that peak: a bright saturated authored colour is off its image. The inverse brings it
+  // back onto the image by scaling all three channels by one factor (hue and saturation exact, brightness given up).
+  // Hue and saturation are read on the LINEAR display colour (HSV's hue and 1 − min/max): a uniform scale keeps both exactly,
+  // a mix toward grey keeps the hue but not the saturation, a per-channel clamp moves the hue. Tolerances: hue 0.1° (one
+  // 8-bit step moves a full-chroma hue by 60°/255 ≈ 0.24°), saturation 1e-4, brightness (Rec.709 luma) 1e-9 relative.
+  const inv = QG.neutralInverseJS, ok = typeof inv === 'function';
+  const EXPOSURES = [0.5, 0.78, 1, 1.3];
+  const hue = (c) => { const M = Math.max(...c), m = Math.min(...c), C = M - m; if (C <= 0) return NaN; const [r, g, b] = c;
+    const h = M === r ? ((g - b) / C) % 6 : M === g ? (b - r) / C + 2 : (r - g) / C + 4; return (h * 60 + 360) % 360; };
+  const dHue = (a, b) => { const d = Math.abs(hue(a) - hue(b)) % 360; return Math.min(d, 360 - d); };
+  const sat = (c) => (Math.max(...c) > 0 ? 1 - Math.min(...c) / Math.max(...c) : 0);
+  const lin = (hex) => [0, 2, 4].map((i) => EOTF(parseInt(hex.slice(i, i + 2), 16) / 255));
+  const round = (c, e) => (ok ? neutralForward(inv(c, e), e) : c.map(() => NaN));
+  const START = THREE_NEUTRAL[0] + THREE_NEUTRAL[1];   // three's StartCompression: a fully saturated colour's ceiling
+  // The ceiling for a given saturation, from three's FORWARD alone (not the product's formula): a pure-red input keeps its
+  // min at 0 through the toe, so its output (n, n·g, n·g) traces the curve's desaturation g against its output peak n;
+  // the brightest peak a colour of min/max ratio r can show is the n at which g reaches r (bisected on the input peak).
+  const ceilingFor = (r) => { let lo = START, hi = 1e6; for (let i = 0; i < 200; i++) { const m = Math.sqrt(lo * hi), y = neutralForward([m, 0, 0], 1);
+    if (y[1] / y[0] <= r) lo = m; else hi = m; } return neutralForward([lo, 0, 0], 1)[0]; };
+  const COLS = ['ff0000', '0000ff', 'ffff00', 'ff2040', '2040ff', 'ffd000'];
+  const rows = COLS.flatMap((hex) => EXPOSURES.map((e) => { const a = lin(hex), b = round(a, e);
+    return { hex, e, a, b, dh: dHue(a, b), ds: Math.abs(sat(a) - sat(b)), k: luma(b) / luma(a), peak: Math.max(...b), ceil: Math.min(Math.max(...a), ceilingFor(Math.min(...a) / Math.max(...a))) }; }));
+  const show = (f) => JSON.stringify(rows.filter((x) => x.e === 0.78).map((x) => ({ [x.hex]: f(x) })));
+  check('neutral: pure red, blue, yellow and #ff2040 #2040ff #ffd000 keep their hue (within 0.1°), at exposures 0.5/0.78/1/1.3',
+    rows.every((x) => x.dh <= 0.1), show((x) => +x.dh.toFixed(4)));
+  check('neutral: … and their saturation (1 − min/max of the linear colour, within 1e-4): not desaturated toward white',
+    rows.every((x) => x.ds <= 1e-4), show((x) => [+sat(x.a).toFixed(4), +sat(x.b).toFixed(4)]));
+  check(`neutral: … never brighter than authored, and at most ${((1 - START) * 100).toFixed(0)}% darker (luma ≥ start × authored: a fully saturated colour's ceiling)`,
+    rows.every((x) => x.k <= 1 + 1e-9 && x.k >= START - 1e-9), show((x) => +x.k.toFixed(4)));
+  check('neutral: … and no darker than they have to be (their peak is the brightest Neutral shows at their saturation, read off three\'s forward, within 1e-4)',
+    rows.every((x) => Math.abs(x.peak - x.ceil) <= 1e-4), show((x) => [+x.peak.toFixed(5), +x.ceil.toFixed(5)]));
+  check('neutral: the brightness given up does not depend on the exposure (the same colour comes back at 0.5, 0.78, 1 and 1.3)',
+    COLS.every((hex) => rows.filter((x) => x.hex === hex).every((x, _, all) => near(x.b, all[0].b, 1e-6))));
+  // the whole sRGB grid: no hue moved, no saturation lost, never brighter; report the share the projection scaled
+  const grid = {};
+  for (const e of EXPOSURES) { let n = 0, hueOff = 0, satOff = 0, brighter = 0, dimmed = 0, worstH = 0, worstS = 0;
+    for (let r = 0; r <= 255; r += 5) for (let g = 0; g <= 255; g += 5) for (let b = 0; b <= 255; b += 5) {
+      const a = [r, g, b].map((x) => EOTF(x / 255)), back = round(a, e); n++;
+      const ds = Math.abs(sat(a) - sat(back)), dh = r === g && g === b ? 0 : dHue(a, back);
+      if (!(dh <= 0.1)) hueOff++; if (!(ds <= 1e-4)) satOff++; if (!(luma(back) <= luma(a) * (1 + 1e-9) + 1e-12)) brighter++; if (luma(back) < luma(a) * (1 - 1e-6)) dimmed++;
+      worstH = Math.max(worstH, dh || 0); worstS = Math.max(worstS, ds || 0); }
+    grid[e] = { hueOff: +(hueOff / n).toFixed(4), satOff: +(satOff / n).toFixed(4), brighter, dimmed: +(dimmed / n).toFixed(4), worstHue: +worstH.toFixed(3), worstSat: +worstS.toFixed(4) }; }
+  check('neutral: across the whole sRGB grid (52³) no colour comes back with its hue moved more than 0.1°, at every exposure',
+    ok && Object.values(grid).every((x) => x.hueOff === 0), JSON.stringify(grid));
+  check('neutral: … nor its saturation moved more than 1e-4, nor brighter than authored', ok && Object.values(grid).every((x) => x.satOff === 0 && x.brighter === 0));
+}
+
 S.done();
