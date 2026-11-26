@@ -138,7 +138,7 @@ try {
   // the box's foot darkens with AO, and the open floor far from it barely moves.
   const ao = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js'), T = p.THREE;
     const S = new T.Scene(); S.background = new T.Color(0, 0, 0);
-    const cam = new T.PerspectiveCamera(50, p.W / p.H, 0.1, 100); cam.position.set(0, 2.2, 4.2); cam.lookAt(0, 0.3, 0);
+    const cam = new T.PerspectiveCamera(50, p.W / p.H, 0.1, 100); cam.position.set(0, 2.2, 4.2); cam.lookAt(0, 0.3, 0); cam.updateMatrixWorld(true);   // project() reads matrixWorldInverse
     const mat = new T.MeshStandardNodeMaterial({ color: new T.Color(0.7, 0.7, 0.7), roughness: 0.9 });
     const floor = new T.Mesh(new T.PlaneGeometry(12, 12).rotateX(-Math.PI / 2), mat); S.add(floor);
     const box = new T.Mesh(new T.BoxGeometry(1, 1, 1), mat); box.position.set(0, 0.5, 0); S.add(box);
@@ -146,14 +146,14 @@ try {
     const plainF = () => { p.renderer.setRenderTarget(null); p.renderer.render(S, cam); return p.grab(); };
     const postF = async () => { p.hold(); const d = post.postPass(p.renderer, S, cam); if (d) d(); else p.renderer.render(S, cam); return p.grab(); };
     const at = (v3) => { const v = v3.clone().project(cam); return [(v.x + 1) / 2 * p.W, (1 - v.y) / 2 * p.H]; };
-    const foot = at(new T.Vector3(0, 0.02, 0.56)), open = at(new T.Vector3(2.6, 0, 1.2));
+    const foot = at(new T.Vector3(0, 0.02, 0.56)), open = at(new T.Vector3(2.2, 0, 1.0));
     const shot = async (light) => { S.add(light); await p.renderer.compileAsync(S, cam);
       globalThis.__setA(0); const a = await p.settle(plainF); globalThis.__setA(3); const b = await p.settle(postF); const dbg = post.postDebug();
       globalThis.__setA(0); await postF(); S.remove(light);
       return { a, b, active: dbg.active, why: dbg.why, passes: dbg.passes }; };
     const D = await shot(sun), I = await shot(amb);
-    return { direct: { settled: !!D.a && !!D.b, active: D.active, why: D.why, diff: D.a && D.b ? p.diff(D.a, D.b) : null, foot: D.a ? [p.lum(D.a, ...foot, 0, 3), p.lum(D.b, ...foot, 0, 3)] : null },
-      indirect: { settled: !!I.a && !!I.b, active: I.active, why: I.why, foot: I.a ? [p.lum(I.a, ...foot, 0, 3), p.lum(I.b, ...foot, 0, 3)] : null, open: I.a ? [p.lum(I.a, ...open, 0, 3), p.lum(I.b, ...open, 0, 3)] : null }, at: { foot, open } };`);
+    return { direct: { settled: !!D.a && !!D.b, active: D.active, why: D.why, passes: D.passes, diff: D.a && D.b ? p.diff(D.a, D.b) : null, foot: D.a ? [p.lum(D.a, ...foot, 0, 3), p.lum(D.b, ...foot, 0, 3)] : null },
+      indirect: { settled: !!I.a && !!I.b, active: I.active, why: I.why, passes: I.passes, foot: I.a ? [p.lum(I.a, ...foot, 0, 3), p.lum(I.b, ...foot, 0, 3)] : null, open: I.a ? [p.lum(I.a, ...open, 0, 3), p.lum(I.b, ...open, 0, 3)] : null }, at: { foot, open } };`);
   console.log(`  · ${JSON.stringify(ao)}`);
   check("PA1 AO in direct light only (a directional light, no ambient): the AO frame is the plain frame (every channel within 1 of 255): the direct term is not darkened",
     ao.direct.settled && ao.direct.active === true && ao.direct.passes === 'ao' && ao.direct.diff && ao.direct.diff.max <= 1 && ao.direct.foot[0] > 20, JSON.stringify(ao.direct));
