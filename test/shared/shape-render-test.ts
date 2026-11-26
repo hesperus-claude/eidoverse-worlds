@@ -323,6 +323,38 @@ await tryRow('SK', async () => {
     && K.fields.audio === 'bool' && /off/.test(K.absentMeans?.audio ?? '') && !!K.docs?.audio && /Boolean\(a\.audio\)/.test(read('client/lib/sky/sky.js')), [a1.refused, a1v, a2.refused, sa(), a3.refused]);
 });
 
+// ===================================================================== gi-volume: the world's baked bounce in a zone (an irradiance probe volume: Godot LightmapGI's probes, Bevy)
+await tryRow('GV', async () => {
+  const V = COMPONENTS['gi-volume'];
+  check('GV1 gi-volume: on a thing; strength (0..16), spacing (m, 0.25..8), bounces (int 0..2); absent meanings written, no stored defaults', V?.on === 'thing' && keys(V?.fields) === keys({ strength: 1, spacing: 1, bounces: 1 }) && V.fields.bounces === 'int'
+    && V.ranges?.strength?.min === 0 && V.ranges?.strength?.max === 16 && V.ranges?.spacing?.min === 0.25 && V.ranges?.spacing?.max === 8 && V.ranges?.bounces?.min === 0 && V.ranges?.bounces?.max === 2 && V.units?.spacing === 'm'
+    && ['strength', 'spacing', 'bounces'].every((k) => !!V.absentMeans?.[k] && !!V.docs?.[k]) && !V.defaults, V);
+  const W = scratchWorld('w2r-gi').seed({ room: { pos: [0, 1.5, 0] }, ball: { pos: [5, 1, 0] }, sky2: { pos: [9, 1, 0] } });
+  const C = (id: string) => W.state().entities[id].c;
+  let r = W.call('set', { id: 'room', component: 'gi-volume', value: {} });
+  check('GV2 a gi-volume with no zone is refused (needs its extent), the fix naming a box zone', code(r) === 'needs' && /zone/.test(r.refused?.reason ?? '') && /box/.test(r.refused?.fix ?? ''), r.refused);
+  W.call('set', { id: 'ball', component: 'zone', value: { shape: 'sphere', radius: 2 } });
+  r = W.call('set', { id: 'ball', component: 'gi-volume', value: {} });
+  check('GV2 …and on a sphere zone (it reads a box)', code(r) === 'shape', r.refused);
+  W.call('set', { id: 'sky2', component: 'zone', value: { shape: 'box', size: [4, 4, 4], global: true } });
+  r = W.call('set', { id: 'sky2', component: 'gi-volume', value: {} });
+  check('GV2 …and on a global zone (a grid needs an extent)', code(r) === 'shape', r.refused);
+  r = W.call('set', { id: 'room', component: 'zone', value: { shape: 'box', size: [6, 3, 9] } });
+  const r2 = W.call('set', { id: 'room', component: 'gi-volume', value: { strength: 1.5, spacing: 1, bounces: 2 } });
+  check('GV3 on a box zone it is stored as written', r.ok && r2.ok && JSON.stringify(C('room')['gi-volume']) === JSON.stringify({ strength: 1.5, spacing: 1, bounces: 2 }), [r.refused, r2.refused, C('room')['gi-volume']]);
+  const r3 = W.call('set', { id: 'room', component: 'gi-volume', value: {} });
+  check('GV3 …an empty one too, and nothing is filled in (absent means the default)', r3.ok && JSON.stringify(C('room')['gi-volume']) === '{}', [r3.refused, C('room')['gi-volume']]);
+  const bad = [{ spacing: 0.1 }, { spacing: 9 }, { bounces: 3 }, { bounces: 1.5 }, { strength: -1 }, { strength: 17 }, { strength: 'bright' }].map((value) => code(W.call('set', { id: 'room', component: 'gi-volume', value })));
+  check('GV4 out of range, not an int or not a number is refused (spacing 0.1 / 9, bounces 3 / 1.5, strength −1 / 17 / a string), and the stored one is kept', bad.every((c) => c === 'shape' || c === 'bounds') && JSON.stringify(C('room')['gi-volume']) === '{}', bad);
+  const unk = W.call('set', { id: 'room', component: 'gi-volume', value: { energy: 2 } });
+  check('GV4 …an unknown field is refused (schema)', code(unk) === 'schema', unk.refused);
+  const dz = W.call('delete', { id: 'room', component: 'zone' });
+  check('GV4 …and its zone can\'t be taken from under it', !dz.ok && C('room').zone !== undefined, [dz.refused, C('room').zone]);
+  r = W.call('set', { id: '@world', component: 'gi-volume', value: {} });
+  check('GV5 a gi-volume on @world is refused (on: thing)', code(r) === 'thing-only', r.refused);
+  check('GV6 the client reads it (client/lib/render/gi.js), and PROTOCOL §4 names it', /'gi-volume'/.test(read('client/lib/render/gi.js')) && /`gi-volume`/.test(read('spec/PROTOCOL.md')), '');
+});
+
 // ===================================================================== terrain: the sim's defaults, raster reserved, layer colours ints, water split out
 await tryRow('TE', async () => {
   const T = COMPONENTS.terrain; const sim = terrainParams({}); const ND = { ...T.defaults, ...(T.when ?? []).find((r) => r.if?.kind === 'noise')?.set };

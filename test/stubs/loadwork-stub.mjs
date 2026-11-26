@@ -8,3 +8,6 @@ export const idleYield = () => Promise.resolve();
 // at import, and the suite stops covering what it was written for.
 export const nextFrame = () => Promise.resolve();
 export const loadNote = () => {};
+// gi.js waits for the lanes to drain before it bakes (test/client/gi-test.mjs sets `lanes.busy`)
+export const lanes = { busy: false };
+export const laneBusy = () => lanes.busy;

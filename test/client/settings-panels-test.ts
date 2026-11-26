@@ -192,6 +192,21 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
   quad.dispatch('fulldetail', true);
   check('quad dispatch(fulldetail) reaches setFullDetail', since(c2, 'setFullDetail')[0]?.[1] === true);
   check('…and the quad\'s full-detail check reads it back', quad.fields().find((x: any) => x.k === 'fulldetail')?.value === true);
+
+  console.log('VIDEO — bounce light (GI): the viewer\'s cost of the world\'s gi-volume (ew-gi), desk and VR');
+  const gi = sel('bounce light');
+  check('a "bounce light" row with off / low / high, low by default', !!gi && [...gi.options].map((o) => o.value).join() === 'off,low,high' && gi.value === 'low', gi && [...gi.options].map((o) => o.value));
+  if (gi) { gi.value = 'off'; fire(gi, 'change'); }
+  check('choosing off stores ew-gi=off and says so in the hint bar', localStorage.getItem('ew-gi') === 'off' && ui.el.hint.innerHTML.includes('bounce light: off'), [localStorage.getItem('ew-gi'), ui.el.hint.innerHTML]);
+  check('…live: no reload button', !!gi && !row(gi).querySelector('button.reload'));
+  const giList = () => quad.fields().find((x: any) => x.label === 'bounce light (GI)');
+  check('the VR quad lists it too, the current level active', giList()?.rows.map((r: any) => r.id).join() === 'off,low,high' && giList()?.rows.find((r: any) => r.active)?.id === 'off', JSON.stringify(giList()?.rows));
+  const e3 = emitted.length;
+  quad.dispatch('gi', 'high');
+  check('quad dispatch(gi) stores it and repaints the quad', localStorage.getItem('ew-gi') === 'high' && giList()?.rows.find((r: any) => r.active)?.id === 'high' && emits(e3, 'xr:repaint') === 1, localStorage.getItem('ew-gi'));
+  quad.dispatch('gi', 'ultra');
+  check('…a value that is no level changes nothing', localStorage.getItem('ew-gi') === 'high');
+  localStorage.removeItem('ew-gi');
 }
 
 // ============================================================ profile: presence
