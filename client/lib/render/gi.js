@@ -5,7 +5,7 @@
 // unskinned meshes at their world matrices and the placed lights near it), never the live scene: baking the live client
 // scene hung the page (render-lab 11-09, probes/gi-grid.js). Rebaked in place, debounced, once loads settle.
 // No gi-volume or the dial off: three's grid code never loads and nothing is built.
-import { THREE, scene, renderer, backendName } from '../core.js';
+import { THREE, TSL, scene, renderer, backendName } from '../core.js';
 import { bus } from '../base.js';
 import { state, onWorldChange } from '../state.js';
 import { laneBusy } from './loadwork.js';
@@ -75,6 +75,19 @@ export function giSupport(r) {
   return null;
 }
 
+// ---- the grid's light node ----
+// three r186's LightProbeGridNode keeps the grid's box, resolution, intensity and falloff as plain uniform()s, which land in
+// the per-OBJECT uniform group, and three refreshes that group for a material with no nodes of its own (every glTF model's
+// plain MeshStandardMaterial) only when the object, its material or its geometry changes (NodeMaterialObserver.needsRefresh).
+// updateGi dims the grid by day every frame: a model first drawn by day kept the day's 0.0012 at night, one first drawn at
+// night kept 1 by day (render-lab 11-23: 23 of 25 model meshes; night frame luma 40.86 after a day preview, 45.55 without).
+// The render group is where three keeps a light's own values (AnalyticLightNode's colour): refreshed every render.
+const GRID_UNIFORMS = ['_min', '_max', '_resolution', '_intensity', '_falloff'];
+/** three's grid light node (Base) with its uniforms in `group`. */
+export function sharedGridNode(Base, group) {
+  return class extends Base { constructor(light) { super(light); for (const k of GRID_UNIFORMS) this[k] = this[k].setGroup(group); } };
+}
+
 // ---- the live grids ----
 let objects = () => new Map();
 export function setGiObjects(fn) { objects = fn; }
@@ -142,7 +155,11 @@ async function replan() {
   const keep = new Set(plans.map((p) => p.id));
   for (const id of [...live.keys()]) if (!keep.has(id)) drop(id);
   if (!plans.length) return;
-  LPG ??= (await import('three/addons/lighting/LightProbeGrid.js')).LightProbeGrid;
+  if (!LPG) {   // registered before the first bake: three's bake registers its own node only when the library has none for the class
+    const Grid = (await import('three/addons/lighting/LightProbeGrid.js')).LightProbeGrid;
+    const { LightProbeGridNode } = await import('three/addons/tsl/lighting/LightProbeGridNode.js');
+    if (!LPG) { renderer.library.addLight(sharedGridNode(LightProbeGridNode, TSL.renderGroup), Grid); LPG = Grid; }
+  }
   const queue = plans.map((plan) => {
     const key = JSON.stringify([plan.center, plan.size, plan.counts]);
     let l = live.get(plan.id);
