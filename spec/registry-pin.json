@@ -1568,6 +1568,8 @@
    "azimuth": "number",
    "fog": "number",
    "exposure": "number",
+   "ambientLightColor": "vec3",
+   "ambientLightEnergy": "number",
    "ambient": "number",
    "sun": "number",
    "fill": "number",
@@ -1628,6 +1630,14 @@
    "exposure": {
     "min": 0
    },
+   "ambientLightColor": {
+    "min": 0,
+    "max": 1
+   },
+   "ambientLightEnergy": {
+    "min": 0,
+    "max": 16
+   },
    "ambient": {
     "min": 0
    },
@@ -1656,6 +1666,8 @@
    "transition": "the renderer's own ease (30 s in a forecast)",
    "forecast": "no forecast: the authored weather holds",
    "override": "no manual weather inside the current forecast segment",
+   "ambientLightColor": "white",
+   "ambientLightEnergy": "0: no light but the sky's and the lamps'",
    "gradient": "the renderer's own sky (its day, clouds and weather)",
    "system": "eidoverse: the detailed sky",
    "colors": "the sky's own colours",
@@ -1679,6 +1691,8 @@
    "fog": "× this renderer's own fog curve",
    "exposure": "× this renderer's tone mapping",
    "ambient": "× this renderer's ambient curve",
+   "ambientLightColor": "the colour of the world's constant ambient light, a linear [r, g, b] 0..1 (Godot's Environment.ambient_light_color)",
+   "ambientLightEnergy": "how strong the world's constant ambient light is, whatever the hour, 0..16: added to the sky's own (Godot's ambient_light_energy)",
    "forecast": "a weather policy {seed, states: [name | {state, weight}], dwell: [min, max] s, k: [min, max], transition: s, epoch (stamped)}",
    "override": "a weather act inside a forecast segment {state, k?, ts} (stamped)",
    "gradient": "a painted sky in place of the day's: {top, horizon, bottom?}, each a linear [r, g, b] 0..1 (OMI_environment_sky gradient; absent bottom = horizon). rate: 0 already pins the clock",
