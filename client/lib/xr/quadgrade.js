@@ -50,7 +50,9 @@ const inv3 = (m) => {
   const [a, b, c, d, e, f, g, h, i] = m, A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g, det = a * A + b * B + c * C;
   return Object.freeze([A, -(b * i - c * h), b * f - c * e, B, a * i - c * g, -(a * f - c * d), C, -(a * h - b * g), a * e - b * d].map((x) => x / det));
 };
-export const NEUTRAL = Object.freeze({ start: 0.8 - 0.04, desat: 0.15, toeAt: 0.08, toeK: 6.25, toeOff: 0.04 });
+// ceil: the inverse's own ceiling, not three's: the curve's peak only approaches 1, and 0.9999 is a peak of 576 (finite, and
+// far under a HalfFloat's 65504 even at exposure 0.5)
+export const NEUTRAL = Object.freeze({ start: 0.8 - 0.04, desat: 0.15, toeAt: 0.08, toeK: 6.25, toeOff: 0.04, ceil: 0.9999 });
 export const SRGB_TO_REC2020 = fromCols([0.6274, 0.0691, 0.0164, 0.3293, 0.9195, 0.0880, 0.0433, 0.0113, 0.8956]);
 export const REC2020_TO_SRGB = fromCols([1.6605, -0.1246, -0.0182, -0.5876, 1.1329, -0.1006, -0.0728, -0.0083, 1.1187]);
 export const AGX_INSET = fromCols([0.856627153315983, 0.137318972929847, 0.11189821299995, 0.0951212405381588, 0.761241990602591, 0.0767994186031903, 0.0482516061458583, 0.101439036467562, 0.811302368396859]);
@@ -72,14 +74,29 @@ export function agxInverseJS(lin, exposure = 1) {
   });
   return mul3(INV.toRec, mul3(INV.inset, enc)).map((v) => v / exposure);
 }
-/** The JS twin of quadcolour.js neutralInverse: the linear working colour whose PBR Neutral at `exposure` is `lin`. */
+/** Neutral's image, from its own maths: a highlight of output peak n ≥ start is mixed toward grey by g(n), so its min/max
+ *  ratio r is at least g(n); g grows with n, so the brightest peak a colour of ratio r can show is the n where g(n) = r:
+ *  1 − u with u = 2d²w / (2dw + r + √(r(4dw + r))), d = 1 − start, w = (1 − r)·desat (start at r = 0, a fully saturated
+ *  colour; → 1 at r = 1, a grey). Below start everything is on the image. Exposure plays no part (the inverse divides by it
+ *  last, and the linear input is unbounded), so neither does it here. The shader's neutralInverse computes the same. */
+export function neutralPeakFor(r) {
+  const d = 1 - NEUTRAL.start, w = (1 - r) * NEUTRAL.desat;
+  return 1 - (2 * d * d * w) / (2 * d * w + r + Math.sqrt(r * (4 * d * w + r)));
+}
+/** The JS twin of quadcolour.js neutralInverse: the linear working colour whose PBR Neutral at `exposure` is `lin`.
+ *  The rule: a colour off Neutral's image is scaled down, all three channels by one factor, to the brightest colour of its
+ *  hue and saturation the curve shows (neutralPeakFor, and never above NEUTRAL.ceil): hue and saturation kept exactly,
+ *  brightness given up (at most 1 − start = 24% in luma, for a fully saturated colour at full peak); a colour on the image
+ *  is untouched. */
 export function neutralInverseJS(lin, exposure = 1) {
-  const { start: S, desat: D, toeAt, toeK, toeOff } = NEUTRAL, d = 1 - S;
-  let y = lin.map((v) => Math.min(0.9999, Math.max(0, v)));
+  const { start: S, desat: D, toeAt, toeK, toeOff, ceil } = NEUTRAL, d = 1 - S;
+  let y = lin.map(clamp01);
+  const pk = Math.max(...y), cap = Math.min(ceil, neutralPeakFor(Math.min(...y) / Math.max(pk, 1e-6)));
+  y = y.map((v) => v * Math.min(1, cap / Math.max(pk, 1e-6)));   // onto the image: one factor for all three channels
   const np = Math.max(...y);
   if (np >= S) {   // undo the highlight compression: newPeak np → the peak it came from, then the desaturation mix
     const p = (d * d) / (1 - np) - d + S, g = 1 - 1 / (D * (p - np) + 1);
-    y = y.map((v) => Math.max(0, ((v - np * g) / (1 - g)) * (p / np)));   // < 0: a highlight more saturated than Neutral makes
+    y = y.map((v) => Math.max(0, ((v - np * g) / (1 - g)) * (p / np)));   // ≥ 0 on the image; max() only absorbs rounding
   }
   // the toe: the darkest channel m came from x with m = x − offset(x); below toeAt offset is x − toeK·x² (so m = toeK·x²), else toeOff
   const m = Math.max(0, Math.min(...y)), x = m < toeK * toeAt * toeAt ? Math.sqrt(m / toeK) : m + toeOff, off = x < toeAt ? x - toeK * x * x : toeOff;

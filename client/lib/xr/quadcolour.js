@@ -55,14 +55,19 @@ export const agxInverse = Fn(([lin]) => {
   return mat3(...INV.toRec).mul(mat3(...INV.inset).mul(enc)).div(toneMappingExposure);
 });
 /** Linear working colour whose Khronos PBR Neutral (at the live exposure) is `lin` (quadgrade.js neutralInverseJS's twin,
- *  closed form). Exact on Neutral's image; a highlight more saturated than Neutral makes clamps at 0. */
+ *  closed form). Exact on Neutral's image; a colour off it (bright and saturated: Neutral mixes highlights toward grey) is
+ *  first scaled down, all three channels by one factor, to the brightest colour of its hue and saturation the curve shows
+ *  (quadgrade.js neutralPeakFor): hue and saturation kept, brightness given up (at most 24% in luma). */
 export const neutralInverse = Fn(([lin]) => {
   const S = float(NEUTRAL.start), d = float(1 - NEUTRAL.start);
-  const y = clamp(lin, 0, 0.9999).toVar();
+  const y0 = clamp(lin, 0, 1), pk = max(max(y0.x, max(y0.y, y0.z)), 1e-6), r = min(y0.x, min(y0.y, y0.z)).div(pk);
+  const w = r.oneMinus().mul(NEUTRAL.desat), dw2 = d.mul(w).mul(2);
+  const cap = min(float(1).sub(d.mul(d).mul(w).mul(2).div(dw2.add(r).add(sqrt(r.mul(dw2.mul(2).add(r)))))), NEUTRAL.ceil);   // neutralPeakFor(r)
+  const y = y0.mul(min(cap.div(pk), 1)).toVar();   // onto the image: one factor for all three channels
   const np = max(y.x, max(y.y, y.z));
   If(np.greaterThanEqual(S), () => {   // undo the highlight compression, then its desaturation mix
     const p = d.mul(d).div(np.oneMinus()).sub(d).add(S), g = float(1).sub(float(1).div(p.sub(np).mul(NEUTRAL.desat).add(1)));
-    y.assign(max(y.sub(np.mul(g)).div(g.oneMinus()).mul(p.div(np)), 0));
+    y.assign(max(y.sub(np.mul(g)).div(g.oneMinus()).mul(p.div(np)), 0));   // ≥ 0 on the image; max() only absorbs rounding
   });
   const m = max(min(y.x, min(y.y, y.z)), 0);
   const x = select(m.lessThan(NEUTRAL.toeK * NEUTRAL.toeAt * NEUTRAL.toeAt), sqrt(m.div(NEUTRAL.toeK)), m.add(NEUTRAL.toeOff));
@@ -80,7 +85,11 @@ export const tonemapInverse = Fn(([lin]) => {
 });
 
 /** Swap a textured quad's material (an HTMLMesh's, or a head-locked canvas plate's) for one whose output is the
- *  authored (graded) colour after the renderer's output pass. Blending and depth settings carry over. */
+ *  authored (graded) colour after the renderer's output pass. Blending and depth settings carry over.
+ *  A stopgap: the per-fragment inverse is for want of (b) "draw panels after the output transform, in their own pass".
+ *  That is possible on the desktop through the post pipeline, but not in a headset today: XR draws straight to the
+ *  session's framebuffer with the curve applied inline, and there is no post pipeline in XR, so the inverse stays (with
+ *  its off-image cases: Neutral's bright saturated colours come back darker, hue kept) until XR has a post path. */
 export function quadMaterial(mesh, _renderer) {   // the renderer is no longer read: the curve to undo is uTonemap's, live
   const old = mesh.material, map = old.map;
   const m = new THREE.MeshBasicNodeMaterial({ map, transparent: old.transparent, alphaTest: old.alphaTest, side: old.side,
