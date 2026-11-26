@@ -5,6 +5,7 @@ import { DrawBatches } from './draw_batches.js';
 import { warm, warmDepth, P_AMBIENT } from './warmqueue.js';
 import { gpuBegin, gpuEnd } from '../debug/gputime.js';
 import { quadMaterial } from '../xr/quadcolour.js';
+import { postPass } from './post.js';
 
 const batches = new DrawBatches({ warm: async (mesh, live) => {
   let error;
@@ -118,7 +119,7 @@ export function renderWorld() {
   const before = { ...renderer.info.render };
   if (renderer.xr?.isPresenting) renderer.xr.updateCamera(camera);   // we build the eyes (cameraAutoUpdate is off while presenting, xr.js): the eye pass starts from the rig
   gpuBegin();                     // Debug › gpu timer brackets the world pass (no-op while off)
-  try { batches.render(renderer, scene, camera); } finally { gpuEnd(); }
+  try { batches.render(renderer, scene, camera, postPass(renderer, scene, camera)); } finally { gpuEnd(); }   // postPass: null = main's plain pass (post.js)
   const after = renderer.info.render;
   // this render's own deltas (nested shadow/output passes included); never reset the renderer's shared counters
   lastRender = {

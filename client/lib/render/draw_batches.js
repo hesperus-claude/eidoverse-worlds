@@ -267,10 +267,13 @@ export class DrawBatches {
     this.hidden.length = this.drawn.length = 0;
   }
 
-  render(renderer, scene, camera) {
+  // draw: the main pass through something else (post.js's RenderPipeline, whose own scene pass prepares the batches);
+  // null: renderer.render
+  render(renderer, scene, camera, draw = null) {
+    const main = draw ?? (() => renderer.render(scene, camera));
     // Nested/offscreen/override passes keep their existing semantics.
     if (!this.enabled || this.active || scene.overrideMaterial || camera.isArrayCamera) {
-      return renderer.render(scene, camera);
+      return main();
     }
     this.active = true;
     const before = scene.onBeforeRender;
@@ -288,7 +291,7 @@ export class DrawBatches {
         this.prepare(scene, args[2]);
       }
     };
-    try { return renderer.render(scene, camera); }
+    try { return main(); }
     finally {
       scene.onBeforeRender = before;
       this.restore();

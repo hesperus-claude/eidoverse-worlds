@@ -25,6 +25,7 @@ import { busy as loadingBusy } from '../render/framebudget.js';
 import { bootDone } from '../boot.js';
 import { setDayness, releaseForeignLights } from '../render/lightrig.js';
 import { warm, P_AMBIENT } from '../render/warmqueue.js';
+import { setBloom } from '../render/post.js';
 import { WEATHERS, CLOUDS, effectiveSky, hoursAt, skyTicks } from '../../../shared/forecast.js';
 import { claimUnowned, releaseHook } from '../render/autohooks.js';
 import { rainSurfaceAt } from '../terrain.js';
@@ -1103,6 +1104,7 @@ function applyTuning(a, day, warmth = Math.pow(1 - day, 1.5), sunPos = null, sky
 
   // exposure is the world's, not the sky's: one global knob, the same on both implementations
   renderer.toneMappingExposure = (skyOwnsLights ? 1 : (1.0 - 0.22 * warmth)) * (a.exposure ?? 1);
+  setBloom(a.bloom);   // the world's glow strength, the same on both skies; each viewer's ew-bloom decides the cost (post.js)
 
   dayness = day;
   setDayness(day);   // the light rig dims lamps and placed lights on this same clock

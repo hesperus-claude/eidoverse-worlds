@@ -112,6 +112,7 @@ import { perf } from './lib/render/perf.js';
 import { renderWorld, drawStats, setDrawBatching } from './lib/render/render.js';
 import { updateMaterials, materialsDebug } from './lib/render/materials.js';
 import { updateRig, rigDebug, setLampShadow, lampShadowState } from './lib/render/lightrig.js';
+import { postDebug } from './lib/render/post.js';
 import { startPrefetch } from './lib/prefetch.js';
 import {
   getMe, setMe, getMyAvatarPath, getMyAvatarName, resolveMyAvatarPath,
@@ -848,6 +849,7 @@ const EW = globalThis.EW = {
   reconcileModels,   // force a full realizer pass (idempotent)
   materials: materialsDebug,   // factory counters + live weather uniforms
   lightrig: rigDebug,          // slot pool + request table
+  post: postDebug,             // the post pipeline: active, why not, the world's bloom strength
   lampShadow: lampShadowState,   // the chest lamp's shadow map + derived bias
   setLampShadow,                 // ({map, texels, dist}) — live, bias re-derived
 

@@ -14,8 +14,8 @@
 const SLOW_MS = 250;
 const GIANT_FS = 400000;   // chars of fragment source: only the sky's cloud programs are this big
 // the world's own pass: no user target bound, or the target three binds for it (its tone-mapping framebuffer, the XR
-// eye target). Anything else is someone's target.
-const isWorldPass = (rt) => rt === null || !!rt?.isPostProcessingRenderTarget || !!rt?.isXRRenderTarget;
+// eye target), or the post pipeline's scene pass (post.js marks it isWorldPass). Anything else is someone's target.
+const isWorldPass = (rt) => rt === null || !!rt?.isPostProcessingRenderTarget || !!rt?.isXRRenderTarget || rt?.isWorldPass === true;
 // the nearest named ancestor, with the path length — most three children are anonymous under a named root
 const named = (o) => { for (let n = o, d = 0; n && d < 6; n = n.parent, d++) if (n.name) return d ? `${n.name}›${d}` : n.name; return '(unnamed)'; };
 

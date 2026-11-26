@@ -12,6 +12,7 @@ import { registerXRPanel } from '../xr/xrpanels.js';
 import { allowUntrusted, setAllowUntrusted, UNTRUSTED_WORDS } from '../mediaprefs.js';
 import { initConsentPanel } from './consentpanel.js';
 import { myShadowPref, setMyShadowPref } from '../render/materials.js';
+import { bloomPref, setBloomPref } from '../render/post.js';
 
 // storage can throw (private mode, quota) — never let a preference read kill the panel
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -70,6 +71,7 @@ function videoFields() {
     { t: 'check', k: 'shadows', label: 'shadows', value: shadowsOn() },
     ...(shadowsOn() ? [pick('shadowres', SHADOW_RES, shadowRes(), 'shadow resolution'), pick('casters', CASTER_CHOICES, getCasterCeiling(), 'shadow casters'),
       { t: 'check', k: 'myshadow', label: 'my body casts a real shadow', value: myShadowPref() }] : []),
+    { t: 'check', k: 'bloom', label: 'glow (bloom)', value: bloomPref() },
     pick('particles', PARTICLE_TIERS, getParticleTier(), 'particles'),
     pick('foliage', FOLIAGE_MODES, getFoliageMode(), 'textured transparency'),
     pick('detail', Object.keys(AVATAR_DETAILS), getAvatarDetail(), 'avatar detail'),
@@ -85,6 +87,7 @@ function videoDispatch(k, v) {
   else if (k === 'shadowres') setShadowRes(+v);
   else if (k === 'casters') setCasterCeiling(+v);
   else if (k === 'myshadow') setMyShadowPref(!!v);
+  else if (k === 'bloom') setBloomPref(!!v);
   else if (k === 'particles') setParticleTier(v);
   else if (k === 'foliage') setFoliageMode(v);
   else if (k === 'detail') setAvatarDetail(v);
@@ -163,6 +166,10 @@ export function initVideoPanel() {
     body.appendChild(resRow);
     body.appendChild(castRow);
     body.appendChild(meRow);
+
+    body.appendChild(checkRow('glow (bloom)',
+      'Lets what is brighter than white glow round its edges (lamps, fire, lit windows) as strongly as the world asks. Off saves a few full-screen passes; a world that asks for none looks the same either way, and costs nothing. Not drawn in a headset.',
+      bloomPref(), (on) => { setBloomPref(on); flashHint(`glow: ${on ? 'on' : 'off'}`); }));
 
     body.appendChild(selectRow('particles',
       'How many sprites particle effects draw. auto lets the engine thin them under load and restore them after.',

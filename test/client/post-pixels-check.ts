@@ -9,7 +9,8 @@
 // The world is held (render.js setWorldHold) and a scene of our own is drawn into the canvas, then read back in the same
 // task (drawImage), so no frame of the page's own lands between a draw and its read.
 // Mutations (must go red, by hand): outputColorTransform = false, or a second renderOutput round the output (PX1);
-// bloom threshold 0 (PX1); strength not applied (PX2); targets not disposed at strength 0 (PX3).
+// bloom threshold 0 (PX1); strength not applied (PX2); targets not disposed at strength 0 (PX3: teardown skipped, or
+// only the pipeline's own dispose).
 import { scratchBench, mkCheck } from "../harness/harness.ts";
 import { until } from "../gate/wait.ts";
 
@@ -87,18 +88,27 @@ try {
   const [r0, r1, r3] = glow.ring ?? [];
   check("PX2 an emitter at 12× white glows: the ring round it is brighter with bloom 1.5 than plain, and brighter still at 3", glow.settled && r1 > r0 + 4 && r3 > r1 + 2, JSON.stringify(glow));
 
-  // PX3: back to none disposes the targets; PX4: the scene pass follows the drawing buffer
-  const after = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js');
-    post.setBloom(1.5); await p.settle(p.postFrame); const texOn = p.renderer.info.memory.textures;
-    post.setBloom(0); p.plainFrame(); await p.postFrame(); const texOff = p.renderer.info.memory.textures, built = post.postDebug().built;
+  // PX3: back to none disposes the targets (every render-target texture the pipeline made is destroyed; a bare texture
+  // count is not the measure: the page creates its own textures between frames); PX4: the scene pass follows the buffer
+  const after = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js'), be = p.renderer.backend, made = new Map();
+    const c0 = be.createTexture.bind(be), d0 = be.destroyTexture.bind(be);
+    be.createTexture = (t, o) => { if (t.isRenderTargetTexture || t.isDepthTexture) made.set(t, (t.isDepthTexture ? 'depth ' : 'colour ') + t.image?.width + 'x' + t.image?.height); return c0(t, o); };
+    be.destroyTexture = (t, ...a) => { made.delete(t); return d0(t, ...a); };
+    let built, ofPipe;
+    try {
+      post.setBloom(0); p.plainFrame(); await p.postFrame();
+      post.setBloom(1.5); await p.settle(p.postFrame); ofPipe = made.size;
+      post.setBloom(0); p.plainFrame(); await p.postFrame(); built = post.postDebug().built;
+    } finally { be.createTexture = c0; be.destroyTexture = d0; }
+    const left = [...made.values()];
     post.setBloom(1.5); await p.postFrame();
     const pr = p.renderer.getPixelRatio(); p.renderer.setPixelRatio(pr * 0.5); await p.postFrame();
     const sz = p.renderer.getDrawingBufferSize(new p.THREE.Vector2()), rt = post.postDebug()._pipe?.scenePass?.renderTarget;
-    const r = { texOn, texOff, built, buffer: [sz.x, sz.y], target: rt ? [rt.width, rt.height] : null };
+    const r = { ofPipe, left, built, buffer: [sz.x, sz.y], target: rt ? [rt.width, rt.height] : null };
     p.renderer.setPixelRatio(pr); post.setBloom(0); await p.postFrame();
     return r;`);
   console.log(`  · ${JSON.stringify(after)}`);
-  check("PX3 …and at strength 0 they are gone: the texture count is back where the plain path had it, nothing held", after.texOff === same.tex0 && after.built === false, JSON.stringify({ tex0: same.tex0, ...after }));
+  check("PX3 …and at strength 0 they are gone: every render-target texture the pipeline made (its scene pass, colour and depth, and its bloom mips) is destroyed, nothing held", after.ofPipe >= 12 && after.left.length === 0 && after.built === false, JSON.stringify(after));
   check("PX4 a pixel-ratio change (the render-scale governor's lever): the scene pass's target follows the drawing buffer", !!after.target && after.target[0] === after.buffer[0] && after.target[1] === after.buffer[1], JSON.stringify(after));
 
   const real = errors.filter((e) => !/popErrorScope|sky finish/.test(e));
