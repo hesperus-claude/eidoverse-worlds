@@ -42,6 +42,10 @@ let skyMesh = null;
 // the skymesh-path fill light is born eagerly: a light appearing later recompiles every lit material
 const fillLight = new THREE.DirectionalLight(0xffffff, 0);
 scene.add(fillLight);
+// the world's constant ambient (sky.ambientLightColor / ambientLightEnergy; Godot's Environment.ambient_light_*), born
+// at 0 for the same reason: absent fields leave it at 0, and every world that names neither draws as it did
+const worldAmbient = new THREE.AmbientLight(0xffffff, 0);
+scene.add(worldAmbient);
 let clock = null;          // { args, t0 } — the server-stamped epoch
 let currentWorld = null;
 
@@ -1103,6 +1107,11 @@ function applyTuning(a, day, warmth = Math.pow(1 - day, 1.5), sunPos = null, sky
 
   // exposure is the world's, not the sky's: one global knob, the same on both implementations
   renderer.toneMappingExposure = (skyOwnsLights ? 1 : (1.0 - 0.22 * warmth)) * (a.exposure ?? 1);
+
+  // the world's constant ambient, the same at every hour and on both sky paths (sky.ambient scales only the sky's
+  // hemisphere, which is low at night): set or cleared on every pass, so a removed field goes back to none
+  worldAmbient.color.setRGB(...(a.ambientLightColor ?? [1, 1, 1]), THREE.LinearSRGBColorSpace);   // linear, as gradient's
+  worldAmbient.intensity = a.ambientLightEnergy ?? 0;
 
   dayness = day;
   setDayness(day);   // the light rig dims lamps and placed lights on this same clock
