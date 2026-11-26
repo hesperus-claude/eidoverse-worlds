@@ -15,14 +15,24 @@
 // the rest of the page, the frame drawn plain, a clientlog line written; postDebug() says why. A reload tries again.
 import { THREE } from '../core.js';
 import { tee } from '../base.js';
-import { pass } from 'three/tsl';
+import { pass, Fn, luminance, smoothstep, mix, vec4 } from 'three/tsl';
 import { bloom as bloomNode } from 'three/addons/tsl/display/BloomNode.js';
 
 export const BLOOM_PREF = 'ew-bloom';
 export const BLOOM_MAX = 3;                         // the registry's range (componentspec sky.bloom)
+// Units: the threshold and the cap are the scene pass's linear values, BEFORE the renderer's exposure (three applies
+// toneMappingExposure inside the tone curve, in the pipeline's output pass, after bloom), so sky.exposure does not move
+// what blooms. Not a physical luminance (no nits). Godot thresholds after its exposure; see the report of 11-25.
 // radius 0.15, threshold 2: only what is well above white in the linear scene (emitters, lamp bodies, fire) blooms
-// (render lab 11-02: 0.4 / 1 spread lamp halos over whole shelves)
+// (render lab 11-02: 0.4 / 1 spread lamp halos over whole shelves; Godot's glow_hdr_threshold default is 1)
 export const BLOOM_RADIUS = 0.15, BLOOM_THRESHOLD = 2;
+// the luminance cap, Godot's glow_hdr_luminance_cap at its default: what feeds the bloom is clamped per channel AFTER the
+// threshold, as Godot's glow first pass does (min(color * feedback, cap)), so one specular firefly can't light a halo many
+// times its size (lab 11-02: the armchair's highlight). A constant until a world needs another.
+export const BLOOM_LUMINANCE_CAP = 12;
+// three's BloomNode high pass (a smoothstep on luminance over smoothWidth), then the cap
+const cappedHighPass = Fn(({ input, threshold, smoothWidth }) =>
+  mix(vec4(0), input, smoothstep(threshold, threshold.add(smoothWidth), luminance(input.rgb))).min(vec4(BLOOM_LUMINANCE_CAP)));
 const WATCH_FRAMES = 3;                             // a new pipeline's first frames run inside a WebGPU error scope
 
 const readPref = (key) => { try { return localStorage.getItem(key) !== 'off'; } catch { return true; } };
@@ -60,6 +70,7 @@ function build(renderer, scene, camera, key) {
   scenePass.renderTarget.isWorldPass = true;
   const color = scenePass.getTextureNode('output');
   const glow = bloomNode(color, bloomStrength, BLOOM_RADIUS, BLOOM_THRESHOLD);
+  glow.highPassFn = cappedHighPass;   // read when the node is set up, at its first frame
   pipe.outputNode = color.add(glow);
   builds++;
   built = { pipe, scenePass, glow, scene, camera, key, frames: 0 };

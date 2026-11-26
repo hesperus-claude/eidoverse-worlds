@@ -50,22 +50,27 @@ try {
     const grab = () => { g2.clearRect(0, 0, W, H); g2.drawImage(cv, 0, 0); return g2.getImageData(0, 0, W, H).data; };
     // one frame of either path, read back in the same task
     const plainFrame = () => { renderer.setRenderTarget(null); renderer.render(S, cam); return grab(); };
-    const postFrame = async () => { const post = await import('/lib/render/post.js'); const d = post.postPass(renderer, S, cam); if (d) d(); else renderer.render(S, cam); return grab(); };
+    // the test's strengths, held: a ticking sky re-applies its tuning ~1 Hz (sky.js updateSky → render → applyTuning), and
+    // that hands post.js the WORLD's bloom (none here) between our frames; every frame of ours re-asserts the test's value
+    const post = await import('/lib/render/post.js'); g.__want = { bloom: 0, ao: 0 };
+    g.__setB = (v) => { g.__want.bloom = v; post.setBloom(v); }; g.__setA = (v) => { g.__want.ao = v; post.setAo?.(v); };
+    const hold = () => { post.setBloom(g.__want.bloom); post.setAo?.(g.__want.ao); };
+    const postFrame = async () => { hold(); const d = post.postPass(renderer, S, cam); if (d) d(); else renderer.render(S, cam); return grab(); };
     // frames until two in a row read the same (a WebGL program links in parallel and pops in a frame late, syncgate.js)
     const settle = async (f) => { let prev = null; for (let i = 0; i < 90; i++) { await new Promise((r) => requestAnimationFrame(r)); const px = await f(); if (prev && px.every((v, j) => v === prev[j])) return px; prev = px; } return null; };
     const diff = (a, b) => { let max = 0, n = 0; for (let i = 0; i < a.length; i += 4) for (let c = 0; c < 3; c++) { const d = Math.abs(a[i + c] - b[i + c]); if (d > max) max = d; if (d > 1) n++; } return { max, over1: n }; };
     const lum = (px, cx, cy, r0, r1) => { let t = 0, n = 0; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const d = Math.hypot(x - cx, y - cy); if (d >= r0 && d < r1) { const i = (y * W + x) * 4; t += 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]; n++; } } return n ? t / n : 0; };
     const proj = (o) => { const v = o.position.clone().project(cam); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; };
     await renderer.compileAsync(S, cam);
-    g.__pp = { THREE, renderer, S, cam, lit, hot, plainFrame, postFrame, settle, diff, lum, proj, W, H };
+    g.__pp = { THREE, renderer, S, cam, lit, hot, hold, plainFrame, postFrame, settle, diff, lum, proj, W, H };
     return { backend: renderer.backend.isWebGLBackend ? 'webgl' : 'webgpu', W, H, samples: renderer.samples };`);
   console.log(`  · ${JSON.stringify(setup)}`);
   check("PX-setup the page runs WebGL 2, as asked", setup.backend === "webgl", JSON.stringify(setup));
 
   // PX1: nothing above threshold. The plain frame, then the pipeline at strength 1.5: the same picture
   const same = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js');
-    post.setBloom(0); const a = await p.settle(p.plainFrame); const tex0 = p.renderer.info.memory.textures;
-    post.setBloom(1.5); const b = await p.settle(p.postFrame);
+    globalThis.__setB(0); const a = await p.settle(p.plainFrame); const tex0 = p.renderer.info.memory.textures;
+    globalThis.__setB(1.5); const b = await p.settle(p.postFrame);
     const d = post.postDebug(), tex1 = p.renderer.info.memory.textures;
     return { settled: !!a && !!b, diff: a && b ? p.diff(a, b) : null, active: d.active, why: d.why, bloom: d.bloom, tex0, tex1,
       litLum: a ? p.lum(a, ...p.proj(p.lit), 0, 20) : null, bgLum: a ? p.lum(a, p.W / 2, p.H / 2, 0, 6) : null };`);
@@ -77,9 +82,9 @@ try {
   // PX2: an emitter at 12× white: with bloom the dark ring round it brightens; plain does not
   const glow = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js');
     p.S.add(p.hot); await p.renderer.compileAsync(p.S, p.cam);
-    post.setBloom(0); const a = await p.settle(p.plainFrame);
-    post.setBloom(1.5); const b = await p.settle(p.postFrame);
-    post.setBloom(3); const c = await p.settle(p.postFrame);
+    globalThis.__setB(0); const a = await p.settle(p.plainFrame);
+    globalThis.__setB(1.5); const b = await p.settle(p.postFrame);
+    globalThis.__setB(3); const c = await p.settle(p.postFrame);
     const [cx, cy] = p.proj(p.hot), r = 0.45 / (2 * Math.tan(25 * Math.PI / 180) * 6) * p.H;   // the emitter's radius on screen
     const ring = (px) => px ? p.lum(px, cx, cy, r * 1.4, r * 2.4) : null;
     p.S.remove(p.hot);
@@ -96,16 +101,17 @@ try {
     be.destroyTexture = (t, ...a) => { made.delete(t); return d0(t, ...a); };
     let built, ofPipe;
     try {
-      post.setBloom(0); p.plainFrame(); await p.postFrame();
-      post.setBloom(1.5); await p.settle(p.postFrame); ofPipe = made.size;
-      post.setBloom(0); p.plainFrame(); await p.postFrame(); built = post.postDebug().built;
+      globalThis.__setB(0); p.plainFrame(); await p.postFrame();
+      globalThis.__setB(1.5); await p.settle(p.postFrame); ofPipe = made.size;
+      globalThis.__setB(0); p.plainFrame(); await p.postFrame(); built = post.postDebug().built;
     } finally { be.createTexture = c0; be.destroyTexture = d0; }
     const left = [...made.values()];
-    post.setBloom(1.5); await p.postFrame();
-    const pr = p.renderer.getPixelRatio(); p.renderer.setPixelRatio(pr * 0.5); await p.postFrame();
+    globalThis.__setB(1.5); await p.postFrame();
+    const pr = p.renderer.getPixelRatio(); p.renderer.setPixelRatio(pr * 0.5);
+    await new Promise((r) => requestAnimationFrame(r)); await p.postFrame();   // a pass resizes in updateBefore, once per frame (three's NodeUpdateType.FRAME)
     const sz = p.renderer.getDrawingBufferSize(new p.THREE.Vector2()), rt = post.postDebug()._pipe?.scenePass?.renderTarget;
     const r = { ofPipe, left, built, failed: post.postDebug().failed, buffer: [sz.x, sz.y], target: rt ? [rt.width, rt.height] : null };
-    p.renderer.setPixelRatio(pr); post.setBloom(0); await p.postFrame();
+    p.renderer.setPixelRatio(pr); globalThis.__setB(0); await p.postFrame();
     return r;`);
   console.log(`  · ${JSON.stringify(after)}`);
   check("PX3 …and at strength 0 they are gone: every render-target texture the pipeline made (its scene pass, colour and depth, and its bloom mips) is destroyed, nothing held", after.ofPipe >= 12 && after.left.length === 0 && after.built === false, JSON.stringify(after));
@@ -116,13 +122,13 @@ try {
   const cap = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js'), T = p.THREE;
     const hot = new T.Mesh(new T.SphereGeometry(0.8, 32, 16), new T.MeshStandardNodeMaterial({ color: 0x000000, emissive: 0xffffff, emissiveIntensity: 60 }));
     p.S.add(hot); await p.renderer.compileAsync(p.S, p.cam);
-    post.setBloom(1.5); await p.settle(p.postFrame);
+    globalThis.__setB(1.5); await p.settle(p.postFrame);
     const rt = post.postDebug()._pipe?.glow?._renderTargetBright; if (!rt) return { error: 'no bright target' };
     const [cx, cy] = p.proj(hot), x = Math.round(cx * rt.width / p.W), y = Math.round(rt.height / 2);   // the emitter sits at the vertical centre: either y origin reads it
     const raw = await p.renderer.readRenderTargetPixelsAsync(rt, x - 1, y - 1, 3, 3);
     const v = [...raw].map((h) => (raw instanceof Uint16Array ? T.DataUtils.fromHalfFloat(h) : h));
     const rgb = []; for (let i = 0; i < v.length; i += 4) rgb.push(Math.max(v[i], v[i + 1], v[i + 2]));
-    p.S.remove(hot); post.setBloom(0); await p.postFrame();
+    p.S.remove(hot); globalThis.__setB(0); await p.postFrame();
     return { failed: post.postDebug().failed, size: [rt.width, rt.height], at: [x, y], max: Math.max(...rgb), rgb, type: raw?.constructor?.name };`);
   console.log(`  · ${JSON.stringify(cap)}`);
   check("PX6 an emitter at 60× white feeds the bloom 12 per channel, not 60 (Godot's glow_hdr_luminance_cap, clamped after the threshold)", !cap.error && Math.abs(cap.max - 12) < 0.05, JSON.stringify(cap));
