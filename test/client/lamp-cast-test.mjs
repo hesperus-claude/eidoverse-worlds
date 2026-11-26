@@ -31,6 +31,8 @@ const CASES = {
   n2: { stored: '2', n: 2 },
   n4: { stored: '4', n: 4 },
   n8: { stored: '8', n: 8 },         // every one of the 8 default slots
+  spot1: { stored: null, n: 1, spots: true },   // spots: one dial over both kinds, at today's default
+  spot2: { stored: '2', n: 2, spots: true },
 };
 // the full scenario runs at these; the others only check the boot shape
 const FULL = ['n1', 'n2', 'n4'];
@@ -84,6 +86,76 @@ if (CASE) {
   check(`rigDebug().shadows.castingSlots is ${N}`, d().shadows.castingSlots === N, d().shadows.castingSlots);
   check(`one row per casting slot in rigDebug().shadows.slots`, castRows().length === N, castRows().length);
   check('lampShadowCount() reads the stored choice back', rig.lampShadowCount?.() === N, rig.lampShadowCount?.());
+
+  if (C.spots) {
+    // SPOT CASTERS: a spot is one map against a cube's six, so one dial ("shadowed lamps") counts both kinds and a spot
+    // goes first within a tier; the tiers still come first (an authored world light outranks the inferred chest lamp,
+    // the rule the point slots already had). Godot: omni and spot share one atlas; shadow_normal_bias 1.0 texel for
+    // both (OmniLight3D.xml:29, SpotLight3D.xml:20).
+    const NS = Math.min(2, N);   // the spot pool is 2 (?spots default)
+    const spotRows = () => d().shadows.spotSlots ?? [];
+    const spotRow = (k) => spotRows().find((r) => r.holder === k) || null;
+    const spotCasts = (k) => Boolean(spotRow(k)?.drawing);
+    check(`S1 born: ${NS} spot slot(s) cast (rigDebug castingSpots), the same dial`, d().shadows.castingSpots === NS && spotRows().length === NS, d().shadows.castingSpots);
+    const down = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2];
+    const spotAt = (key, pos, shadows, angle = 0.6, extra = {}) => rig.requestLight(key, { authored: true, intensity: 30, range: 6, shadows, pos, q: down, spot: { angle, inner: angle * 0.6 }, ...extra });
+    spotAt('spot:desk', [0, 3, -4], true);
+    tick();
+    check('S2 a world spot that asks casts', spotCasts('spot:desk'), spotRows());
+    const g = new THREE.Group(); g.position.set(0, 1, -2);
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshStandardMaterial({ emissive: 0xffffff, emissiveIntensity: 2 }));
+    g.add(m); g.updateMatrixWorld(true);
+    const body = rig.attachLamps(g, 'body:me', { shadows: true })[0].key;
+    tick();
+    if (N === 1) {
+      check('S3 one shadowed lamp, a world spot that asks and the avatar\'s chest lamp: the spot casts (authored outranks inferred)', spotCasts('spot:desk') && !casts(body), { spot: spotRows(), body: rowOf(body) });
+      check('S3b ...and the chest lamp still lights, without casting', lit(body), slotOf(body));
+    } else {
+      check('S3 two shadowed lamps: the spot and the chest lamp both cast', spotCasts('spot:desk') && casts(body), { spot: spotRows(), body: rowOf(body) });
+    }
+    rig.updateRequest('spot:desk', { shadows: false });
+    tick();
+    check('S4 the spot stops asking: the chest lamp casts again, the spot slot draws nothing', casts(body) && !spotCasts('spot:desk') && !spotRows().some((r) => r.drawing), { spot: spotRows(), body: rowOf(body) });
+    rig.updateRequest('spot:desk', { shadows: true });
+    rig.requestLight('complight:pt', { authored: true, intensity: 30, range: 6, shadows: true, pos: [1, 2, -3] });
+    tick();
+    if (N === 1) check('S5 an authored point and an authored spot both ask, one shadowed lamp: the spot (one map against six)', spotCasts('spot:desk') && !casts('complight:pt'), { spot: spotRows(), pt: rowOf('complight:pt') });
+    else check('S5 two shadowed lamps, an authored point and spot ask: both cast, the chest lamp (inferred) not', spotCasts('spot:desk') && casts('complight:pt') && !casts(body), { spot: spotRows(), pt: rowOf('complight:pt'), body: rowOf(body) });
+    rig.updateRequest('complight:pt', { keep: true });
+    tick();
+    check('S6 a keep (important) point outranks the authored spot: the tier comes first', casts('complight:pt') && (N > 1 || !spotCasts('spot:desk')), { spot: spotRows(), pt: rowOf('complight:pt') });
+    rig.releaseLight('complight:pt');
+    tick();
+    const sr = spotRow('spot:desk');
+    const n = 512, tex = 1.5 * (2 * Math.min(3, 6) * Math.tan(0.6)) / n;
+    check('S7 the spot is tuned as a world lamp in texels: bias -0.00002, normalBias 1.5 texels at min(3 m, range), a 512 map', sr && sr.bias === -0.00002 && near(sr.normalBias, tex) && sr.map === 512, { sr, tex });
+    check('S7b ...near 0.03 (three\'s spot default 0.5 clips a lamp\'s own shade)', sr?.near === 0.03, sr);
+    // a spot that did not ask, seated in the casting spot slot, and one that asks in the other: they trade places
+    rig.releaseLight('spot:desk'); rig.releaseOwner('body:me'); tick();
+    spotAt('spot:quiet', [0, 3, -3.5], false, 0.6, { intensity: 60 });   // the brighter: ranked (and seated) first
+    tick();
+    spotAt('spot:asker', [1, 3, -5], true);
+    tick();
+    check('S8 a spot that asks takes the casting spot slot from one that did not; both stay lit', spotCasts('spot:asker') && !spotCasts('spot:quiet')
+      && d().spots.filter((x) => x.intensity > 0).length === 2, { rows: spotRows(), spots: d().spots.map((x) => x.intensity) });
+    rig.setShadowRes(4096);
+    check('S9 the resolution dial sizes the spot map too (4096: 1024)', spotRow('spot:asker')?.map === 1024, spotRow('spot:asker'));
+    rig.setShadowRes(2048);
+    // the caster budget's reach rule: a thing in a casting spot's range is in shadow reach
+    rig.releaseLight('spot:quiet'); rig.releaseLight('spot:asker'); tick();
+    spotAt('spot:far', [150, 3, 0], true);
+    tick();
+    const big = new THREE.Group(); big.position.set(0, 1, 150); big.add(new THREE.Mesh(new THREE.SphereGeometry(2), new THREE.MeshStandardMaterial())); big.updateMatrixWorld(true);
+    rig.registerCaster('far-big', big);   // reached by nothing, larger, registered first: it wins unless reach ranks first
+    const thing = new THREE.Group(); thing.position.set(150.3, 1, 0); thing.add(new THREE.Mesh(new THREE.SphereGeometry(0.2), new THREE.MeshStandardMaterial())); thing.updateMatrixWorld(true);
+    rig.registerCaster('by-spot', thing);
+    rig.setCasterBudget(1);
+    for (let i = 0; i < 12; i++) { rig.updateRig(t += 301); for (let j = 0; j < 4; j++) await Promise.resolve(); }
+    const on = rig.rigDebug().casterList.filter((c) => c.casting).map((c) => c.id);
+    check('S10 a thing by a casting spot (outside the sun\'s box) is in shadow reach and takes the one caster place', on.includes('by-spot') && !on.includes('far-big'), on);
+    out();
+    process.exit(0);
+  }
   check('LAMP_SHADOW_CHOICES are 1, 2, 4, 8', JSON.stringify(rig.LAMP_SHADOW_CHOICES) === '[1,2,4,8]', rig.LAMP_SHADOW_CHOICES);
   check('an idle casting slot draws nothing (no holder asked)', castRows().length === N && castRows().every((s) => !s.drawing), castRows());
   { // a resize while no slot draws (nobody asked yet) asks EVERY casting slot for its draw in that frame, not only slot 0:

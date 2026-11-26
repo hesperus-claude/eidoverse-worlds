@@ -61,6 +61,7 @@ if (CASE) {
       // three's PointShadowNode: a map draws when needsUpdate || autoUpdate, with far = light.distance || camera.far,
       // and clears needsUpdate
       slots.forEach((pl, i) => { if (pl.castShadow && (pl.shadow.needsUpdate || pl.shadow.autoUpdate)) { pl.shadow.camera.far = pl.distance || pl.shadow.camera.far; pl.shadow.needsUpdate = false; drawsSeen[i]++; } });
+      for (const sl of rig.rigDebug()._spotSlots ?? []) if (sl.castShadow && (sl.shadow.needsUpdate || sl.shadow.autoUpdate)) sl.shadow.needsUpdate = false;
     }
   };
   const frames = (n, ms) => { for (let i = 0; i < n; i++) frame(ms); };
@@ -324,6 +325,25 @@ if (CASE) {
     check('M10c the viewer turns round: it redraws that frame', n2 === 1 && cache(k).stale === false, cache(k));
     camera.rotation.y = 0; camera.updateMatrixWorld(true);
     world.remove(near); rig.releaseLight(k); settle(); }
+
+  console.log('A CASTING SPOT IS CACHED TOO');
+  { const down = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2];   // -Z turned to point straight down
+    rig.requestLight('spot:desk', { authored: true, intensity: 30, range: 5, shadows: true, pos: [1, 3, -5], q: down, spot: { angle: 0.6, inner: 0.4 } });
+    settle();
+    const srow = () => d().shadows.spotSlots?.find((r) => r.holder === 'spot:desk') ?? null;
+    const sho = () => srow()?.cache?.handoffs ?? NaN;
+    check('SC0 (setup) the spot holds a casting spot slot and draws', srow()?.drawing === true, d().shadows.spotSlots);
+    const h0 = sho(); frames(30);
+    check('SC1 a still spot: no redraw over 30 frames', sho() - h0 === 0, srow());
+    const lamp = box([1.2, 0.25, -5.2]); frames(1); const h1 = sho(); frames(3);
+    lamp.position.x += 0.2; const h2 = sho(); frame();
+    check('SC2 a caster moved in its range: one redraw, reason matrix', sho() - h2 === 1 && srow().cache.reason === 'matrix', { c: srow()?.cache, settled: h2 - h1 });
+    rig.updateRequest('spot:desk', { q: [-0.6, 0, 0, 0.8] }); frames(1); const h3 = sho(); void h3;
+    check('SC3 the spot turns (its cone points elsewhere): a redraw, reason cone', srow()?.cache?.reason === 'cone', srow());
+    frames(5); const h4 = sho();
+    rig.updateRequest('spot:desk', { spot: { angle: 0.4, inner: 0.3 } }); frames(3);
+    check('SC4 its angle changes: one redraw, reason cone', sho() - h4 === 1 && srow().cache.reason === 'cone', srow());
+    world.remove(lamp); rig.releaseLight('spot:desk'); settle(); }
 
   console.log('THE BUDGET');
   { // four slots, each kept dirty by a skinned body walking among them
