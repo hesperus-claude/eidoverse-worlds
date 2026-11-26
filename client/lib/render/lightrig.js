@@ -15,7 +15,8 @@
 //
 // Shadows: the world says which lights cast (a request's `shadows`, light.shadows), the viewer how many at once
 // (ew-lamp-shadows: slots 0..N_CAST-1 are born casting). The best-ranked askers take the casting slots (assign), a casting
-// slot draws only for a holder that asked, and its depth tuning follows its holder (tuneSlot). A casting slot's map is
+// slot draws only for a holder that asked, and its depth tuning follows its holder (tuneSlot). Spots cast too, from their
+// own casting spot slots, counted by the same dial (castingChoice: tier first, then a spot before a point). A casting slot's map is
 // redrawn only when something it shows has changed, a few slots a frame at most (the shadow cache, shadowCacheCheck).
 //
 // Measurements and the chest lamp's shadow tuning: docs/research/light-rig.md.
@@ -78,7 +79,8 @@ export function setLampShadowCount(n) {
   if (!LAMP_SHADOW_CHOICES.includes(+n)) return;
   try { localStorage.setItem(LAMP_SHADOWS_KEY, String(+n)); } catch { /* private window */ }
 }
-const N_CAST = Math.min(N_SLOTS, lampShadowCount());
+const N_SHADOWED = lampShadowCount();   // how many lamps may cast at once, of either kind (castingChoice)
+const N_CAST = Math.min(N_SLOTS, N_SHADOWED);
 let _prefShadows = stored(SH_KEY) !== 'off';   // `let`: setShadows() flips it, and shadowsOn() must follow
 for (let i = 0; i < N_SLOTS; i++) {
   const pl = new THREE.PointLight(0xffffff, 0, 10, 1.7);
@@ -99,6 +101,31 @@ for (let i = 0; i < N_SLOTS; i++) {
   }
   slots.push(pl);
   rigGroup.add(pl);
+}
+// The spot pool: its own light type, so its own fixed pool (?spots=N, default 2), born after the point slots (scene order
+// is pipeline shape). Same ranking as the point pool (rankOf, against the frustum assign() just built). Spots 0..N_SCAST-1
+// are born casting: one dial (ew-lamp-shadows, "shadowed lamps") counts lamps of both kinds, and a spot is one map
+// against a cube's six (Godot shares one atlas between omni and spot). ?spotshadows=0 (boot) bears none.
+const _spotRaw = CONFIG.params.get('spots');   // null when absent: Number(null) is 0
+const _spotParam = _spotRaw == null || _spotRaw === '' ? NaN : Number(_spotRaw);
+const N_SPOT = Number.isFinite(_spotParam) && _spotParam >= 0 ? Math.min(8, Math.round(_spotParam)) : 2;
+const N_SCAST = CONFIG.params.get('spotshadows') === '0' ? 0 : Math.min(N_SPOT, N_SHADOWED);
+// a spot map is one 2D map: twice a cube face's side (a 90-degree cone then gets twice the face's texel density, for
+// two thirds of one cube's pixels)
+const SPOT_MAP = 2 * SHADOW_MAP;
+const spotSlots = [];
+for (let i = 0; i < N_SPOT; i++) {
+  const sl = new THREE.SpotLight(0xffffff, 0, 10, Math.PI / 4, 0, 1.7);
+  sl.name = `spot${i}`;
+  sl.castShadow = i < N_SCAST;   // pipeline shape, fixed at birth, as the point slots
+  if (i < N_SCAST) {
+    sl.shadow.mapSize.set(SPOT_MAP, SPOT_MAP);
+    sl.shadow.camera.near = 0.03;   // as the world lamps: a lamp's own shade sits close (three's default is 0.5)
+    sl.shadow.camera.updateProjectionMatrix();
+    sl.shadow.bias = WORLD_DEPTH_BIAS;
+  }
+  rigGroup.add(sl); rigGroup.add(sl.target);
+  spotSlots.push(sl);
 }
 scene.add(rigGroup);
 /** A casting-shaped slot's map is drawn at birth, whoever holds it and whatever the gate says: it asks three for one
@@ -224,11 +251,13 @@ export function setShadowUpdateBudget(k) { if (Number.isFinite(+k)) _shadowBudge
 export const shadowUpdateBudget = () => _shadowBudget;
 // per casting slot: `drawn` is what it drew last (null: never), `cur` this frame's reading, `marks` where each part of
 // the reading starts (for the reason), `force` a reason to redraw that no reading shows (first, release)
-const _sc = Array.from({ length: N_CAST }, () => ({
+// the cached lights: the casting point slots, then the casting spot slots (index N_CAST + s)
+const _cl = [...slots.slice(0, N_CAST), ...spotSlots.slice(0, N_SCAST)];
+const _sc = Array.from({ length: _cl.length }, () => ({
   drawn: null, drawnMarks: [], cur: [], marks: [], force: 'first', staleSince: -1, reason: null, deforming: false,
   pending: false, handoffs: 0, draws: 0, deferred: 0, outOfView: 0, times: [], deferTimes: [],
 }));
-const _cachedLights = new Set(SHADOW_CACHE ? slots.slice(0, N_CAST) : []);
+const _cachedLights = new Set(SHADOW_CACHE ? _cl : []);
 let _cacheHold = 0, _cacheArmed = false, _cacheFrame = 0, _rigNow = 0;
 /** Debug tools that hold the shadow maps across frames (gputime's A/B, overdraw) hold the cache too: no slot is handed a
  *  redraw while held, and every slot redraws once on release (anything may have changed meanwhile). */
@@ -254,9 +283,11 @@ function gateShadow(l, on) {
 // shade that never asked, the lightning) has not asked to cast; empty, it has nothing to cast for. assign() keeps this
 // current; the slot casts when this AND the preference say so.
 const _holderWants = new Array(N_CAST).fill(false);
+const _spotWants = new Array(N_SCAST).fill(false);   // the same, per casting spot slot
 function applyShadowPref(on) {
   gateShadow(sun, on);
   for (let k = 0; k < N_CAST; k++) gateShadow(slots[k], on && _holderWants[k]);
+  for (let s = 0; s < N_SCAST; s++) gateShadow(spotSlots[s], on && _spotWants[s]);
 }
 /** Put the shadow preference's uniform half back (after a probe held shadow maps across frames). */
 export const reassertShadowPref = () => applyShadowPref(_prefShadows);
@@ -277,13 +308,16 @@ export const SHADOW_RES = [1024, 2048, 4096];
 export const shadowRes = () => { const v = +stored(RES_KEY); return SHADOW_RES.includes(v) ? v : 2048; };
 // one dial for every caster: the sun takes n, the casting lamp slots scale SHADOW_MAP by n/2048 (setLampShadow sizes them all)
 const lampMapFor = (n) => Math.round(SHADOW_MAP * (n / 2048));
+const sizeSpotMaps = (n) => { const m = 2 * lampMapFor(n); for (let i = 0; i < N_SCAST; i++) spotSlots[i].shadow.mapSize.set(m, m); };
 export function setShadowRes(n) {
   localStorage.setItem(RES_KEY, String(n));
   sizeShadowMap(sun, n);
+  sizeSpotMaps(n);
   if (slots[SHADOW_SLOT] && slots[SHADOW_SLOT].shadow.mapSize.x !== lampMapFor(n)) setLampShadow({ map: lampMapFor(n) });
 }
 sun.shadow.mapSize.set(shadowRes(), shadowRes());
 if (lampMapFor(shadowRes()) !== SHADOW_MAP) setLampShadow({ map: lampMapFor(shadowRes()) });
+sizeSpotMaps(shadowRes());
 // ?csm=2|3|4 — cascaded shadow maps (bench probe): three's CSMShadowNode fits one ortho camera per cascade around the
 // view frustum each frame, replacing the follow box in updateShadow. N cascades = N depth passes.
 const CSM_N = Math.min(4, Math.max(0, +CONFIG.params.get('csm') || 0));
@@ -553,7 +587,7 @@ function assign(now) {
   _lastCam.copy(_eye);
   viewFrustum();
   assignDirty = false;
-  assignSpots();
+  const spotWin = assignSpots();
   const ranked = [...requests.values()].filter((r) => !r.spot && (!r.mirror || mirrorLit(r, now)))
     .map((r) => rankOf(r, r.slot >= 0)).sort(byRank);
   // a lit mirror holds a reserved slot: neither ranking nor the governor's cap sheds a strike
@@ -574,9 +608,10 @@ function assign(now) {
     if (r.slot >= 0 && !winnerSet.has(r)) r.slot = -1;
   }
   const used = new Set(winners.map((r) => r.slot).filter((i) => i >= 0));
-  // the N_CAST best-ranked requests that want shadows take the casting slots before the general pass; the rest light
-  // without casting (another caster would be a recompile). Winners are in rank order, so these are the best askers.
-  const wanting = winners.filter((r) => r.shadows).slice(0, N_CAST);
+  // the chosen askers (castingChoice, one dial over both kinds) take the casting slots before the general pass; the rest
+  // light without casting (another caster would be a recompile). Winners are in rank order, so these are the best askers.
+  const { points: wanting, spots: spotCasting } = castingChoice(winners, spotWin);
+  seatSpots(spotCasting, spotWin);
   const castHeld = new Set(wanting.filter((r) => r.slot >= 0 && r.slot < N_CAST).map((r) => r.slot));
   for (const wants of wanting) {
     if (wants.slot >= 0 && wants.slot < N_CAST) continue;   // already casting where it is
@@ -601,11 +636,47 @@ function assign(now) {
     used.add(free);
   }
   const wantsNow = new Array(N_CAST).fill(false);
-  for (const r of winners) if (r.slot >= 0 && r.slot < N_CAST && r.shadows) wantsNow[r.slot] = true;
+  for (const r of wanting) if (r.slot >= 0 && r.slot < N_CAST) wantsNow[r.slot] = true;
   for (let k = 0; k < N_CAST; k++) {
     if (wantsNow[k] === _holderWants[k]) continue;
     _holderWants[k] = wantsNow[k];
     gateShadow(slots[k], _prefShadows && wantsNow[k]);
+  }
+  for (let sl = 0; sl < N_SCAST; sl++) {
+    const w = spotCasting.some((r) => r.sslot === sl);
+    if (w === _spotWants[sl]) continue;
+    _spotWants[sl] = w;
+    gateShadow(spotSlots[sl], _prefShadows && w);
+  }
+}
+// One dial ("shadowed lamps", ew-lamp-shadows) counts lamps of both kinds. The askers that cast are the best by tier
+// (keep, authored, inferred: so an authored world light outranks the avatar's inferred chest lamp, whatever its kind),
+// and within a tier a spot before a point (one map against a cube's six), each kind in its own rank order; at most
+// N_CAST points and N_SCAST spots.
+const tierOf = (r) => (r.keep ? 0 : r.authored ? 1 : 2);
+function castingChoice(pointWinners, spotWinners) {
+  // spots first in the list and a stable sort by tier: within a tier the spots stay ahead, each kind in rank order
+  const askers = [...spotWinners.filter((r) => r.shadows && r.sslot >= 0), ...pointWinners.filter((r) => r.shadows)]
+    .sort((a, b) => tierOf(a) - tierOf(b));
+  const points = [], spots = [];
+  for (const r of askers) {
+    if (points.length + spots.length >= N_SHADOWED) break;
+    if (r.spot) { if (spots.length < N_SCAST) spots.push(r); } else if (points.length < N_CAST) points.push(r);
+  }
+  return { points, spots };
+}
+/** A chosen spot sits in a casting spot slot (0..N_SCAST-1), swapping with whoever holds one no chosen spot holds. */
+function seatSpots(chosen, spotWinners) {
+  const held = new Set(chosen.filter((r) => r.sslot >= 0 && r.sslot < N_SCAST).map((r) => r.sslot));
+  for (const w of chosen) {
+    if (w.sslot >= 0 && w.sslot < N_SCAST) continue;
+    let s = 0;
+    while (held.has(s)) s++;
+    held.add(s);
+    const incumbent = spotWinners.find((r) => r !== w && r.sslot === s);
+    const vacated = w.sslot;
+    w.sslot = s;
+    if (incumbent) incumbent.sslot = vacated;
   }
 }
 
@@ -758,6 +829,10 @@ function inShadowReach(at, r, eye) {
     const pl = slots[k];
     if (pl.intensity > 0 && castsNow(pl) && at.distanceTo(pl.position) - r <= (pl.distance || Infinity)) return true;
   }
+  for (let k = 0; k < N_SCAST; k++) {   // a casting spot: its range sphere (conservative: the cone is inside it)
+    const sl = spotSlots[k];
+    if (sl.intensity > 0 && castsNow(sl) && at.distanceTo(sl.position) - r <= (sl.distance || Infinity)) return true;
+  }
   return false;
 }
 // how far outside a glow body's bounding sphere a light still counts as inside it (a bulb at the glass)
@@ -848,6 +923,7 @@ function trackShadowFar(pl) {
 // without it):
 //   the holder: which request the slot draws (hand-over, swap)                                 row 4 "holder"
 //   the light's world position                                                                 row 4 "moves"
+//   a spot's cone: where it points (its target) and its angle (three's fov = 2 angle * focus)  rows SC3, SC4
 //   its range = the far plane three draws and samples with (and the near)                      row 4 "range", row 11
 //   the map: its size (a resize applies only when it draws) and the target itself              row 8 "resolution"
 //   the gate turning on (first holder that asked, the preference back on), a hold released    rows 8, 9, 13
@@ -867,8 +943,9 @@ function trackShadowFar(pl) {
 // A dirty slot whose whole light sphere is outside the view waits (it stays dirty): nothing on screen samples it. The
 // pool keeps a light that misses the view in a slot when it has room, and re-ranks only every 600 ms, so it can.  row 10
 const _ckP = new THREE.Vector3(), _ckS = new THREE.Sphere(), _ckV = new THREE.Frustum(), _ckM = new THREE.Matrix4();
-const _lightP = Array.from({ length: N_CAST }, () => new THREE.Vector3());
-const _lightR = new Array(N_CAST).fill(Infinity);
+const _lightP = Array.from({ length: _cl.length }, () => new THREE.Vector3());
+const _lightR = new Array(_cl.length).fill(Infinity);
+const _ckT = new THREE.Vector3();
 const _onK = [];
 function mark(c, tag) { c.marks.push(c.cur.length, tag); }
 function pushMaterial(c, m) {
@@ -938,8 +1015,8 @@ const _dirtyK = [];
 function shadowCacheCheck(cam) {
   _cacheFrame++;
   _nOn = 0;
-  for (let k = 0; k < N_CAST; k++) {
-    const pl = slots[k], c = _sc[k];
+  for (let k = 0; k < _cl.length; k++) {
+    const pl = _cl[k], c = _sc[k];
     if (c.pending && !pl.shadow.needsUpdate) c.draws++;   // three cleared it: the map was drawn
     c.pending = false;
     while (c.times.length && _rigNow - c.times[0] > 1000) c.times.shift();
@@ -950,11 +1027,14 @@ function shadowCacheCheck(cam) {
   if (!_nOn || _cacheHold > 0) return;
   _seenMask = cam?.layers?.mask ?? 1;
   for (let i = 0; i < _nOn; i++) {
-    const k = _onK[i], pl = slots[k], c = _sc[k];
+    const k = _onK[i], pl = _cl[k], c = _sc[k];
     c.cur.length = 0; c.marks.length = 0; c.deforming = false;
     _lightP[k].setFromMatrixPosition(pl.matrixWorld);
     _lightR[k] = pl.distance || pl.shadow.camera.far;
-    mark(c, 'holder'); c.cur.push(shown[k]?.key ?? null);
+    mark(c, 'holder'); c.cur.push((k < N_CAST ? shown[k] : _spotShown[k - N_CAST])?.key ?? null);
+    if (pl.isSpotLight) {   // a spot's map is its cone: where it points, how wide (three's fov = 2 angle * focus)
+      mark(c, 'cone'); _ckT.setFromMatrixPosition(pl.target.matrixWorld); c.cur.push(_ckT.x, _ckT.y, _ckT.z, pl.angle, pl.shadow.focus);
+    }
     mark(c, 'light'); c.cur.push(_lightP[k].x, _lightP[k].y, _lightP[k].z);
     mark(c, 'range'); c.cur.push(pl.distance, pl.shadow.camera.near, pl.shadow.camera.far);
     mark(c, 'map'); c.cur.push(pl.shadow.mapSize.x, pl.shadow.mapSize.y, pl.shadow.map, renderer.shadowMap.type);
@@ -965,7 +1045,7 @@ function shadowCacheCheck(cam) {
   if (view) _ckV.setFromProjectionMatrix(_ckM.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse), cam.coordinateSystem, cam.reversedDepth);
   let used = 0, nDirty = 0;
   for (let i = 0; i < _nOn; i++) {
-    const k = _onK[i], pl = slots[k], c = _sc[k];
+    const k = _onK[i], pl = _cl[k], c = _sc[k];
     const reason = c.force ?? (c.deforming ? 'deforming' : diffReason(c));
     if (pl.shadow.needsUpdate) { c.reason = reason ?? 'gate'; handOff(c, pl); used++; continue; }   // already asked for (gateShadow): it draws
     if (!reason) { c.staleSince = -1; continue; }        // clean, or clean again while it waited
@@ -978,10 +1058,10 @@ function shadowCacheCheck(cam) {
   const order = _dirtyK.slice(0, nDirty).sort((a, b) => _sc[a].staleSince - _sc[b].staleSince || a - b);
   for (const k of order) {
     const c = _sc[k];
-    if (used < _shadowBudget) { handOff(c, slots[k]); used++; } else { c.deferred++; c.deferTimes.push(_rigNow); }
+    if (used < _shadowBudget) { handOff(c, _cl[k]); used++; } else { c.deferred++; c.deferTimes.push(_rigNow); }
   }
 }
-if (SHADOW_CACHE && N_CAST > 0) {
+if (SHADOW_CACHE && _cl.length > 0) {
   const before = scene.onBeforeRender;
   scene.onBeforeRender = function (r, sc, cam, ...rest) {
     if (typeof before === 'function') before.call(this, r, sc, cam, ...rest);
@@ -993,33 +1073,26 @@ if (SHADOW_CACHE && N_CAST > 0) {
   };
 }
 
-// ---- the spot pool: its own light type, so its own fixed pool (?spots=N, default 2). Same ranking as the point
-// pool (rankOf, against the frustum assign() just built); no shadows.
-const _spotRaw = CONFIG.params.get('spots');   // null when absent: Number(null) is 0
-const _spotParam = _spotRaw == null || _spotRaw === '' ? NaN : Number(_spotRaw);
-const N_SPOT = Number.isFinite(_spotParam) && _spotParam >= 0 ? Math.min(8, Math.round(_spotParam)) : 2;
-const spotSlots = [];
-for (let i = 0; i < N_SPOT; i++) {
-  const sl = new THREE.SpotLight(0xffffff, 0, 10, Math.PI / 4, 0, 1.7);
-  sl.name = `spot${i}`; sl.castShadow = false;
-  rigGroup.add(sl); rigGroup.add(sl.target);
-  spotSlots.push(sl);
-}
+// ---- the spot pool (born at boot with the point slots, after them: see spotSlots) ----------------------------------
 function assignSpots() {
   const ranked = [...requests.values()].filter((r) => r.spot).map((r) => rankOf(r, r.sslot >= 0)).sort(byRank);
-  const win = new Set(ranked.slice(0, N_SPOT).map((x) => x.r));
+  const winners = ranked.slice(0, N_SPOT).map((x) => x.r);
+  const win = new Set(winners);
   for (const r of requests.values()) if (r.sslot >= 0 && (!win.has(r) || !r.spot)) r.sslot = -1;
   const used = new Set([...win].map((r) => r.sslot).filter((i) => i >= 0));
   let free = 0;
   for (const r of win) { if (r.sslot >= 0) continue; while (used.has(free)) free++; if (free >= N_SPOT) break; r.sslot = free; used.add(free); }
   for (const r of win) if (r.slot >= 0) r.slot = -1;   // a light that became a spot leaves the point pool
+  return winners;
 }
 const _sq = new THREE.Quaternion(), _sfwd = new THREE.Vector3();
+const _spotShown = new Array(N_SPOT).fill(null);   // the request each spot slot draws (the cache's holder)
 function writeSpots() {
   const lit = new Array(N_SPOT).fill(null);
   for (const r of requests.values()) if (r.spot && r.sslot >= 0) lit[r.sslot] = r;
   for (let i = 0; i < N_SPOT; i++) {
     const sl = spotSlots[i], r = lit[i];
+    _spotShown[i] = r;
     if (!r) { sl.intensity = 0; continue; }
     worldPosOf(r, sl.position);
     if (r.obj) r.obj.getWorldQuaternion(_sq); else if (r.q) _sq.set(r.q[0], r.q[1], r.q[2], r.q[3]); else _sq.identity();   // r.q: an unrealized host's world q (realize/models.js lightSpec)
@@ -1031,7 +1104,16 @@ function writeSpots() {
     sl.distance = r.range; sl.decay = r.decay;
     sl.angle = r.spot.angle;
     sl.penumbra = r.spot.angle > 0 ? Math.min(1, Math.max(0, (r.spot.angle - (r.spot.inner ?? 0)) / r.spot.angle)) : 0;   // as three's GLTFLoader maps it
+    if (i < N_SCAST) tuneSpot(sl);
   }
+}
+/** A casting spot's normal offset: 1.5 texels at min(3 m, its range), the world lamps' unit (Godot's
+ *  shadow_normal_bias is in texels for omni and spot, both defaulting to 1.0: OmniLight3D.xml:29, SpotLight3D.xml:20).
+ *  A texel at distance d spans about 2 d tan(angle) / n (the map covers the cone, three's fov = 2 angle). */
+function tuneSpot(sl) {
+  const n = sl.shadow.mapSize.x || SPOT_MAP;
+  sl.shadow.bias = WORLD_DEPTH_BIAS;
+  sl.shadow.normalBias = WORLD_BIAS_TEXELS * (2 * Math.min(WORLD_BIAS_DIST, sl.distance || 10) * Math.tan(Math.min(sl.angle, 1.5))) / n;
 }
 
 // ---- the hand-over: a slot that changes lamps crosses through dark. The ranking follows the view, so a turn of the head
@@ -1113,6 +1195,10 @@ export function shedALight() {
   return true;
 }
 
+// the cache: redraws handed to three (all time / the last second), draws three confirmed, frames deferred by the budget
+// (all time / the last second) or waiting outside the view, and why it last went dirty
+const cacheRow = (j) => { const c = _sc[j]; return { handoffs: c.handoffs, redraws1s: c.times.length, draws: c.draws, deferred: c.deferred,
+  deferred1s: c.deferTimes.length, outOfView: c.outOfView, reason: c.reason, stale: c.staleSince >= 0, deforming: c.deforming }; };
 export const rigDebug = () => ({
   spots: spotSlots.map((sl) => ({ intensity: +sl.intensity.toFixed(3), angle: +sl.angle.toFixed(4), penumbra: +sl.penumbra.toFixed(4),
     pos: sl.position.toArray().map((x) => +x.toFixed(3)), dir: sl.target.position.clone().sub(sl.position).toArray().map((x) => +x.toFixed(3)) })),
@@ -1134,19 +1220,21 @@ export const rigDebug = () => ({
         slot: k, holder: r?.key ?? null, asked: _holderWants[k], body: Boolean(r?.body), drawing: castsNow(slots[k]),
         map: slots[k].shadow.mapSize.x, bias: slots[k].shadow.bias, normalBias: +slots[k].shadow.normalBias.toFixed(5),
         tunedFor: _tunedFor[k]?.key ?? null,
-        // the cache: redraws handed to three (all time / the last second), draws three confirmed, frames deferred by the
-        // budget (all time / the last second) or waiting outside the view, and why it last went dirty
-        cache: { handoffs: _sc[k].handoffs, redraws1s: _sc[k].times.length, draws: _sc[k].draws, deferred: _sc[k].deferred,
-          deferred1s: _sc[k].deferTimes.length, outOfView: _sc[k].outOfView, reason: _sc[k].reason,
-          stale: _sc[k].staleSince >= 0, deforming: _sc[k].deforming },
+        cache: cacheRow(k),
+      })),
+      castingSpots: N_SCAST,         // spot slots 0..castingSpots-1 are born casting (the same dial)
+      // one row per casting spot slot, as the point rows
+      spotSlots: spotSlots.slice(0, N_SCAST).map((sl, s) => ({
+        slot: s, holder: _spotShown[s]?.key ?? null, asked: _spotWants[s], drawing: castsNow(sl), map: sl.shadow.mapSize.x,
+        bias: sl.shadow.bias, normalBias: +sl.shadow.normalBias.toFixed(5), near: sl.shadow.camera.near, cache: cacheRow(N_CAST + s),
       })),
       cache: { on: SHADOW_CACHE, budget: _shadowBudget, held: _cacheHold },
       wantsShadows: want.map((r) => ({
         key: r.key, slot: r.slot,
-        casting: r.slot >= 0 && castsNow(slots[r.slot]),
+        casting: r.spot ? r.sslot >= 0 && castsNow(spotSlots[r.sslot]) : r.slot >= 0 && castsNow(slots[r.slot]),
         intensity: r.slot >= 0 ? +(slots[r.slot]?.intensity ?? 0).toFixed(3) : 0,
       })),
-      anyCasting: held.some((r) => castsNow(slots[r.slot])),
+      anyCasting: held.some((r) => castsNow(slots[r.slot])) || want.some((r) => r.spot && r.sslot >= 0 && castsNow(spotSlots[r.sslot])),
       lamp: lampShadowState(),
     };
   })(),
@@ -1154,6 +1242,7 @@ export const rigDebug = () => ({
     i, casting: pl.castShadow, intensity: +pl.intensity.toFixed(3),
     shown: shown[i]?.key ?? null,   // the request the slot is drawing: during a hand-over, still the old one
   })),
+  _spotSlots: spotSlots,   // the live spot lights (test/client/shadow-cache-test.mjs plays three's shadow node over them)
   _slots: slots,   // the live lights, for probes and test/client/shadow-fade-test.mjs; the fields above are the stable surface
   casters: casters.size, casterBudget,
   casting: [...casters.values()].filter((c) => c.casting).length,
