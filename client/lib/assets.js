@@ -13,6 +13,7 @@ const BODY_FIRST = CONFIG.params.get('bodyfirst') !== '0';
 import { THREE, renderer, camera, scene } from './core.js';
 import { report, bus, CONFIG } from './base.js';
 import { versionReady } from './version.js';
+import { textureAnisotropy } from './render/anisotropy.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
@@ -216,7 +217,9 @@ function textureUploadBytes(t) {
 }
 async function primeTextures(obj, work) {
   let spent = 0;
+  const aniso = textureAnisotropy(renderer);   // the viewer's texture filtering (render/anisotropy.js)
   for (const t of collectTextures(obj)) {
+    if (t.anisotropy < aniso) t.anisotropy = aniso;   // before the upload: the sampler is built from it
     const est = textureUploadBytes(t);
     // `spent > 0`: an oversized texture still uploads, alone in its frame; the budget spreads, never skips
     if (spent > 0 && spent + est > TEX_FRAME_BYTES) {
