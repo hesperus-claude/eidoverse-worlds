@@ -15,6 +15,8 @@
 // Run one headless browser at a time; clouds are forced off before boot here.
 import { launchBrowser, ownedWorld, checker, iwerInit } from '../harness/probe-harness.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { agxForward, neutralForward, linearForward, eotf, oetf } from './tonemap-forward.mjs';
+import * as QG from '../../client/lib/xr/quadgrade.js';
 
 const { check, done } = checker();
 const shotDir = (() => { const i = process.argv.indexOf('--shots'); return i > 0 ? process.argv[i + 1] : null; })();
@@ -399,6 +401,25 @@ try {
   console.log(`  · head-locked plate: ${mp.names.map((k, i) => `${k} ${mp.want[i]}→#${mp.got[i].map((v) => v.toString(16).padStart(2, '0')).join('')}`).join(', ')}; depth ${JSON.stringify(mp.depth)}`);
   check('colour: a head-locked plate (blended, depth off) shows the token colours too, and keeps its depth settings',
     rowsP.every((r) => r.d <= 4) && mp.depth.test === false && mp.depth.write === false, `${rowsP.map((r) => `${r.k} Δ${r.d}`).join(', ')} ${JSON.stringify(mp.depth)}`);
+  // sky.tonemap: the world picks the curve (tonemap.js setTonemap, which sky.js calls beside the exposure); the quad's
+  // shader branches on uTonemap, so it undoes whichever curve is live (each quad here is built after the switch: that a
+  // quad built earlier follows too rests on the branch being a uniform, pinned in one-binding-test). Off a curve's image (a saturated highlight AgX or Neutral never
+  // makes) no input reaches the token, so each colour is held to what the JS twins predict the GPU paints, and the
+  // distance to the token is reported beside it.
+  const FWD = { agx: agxForward, neutral: neutralForward, linear: linearForward };
+  const INV = { agx: QG.agxInverseJS, neutral: QG.neutralInverseJS, linear: QG.linearInverseJS };
+  for (const k of ['agx', 'neutral', 'linear', 'aces']) {
+    const set = await ev(async (k) => { try { const { renderer } = await import('./lib/core.js'); return (await import('./lib/render/tonemap.js')).setTonemap(renderer, k); } catch (e) { return `error: ${e?.message ?? e}`; } }, k);
+    const mk = await measure(0.78);
+    const rowsK = mk.names.map((n, i) => {
+      const tok = hexRgb(mk.want[i]);
+      const want = k === 'aces' || !INV[k] ? tok : FWD[k](INV[k](tok.map((v) => eotf(v / 255)), 0.78), 0.78).map((v) => Math.round(oetf(Math.min(1, Math.max(0, v))) * 255));
+      return { n, want, got: mk.got[i], d: Math.max(...want.map((v, j) => Math.abs(v - mk.got[i][j]))), dTok: Math.max(...tok.map((v, j) => Math.abs(v - mk.got[i][j]))) };
+    });
+    console.log(`  · tonemap ${k} (set → ${set}, renderer ${mk.toneMapping}, exposure ${mk.exposure}): ${rowsK.map((r) => `${r.n} #${r.got.map((v) => v.toString(16).padStart(2, '0')).join('')} (Δtwin ${r.d}, Δtoken ${r.dTok})`).join(', ')}`);
+    check(`colour: sky.tonemap ${k}: the quad undoes the live ${k} curve (uTonemap, set by setTonemap) (every token within 4 of what the twin predicts)`,
+      set === k && rowsK.every((r) => r.d <= 4), `set ${set}; ${rowsK.map((r) => `${r.n} Δ${r.d}`).join(', ')}`);
+  }
   // the REAL settings and world quads (their own material, as domquad builds them) through the output pass, for the eye
   for (const id of ['settings', 'world']) {
     const url = await ev(async (id) => {

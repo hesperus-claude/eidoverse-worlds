@@ -286,11 +286,11 @@ await tryRow('CA', () => {
   check('CA1 captions stores {session, n, gen, title?, line}: no window, no mediaTime', keys(C.fields) === keys({ session: 1, n: 1, gen: 1, title: 1, line: 1 }), Object.keys(C.fields));
 });
 
-// ===================================================================== sky: its 20 fields, radians, stamped fields refused, defaults in the registry
+// ===================================================================== sky: its 21 fields, radians, stamped fields refused, defaults in the registry
 await tryRow('SK', async () => {
   const K = COMPONENTS.sky;
-  const want = ['hours', 'rate', 'ts', 'tz', 'clouds', 'weather', 'weatherK', 'transition', 'azimuth', 'fog', 'exposure', 'ambient', 'sun', 'fill', 'forecast', 'override', 'gradient', 'system', 'colors', 'audio'];   // gradient: OMI_environment_sky (step 3a); system, colors, audio: main's (10-28)
-  check('SK1 sky has 20 fields (gradient, system, colors, audio joined; sun and fill kept, as main stored them (R 10-30); clock, dormantRated, world cut; weatherSeconds → transition)', keys(K.fields) === keys(Object.fromEntries(want.map((k) => [k, 1]))), Object.keys(K.fields));
+  const want = ['hours', 'rate', 'ts', 'tz', 'clouds', 'weather', 'weatherK', 'transition', 'azimuth', 'fog', 'exposure', 'tonemap', 'ambient', 'sun', 'fill', 'forecast', 'override', 'gradient', 'system', 'colors', 'audio'];   // tonemap: the world's display transform (R 11-02); gradient: OMI_environment_sky (step 3a); system, colors, audio: main's (10-28)
+  check('SK1 sky has 21 fields (tonemap, gradient, system, colors, audio joined; sun and fill kept, as main stored them (R 10-30); clock, dormantRated, world cut; weatherSeconds → transition)', keys(K.fields) === keys(Object.fromEntries(want.map((k) => [k, 1]))), Object.keys(K.fields));
   check('SK1 …azimuth in radians (default π), defaults and enums in the registry, units written', K.units?.azimuth === 'rad' && K.defaults?.azimuth === Math.PI && K.defaults?.hours === 12 && K.defaults?.clouds === 'cumulus' && K.enums?.weather?.includes('storm') && K.enums?.clouds?.includes('cirrus') && K.units?.ts === 'ms' && K.units?.transition === 's', [K.units, K.defaults]);
   const W = scratchWorld('w2r-sky');
   let r = W.call('set', { id: '@world', component: 'sky', value: { hours: 9, ts: 5 } });
@@ -321,6 +321,16 @@ await tryRow('SK', async () => {
   const a1 = Wa.call('set', { id: '@world', component: 'sky', value: { hours: 9, audio: true } }), a1v = sa()?.audio, a2 = Wa.call('sky', { audio: false }), a3 = Wa.call('set', { id: '@world', component: 'sky', value: { hours: 9, audio: 'yes' } });
   check('SK7 sky.audio (main\'s weather sounds) is a bool: set and the sky act store it, a non-bool is refused, absent means off, and the client reads it', a1.ok && a1v === true && a2.ok && sa()?.audio === false && code(a3) === 'shape'
     && K.fields.audio === 'bool' && /off/.test(K.absentMeans?.audio ?? '') && !!K.docs?.audio && /Boolean\(a\.audio\)/.test(read('client/lib/sky/sky.js')), [a1.refused, a1v, a2.refused, sa(), a3.refused]);
+  // sky.tonemap (R 11-02: the world owns the look): one of four curves, like clouds and system; an unknown one is refused at
+  // the door as every enum field is (checks.js), and absent stores nothing (absent = aces, the curve every world had)
+  const Wt = scratchWorld('w2r-sky-tonemap'); const st = () => Wt.state().entities['@world'].c.sky;
+  const t1 = Wt.call('set', { id: '@world', component: 'sky', value: { hours: 9, tonemap: 'agx' } }), t1v = st()?.tonemap;
+  const t2 = Wt.call('sky', { tonemap: 'neutral' }), t2v = st()?.tonemap;
+  const t3 = Wt.call('set', { id: '@world', component: 'sky', value: { hours: 9, tonemap: 'reinhard' } }), t4 = Wt.call('sky', { tonemap: 'filmic' }), t3v = st()?.tonemap;
+  const t5 = Wt.call('set', { id: '@world', component: 'sky', value: { hours: 9 } }), t5v = st();
+  check('SK8 sky.tonemap: set and the sky act store aces | agx | neutral | linear; an unknown curve is refused (shape), naming the four; nothing stored; absent stores none',
+    t1.ok && t1v === 'agx' && t2.ok && t2v === 'neutral' && code(t3) === 'shape' && /aces \| agx \| neutral \| linear/.test(t3.refused?.message ?? JSON.stringify(t3.refused)) && !t4.ok && t3v === 'neutral'
+      && t5.ok && !('tonemap' in (t5v ?? {})) && K.fields.tonemap === 'string' && !!K.docs?.tonemap, [t1.refused, t1v, t2.refused, t2v, t3.refused, t4.refused, t3v, t5.refused, t5v]);
 });
 
 // ===================================================================== terrain: the sim's defaults, raster reserved, layer colours ints, water split out

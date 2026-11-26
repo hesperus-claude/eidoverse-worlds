@@ -54,6 +54,7 @@ const renderer = {
   xr: { isPresenting: false, enabled: false },
   domElement: { width: 800, height: 600 },
   getRenderTarget: () => null, setRenderTarget() {}, renderAsync: async () => {}, compileAsync: async () => {}, render() {},
+  toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1,   // as core.js builds the real one
 };
 mock.module(lib('core.js'), () => ({ THREE, scene, renderer, camera: new THREE.PerspectiveCamera(),
   sun: new THREE.DirectionalLight(), hemi: new THREE.HemisphereLight() }));
@@ -389,6 +390,63 @@ try {
     check('the stand-in gradient: skyBusy and skyRendering at once, the panel told', up.busy && up.rendering && up.told === true, up);
     check('…and both clear when it goes', !down.busy && !down.rendering, down);
   }
+  // ---- 7. sky.tonemap: the world's display transform, set where its exposure is (R 11-02: the owner's look) ----------
+  // Godot's Environment.tonemap_mode, three's renderer.toneMapping. The world says which curve; the quads' inverse
+  // (quadcolour.js) is told which one to undo through tonemap.js's uTonemap. Exposure rides the same road, so each row
+  // also says what the exposure did: tonemap must behave exactly as it does.
+  {
+    if (renderer.xr.isPresenting) leave();
+    await freshSky('medium');
+    let TM = null; try { TM = await import(lib('render/tonemap.js')); } catch (e) { check('tonemap.js loads', false, e?.message ?? String(e)); }
+    const { COMPONENTS } = await import('../../shared/protocol/componentspec.js');
+    const CURVE = { aces: THREE.ACESFilmicToneMapping, agx: THREE.AgXToneMapping, neutral: THREE.NeutralToneMapping, linear: THREE.LinearToneMapping };
+    const NAMES = Object.keys(CURVE);
+    const now = () => ({ tm: renderer.toneMapping, u: TM?.uTonemap?.value ?? null, exp: renderer.toneMappingExposure });
+    const put = async (extra, via = sky.applySky) => { await via({ ...ARGS, ...extra, ts: ++T }); await settle(); return now(); };
+    const K = COMPONENTS.sky;
+    check('tonemap: the registry names the four curves (aces | agx | neutral | linear), stores no default, and says absent = aces',
+      JSON.stringify(K.enums?.tonemap) === JSON.stringify(NAMES) && K.fields?.tonemap === 'string' && !('tonemap' in (K.defaults ?? {})) && /^aces\b/.test(K.absentMeans?.tonemap ?? ''),
+      { enums: K.enums?.tonemap, field: K.fields?.tonemap, absent: K.absentMeans?.tonemap });
+    check('…and tonemap.js reads its list from the registry (one binding)', JSON.stringify(TM?.TONEMAPS) === JSON.stringify(K.enums?.tonemap), TM?.TONEMAPS);
+    // (1) absent: exactly main's curve. The first apply of a world with no tonemap, then again after a world that set one
+    const a0 = await put({});
+    check('tonemap absent: ACES Filmic (core.js\'s curve, what main draws), exposure the owner\'s 1, quads told aces (0)',
+      a0.tm === THREE.ACESFilmicToneMapping && a0.exp === 1 && a0.u === 0, a0);
+    // (2) every named curve reaches the renderer, and the quads are told the same one
+    for (const [i, k] of NAMES.entries()) {
+      const r = await put({ tonemap: k });
+      check(`tonemap '${k}': the renderer draws with three's curve ${CURVE[k]} and the quads undo curve ${i}`, r.tm === CURVE[k] && r.u === i, r);
+    }
+    await put({ tonemap: 'agx' });
+    const back = await put({});
+    check('tonemap absent after a world that set agx (a travel, a removed field): back to ACES Filmic, quads told aces',
+      back.tm === THREE.ACESFilmicToneMapping && back.u === 0, back);
+    // (3) live, like exposure: a sky edit applies at once with no rebuild, and so does the sky panel's preview
+    const b0 = BAKE.builds;
+    const e1 = await put({ tonemap: 'neutral', exposure: 0.6 });
+    check('a sky edit (tonemap neutral, exposure 0.6) applies live: both reach the renderer exactly, the sky is not rebuilt',
+      e1.tm === THREE.NeutralToneMapping && e1.u === 2 && e1.exp === 0.6 && BAKE.builds === b0, { ...e1, builds: BAKE.builds - b0 });
+    const p1 = await put({ tonemap: 'linear', exposure: 1.3 }, sky.previewSky);
+    check('…the sky panel\'s preview too (previewSky: linear at exposure 1.3), no rebuild',
+      p1.tm === THREE.LinearToneMapping && p1.u === 3 && p1.exp === 1.3 && BAKE.builds === b0, { ...p1, builds: BAKE.builds - b0 });
+    const p2 = await put({});
+    check('…and the logged sky after the preview puts the world\'s own back (absent: aces at exposure 1)', p2.tm === THREE.ACESFilmicToneMapping && p2.u === 0 && p2.exp === 1, p2);
+    // in a headset session a cheap field is not held for exit (only rebuilds are): exposure applies at once, and tonemap with it
+    enter(); curtain(); await settle();
+    const x1 = await put({ tonemap: 'agx', exposure: 0.7 });
+    const heldX = sky.skyHeld();
+    leave(); await settle();
+    check('in a headset: a tonemap edit applies at once, as an exposure edit does (neither held for exit)',
+      x1.tm === THREE.AgXToneMapping && x1.u === 1 && x1.exp === 0.7 && !heldX, { ...x1, held: heldX });
+    // (5) an unknown curve: the door refuses it (shape-render SK8); a log that carries one anyway (hand-edited, a newer
+    // server) draws the absent curve, as an unknown clouds value draws cumulus
+    const u1 = await put({ tonemap: 'reinhard' });
+    const u2 = await put({ tonemap: 4 });
+    check('an unknown tonemap that reaches a client (\'reinhard\', 4) draws the absent curve: ACES Filmic, quads told aces',
+      [u1, u2].every((r) => r.tm === THREE.ACESFilmicToneMapping && r.u === 0), [u1, u2]);
+    await put({});
+  }
+
   check('no reported errors', reports.length === 0, reports.slice(0, 3));
 } catch (e) { check('ran', false, e?.stack ?? String(e)); }
 

@@ -52,6 +52,15 @@ const ROWS: Row[] = [
   { name: "rot.js owns its numerics: no host transcendental", owner: [], scope: ["shared/rot.js"], forbidden: [/Math\.(sin|cos|tan|atan2?|asin|acos|pow|exp|log|hypot)\b/] },
   { name: "the quad shader reads the ACES inverse arrays, no literals of its own", owner: [], scope: ["client/lib/xr/quadcolour.js"], forbidden: [/1\.76474097|0\.64303825/],
     requires: [["client/lib/xr/quadcolour.js", /mat3\(\.\.\.ACES_OUT_INV\)/], ["client/lib/xr/quadcolour.js", /mat3\(\.\.\.ACES_IN_INV\)/]] },
+  // sky.tonemap's other inverses: AgX's matrices, sigmoid and EV range and Neutral's constants are quadgrade.js's, read by the
+  // shader and by its JS twin (quadcolour-test round-trips the twin through three's forward)
+  { name: "the quad shader reads the AgX and Neutral inverse data, no literals of its own", owner: [], scope: ["client/lib/xr/quadcolour.js"],
+    forbidden: [/15\.5|40\.14|0\.856627|1\.12710|1\.6605|0\.6274|12\.47393|4\.026069|\b0\.76\b|0\.15\b|6\.25/],
+    requires: [["client/lib/xr/quadcolour.js", /mat3\(\.\.\.INV\.toSrgb\)/], ["client/lib/xr/quadcolour.js", /mat3\(\.\.\.INV\.outset\)/], ["client/lib/xr/quadcolour.js", /mat3\(\.\.\.INV\.inset\)/],
+      ["client/lib/xr/quadcolour.js", /mat3\(\.\.\.INV\.toRec\)/], ["client/lib/xr/quadcolour.js", /AGX_POLY/], ["client/lib/xr/quadcolour.js", /AGX_EV\./], ["client/lib/xr/quadcolour.js", /NEUTRAL\./]] },
+  // the quads undo the curve the world shows NOW (tonemap.js uTonemap, set beside the exposure), not the one at build time
+  { name: "the quad shader picks its inverse by the live curve (uTonemap), not by the renderer when the quad was built", owner: [], scope: ["client/lib/xr/quadcolour.js"],
+    forbidden: [/renderer\??\.toneMapping\s*===/], requires: [["client/lib/xr/quadcolour.js", /uTonemap\.equal\(/]] },
   { name: "N (names) is bound in namereveal.js alone", owner: ["client/lib/avatar/namereveal.js"], scope: walk("client").filter((f) => f.endsWith(".js")),
     forbidden: [/['"]KeyN['"]|key === ['"][nN]['"]/], raw: true },
   { name: "no controller button reveals names (xr.js never calls setReveal)", owner: [], scope: ["client/lib/xr/xr.js"], forbidden: [/setReveal\(/] },
