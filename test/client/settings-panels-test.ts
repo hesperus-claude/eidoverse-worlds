@@ -174,6 +174,8 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
   check('re-checking shows it again', row(res).hidden === false && since(c1, 'setShadows')[1]?.[1] === true);
   const lampSel = sel('shadowed lamps');
   check('a "shadowed lamps" row offers 1, 2, 4, 8 and shows the stored count', !!lampSel && [...lampSel.options].map((o) => o.value).join(',') === '1,2,4,8' && lampSel.value === '1', lampSel && [...lampSel.options].map((o) => o.value));
+  const lampHint = lampSel ? (row(lampSel).querySelector('.nm') as HTMLElement)?.title ?? '' : '';
+  check('…its hint says the dial counts spots too, and what each kind costs (a point light six views, a spot one), still on reload', /spot/.test(lampHint) && /six views[^.]*point light|point light[^.]*six views/.test(lampHint) && /\bone (view )?for a spot|spot[^.]*\bone view/.test(lampHint) && /on reload/.test(lampHint), lampHint);
   shadows.checked = false; fire(shadows, 'change');
   check('…hidden while shadows are off, like its neighbours', !!lampSel && row(lampSel).hidden === true);
   shadows.checked = true; fire(shadows, 'change');
