@@ -87,9 +87,10 @@ console.log('INVERSE AGX, NEUTRAL, LINEAR (the world\'s other display transforms
   check('the three twins exist (agxInverseJS, neutralInverseJS, linearInverseJS)', Object.values(twins).every(([, inv]) => typeof inv === 'function'));
   const EXPOSURES = [0.5, 0.78, 1, 1.3];   // the house exposure is 0.78; the others bracket it, as the ACES rows do
   // Exact where it can be: on what each curve PRODUCES (the forward of a linear grid, 1/64 … 16, across hues),
-  // forward ∘ inverse ∘ forward = forward. Both AgX and Neutral desaturate highlights, so a bright, saturated sRGB colour is
-  // OFF their image: no input makes it, and the inverse returns the nearest reachable one; that part is reported, and held
-  // only to a floor (the next rows), not to exactness.
+  // forward ∘ inverse ∘ forward = forward. Neutral desaturates highlights, so a bright, saturated sRGB colour is OFF its
+  // image: no input makes it, and its inverse scales the colour down onto the image first (the NEUTRAL OFF ITS IMAGE rows
+  // below hold that exactly); so on the whole grid Neutral is held only to a floor (the next rows). AgX, read the right way
+  // round, reaches the whole sRGB cube, and is held to exactness there.
   const onImage = (fwd, inv) => { let w = 0, at = null; const L = []; for (let k = -6; k <= 4; k += 0.5) L.push(2 ** k);
     for (const e of EXPOSURES) for (const r of L) for (const g of L) for (const b of [L[0], L[6], L[12], L[18]]) {
       const y = fwd([r, g, b], e), back = fwd(inv(y, e), e);
@@ -154,8 +155,13 @@ console.log('NEUTRAL OFF ITS IMAGE (a warning red stays red in any world look: h
     rows.every((x) => x.ds <= 1e-4), show((x) => [+sat(x.a).toFixed(4), +sat(x.b).toFixed(4)]));
   check(`neutral: … never brighter than authored, and at most ${((1 - START) * 100).toFixed(0)}% darker (luma ≥ start × authored: a fully saturated colour's ceiling)`,
     rows.every((x) => x.k <= 1 + 1e-9 && x.k >= START - 1e-9), show((x) => +x.k.toFixed(4)));
-  check('neutral: … and no darker than they have to be (their peak is the brightest Neutral shows at their saturation, read off three\'s forward, within 1e-4)',
-    rows.every((x) => Math.abs(x.peak - x.ceil) <= 1e-4), show((x) => [+x.peak.toFixed(5), +x.ceil.toFixed(5)]));
+  // white and a near-white tint too: there the ceiling is the inverse's own cap (0.9999, NEUTRAL.ceil: the curve's peak
+  // only approaches 1), typed here so a cap lowered in the product (0.995 leaves white at 254.4, inside the greys row's one
+  // step) is caught
+  const CAP = 0.9999, PALE = ['ffffff', 'fff0f0'].map((hex) => { const a = lin(hex), b = round(a, 0.78);
+    return { hex, e: 0.78, peak: Math.max(...b), ceil: Math.min(Math.max(...a), CAP, ceilingFor(Math.min(...a) / Math.max(...a))) }; });
+  check('neutral: … and no darker than they have to be (their peak is the brightest Neutral shows at their saturation, read off three\'s forward, and never above the 0.9999 cap; white and #fff0f0 too; within 1e-5)',
+    [...rows, ...PALE].every((x) => Math.abs(x.peak - x.ceil) <= 1e-5), JSON.stringify([...rows, ...PALE].filter((x) => x.e === 0.78).map((x) => ({ [x.hex]: [+x.peak.toFixed(6), +x.ceil.toFixed(6)] }))));
   check('neutral: the brightness given up does not depend on the exposure (the same colour comes back at 0.5, 0.78, 1 and 1.3)',
     COLS.every((hex) => rows.filter((x) => x.hex === hex).every((x, _, all) => near(x.b, all[0].b, 1e-6))));
   // the whole sRGB grid: no hue moved, no saturation lost, never brighter; report the share the projection scaled
@@ -170,6 +176,16 @@ console.log('NEUTRAL OFF ITS IMAGE (a warning red stays red in any world look: h
   check('neutral: across the whole sRGB grid (52³) no colour comes back with its hue moved more than 0.1°, at every exposure',
     ok && Object.values(grid).every((x) => x.hueOff === 0), JSON.stringify(grid));
   check('neutral: … nor its saturation moved more than 1e-4, nor brighter than authored', ok && Object.values(grid).every((x) => x.satOff === 0 && x.brighter === 0));
+  // The cost, pinned (the numbers the PR states): the share of the 52³ grid the projection darkens, at a neutral grade and
+  // under the default VR panel grade (gradeSRGB runs before the inverse, and its boost pushes more colours off the image):
+  // darkened at all (luma < 1 − 1e-6 of authored), by more than 10%, and by the full 24% (luma ≤ start + 1e-6).
+  const cost = (G) => { let n = 0, dim = 0, big = 0, full = 0; for (let r = 0; r <= 255; r += 5) for (let g = 0; g <= 255; g += 5) for (let b = 0; b <= 255; b += 5) {
+    n++; const a = gradeSRGB([r, g, b].map((x) => x / 255), G).map(EOTF), la = luma(a); if (!la) continue; const k = luma(round(a, 0.78)) / la;
+    if (k < 1 - 1e-6) dim++; if (k < 0.9) big++; if (k <= START + 1e-6) full++; }
+    return [dim, big, full].map((x) => +(100 * x / n).toFixed(2)); };
+  const costs = { neutralGrade: cost({ saturation: 1, contrast: 1 }), defaultGrade: cost(GRADE_DEFAULT) };
+  check('neutral: the cost is as stated: darkened / > 10% / the full 24%, % of the 52³ grid: 13.00 / 3.82 / 0.22 at a neutral grade, 34.92 / 17.38 / 5.60 under the default VR grade',
+    ok && near(costs.neutralGrade, [13.00, 3.82, 0.22], 1e-9) && near(costs.defaultGrade, [34.92, 17.38, 5.60], 1e-9), JSON.stringify(costs));
 }
 
 S.done();
