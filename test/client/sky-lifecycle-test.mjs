@@ -183,6 +183,11 @@ try {
     const on = post.postDebug?.().bloom;
     await sky.applySky({ ...ARGS, ts: ++T }); await settle();
     const off = post.postDebug?.().bloom;
+    await sky.applySky({ ...ARGS, ao: 2, ts: ++T }); await settle();
+    const aoOn = post.postDebug?.().ao;
+    await sky.applySky({ ...ARGS, ts: ++T }); await settle();
+    const aoOff = post.postDebug?.().ao;
+    check('SA1 a sky with ao 2 hands the post pipeline 2; the next sky without it hands it none', aoOn === 2 && aoOff === 0, { aoOn, aoOff, error: post.error });
     check('SB1 a sky with bloom 1.5 hands the post pipeline 1.5; the next sky without it hands it none (every world\'s look before the field)', on === 1.5 && off === 0, { on, off, error: post.error }); }
 
   // ---- 1. ENTRY WHILE `high` IS PENDING -----------------------------------------------------------------------------

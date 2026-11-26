@@ -105,3 +105,7 @@ export const applyOwnBodyShadow = async () => false;
 let bloomOn = true;
 export const bloomPref = () => bloomOn;
 export const setBloomPref = (on) => { calls.push(['setBloomPref', on]); bloomOn = !!on; };
+// the ambient occlusion row (render/post.js): the viewer's ew-ao, on by default
+let aoOn = true;
+export const aoPref = () => aoOn;
+export const setAoPref = (on) => { calls.push(['setAoPref', on]); aoOn = !!on; };

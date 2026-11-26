@@ -62,7 +62,7 @@ try {
     const lum = (px, cx, cy, r0, r1) => { let t = 0, n = 0; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const d = Math.hypot(x - cx, y - cy); if (d >= r0 && d < r1) { const i = (y * W + x) * 4; t += 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]; n++; } } return n ? t / n : 0; };
     const proj = (o) => { const v = o.position.clone().project(cam); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; };
     await renderer.compileAsync(S, cam);
-    g.__pp = { THREE, renderer, S, cam, lit, hot, hold, plainFrame, postFrame, settle, diff, lum, proj, W, H };
+    g.__pp = { THREE, renderer, S, cam, lit, hot, hold, grab, plainFrame, postFrame, settle, diff, lum, proj, W, H };
     return { backend: renderer.backend.isWebGLBackend ? 'webgl' : 'webgpu', W, H, samples: renderer.samples };`);
   console.log(`  · ${JSON.stringify(setup)}`);
   check("PX-setup the page runs WebGL 2, as asked", setup.backend === "webgl", JSON.stringify(setup));
@@ -132,6 +132,33 @@ try {
     return { failed: post.postDebug().failed, size: [rt.width, rt.height], at: [x, y], max: Math.max(...rgb), rgb, type: raw?.constructor?.name };`);
   console.log(`  · ${JSON.stringify(cap)}`);
   check("PX6 an emitter at 60× white feeds the bloom 12 per channel, not 60 (Godot's glow_hdr_luminance_cap, clamped after the threshold)", !cap.error && Math.abs(cap.max - 12) < 0.05, JSON.stringify(cap));
+
+  // AO: a box on a floor. Lit by a directional light only (no ambient, black ground and sky), AO changes nothing: three's
+  // builtinAOContext feeds the ambientOcclusion that only indirect light reads. Lit by an ambient light only, the floor at
+  // the box's foot darkens with AO, and the open floor far from it barely moves.
+  const ao = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js'), T = p.THREE;
+    const S = new T.Scene(); S.background = new T.Color(0, 0, 0);
+    const cam = new T.PerspectiveCamera(50, p.W / p.H, 0.1, 100); cam.position.set(0, 2.2, 4.2); cam.lookAt(0, 0.3, 0);
+    const mat = new T.MeshStandardNodeMaterial({ color: new T.Color(0.7, 0.7, 0.7), roughness: 0.9 });
+    const floor = new T.Mesh(new T.PlaneGeometry(12, 12).rotateX(-Math.PI / 2), mat); S.add(floor);
+    const box = new T.Mesh(new T.BoxGeometry(1, 1, 1), mat); box.position.set(0, 0.5, 0); S.add(box);
+    const sun = new T.DirectionalLight(0xffffff, 3); sun.position.set(-1, 4, 3); const amb = new T.AmbientLight(0xffffff, 1.5);
+    const plainF = () => { p.renderer.setRenderTarget(null); p.renderer.render(S, cam); return p.grab(); };
+    const postF = async () => { p.hold(); const d = post.postPass(p.renderer, S, cam); if (d) d(); else p.renderer.render(S, cam); return p.grab(); };
+    const at = (v3) => { const v = v3.clone().project(cam); return [(v.x + 1) / 2 * p.W, (1 - v.y) / 2 * p.H]; };
+    const foot = at(new T.Vector3(0, 0.02, 0.56)), open = at(new T.Vector3(2.6, 0, 1.2));
+    const shot = async (light) => { S.add(light); await p.renderer.compileAsync(S, cam);
+      globalThis.__setA(0); const a = await p.settle(plainF); globalThis.__setA(3); const b = await p.settle(postF); const dbg = post.postDebug();
+      globalThis.__setA(0); await postF(); S.remove(light);
+      return { a, b, active: dbg.active, why: dbg.why, passes: dbg.passes }; };
+    const D = await shot(sun), I = await shot(amb);
+    return { direct: { settled: !!D.a && !!D.b, active: D.active, why: D.why, diff: D.a && D.b ? p.diff(D.a, D.b) : null, foot: D.a ? [p.lum(D.a, ...foot, 0, 3), p.lum(D.b, ...foot, 0, 3)] : null },
+      indirect: { settled: !!I.a && !!I.b, active: I.active, why: I.why, foot: I.a ? [p.lum(I.a, ...foot, 0, 3), p.lum(I.b, ...foot, 0, 3)] : null, open: I.a ? [p.lum(I.a, ...open, 0, 3), p.lum(I.b, ...open, 0, 3)] : null }, at: { foot, open } };`);
+  console.log(`  · ${JSON.stringify(ao)}`);
+  check("PA1 AO in direct light only (a directional light, no ambient): the AO frame is the plain frame (every channel within 1 of 255): the direct term is not darkened",
+    ao.direct.settled && ao.direct.active === true && ao.direct.passes === 'ao' && ao.direct.diff && ao.direct.diff.max <= 1 && ao.direct.foot[0] > 20, JSON.stringify(ao.direct));
+  const [f0, f1] = ao.indirect.foot ?? [], [o0, o1] = ao.indirect.open ?? [];
+  check("PA2 AO in ambient light only: the floor at the box's foot darkens (by more than a tenth), the open floor moves far less", ao.indirect.settled && ao.indirect.active === true && f1 < f0 * 0.9 && (f0 - f1) > 3 * Math.abs(o0 - o1), JSON.stringify(ao.indirect));
 
   const real = errors.filter((e) => !/popErrorScope|sky finish/.test(e));
   check("PX5 no page errors", real.length === 0, JSON.stringify(real.slice(0, 4)));

@@ -176,6 +176,10 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
   if (glow) { glow.checked = false; fire(glow, 'change'); }
   check('unchecking it calls setBloomPref(false) once and says so in the hint bar', since(c1, 'setBloomPref').length === 1 && since(c1, 'setBloomPref')[0][1] === false && /glow: off/.test(ui.el.hint.innerHTML), JSON.stringify(since(c1, 'setBloomPref')));
   check('…live: no reload button (the pipeline is built and dropped as it goes)', !!glow && !row(glow).querySelector('button.reload'));
+  const aoBox = boxes.find((b) => row(b).textContent?.includes('ambient occlusion'));
+  check('an "ambient occlusion" check shows the viewer\'s ew-ao (on by default), its hint saying the world decides how strongly, ambient light only, none in a headset', !!aoBox && aoBox.checked === true && /world/.test(aoBox.title) && /ambient/.test(aoBox.title) && /headset/.test(aoBox.title), aoBox?.title);
+  if (aoBox) { aoBox.checked = false; fire(aoBox, 'change'); }
+  check('unchecking it calls setAoPref(false) once and says so in the hint bar, live (no reload)', since(c1, 'setAoPref').length === 1 && since(c1, 'setAoPref')[0][1] === false && /ambient occlusion: off/.test(ui.el.hint.innerHTML) && !row(aoBox!).querySelector('button.reload'), JSON.stringify(since(c1, 'setAoPref')));
   check('antialiasing starts on', msaa.checked);
   msaa.checked = false; fire(msaa, 'change');
   check('unchecking writes PREF_MSAA=0', localStorage.getItem(stub.PREF_MSAA) === '0', String(localStorage.getItem(stub.PREF_MSAA)));
@@ -195,6 +199,9 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
   check('the quad\'s scale list marks the current value active', scaleList?.rows.find((r: any) => r.active)?.id === '0.85', JSON.stringify(scaleList?.rows.map((r: any) => [r.id, r.active])));
   check('the quad\'s msaa check reads the pref', f.find((x: any) => x.k === 'msaa')?.value === false);
   check('the quad\'s glow (bloom) check reads the pref', f.find((x: any) => x.k === 'bloom')?.value === false && f.find((x: any) => x.k === 'bloom')?.label === 'glow (bloom)', JSON.stringify(f.find((x: any) => x.k === 'bloom')));
+  check('the quad\'s ambient occlusion check reads the pref', f.find((x: any) => x.k === 'ao')?.value === false && f.find((x: any) => x.k === 'ao')?.label === 'ambient occlusion', JSON.stringify(f.find((x: any) => x.k === 'ao')));
+  quad.dispatch('ao', true);
+  check('quad dispatch(ao) reaches setAoPref', since(c2, 'setAoPref')[0]?.[1] === true, JSON.stringify(since(c2, 'setAoPref')));
   const e3 = emitted.length; quad.dispatch('bloom', true);
   check('quad dispatch(bloom) reaches setBloomPref and repaints', since(c2, 'setBloomPref')[0]?.[1] === true && emits(e3, 'xr:repaint') === 1, JSON.stringify(since(c2, 'setBloomPref')));
   quad.dispatch('fulldetail', true);

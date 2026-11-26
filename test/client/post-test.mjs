@@ -213,6 +213,57 @@ console.log('GPU LOST — nothing draws, nothing is built');
   delete globalThis.__gpuLost;
 }
 
+console.log('AO — sky.ao, the world\'s ambient occlusion: a normal/depth pre-pass, GTAO, applied to indirect light only');
+{
+  const setAo = (s) => { try { post.setAo(s); } catch (e) { return e; } };
+  const setAoPref = (on) => { try { post.setAoPref(on); } catch (e) { return e; } };
+  setBloom(0); setAo(0); frame(); localStorage.removeItem('ew-ao');
+  check('A0 ew-ao defaults on (absent in storage)', post.aoPref?.() === true, post.aoPref?.());
+  setBloom(1); frame();
+  let p = live();
+  check('A1 sky.ao absent with bloom on: no pre-pass, no AO node, the scene pass carries no AO context', !!p && !p.pre && !p.occl && p.scenePass.contextNode == null, p && { pre: !!p.pre, occl: !!p.occl, ctx: !!p.scenePass.contextNode });
+  setBloom(0);
+  for (const v of [undefined, null, 0, -2, NaN, 'x']) {
+    setAo(1); setAo(v); const d = frame();
+    check(`A1b sky.ao ${JSON.stringify(v) ?? 'undefined'} reads as none: plain, nothing built`, plain(d) && !live() && dbg().ao === 0, { d: show(d), ao: dbg().ao });
+  }
+  setAoPref(false); setAo(1.5); let d = frame();
+  check('A1c sky.ao 1.5 with ew-ao off: plain, nothing built; the readout names the viewer\'s setting', plain(d) && !live() && /ew-ao/.test(String(dbg().why)) && dbg().ao === 1.5, { d: show(d), why: dbg().why });
+  check('A1c …setAoPref(false) stores off', localStorage.getItem('ew-ao') === 'off', localStorage.getItem('ew-ao'));
+  setAoPref(true);
+  const made0 = pipelinesMade; d = frame(); p = live();
+  check('A2 sky.ao 1.5 (no bloom): one pipeline, through its output quad', viaPipe(d) && pipelinesMade === made0 + 1 && !!p, { d: show(d), made: pipelinesMade - made0 });
+  check('A2 …a pre-pass of the live scene through the live camera, without MSAA (GTAO gathers depth; a multisampled depth hung the page, lab 11-06)',
+    p?.pre?.isPassNode && p.pre.scene === scene && p.pre.camera === camera && p.pre.options?.samples === 0 && p.pre.renderTarget.samples === 0, p?.pre && { samples: p.pre.options?.samples, rt: p.pre.renderTarget.samples });
+  check('A2 …its MRT writes the view normal as its output, and it draws opaque only (three\'s GTAO example: prePass.transparent = false)', !!p?.pre?._mrt?.has?.('output') && p.pre.transparent === false, p?.pre && { mrt: [...(p.pre._mrt?.outputNodes ? Object.keys(p.pre._mrt.outputNodes) : [])], transparent: p.pre.transparent });
+  check('A2 …GTAO reads the pre-pass\'s depth and normal: strength 1.5 as its scale (an exponent on visibility), radius 0.5 m, half resolution',
+    !!p?.occl && Math.abs(p.occl.scale.value - 1.5) < 1e-9 && Math.abs(p.occl.radius.value - 0.5) < 1e-9 && p.occl.resolutionScale === 0.5 && p.occl.depthNode?.value === p.pre.renderTarget.depthTexture,
+    p?.occl && [p.occl.scale.value, p.occl.radius.value, p.occl.resolutionScale]);
+  const ctx = p?.scenePass?.contextNode?.getFlowContextData?.() ?? p?.scenePass?.contextNode?.value;
+  check('A2 …and the scene pass carries the AO into lighting (three\'s builtinAOContext: getAO, the ambientOcclusion that only indirect light reads)', typeof ctx?.getAO === 'function', ctx && Object.keys(ctx));
+  check('A2 …no bloom asked: the output is the scene pass\'s colour, no BloomNode', !p?.glow, !!p?.glow);
+  check('A2 …the readout: active, the live AO strength', dbg().active === true && dbg().ao === 1.5 && dbg().why == null, dbg());
+  setAo(2.5); frame();
+  check('A2b a live sky edit 1.5 → 2.5 moves the scale uniform and builds nothing', live() === p && Math.abs(p.occl.scale.value - 2.5) < 1e-9 && pipelinesMade === made0 + 1, { same: live() === p, s: p?.occl?.scale.value });
+  setAo(9); frame();
+  check('A2b …above 3 is held at 3', dbg().ao === 3 && Math.abs(p.occl.scale.value - 3) < 1e-9, dbg().ao);
+  const m1 = pipelinesMade; setBloom(1); frame(); const pb = live();
+  check('A2c bloom joins: one rebuild, the new pipeline carries both (pre-pass, AO, BloomNode)', pipelinesMade === m1 + 1 && !!pb?.pre && !!pb?.occl && !!pb?.glow && pb.glow.inputNode?.value === pb.scenePass.renderTarget.texture, { made: pipelinesMade - m1 });
+  const disposed = [];
+  pb?.pre?.renderTarget?.addEventListener('dispose', () => disposed.push('pre'));
+  const occlRt = pb?.occl?._aoRenderTarget ?? pb?.occl?.renderTarget ?? null; occlRt?.addEventListener?.('dispose', () => disposed.push('ao'));
+  const m2 = pipelinesMade; setAo(0); frame(); const po = live();
+  check('A2d AO leaves a blooming world: one rebuild, no pre-pass or AO node left, the scene pass has no AO context', pipelinesMade === m2 + 1 && !!po && !po.pre && !po.occl && po.scenePass.contextNode == null, po && { made: pipelinesMade - m2, pre: !!po.pre });
+  check('A2d …the pre-pass and AO targets are disposed', disposed.includes('pre') && (!occlRt || disposed.includes('ao')), { disposed, occlRt: !!occlRt });
+  setBloom(0); setAo(1); frame(); const pa = live(), m3 = pipelinesMade;
+  renderer.xr.isPresenting = true; d = frame(); renderer.xr.isPresenting = false;
+  check('A3 presenting: the eye pass is plain, with AO too; the pipeline kept, nothing rebuilt', plain(d) && live() === pa && pipelinesMade === m3, { d: show(d) });
+  const steps = [['ao strength 1 → 2', () => setAo(2), 0], ['ew-ao off and on', () => { setAoPref(false); frame(); setAoPref(true); }, 1], ['the world loses AO and regains it', () => { setAo(0); frame(); setAo(1); }, 1]];
+  const got = steps.map(([name, act, want]) => { const n = pipelinesMade; act(); frame(); return [name, pipelinesMade - n, want]; });
+  check('A4 rebuilds: an AO strength edit builds nothing; the viewer\'s ew-ao switch or the world gaining AO builds exactly one', got.every(([, n, want]) => n === want), got);
+  setAo(0); frame();
+}
+
 console.log('SYNCGATE — on WebGL the pipeline\'s scene pass is the world\'s own pass: its links defer, as the plain frame\'s do');
 {
   setBloom(1); frame();
