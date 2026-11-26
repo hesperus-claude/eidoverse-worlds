@@ -5,6 +5,7 @@ import { RENDER_SCALES, getRenderScale, setRenderScale,
   PARTICLE_TIERS, getParticleTier, setParticleTier,
   AVATAR_DETAILS, getAvatarDetail, setAvatarDetail, getFullDetail, setFullDetail } from '../render/governor.js';
 import { shadowsOn, setShadows, shadowRes, setShadowRes, SHADOW_RES, CASTER_CHOICES, getCasterCeiling, setCasterCeiling } from '../render/lightrig.js';
+import { ANISO_LEVELS, anisotropy, setAnisotropy } from '../render/anisotropy.js';
 import { backendName, PREF_MSAA, PREF_BACKEND, PREF_HEADSET_SEEN, WEBGPU_XR, WEBGPU_POSSIBLE, headsetSeenRecently } from '../core.js';
 import { CONFIG, bus } from '../base.js';
 import { FOLIAGE_MODES, getFoliageMode, setFoliageMode } from '../vegetation/foliage.js';
@@ -25,7 +26,7 @@ function selectRow(label, hint, options, value, onChange) {
   const sel = document.createElement('select');
   sel.setAttribute('aria-label', `${label} — local only, never shared with the world`);
   for (const [v, text] of options) sel.appendChild(new Option(text, v));
-  sel.value = value;
+  sel.value = String(value);   // a number reaches here from the dials; a DOM that does not coerce (happy-dom) would show the first option
   sel.onchange = () => onChange(sel.value, row);
   const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = label; nm.title = hint;
   const ctl = document.createElement('span'); ctl.className = 'ctl'; ctl.appendChild(sel);
@@ -70,6 +71,7 @@ function videoFields() {
     { t: 'check', k: 'shadows', label: 'shadows', value: shadowsOn() },
     ...(shadowsOn() ? [pick('shadowres', SHADOW_RES, shadowRes(), 'shadow resolution'), pick('casters', CASTER_CHOICES, getCasterCeiling(), 'shadow casters'),
       { t: 'check', k: 'myshadow', label: 'my body casts a real shadow', value: myShadowPref() }] : []),
+    pick('aniso', ANISO_LEVELS, anisotropy(), 'texture filtering (on reload)'),
     pick('particles', PARTICLE_TIERS, getParticleTier(), 'particles'),
     pick('foliage', FOLIAGE_MODES, getFoliageMode(), 'textured transparency'),
     pick('detail', Object.keys(AVATAR_DETAILS), getAvatarDetail(), 'avatar detail'),
@@ -85,6 +87,7 @@ function videoDispatch(k, v) {
   else if (k === 'shadowres') setShadowRes(+v);
   else if (k === 'casters') setCasterCeiling(+v);
   else if (k === 'myshadow') setMyShadowPref(!!v);
+  else if (k === 'aniso') setAnisotropy(+v);
   else if (k === 'particles') setParticleTier(v);
   else if (k === 'foliage') setFoliageMode(v);
   else if (k === 'detail') setAvatarDetail(v);
@@ -163,6 +166,13 @@ export function initVideoPanel() {
     body.appendChild(resRow);
     body.appendChild(castRow);
     body.appendChild(meRow);
+
+    // texture filtering (render/anisotropy.js): a texture takes its level at upload, so models loading later get a change
+    // and what is already here gets it on reload
+    body.appendChild(selectRow('texture filtering',
+      'Keeps textures sharp on surfaces seen at a slant: a floor ahead of you, a long wall. Higher costs a little texture bandwidth; 4× is the default. A texture takes it as it loads, so it applies to what is here on reload.',
+      ANISO_LEVELS.map((v) => [v, `${v}×`]), anisotropy(),
+      (v, row) => { setAnisotropy(+v); needsReload(row); flashHint(`texture filtering: ${v}× (on reload)`); }));
 
     body.appendChild(selectRow('particles',
       'How many sprites particle effects draw. auto lets the engine thin them under load and restore them after.',

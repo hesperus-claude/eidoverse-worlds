@@ -178,7 +178,7 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
   // texture filtering (render/anisotropy.js, real here: it reads and writes the pref itself): the viewer's dial, on reload
   localStorage.removeItem('ew-anisotropy');
   const aniso = sel('texture filtering');
-  check('a "texture filtering" row offers 1, 2, 4, 8, 16 (×) and shows 4 with nothing stored', !!aniso && [...aniso.options].map((o) => o.value).join(',') === '1,2,4,8,16' && aniso.value === '4' && aniso.selectedOptions[0]?.text === '4×', aniso && [...aniso.options].map((o) => [o.value, o.text]));
+  check('a "texture filtering" row offers 1, 2, 4, 8, 16 (×) and shows 4 with nothing stored', !!aniso && [...aniso.options].map((o) => o.value).join(',') === '1,2,4,8,16' && aniso.value === '4' && aniso.selectedOptions[0]?.text === '4×', aniso && { options: [...aniso.options].map((o) => [o.value, o.text]), value: aniso.value, shown: aniso.selectedOptions[0]?.text });
   if (aniso) { aniso.value = '8'; fire(aniso, 'change'); }
   check('choosing 8× writes ew-anisotropy=8', localStorage.getItem('ew-anisotropy') === '8', String(localStorage.getItem('ew-anisotropy')));
   check('…and the row needs a reload (a texture takes its level at upload)', !!aniso && !!row(aniso).querySelector('button.reload'));
