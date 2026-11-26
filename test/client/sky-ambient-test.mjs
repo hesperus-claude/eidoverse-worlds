@@ -7,7 +7,7 @@
 // sky.js's fillLight says), so absent fields add nothing and change no other light; a set colour and energy reach the
 // scene the same at noon and at night (the point of the field: sky.ambient scales the hemisphere, which is ~0 at night);
 // a live edit and a preview update it, and taking the fields away puts it back to 0 and white; the per-frame update
-// leaves it alone. The door's half (types, ranges, refusals) is shape-render's SK8.
+// leaves it alone. The door's half (types, ranges, refusals) is shape-render's SK8-ambient.
 // The rows that turn red, and the line of the product that turns them:
 //   · no AmbientLight in sky.js                                   → AL1..AL6
 //   · the light added on first use instead of at import          → AL1

@@ -327,17 +327,17 @@ await tryRow('SK', async () => {
   const Wm = scratchWorld('w2r-sky-ambient'); const sm = () => Wm.state().entities['@world'].c.sky;
   const m1 = Wm.call('set', { id: '@world', component: 'sky', value: { hours: 22, ambientLightColor: [0.2, 0.3, 0.5], ambientLightEnergy: 0.8 } }), m1v = sm();
   const m2 = Wm.call('sky', { ambientLightColor: [1, 0.9, 0.8], ambientLightEnergy: 16 }), m2v = sm();
-  check('SK8 sky.ambientLightColor (vec3) + sky.ambientLightEnergy (number): set and the sky act store them as sent', m1.ok && same(m1v?.ambientLightColor, [0.2, 0.3, 0.5]) && m1v?.ambientLightEnergy === 0.8
+  check('SK8-ambient sky.ambientLightColor (vec3) + sky.ambientLightEnergy (number): set and the sky act store them as sent', m1.ok && same(m1v?.ambientLightColor, [0.2, 0.3, 0.5]) && m1v?.ambientLightEnergy === 0.8
     && m2.ok && same(m2v?.ambientLightColor, [1, 0.9, 0.8]) && m2v?.ambientLightEnergy === 16, [m1.refused, m1v, m2.refused, m2v]);
-  check('SK8 …in the registry: vec3 0..1 each, number 0..16, no default (absent stores nothing), absence and meaning written', K.fields.ambientLightColor === 'vec3' && K.fields.ambientLightEnergy === 'number'
+  check('SK8-ambient …in the registry: vec3 0..1 each, number 0..16, no default (absent stores nothing), absence and meaning written', K.fields.ambientLightColor === 'vec3' && K.fields.ambientLightEnergy === 'number'
     && K.ranges?.ambientLightColor?.min === 0 && K.ranges?.ambientLightColor?.max === 1 && K.ranges?.ambientLightEnergy?.min === 0 && K.ranges?.ambientLightEnergy?.max === 16
     && !('ambientLightColor' in (K.defaults ?? {})) && !('ambientLightEnergy' in (K.defaults ?? {}))
     && /0/.test(K.absentMeans?.ambientLightEnergy ?? '') && /white/.test(K.absentMeans?.ambientLightColor ?? '') && !!K.docs?.ambientLightColor && !!K.docs?.ambientLightEnergy, [K.fields.ambientLightColor, K.ranges?.ambientLightColor, K.ranges?.ambientLightEnergy, K.absentMeans?.ambientLightEnergy]);
-  const bad = ([['colour above 1', { ambientLightColor: [1.2, 0, 0] }, 'bounds'], ['colour below 0', { ambientLightColor: [0, -0.1, 0] }, 'bounds'], ['colour of two', { ambientLightColor: [0.1, 0.2] }, 'shape'],
+  const mbad = ([['colour above 1', { ambientLightColor: [1.2, 0, 0] }, 'bounds'], ['colour below 0', { ambientLightColor: [0, -0.1, 0] }, 'bounds'], ['colour of two', { ambientLightColor: [0.1, 0.2] }, 'shape'],
     ['colour a word', { ambientLightColor: 'red' }, 'shape'], ['colour an int (the light component\'s spelling)', { ambientLightColor: 0xff8800 }, 'shape'], ['energy below 0', { ambientLightEnergy: -1 }, 'bounds'],
     ['energy above 16', { ambientLightEnergy: 17 }, 'bounds'], ['energy a string', { ambientLightEnergy: '2' }, 'shape']] as const)
     .map(([what, v, want]) => { const r = Wm.call('set', { id: '@world', component: 'sky', value: { hours: 22, ...v } }); return { what, want, got: code(r) }; });
-  check('SK8 …a bad value is refused at the door, as the sky\'s other numbers and colours are (bounds out of range, shape wrong type), and nothing stored', bad.every((b) => b.got === b.want) && same(sm(), m2v), bad.filter((b) => b.got !== b.want));
+  check('SK8-ambient …a bad value is refused at the door, as the sky\'s other numbers and colours are (bounds out of range, shape wrong type), and nothing stored', mbad.every((b) => b.got === b.want) && same(sm(), m2v), mbad.filter((b) => b.got !== b.want));
 });
 
 // ===================================================================== terrain: the sim's defaults, raster reserved, layer colours ints, water split out
