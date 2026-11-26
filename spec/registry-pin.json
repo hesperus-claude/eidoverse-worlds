@@ -2651,6 +2651,43 @@
   },
   "on": "thing"
  },
+ "gi-volume": {
+  "status": "trial",
+  "fields": {
+   "strength": "number",
+   "spacing": "number",
+   "bounces": "int"
+  },
+  "ranges": {
+   "strength": {
+    "min": 0,
+    "max": 16
+   },
+   "spacing": {
+    "min": 0.25,
+    "max": 8
+   },
+   "bounces": {
+    "min": 0,
+    "max": 2
+   }
+  },
+  "absentMeans": {
+   "strength": "1: the bounce as baked",
+   "spacing": "1.5 m between probes",
+   "bounces": "1: light off one surface, then another"
+  },
+  "docs": {
+   "strength": "× the baked bounce light, 0..16 (as Godot VoxelGIData.energy scales its bake)",
+   "spacing": "metres between light probes, 0.25..8 (Unity probe spacing): the owner's detail; each viewer's GI setting may widen it",
+   "bounces": "how many times light bounces after the first hit, 0..2 (0: lamp light off the first surface only)"
+  },
+  "units": {
+   "spacing": "m",
+   "strength": "×"
+  },
+  "on": "thing"
+ },
  "terrain-feature": {
   "status": "trial",
   "fields": {

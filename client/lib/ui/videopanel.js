@@ -12,6 +12,7 @@ import { registerXRPanel } from '../xr/xrpanels.js';
 import { allowUntrusted, setAllowUntrusted, UNTRUSTED_WORDS } from '../mediaprefs.js';
 import { initConsentPanel } from './consentpanel.js';
 import { myShadowPref, setMyShadowPref } from '../render/materials.js';
+import { GI_LEVELS, giPref, setGiPref } from '../render/gipref.js';   // the dial alone: the bake (render/gi.js) stays out of the panels
 
 // storage can throw (private mode, quota) — never let a preference read kill the panel
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -70,6 +71,7 @@ function videoFields() {
     { t: 'check', k: 'shadows', label: 'shadows', value: shadowsOn() },
     ...(shadowsOn() ? [pick('shadowres', SHADOW_RES, shadowRes(), 'shadow resolution'), pick('casters', CASTER_CHOICES, getCasterCeiling(), 'shadow casters'),
       { t: 'check', k: 'myshadow', label: 'my body casts a real shadow', value: myShadowPref() }] : []),
+    pick('gi', GI_LEVELS, giPref(), 'bounce light (GI)'),
     pick('particles', PARTICLE_TIERS, getParticleTier(), 'particles'),
     pick('foliage', FOLIAGE_MODES, getFoliageMode(), 'textured transparency'),
     pick('detail', Object.keys(AVATAR_DETAILS), getAvatarDetail(), 'avatar detail'),
@@ -85,6 +87,7 @@ function videoDispatch(k, v) {
   else if (k === 'shadowres') setShadowRes(+v);
   else if (k === 'casters') setCasterCeiling(+v);
   else if (k === 'myshadow') setMyShadowPref(!!v);
+  else if (k === 'gi') setGiPref(v);
   else if (k === 'particles') setParticleTier(v);
   else if (k === 'foliage') setFoliageMode(v);
   else if (k === 'detail') setAvatarDetail(v);
@@ -163,6 +166,11 @@ export function initVideoPanel() {
     body.appendChild(resRow);
     body.appendChild(castRow);
     body.appendChild(meRow);
+
+    body.appendChild(selectRow('bounce light',
+      'Lamp light bouncing off walls, floors and furniture into the rest of a room, where the world asks for it. Baked a probe a frame after the room settles, then cheap to draw. off: none. low: fewer, coarser probes (quicker to bake). high: more probes and sharper captures (longer to bake). Worlds that ask for none look the same either way. Changes live.',
+      GI_LEVELS.map((v) => [v, v]), giPref(),
+      (v) => { setGiPref(v); flashHint(`bounce light: ${v}`); }));
 
     body.appendChild(selectRow('particles',
       'How many sprites particle effects draw. auto lets the engine thin them under load and restore them after.',

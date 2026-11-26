@@ -210,6 +210,23 @@ export function releaseOwner(owner) {
   assignDirty = true;
 }
 export const isCasting = (key) => (requests.get(key)?.slot ?? -1) >= 0;
+/** Every placed light as it stands ({key, pos, color, intensity, range, decay, spot, dir, dayAware}), slotted or not: what a
+ *  bake lights a room with (render/gi.js), where the pool lights only the best few. Authored requests only: no body lamps,
+ *  no adopted lightning. intensity is the request's own, before the day curve. */
+export function worldLights() {
+  const out = [];
+  for (const r of requests.values()) {
+    if (!r.authored || r.mirror) continue;
+    let dir = null;
+    if (r.spot) {   // a spot shines down its -Z (writeSpots): its host's, or a parked one's folded q
+      const q = r.obj ? r.obj.getWorldQuaternion(new THREE.Quaternion()) : r.q ? new THREE.Quaternion(r.q[0], r.q[1], r.q[2], r.q[3]) : new THREE.Quaternion();
+      dir = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+    }
+    out.push({ key: r.key, pos: worldPosOf(r, new THREE.Vector3()), color: r.color, intensity: r.intensity, range: r.range, decay: r.decay,
+      spot: r.spot, dir, dayAware: r.dayAware });
+  }
+  return out;
+}
 
 // ---- lamps ------------------------------------------------------------------
 // A body that glows sheds light: each emissive mesh (≤2) gets a lamp request at its centre. A placed model infers

@@ -5,6 +5,7 @@
 // handle in mybody.js, my body's physics in localbody.js, consent in consent.js, voice mouths in voicemouths.js,
 // /commands in lib/ui/commands/. lite.js is the renderer-free sibling.
 import { updateWater, updateWaterView, setWaterObjects, setWaterClock, setSkyHider, waterDebug, applyEnvLight } from './lib/realize/watervolumes.js';
+import { updateGi, setGiObjects, giDebug } from './lib/render/gi.js';   // gi-volume: the world's baked bounce, a probe a frame
 
 import { say } from './lib/net.js';
 import { updateHelm, helmHull } from './lib/player/vehicles.js';
@@ -515,6 +516,8 @@ setClimbObjects(() => entities);   // climb routes resolve through their hosts' 
 setWaterClock(serverNow);
 setSkyHider(hideSkyForWater);
 registerSystem('water', updateWater);
+setGiObjects(() => entities);
+registerSystem('gi', updateGi);                                  // after the rig: a bake reads its lights where they stand
 registerSystem('me-drive', (dt) => {
   if (CONFIG.renderer) { /* camera is driven per snap request */ }
   else if (CONFIG.spectate) updateSpectator(dt, CONFIG.follow ? remotes.get(CONFIG.follow) : null);
@@ -864,6 +867,7 @@ const EW = globalThis.EW = {
   grassDiag,                   // `await EW.grassDiag()` — the meadow's GPU cost, attributed by difference
   setCloudQuality,             // the sky pane's tier knob
   water: waterDebug,
+  gi: giDebug,                 // the GI dial, why it is off here, its grids and the bake in progress (render-lab's capture rig reads .baking)
   warm: warmStats,             // the warm conductor's queue
   budget: budgetStats,         // the shared per-frame background budget: share, debt, per-lane spend/grants/denials
   lanes: () => ({ sched: schedLaneStats(), load: loadLaneStats() }),  // queue depths vs caps

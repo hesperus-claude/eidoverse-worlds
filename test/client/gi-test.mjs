@@ -107,7 +107,7 @@ core.scene.add = (o) => { added.push(o); };
 core.scene.remove = (o) => { removed.push(o); };
 let objectReads = 0;
 const roomMeshes = new Map();
-{ const g = new core.THREE.Group(); g.parent = {}; const box = new core.THREE.Mesh(new core.THREE.BoxGeometry(3, 3, 3), new core.THREE.MeshStandardMaterial()); box.position.set(0, 1.5, 0); g.add(box); roomMeshes.set('walls', g); }
+{ const world = new core.THREE.Scene(), g = new core.THREE.Group(); world.add(g); const box = new core.THREE.Mesh(new core.THREE.BoxGeometry(3, 3, 3), new core.THREE.MeshStandardMaterial()); box.position.set(0, 1.5, 0); g.add(box); roomMeshes.set('walls', g); }
 G?.setGiObjects?.(() => { objectReads++; return roomMeshes; });
 core.renderer.isWebGPURenderer = true;
 core.renderer.backend = { isWebGPUBackend: true };

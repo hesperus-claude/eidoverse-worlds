@@ -471,7 +471,7 @@ export const COMPONENTS = {
                  size: "a box's full size [x, y, z], metres, before the thing's scale", radius: "a sphere's, capsule's or cylinder's radius, metres", height: "a capsule's or cylinder's full height along its y, metres (a capsule's includes its caps)",
                  priority: "which of two overlapping zones' effects wins: the higher (Godot Area3D); a tie goes to the later id", blend: "how far outside its shape a look effect fades out, metres (Unity Volume blend distance); look only, never the medium",
                  weight: "how strongly a look effect applies, 0..1 (Unity Volume weight); look only, never the medium", global: "true: everywhere in the world, its shape unused (Unity Volume global, Unreal unbound)" },
-               help: "a volume that effects (water, water-exclusion, physics-volume) ride on as siblings on the same thing: {shape: box|sphere|capsule|cylinder, size? [x, y, z] m (a box), radius? m (sphere, capsule, cylinder), height? m (capsule, cylinder), priority? int (higher wins; absent 0), blend? m (absent 0), weight? 0..1 (absent 1), global? (true: everywhere)}, centred on the thing's origin" },
+               help: "a volume that effects (water, water-exclusion, physics-volume, gi-volume) ride on as siblings on the same thing: {shape: box|sphere|capsule|cylinder, size? [x, y, z] m (a box), radius? m (sphere, capsule, cylinder), height? m (capsule, cylinder), priority? int (higher wins; absent 0), blend? m (absent 0), weight? 0..1 (absent 1), global? (true: everywhere)}, centred on the thing's origin" },
   // a dry pocket carved out of water bodies, after Unreal's Water Body Exclusion Volume
   "water-exclusion": { on: "thing", fields: { bodies: "refs" }, ranges: { bodies: { maxItems: 16 } },
                absentMeans: { bodies: "every water body its zone overlaps, @world's level included" },
@@ -485,6 +485,14 @@ export const COMPONENTS = {
                  factor: "speed: × a body's own speed inside (walking, running, wading, swimming): < 1 slows (mud, deep snow), > 1 boosts; 0.05..10. The authority's track widens inside a boost, never narrows",
                  modes: "which movement modes it touches: walk | swim | fly | climb (Unreal's per-mode settings); absent: all. Main's slow water translates to ['swim']" },
                help: "on a thing with a zone {shape: 'box', size} (or global): {kind: 'speed', factor? (× a body's own speed inside, 0.05..10; absent 1), modes? (a list of walk | swim | fly | climb, e.g. ['swim']; absent, every mode)}. Where speed volumes overlap, only those whose modes take the body's current mode count, and the highest zone priority among them decides" },
+  // a zone effect: the world's baked diffuse bounce inside it, an irradiance probe volume (three's LightProbeGrid; Godot LightmapGI's
+  // probes, Bevy's irradiance volumes, Unity's probe volume); look only
+  "gi-volume": { on: "thing", fields: { strength: "number", spacing: "number", bounces: "int" },
+               ranges: { strength: { min: 0, max: 16 }, spacing: { min: 0.25, max: 8 }, bounces: { min: 0, max: 2 } }, units: { spacing: "m", strength: "×" },
+               absentMeans: { strength: "1: the bounce as baked", spacing: "1.5 m between probes", bounces: "1: light off one surface, then another" },
+               docs: { strength: "× the baked bounce light, 0..16 (as Godot VoxelGIData.energy scales its bake)", spacing: "metres between light probes, 0.25..8 (Unity probe spacing): the owner's detail; each viewer's GI setting may widen it",
+                 bounces: "how many times light bounces after the first hit, 0..2 (0: lamp light off the first surface only)" },
+               help: "global illumination for a static room, on a thing with a zone {shape: 'box', size} (the volume: the zone's box, world-axis-aligned; not global): {strength? ×, spacing? m, bounces? 0..2}. The room's lamps and opaque things are baked into a grid of light probes; each viewer's GI setting decides the cost (or none)" },
   // the ground's other two layers, each a component of its own beside the bag (shared/terrainshape.js groundArgs gathers
   // them): PARTITION keys, pieces of one shared ground, so whoever may shape the ground may change any of them
   "terrain-feature": { on: "world", keyed: true, key: "partition", fields: { type: "string", x: "number", z: "number", x1: "number", z1: "number", x2: "number", z2: "number", radius: "number", height: "number", edge: "number", order: "number" },
