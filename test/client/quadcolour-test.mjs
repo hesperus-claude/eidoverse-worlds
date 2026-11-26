@@ -74,7 +74,10 @@ console.log('INVERSE AGX, NEUTRAL, LINEAR (the world\'s other display transforms
   check('three\'s AgX read from source (four 3×3 matrices, a 7-term sigmoid, the EV range) and Neutral\'s six literals',
     [THREE_AGX.R2S, THREE_AGX.S2R, THREE_AGX.INSET, THREE_AGX.OUTSET].every((m) => m.length === 9) && THREE_AGX.POLY.length === 7 && THREE_AGX.EV.length === 2 && THREE_NEUTRAL.length === 6,
     JSON.stringify({ THREE_AGX, THREE_NEUTRAL }));
-  check('our AgX constants are three\'s (both gamut matrices, inset, outset, EV range, the signed sigmoid)',
+  const greys = [0.01, 0.18, 1, 4, 64].map((k) => agxForward([k, k, k], 1));
+  check('three\'s AgX, as transcribed, keeps a grey grey (its matrices are vec3 COLUMNS: read as rows, a grey turns magenta)',
+    greys.every((g) => Math.max(...g) - Math.min(...g) < 2e-3), JSON.stringify(greys.map((g) => g.map((v) => +v.toFixed(4)))));
+  check('our AgX constants are three\'s, as three means them (rows of the matrices three lists as columns; EV range, the signed sigmoid)',
     same(QG.REC2020_TO_SRGB, THREE_AGX.R2S) && same(QG.SRGB_TO_REC2020, THREE_AGX.S2R) && same(QG.AGX_INSET, THREE_AGX.INSET) && same(QG.AGX_OUTSET, THREE_AGX.OUTSET)
       && same([QG.AGX_EV?.min, QG.AGX_EV?.max], THREE_AGX.EV) && same(QG.AGX_POLY, AGX_POLY_SIGNED), JSON.stringify({ EV: QG.AGX_EV, POLY: QG.AGX_POLY }));
   check('our Neutral constants are three\'s (start 0.8 − 0.04, desaturation 0.15, toe 0.08 / 6.25 / 0.04)',
@@ -106,10 +109,12 @@ console.log('INVERSE AGX, NEUTRAL, LINEAR (the world\'s other display transforms
     const img = onImage(fwd, inv), grid = sweep(fwd, inv); R[k] = { img, grid };
     check(`${k}: exact on the curve's own image (forward ∘ inverse ∘ forward = forward: worst < 0.5 of an 8-bit step, exposures ${EXPOSURES.join('/')})`, img.worst < 0.5, JSON.stringify(img));
   }
-  // the floors the lab measured on 11-02 (≥ 85% within one step), and Linear, whose image is all of [0, 1]: exact
+  // Neutral: the floor the lab measured on 11-02 (≥ 85% within one step); Linear, whose image is all of [0, 1]: exact
   check('linear: the whole sRGB grid comes back exact (worst < 0.5 of a step: its image is all of [0, 1])', R.linear && Object.values(R.linear.grid).every((x) => x.worst < 0.5), JSON.stringify(R.linear?.grid));
   check('neutral: ≥ 85% of the whole sRGB grid comes back within one 8-bit step, at every exposure', R.neutral && Object.values(R.neutral.grid).every((x) => x.within1 >= 0.85), JSON.stringify(R.neutral?.grid));
-  check('agx: ≥ 85% of the whole sRGB grid comes back within one 8-bit step, at every exposure', R.agx && Object.values(R.agx.grid).every((x) => x.within1 >= 0.85), JSON.stringify(R.agx?.grid));
+  // AgX, read the right way round, reaches the whole sRGB cube (its sigmoid spans [0, 1] and nothing in it mixes toward
+  // white), so its undo is exact everywhere, not only on a floor: held to that
+  check('agx: the whole sRGB grid comes back exact (worst < 0.5 of a step), at every exposure', R.agx && Object.values(R.agx.grid).every((x) => x.worst < 0.5), JSON.stringify(R.agx?.grid));
   check('neutral: the panel\'s greys and darks (r = g = b, and every colour ≤ 0x80) come back within one step',
     typeof QG.neutralInverseJS === 'function' && [0, 0x10, 0x40, 0x80, 0xc0, 0xff].every((v) => { const c = [v, v, v].map((x) => EOTF(x / 255)); const back = neutralForward(QG.neutralInverseJS(c, 0.78), 0.78).map((x) => OETF(Math.min(1, x)) * 255); return back.every((x) => Math.abs(x - v) < 1); })
       && [[5, 20, 20], [0x20, 0x40, 0x80], [0x80, 0x10, 0x10]].every((rgb) => { const back = neutralForward(QG.neutralInverseJS(rgb.map((x) => EOTF(x / 255)), 0.78), 0.78).map((x) => OETF(Math.min(1, x)) * 255); return back.every((x, i) => Math.abs(x - rgb[i]) < 1); }));

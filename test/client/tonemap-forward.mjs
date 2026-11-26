@@ -7,11 +7,17 @@ import { readFileSync } from 'node:fs';
 
 const src = readFileSync(new URL('../../client/node_modules/three/src/nodes/display/ToneMappingFunctions.js', import.meta.url), 'utf8');
 const nums = (s) => (s.replace(/-\s+/g, '-').match(/-?\d*\.\d+/g) ?? []).map(Number);
-// `const NAME = /*@__PURE__*/ mat3( vec3( … ), … );` or `const NAME = mat3( … );`: nine numbers in three's listing order
+// `const NAME = /*@__PURE__*/ mat3( vec3( … ), vec3( … ), vec3( … ) );`: nine numbers in three's listing order. TSL builds a
+// mat3 from three vec3s as COLUMNS (as GLSL and WGSL do), but from nine scalars as ROWS (it is a Matrix3, whose
+// constructor takes n11, n12, n13, …: ACESInputMat is written that way). AgX's four matrices are vec3 columns, so they are
+// transposed here into rows, the orientation mul3 below (and quadgrade.js, and the shader's mat3(...9 scalars)) reads.
+// Read the other way, a grey comes out magenta (quadcolour-test holds a grey grey).
 const mat = (name) => nums(src.match(new RegExp(`const ${name} = [^m]*mat3\\(([^;]*)\\);`))?.[1] ?? '');
+const colsToRows = (l) => (l.length === 9 ? [0, 3, 6, 1, 4, 7, 2, 5, 8].map((i) => l[i]) : l);
+const vecCols = (name) => { if (!new RegExp(`const ${name} = [^m]*mat3\\( vec3\\(`).test(src)) return []; return colsToRows(mat(name)); };   // refuses a listing that is not vec3 columns
 export const THREE_AGX = Object.freeze({
-  R2S: mat('LINEAR_REC2020_TO_LINEAR_SRGB'), S2R: mat('LINEAR_SRGB_TO_LINEAR_REC2020'),
-  INSET: mat('AgXInsetMatrix'), OUTSET: mat('AgXOutsetMatrix'),
+  R2S: vecCols('LINEAR_REC2020_TO_LINEAR_SRGB'), S2R: vecCols('LINEAR_SRGB_TO_LINEAR_REC2020'),
+  INSET: vecCols('AgXInsetMatrix'), OUTSET: vecCols('AgXOutsetMatrix'),
   // the sigmoid's magnitudes, x⁶ … x⁰ (its signs live in .sub / .add, so they are read as magnitudes)
   POLY: nums(src.match(/const agxDefaultContrastApprox = [\s\S]*?\} \);/)?.[0] ?? ''),
   EV: [...nums(src.match(/AgxMinEv = float\(([^)]*)\)/)?.[1] ?? ''), ...nums(src.match(/AgxMaxEv = float\(([^)]*)\)/)?.[1] ?? '')],
