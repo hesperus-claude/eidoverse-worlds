@@ -2,14 +2,16 @@
 //
 // WebGPURenderer ignores material.toneMapped: tone mapping and the sRGB encode happen in one output pass over the whole
 // frame, so panel pixels went through ACES Filmic at the world's exposure and read washed out
-// (test/client/xr-quad-colour-probe.mjs). The cure: the quad's output node applies the exact inverse of three's
-// acesFilmicToneMapping at the live exposure, so the output pass lands on the authored value.
+// (test/client/xr-quad-colour-probe.mjs). The cure: the quad's output node applies the inverse of the live curve at the
+// live exposure, so the output pass lands on the authored value. The curve is the world's (sky.tonemap, render/tonemap.js:
+// aces | agx | neutral | linear), chosen per frame by uTonemap, so a quad built under one curve follows a change.
 // On top, a VR-only saturation/contrast grade in sRGB space, quads only (never the design tokens or the desktop);
 // quadgrade.js holds its JS twin: test/client/quadcolour-test.mjs tests the twin, test/client/xr-quad-colour-probe.mjs
 // holds the GPU's output to it.
 import * as THREE from 'three';
-import { GRADE_DEFAULT, GRADE_RANGE, LUMA, loadGrade, clampTo, storeGrade, ACES_IN_INV, ACES_OUT_INV, ACES_FIT } from './quadgrade.js';
-import { Fn, vec3, vec4, mat3, texture, uniform, toneMappingExposure, sRGBTransferOETF, sRGBTransferEOTF, dot, mix, clamp, sqrt, max } from 'three/tsl';
+import { GRADE_DEFAULT, GRADE_RANGE, LUMA, loadGrade, clampTo, storeGrade, ACES_IN_INV, ACES_OUT_INV, ACES_FIT, INV, AGX_EV, AGX_POLY, AGX_BISECT, NEUTRAL } from './quadgrade.js';
+import { uTonemap, TONEMAPS } from '../render/tonemap.js';
+import { Fn, If, float, vec3, vec4, mat3, texture, uniform, toneMappingExposure, sRGBTransferOETF, sRGBTransferEOTF, dot, mix, clamp, sqrt, max, min, pow, exp2, step, select } from 'three/tsl';
 
 const { A, B, C, D, E } = ACES_FIT;
 
@@ -41,9 +43,45 @@ export const acesFilmicInverse = Fn(([lin]) => {
   return mat3(...ACES_IN_INV).mul(v).mul(0.6).div(toneMappingExposure);
 });
 
+/** Linear working colour whose AgX (at the live exposure) is `lin` (quadgrade.js agxInverseJS's twin; the sigmoid bisected).
+ *  Exact on what AgX can produce; a colour more saturated than its highlights ever are comes back as the nearest it makes. */
+const agxPoly = (x) => AGX_POLY.reduce((acc, k) => (acc === null ? vec3(k) : acc.mul(x).add(k)), null);
+export const agxInverse = Fn(([lin]) => {
+  const c = pow(max(mat3(...INV.toSrgb).mul(clamp(lin, 0, 1)), 0), vec3(1 / 2.2));
+  const y = clamp(mat3(...INV.outset).mul(c), 0, 1);
+  const lo = vec3(0).toVar(), hi = vec3(1).toVar();
+  for (let i = 0; i < AGX_BISECT; i++) { const m = lo.add(hi).mul(0.5), s = step(agxPoly(m), y); lo.assign(mix(lo, m, s)); hi.assign(mix(m, hi, s)); }
+  const enc = exp2(lo.add(hi).mul(0.5).mul(AGX_EV.max - AGX_EV.min).add(AGX_EV.min));
+  return mat3(...INV.toRec).mul(mat3(...INV.inset).mul(enc)).div(toneMappingExposure);
+});
+/** Linear working colour whose Khronos PBR Neutral (at the live exposure) is `lin` (quadgrade.js neutralInverseJS's twin,
+ *  closed form). Exact on Neutral's image; a highlight more saturated than Neutral makes clamps at 0. */
+export const neutralInverse = Fn(([lin]) => {
+  const S = float(NEUTRAL.start), d = float(1 - NEUTRAL.start);
+  const y = clamp(lin, 0, 0.9999).toVar();
+  const np = max(y.x, max(y.y, y.z));
+  If(np.greaterThanEqual(S), () => {   // undo the highlight compression, then its desaturation mix
+    const p = d.mul(d).div(np.oneMinus()).sub(d).add(S), g = float(1).sub(float(1).div(p.sub(np).mul(NEUTRAL.desat).add(1)));
+    y.assign(max(y.sub(np.mul(g)).div(g.oneMinus()).mul(p.div(np)), 0));
+  });
+  const m = max(min(y.x, min(y.y, y.z)), 0);
+  const x = select(m.lessThan(NEUTRAL.toeK * NEUTRAL.toeAt * NEUTRAL.toeAt), sqrt(m.div(NEUTRAL.toeK)), m.add(NEUTRAL.toeOff));
+  return y.add(select(x.lessThan(NEUTRAL.toeAt), x.sub(x.mul(x).mul(NEUTRAL.toeK)), float(NEUTRAL.toeOff))).div(toneMappingExposure);
+});
+/** The undo of whichever curve the world shows (render/tonemap.js uTonemap), chosen per frame: a uniform branch, so a
+ *  change of curve recompiles nothing here. linear (exposure, then a clamp) is the fall-through. */
+const CURVE_AT = Object.fromEntries(TONEMAPS.map((k, i) => [k, i]));
+export const tonemapInverse = Fn(([lin]) => {
+  const out = vec3(clamp(lin, 0, 1)).div(toneMappingExposure).toVar();
+  If(uTonemap.equal(CURVE_AT.aces), () => { out.assign(acesFilmicInverse(lin)); })
+    .ElseIf(uTonemap.equal(CURVE_AT.agx), () => { out.assign(agxInverse(lin)); })
+    .ElseIf(uTonemap.equal(CURVE_AT.neutral), () => { out.assign(neutralInverse(lin)); });
+  return out;
+});
+
 /** Swap a textured quad's material (an HTMLMesh's, or a head-locked canvas plate's) for one whose output is the
  *  authored (graded) colour after the renderer's output pass. Blending and depth settings carry over. */
-export function quadMaterial(mesh, renderer) {
+export function quadMaterial(mesh, _renderer) {   // the renderer is no longer read: the curve to undo is uTonemap's, live
   const old = mesh.material, map = old.map;
   const m = new THREE.MeshBasicNodeMaterial({ map, transparent: old.transparent, alphaTest: old.alphaTest, side: old.side,
     depthTest: old.depthTest, depthWrite: old.depthWrite, fog: false });
@@ -52,10 +90,9 @@ export function quadMaterial(mesh, renderer) {
   const y = dot(s, vec3(...LUMA));
   const graded = clamp(mix(vec3(y), s, uSat).sub(0.5).mul(uCon).add(0.5), 0, 1);
   const lin = sRGBTransferEOTF(graded);
-  const aces = renderer?.toneMapping === THREE.ACESFilmicToneMapping;
   // outputNode, not colorNode: NodeMaterial clamps its lit result at 0 and the inverse needs negatives. The map stays
   // the diffuse colour, so alphaTest still cuts the rounded corners from the texture's alpha.
-  m.outputNode = vec4(aces ? acesFilmicInverse(lin) : lin, t.a);
+  m.outputNode = vec4(tonemapInverse(lin), t.a);
   m.toneMapped = false;   // honoured by the classic WebGLRenderer only; kept so the intent reads the same
   mesh.material = m; old.dispose();
   // HTMLMesh.dispose() disposes `material` from its closure (the old one) — keep ours from leaking
