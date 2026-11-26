@@ -328,9 +328,10 @@ await tryRow('SK', async () => {
   const t2 = Wt.call('sky', { tonemap: 'neutral' }), t2v = st()?.tonemap;
   const t3 = Wt.call('set', { id: '@world', component: 'sky', value: { hours: 9, tonemap: 'reinhard' } }), t4 = Wt.call('sky', { tonemap: 'filmic' }), t3v = st()?.tonemap;
   const t5 = Wt.call('set', { id: '@world', component: 'sky', value: { hours: 9 } }), t5v = st();
-  check('SK8 sky.tonemap: set and the sky act store aces | agx | neutral | linear; an unknown curve is refused (shape), naming the four; nothing stored; absent stores none',
+  check('SK8-tonemap sky.tonemap: set and the sky act store aces | agx | neutral | linear; an unknown curve is refused (shape), naming the four; nothing stored; absent stores none',
     t1.ok && t1v === 'agx' && t2.ok && t2v === 'neutral' && code(t3) === 'shape' && /aces \| agx \| neutral \| linear/.test(t3.refused?.message ?? JSON.stringify(t3.refused)) && !t4.ok && t3v === 'neutral'
       && t5.ok && !('tonemap' in (t5v ?? {})) && K.fields.tonemap === 'string' && !!K.docs?.tonemap, [t1.refused, t1v, t2.refused, t2v, t3.refused, t4.refused, t3v, t5.refused, t5v]);
+  check('SK8-tonemap …the sky\'s help names it, optional, with its four curves and its absence (aces), as it names audio?', /tonemap\? \(aces \| agx \| neutral \| linear[^)]*absent: aces\)/.test(K.help ?? ''), K.help);
 });
 
 // ===================================================================== terrain: the sim's defaults, raster reserved, layer colours ints, water split out

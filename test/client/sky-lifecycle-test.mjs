@@ -438,7 +438,7 @@ try {
     leave(); await settle();
     check('in a headset: a tonemap edit applies at once, as an exposure edit does (neither held for exit)',
       x1.tm === THREE.AgXToneMapping && x1.u === 1 && x1.exp === 0.7 && !heldX, { ...x1, held: heldX });
-    // (5) an unknown curve: the door refuses it (shape-render SK8); a log that carries one anyway (hand-edited, a newer
+    // (5) an unknown curve: the door refuses it (shape-render SK8-tonemap); a log that carries one anyway (hand-edited, a newer
     // server) draws the absent curve, as an unknown clouds value draws cumulus
     const u1 = await put({ tonemap: 'reinhard' });
     const u2 = await put({ tonemap: 4 });
