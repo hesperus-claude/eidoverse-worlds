@@ -202,8 +202,8 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
   check('the quad\'s ambient occlusion check reads the pref', f.find((x: any) => x.k === 'ao')?.value === false && f.find((x: any) => x.k === 'ao')?.label === 'ambient occlusion', JSON.stringify(f.find((x: any) => x.k === 'ao')));
   quad.dispatch('ao', true);
   check('quad dispatch(ao) reaches setAoPref', since(c2, 'setAoPref')[0]?.[1] === true, JSON.stringify(since(c2, 'setAoPref')));
-  const e3 = emitted.length; quad.dispatch('bloom', true);
-  check('quad dispatch(bloom) reaches setBloomPref and repaints', since(c2, 'setBloomPref')[0]?.[1] === true && emits(e3, 'xr:repaint') === 1, JSON.stringify(since(c2, 'setBloomPref')));
+  const eBloom = emitted.length; quad.dispatch('bloom', true);
+  check('quad dispatch(bloom) reaches setBloomPref and repaints', since(c2, 'setBloomPref')[0]?.[1] === true && emits(eBloom, 'xr:repaint') === 1, JSON.stringify(since(c2, 'setBloomPref')));
   quad.dispatch('fulldetail', true);
   check('quad dispatch(fulldetail) reaches setFullDetail', since(c2, 'setFullDetail')[0]?.[1] === true);
   check('…and the quad\'s full-detail check reads it back', quad.fields().find((x: any) => x.k === 'fulldetail')?.value === true);
