@@ -167,12 +167,21 @@ if (G) {
   // moved, a model landed) had no second bounce and kept that at night (both passes at 0.00116; atlas L0 mean 0.298 where a
   // night bake gives 0.319). What a bake holds is the room, not the hour.
   St.reset(); LR.setDayness(0.966); LP.bakes.length = 0;
+  LR.requestLight('complight:bulb', { authored: true, pos: [0, 2, 0], intensity: 10, range: 5, decay: 2, dayAware: true });   // G16's lamp, inside the room
   St.hydrate(giRoom({ bounces: 1, strength: 2 }));
   await run(250);
   const day = LR.glowScale(), shown = LP.bakes[0]?.grid?.intensity;
   check('G13 a bake step runs with the grid at its volume\'s strength, whatever the hour (the bounce pass reads it)', day < 0.01 && LP.bakes.length === 54 && LP.bakes.every((x) => x.intensity === 2), [day, LP.bakes.length, [...new Set(LP.bakes.map((x) => x.intensity))]]);
   check('G13 …and the frame still shows the grid dimmed by day', Math.abs(shown - 2 * day) < 1e-12, [shown, 2 * day]);
   LR.setDayness(null);
+  // G16 pins TODAY'S behaviour (the plan critique of 11-25, a second suspect for the loose per-patch fit, r = 0.43): the
+  // bake's lights cast no shadows and its proxy meshes cast none, so lamp light reaches every probe through furniture during
+  // the bake itself, not only at lookup. Turning bake shadows on must move this row on purpose.
+  const pl = LP.bakes[0]?.scene?.children?.filter((o) => o.isLight) ?? [], pm = LP.bakes[0]?.scene?.children?.filter((o) => o.isMesh) ?? [];
+  check('G16 today the bake lights the proxy with every placed light in range, none casting a shadow, and no proxy mesh casts one (light leaks through furniture in the bake)',
+    pl.length === 1 && pl[0].isPointLight && pl[0].intensity === 10 && pl.every((l) => l.castShadow === false) && pm.length > 0 && pm.every((m) => m.castShadow === false),
+    [pl.map((l) => [l.type, l.intensity, l.castShadow]), pm.map((m) => m.castShadow)]);
+  LR.releaseLight('complight:bulb');
 }
 check('G10 Video settings carry the GI row through the dial\'s own module (videopanel.js reads render/gipref.js, not the bake)', /from '\.\.\/render\/gipref\.js'/.test(read('client/lib/ui/videopanel.js')) && /giPref\(\)/.test(read('client/lib/ui/videopanel.js')) && /setGiPref\(/.test(read('client/lib/ui/videopanel.js')), '');
 check('G10 …the frame loop steps it, hands it the world\'s objects, and EW.gi reads giDebug (main.js)', /registerSystem\('gi', updateGi\)/.test(read('client/main.js')) && /setGiObjects\(\(\) => entities\)/.test(read('client/main.js')) && /\bgi: giDebug\b/.test(read('client/main.js')), '');
