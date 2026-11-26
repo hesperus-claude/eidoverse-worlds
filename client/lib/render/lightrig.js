@@ -103,13 +103,22 @@ for (let i = 0; i < N_SLOTS; i++) {
   rigGroup.add(pl);
 }
 // The spot pool: its own light type, so its own fixed pool (?spots=N, default 2), born after the point slots (scene order
-// is pipeline shape). Same ranking as the point pool (rankOf, against the frustum assign() just built). Spots 0..N_SCAST-1
-// are born casting: one dial (ew-lamp-shadows, "shadowed lamps") counts lamps of both kinds, and a spot is one map
-// against a cube's six (Godot shares one atlas between omni and spot). ?spotshadows=0 (boot) bears none.
+// is pipeline shape). Same ranking as the point pool (rankOf, against the frustum assign() just built). Up to N_SCAST
+// spots may cast: one dial (ew-lamp-shadows, "shadowed lamps") counts lamps of both kinds, and a spot is one map against
+// a cube's six (Godot shares one atlas between omni and spot). They are born casting-shaped only above the default dial
+// (SPOT_SHADOWS_BORN_ABOVE); at the default the first world spot that asks converts one slot, once (convertSpots).
+// ?spotshadows=0 (boot): no spot ever casts; ?spotshadows=1: born casting-shaped at any dial.
 const _spotRaw = CONFIG.params.get('spots');   // null when absent: Number(null) is 0
 const _spotParam = _spotRaw == null || _spotRaw === '' ? NaN : Number(_spotRaw);
 const N_SPOT = Number.isFinite(_spotParam) && _spotParam >= 0 ? Math.min(8, Math.round(_spotParam)) : 2;
-const N_SCAST = CONFIG.params.get('spotshadows') === '0' ? 0 : Math.min(N_SPOT, N_SHADOWED);
+const _spotShadowsParam = CONFIG.params.get('spotshadows');
+const N_SCAST = _spotShadowsParam === '0' ? 0 : Math.min(N_SPOT, N_SHADOWED);   // how many spots may cast at once
+// Off by default: a casting-shaped spot slot puts a shadow lookup in every lit material even while no spot casts.
+// Not yet measured on a loaded page: the 11-26 iGPU figure (~3 ms of a ~29 ms frame) was taken on pages still loading
+// and is void (render lab, 2026-11-27).
+// So spots are born casting-shaped only when the viewer's dial asks for more shadowed lamps than this.
+export const SPOT_SHADOWS_BORN_ABOVE = LAMP_SHADOWS_DEFAULT;
+const N_SCAST_BORN = _spotShadowsParam === '1' || (_spotShadowsParam !== '0' && N_SHADOWED > SPOT_SHADOWS_BORN_ABOVE) ? N_SCAST : 0;
 // a spot map is one 2D map: twice a cube face's side (a 90-degree cone then gets twice the face's texel density, for
 // two thirds of one cube's pixels)
 const SPOT_MAP = 2 * SHADOW_MAP;
@@ -117,15 +126,32 @@ const spotSlots = [];
 for (let i = 0; i < N_SPOT; i++) {
   const sl = new THREE.SpotLight(0xffffff, 0, 10, Math.PI / 4, 0, 1.7);
   sl.name = `spot${i}`;
-  sl.castShadow = i < N_SCAST;   // pipeline shape, fixed at birth, as the point slots
-  if (i < N_SCAST) {
-    sl.shadow.mapSize.set(SPOT_MAP, SPOT_MAP);
-    sl.shadow.camera.near = 0.03;   // as the world lamps: a lamp's own shade sits close (three's default is 0.5)
-    sl.shadow.camera.updateProjectionMatrix();
-    sl.shadow.bias = WORLD_DEPTH_BIAS;
-  }
+  sl.castShadow = false;
+  if (i < N_SCAST) sl.shadow.mapSize.set(SPOT_MAP, SPOT_MAP);
+  if (i < N_SCAST_BORN) shapeSpotCaster(sl);   // pipeline shape, fixed at birth, as the point slots
   rigGroup.add(sl); rigGroup.add(sl.target);
   spotSlots.push(sl);
+}
+let _spotShape = N_SCAST_BORN;   // spot slots 0.._spotShape-1 are casting-shaped (castShadow)
+function shapeSpotCaster(sl) {
+  sl.castShadow = true;
+  sl.shadow.camera.near = 0.03;   // as the world lamps: a lamp's own shade sits close (three's default is 0.5)
+  sl.shadow.camera.updateProjectionMatrix();
+  sl.shadow.bias = WORLD_DEPTH_BIAS;
+}
+// When each conversion happened (rigDebug().shadows.spotConversions): a probe can see the one recompile and when.
+const _spotConversions = [];
+/** Make spot slots 0..need-1 casting-shaped, once each, never back. castShadow is in three's lights cache key
+ *  (LightsNode.customCacheKey: light id + castShadow), so on the next render every lit render object's dynamic cache
+ *  key changes and it is rebuilt: one recompile of the lit materials, synchronous at that render. Not pre-warmed: a
+ *  compileAsync of the new shape leaves pipelines pending that the same render would then skip drawing. */
+function convertSpots(need) {
+  while (_spotShape < Math.min(need, N_SCAST)) {
+    const i = _spotShape++;
+    shapeSpotCaster(spotSlots[i]);
+    _spotConversions.push({ slot: i, at: _rigNow });
+    tee(`[lightrig] spot slot ${i} is now casting-shaped (a world spot asked for shadows): lit materials recompile once`);
+  }
 }
 scene.add(rigGroup);
 /** A casting-shaped slot's map is drawn at birth, whoever holds it and whatever the gate says: it asks three for one
@@ -611,6 +637,7 @@ function assign(now) {
   // the chosen askers (castingChoice, one dial over both kinds) take the casting slots before the general pass; the rest
   // light without casting (another caster would be a recompile). Winners are in rank order, so these are the best askers.
   const { points: wanting, spots: spotCasting } = castingChoice(winners, spotWin);
+  convertSpots(spotCasting.length);
   seatSpots(spotCasting, spotWin);
   const castHeld = new Set(wanting.filter((r) => r.slot >= 0 && r.slot < N_CAST).map((r) => r.slot));
   for (const wants of wanting) {
@@ -665,11 +692,12 @@ function castingChoice(pointWinners, spotWinners) {
   }
   return { points, spots };
 }
-/** A chosen spot sits in a casting spot slot (0..N_SCAST-1), swapping with whoever holds one no chosen spot holds. */
+/** A chosen spot sits in a casting-shaped spot slot (0.._spotShape-1), swapping with whoever holds one no chosen spot
+ *  holds. */
 function seatSpots(chosen, spotWinners) {
-  const held = new Set(chosen.filter((r) => r.sslot >= 0 && r.sslot < N_SCAST).map((r) => r.sslot));
+  const held = new Set(chosen.filter((r) => r.sslot >= 0 && r.sslot < _spotShape).map((r) => r.sslot));
   for (const w of chosen) {
-    if (w.sslot >= 0 && w.sslot < N_SCAST) continue;
+    if (w.sslot >= 0 && w.sslot < _spotShape) continue;
     let s = 0;
     while (held.has(s)) s++;
     held.add(s);
@@ -1222,9 +1250,11 @@ export const rigDebug = () => ({
         tunedFor: _tunedFor[k]?.key ?? null,
         cache: cacheRow(k),
       })),
-      castingSpots: N_SCAST,         // spot slots 0..castingSpots-1 are born casting (the same dial)
+      castingSpots: _spotShape,      // spot slots 0..castingSpots-1 are casting-shaped (born so above the default dial, or converted)
+      spotCapacity: N_SCAST,         // how many spots may cast (the same dial)
+      spotConversions: _spotConversions.map((x) => ({ ...x })),
       // one row per casting spot slot, as the point rows
-      spotSlots: spotSlots.slice(0, N_SCAST).map((sl, s) => ({
+      spotSlots: spotSlots.slice(0, _spotShape).map((sl, s) => ({
         slot: s, holder: _spotShown[s]?.key ?? null, asked: _spotWants[s], drawing: castsNow(sl), map: sl.shadow.mapSize.x,
         bias: sl.shadow.bias, normalBias: +sl.shadow.normalBias.toFixed(5), near: sl.shadow.camera.near, cache: cacheRow(N_CAST + s),
       })),
