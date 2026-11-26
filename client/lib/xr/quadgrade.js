@@ -42,17 +42,19 @@ export function acesFilmicInverseJS(lin, exposure = 1) {
 // The world's other display transforms (sky.tonemap; render/tonemap.js): the inverses of three r186's agxToneMapping (its
 // sigmoid solved by bisection), neutralToneMapping (Khronos PBR Neutral, closed form) and linearToneMapping, as data the
 // quadcolour.js shader reads plus their JS twins; test/client/quadcolour-test.mjs reads three's own constants out of its
-// source and round-trips these twins through three's forward. Matrices are listed in three's order (mul3 above reads
-// them as the shader does).
+// source and round-trips these twins through three's forward. Orientation: TSL's mat3 of nine scalars is a Matrix3, read
+// as ROWS (ACES's above), but three writes AgX's four as three vec3 COLUMNS; each is listed here in three's own order and
+// turned into rows once (fromCols), so mul3, the shader's mat3(...9 scalars) and three all mean the same matrix.
+const fromCols = (l) => Object.freeze([0, 3, 6, 1, 4, 7, 2, 5, 8].map((i) => l[i]));
 const inv3 = (m) => {
   const [a, b, c, d, e, f, g, h, i] = m, A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g, det = a * A + b * B + c * C;
   return Object.freeze([A, -(b * i - c * h), b * f - c * e, B, a * i - c * g, -(a * f - c * d), C, -(a * h - b * g), a * e - b * d].map((x) => x / det));
 };
 export const NEUTRAL = Object.freeze({ start: 0.8 - 0.04, desat: 0.15, toeAt: 0.08, toeK: 6.25, toeOff: 0.04 });
-export const SRGB_TO_REC2020 = Object.freeze([0.6274, 0.0691, 0.0164, 0.3293, 0.9195, 0.0880, 0.0433, 0.0113, 0.8956]);
-export const REC2020_TO_SRGB = Object.freeze([1.6605, -0.1246, -0.0182, -0.5876, 1.1329, -0.1006, -0.0728, -0.0083, 1.1187]);
-export const AGX_INSET = Object.freeze([0.856627153315983, 0.137318972929847, 0.11189821299995, 0.0951212405381588, 0.761241990602591, 0.0767994186031903, 0.0482516061458583, 0.101439036467562, 0.811302368396859]);
-export const AGX_OUTSET = Object.freeze([1.1271005818144368, -0.1413297634984383, -0.14132976349843826, -0.11060664309660323, 1.157823702216272, -0.11060664309660294, -0.016493938717834573, -0.016493938717834257, 1.2519364065950405]);
+export const SRGB_TO_REC2020 = fromCols([0.6274, 0.0691, 0.0164, 0.3293, 0.9195, 0.0880, 0.0433, 0.0113, 0.8956]);
+export const REC2020_TO_SRGB = fromCols([1.6605, -0.1246, -0.0182, -0.5876, 1.1329, -0.1006, -0.0728, -0.0083, 1.1187]);
+export const AGX_INSET = fromCols([0.856627153315983, 0.137318972929847, 0.11189821299995, 0.0951212405381588, 0.761241990602591, 0.0767994186031903, 0.0482516061458583, 0.101439036467562, 0.811302368396859]);
+export const AGX_OUTSET = fromCols([1.1271005818144368, -0.1413297634984383, -0.14132976349843826, -0.11060664309660323, 1.157823702216272, -0.11060664309660294, -0.016493938717834573, -0.016493938717834257, 1.2519364065950405]);
 export const AGX_EV = Object.freeze({ min: -12.47393, max: 4.026069 });
 export const AGX_POLY = Object.freeze([15.5, -40.14, 31.96, -6.868, 0.4298, 0.1191, -0.00232]);   // the sigmoid, x⁶ … x⁰
 export const AGX_BISECT = 20;   // halvings of [0, 1]: 2⁻²⁰ of the log range, far under an 8-bit step
