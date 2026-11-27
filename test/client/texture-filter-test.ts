@@ -140,6 +140,30 @@ console.log('CLAMP — never above what the renderer says it can do');
   const u = await load('8', 16);
   check('A4d 8 on a GPU that reports 16: 8 (the maximum is a ceiling, not a level)', all(u, 8), u); }
 
+// The other door: an image that is not inside a model. A `material` component's texture and a hung picture arrive through
+// globalThis.loadImageTexture (realize/pictures.js imageTexture; assets.js queueTexturePrime uploads them), never through
+// primeTextures. That is the dial's own headline case, the floor ahead of you: a `mesh` plane wearing a texture.
+console.log('IMAGE — a texture loaded as an image (a material component\'s, a picture\'s) uploads at the viewer\'s level too');
+async function image(pref: string | null, max = 16) {
+  if (pref === null) localStorage.removeItem('ew-anisotropy'); else localStorage.setItem('ew-anisotropy', pref);
+  stub.gpu.maxAnisotropy = max;
+  const from = stub.uploads.length;
+  let tex: any = null, error = '';
+  try { tex = await (globalThis as any).loadImageTexture(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, n++ & 255]), { srgb: true, flipY: false }); } catch (e: any) { error = String(e?.stack ?? e).split('\n')[0]; }
+  for (let i = 0; i < 4; i++) await Promise.resolve();   // the prime queue's pump starts on a microtask
+  const up = stub.uploads.slice(from);
+  return { at: up.map((u: any) => u.anisotropy), now: tex?.anisotropy, uploads: up.length, error };
+}
+{ const r = await image(null);
+  check('I0 (setup) the image loads and is uploaded once', !r.error && r.uploads === 1, r);
+  check('I1 no ew-anisotropy: it uploads at 4', r.at[0] === 4 && r.now === 4, r);
+  const s = await image('16');
+  check('I2 ew-anisotropy=16: it uploads at 16', s.at[0] === 16 && s.now === 16, s);
+  const c = await image('16', 8);
+  check('I3 16 on a GPU that reports 8: 8', c.at[0] === 8 && c.now === 8, c);
+  const one = await image('1');
+  check('I4 (control) ew-anisotropy=1: three\'s 1, as before', one.at[0] === 1 && one.now === 1, one); }
+
 console.log('MODULE — render/anisotropy.js: the levels, the getter and the setter the Settings rows call');
 { let M: any = null, why = '';
   try { M = await import('../../client/lib/render/anisotropy.js'); } catch (e: any) { why = String(e?.message ?? e).split('\n')[0]; }
