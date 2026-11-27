@@ -13,4 +13,7 @@ export const THREE = {
   NodeMaterial: THREE_.MeshBasicMaterial,
 };
 export const prepareObject = () => {};
+// the mesh part's door into the factory, recorded: [material, receiver] per call (collider-off-bodies-test's sweep-mark pin)
+export const preparedMaterials = [];
+export const prepareMaterial = (mat, receiver = null) => { preparedMaterials.push([mat, receiver]); };
 export const defsRegistry = () => new Promise(() => {});

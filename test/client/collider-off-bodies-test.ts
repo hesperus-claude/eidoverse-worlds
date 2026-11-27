@@ -95,6 +95,9 @@ for (const id of ['meshoff', 'meshhulls', 'meshon', 'hiddenload', 'cart']) await
 check('collider {enabled: false}: no collider once it loads', !has('meshoff'));
 check('collider {blocks: ["hulls"]}: no collider once it loads (bodies aren\'t blocked)', !has('meshhulls'));
 check('control: a mesh with no collider component has one', has('meshon'));
+// the factory marks the receiver it is handed so the toolkit's sweeps skip it (shadow-fade SW1): the part must BE that receiver
+{ const calls = stub.preparedMaterials.filter(([, r]: any[]) => r?.userData?.meshPart === true);
+  check('a mesh part enters the material factory as its own material\'s receiver', calls.length >= 3 && calls.every(([m, r]: any[]) => r.material === m && m.name === 'surface'), `${calls.length} of ${stub.preparedMaterials.length} calls`); }
 await promoted('modeloff'); await promoted('modelon');
 check('control: a model with collider {enabled: false} has none once promoted (runPromoteTail\'s check)', !has('modeloff'));
 check('control: a model with no collider component has one once promoted', has('modelon'));

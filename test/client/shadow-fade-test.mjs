@@ -199,6 +199,33 @@ console.log('MATERIALS — one mask node, marked');
   check('re-preparing a clone keeps the ONE node (never FADE.and(FADE))', clone.maskShadowNode === a.maskShadowNode, clone.maskShadowNode?.tag);
   check('…and its wrapped colour and roughness are not wrapped again (house I173: wetness and cloud shade twice)', !!a.colorNode && clone.colorNode === a.colorNode && clone.roughnessNode === a.roughnessNode); }
 
+// The toolkit's own sweeps (weather_system.js: the wetness wrap, then sky.wrapCloudShadows) wrap every PBR node material on
+// a mesh that is not marked userData.noWet / noCloudShadow. A mesh whose material the factory dressed must carry both
+// marks, whichever door it came through: prepareObject marked its meshes, prepareMaterial(mat, receiver) did not, so a
+// `mesh` component's part (realize/models.js syncParts) and a material override's mesh were swept on top of the factory's
+// wraps: the toolkit's full cloud march in the lit shader AND in the shadow depth pass, and wetness and cloud shade twice.
+console.log('MATERIALS — the mesh a material was prepared for is marked, so the toolkit\'s sweeps skip it');
+{ const swept = (o) => !(o.userData.noWet && o.userData.noCloudShadow);   // either sweep would still wrap it
+  const mk = () => { const m = new THREE.NodeMaterial(); m.roughness = 0.5; m.metalness = 0; return m; };
+  const part = new THREE.Mesh(new THREE.BufferGeometry(), mk()); part.userData = { meshPart: true };
+  mats.prepareMaterial(part.material, part);
+  check('SW1 prepareMaterial(mat, receiver) marks the receiver for both sweeps', !swept(part), JSON.stringify(part.userData));
+  check('SW2 ...and keeps what the receiver already carried', part.userData.meshPart === true);
+  // a second mesh given an already prepared material (a clone path, a shared material): the mesh is new even if the material is not
+  const again = new THREE.Mesh(new THREE.BufferGeometry(), part.material);
+  mats.prepareMaterial(again.material, again);
+  check('SW3 a receiver of an already prepared material is marked too', !swept(again), JSON.stringify(again.userData));
+  // an unlit material's mesh: the factory does not wrap it and neither sweep takes a non-PBR material, but the mark is the one rule
+  const basic = new THREE.MeshBasicMaterial(); basic.isNodeMaterial = true; basic.isMeshBasicNodeMaterial = true;
+  const plate = new THREE.Mesh(new THREE.BufferGeometry(), basic);
+  mats.prepareMaterial(basic, plate);
+  check('SW4 an unlit material\'s receiver is marked as well (one rule)', !swept(plate), JSON.stringify(plate.userData));
+  let threw = null; try { mats.prepareMaterial(mk()); mats.prepareMaterial(mk(), null); mats.prepareMaterial(null, new THREE.Mesh()); } catch (e) { threw = String(e); }
+  check('SW5 (control) no receiver, or no material, is still fine', threw === null, threw);
+  const root = new THREE.Group(); const child = new THREE.Mesh(new THREE.BufferGeometry(), mk()); root.add(child);
+  mats.prepareObject(root, { kind: 'model' });
+  check('SW6 (control) prepareObject marks its meshes, as before', !swept(child)); }
+
 console.log('REGISTER — a mesh handed in casting starts not casting (house I172, #260)');
 { const g = new THREE.Group(); const m = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial()); m.castShadow = true;   // realize/models.js primitives
   g.add(m); g.position.set(500, 0, 0); g.updateMatrixWorld(true); registerCaster('pre-cast', g);
