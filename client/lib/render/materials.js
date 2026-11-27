@@ -8,8 +8,8 @@
 //   wetness     — a shape-identical port of the toolkit's weather_system.js wrapMaterial, driving the same uniforms
 //   cloud shade — our own cheap field (two taps of a seeded, wind-scrolled noise texture, sun-projected); the
 //                 texture is seeded alike everywhere, but the scroll accumulates per client from load
-// Every prepared mesh is marked userData.noWet + noCloudShadow so the toolkit's sweeps skip it; unprepared materials
-// (mods) still get swept. Decisions and measurements: docs/research/material-factory.md.
+// Every mesh the factory dressed is marked userData.noWet + noCloudShadow so the toolkit's sweeps skip it (markDressed:
+// prepareObject's meshes and prepareMaterial's receiver); unprepared materials (mods) still get swept. Decisions and measurements: docs/research/material-factory.md.
 
 import { THREE, TSL, sun, ground, renderer } from '../core.js';
 import { report, CONFIG, bus } from '../base.js';
@@ -257,6 +257,7 @@ function upgradeTransmissive(mesh, m) {
 /** Wrap one material, once. Basic (unlit) materials are skipped: a stand-in box and a light gizmo have no business
  *  getting wet. Returns whether the material was wrapped. */
 export function prepareMaterial(mat, receiver = null) {
+  markDressed(receiver);   // before any early return: the mesh may be new where its material is not (a clone, a shared material)
   if (!mat?.isNodeMaterial || preparedMats.has(mat)) return false;
   preparedMats.add(mat);
   if (mat.isMeshBasicNodeMaterial) { stats.unlit++; return false; }
@@ -274,6 +275,16 @@ export function prepareMaterial(mat, receiver = null) {
   }
   stats.wrapped++;
   return true;
+}
+
+/** The toolkit sweeps' skip markers: this mesh's materials are the factory's to dress (weather_system.js wraps wetness
+ *  onto any mesh without noWet, and sky.wrapCloudShadows its cloud march onto any without noCloudShadow). Both doors
+ *  into the factory mark, prepareObject per mesh and prepareMaterial its receiver: a mesh that came through
+ *  prepareMaterial alone (a `mesh` component's part) was swept on top of the wraps above. */
+function markDressed(o) {
+  if (!o?.isMesh) return;
+  o.userData.noWet = true;
+  o.userData.noCloudShadow = true;
 }
 
 // The body meshes that must not cast: the kintsugi seams (thin ribbons through the skin, which self-shadow into dark
@@ -336,8 +347,7 @@ export function prepareObject(root, { kind = 'model', foliage = true } = {}) {
   root.traverse((o) => {
     if (!o.isMesh) return;
     stats.meshes++;
-    o.userData.noWet = true;           // the toolkit sweeps' skip markers: this mesh is already dressed
-    o.userData.noCloudShadow = true;
+    markDressed(o);                    // the toolkit sweeps' skip markers: this mesh is already dressed
     o.receiveShadow = receive;         // explicit both ways: toolkit vegetation ships receiveShadow=true
     // grass never casts either (toolkit shrub wood ships castShadow=true); castShadow is in no pipeline key, so
     // clearing it is free
