@@ -237,6 +237,10 @@ async function primeTextures(obj, work) {
 const texPrimeQueue = [];
 let texPrimePumping = false;
 function queueTexturePrime(tex) {
+  // the viewer's texture filtering, as primeTextures gives a model's own: an image that is not inside a model (a material
+  // component's texture, a picture) comes through here, and the sampler is built from it at the upload below
+  const aniso = textureAnisotropy(renderer);
+  if (tex.anisotropy < aniso) tex.anisotropy = aniso;
   texPrimeQueue.push(tex);
   if (texPrimePumping) return;
   texPrimePumping = true;

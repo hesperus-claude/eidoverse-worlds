@@ -13,6 +13,7 @@
 //   · the default not 4 (render/anisotropy.js)                    → A1, A2
 //   · a junk pref accepted                                       → A2
 //   · no clamp to getMaxAnisotropy                               → A4
+//   · queueTexturePrime without the assignment (assets.js)      → I1, I2, I3
 //   · setAnisotropy writing a value not in the list              → M2
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/texture-filter-test.ts

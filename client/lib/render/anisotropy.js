@@ -1,8 +1,10 @@
 // anisotropy: texture filtering at grazing angles, a viewer's quality dial (never the look). A floor ahead of you or a
 // long wall seen edge-on stays sharp instead of blurring through its mips. Godot's default_filters/anisotropic_filtering_level
-// (default 4x) and Unity's Anisotropic Textures quality setting. Applied to a model's textures before their upload
-// (assets.js primeTextures): both of three's backends build the sampler from texture.anisotropy then, so a change
-// applies to models as they load, and to what is already here on reload.
+// (default 4x) and Unity's Anisotropic Textures quality setting. Applied before the upload to a model's textures
+// (assets.js primeTextures) and to an image loaded by itself, a material component's texture or a library picture
+// (queueTexturePrime): both of three's backends build the sampler from texture.anisotropy then, so a change applies to
+// what loads later, and to what is already here on reload. Not reached: a picture from an https link (pictures.js
+// linkTexture, a CanvasTexture uploaded at its first draw), the terrain's and the vegetation's own textures.
 const KEY = 'ew-anisotropy';
 export const ANISO_LEVELS = [1, 2, 4, 8, 16];
 export const ANISO_DEFAULT = 4;
