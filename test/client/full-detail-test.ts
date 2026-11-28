@@ -46,7 +46,11 @@ check('(setup) the scene starts at full detail', same(visible(), FULL), visible(
 for (let i = 0; i < 150; i++) tick(12);
 const down = visible();
 const moved = Object.keys(FULL).filter((k) => (down as any)[k] !== (FULL as any)[k]);
-check('control — off, slow: every lever shed', moved.length === Object.keys(FULL).length, { down, unmoved: Object.keys(FULL).filter((k) => !moved.includes(k)) });
+// the sun's shadow map size is in FULL but is not a lever: the detail lever stops resizing it (a size there and back
+// while a model is not drawn leaves it on a destroyed texture; governor-xr has the why)
+const LEVERED = Object.keys(FULL).filter((k) => k !== 'shadowMap');
+check('control — off, slow: every lever shed', LEVERED.every((k) => moved.includes(k)), { down, unmoved: LEVERED.filter((k) => !moved.includes(k)) });
+check('…and the sun\'s shadow map size is left where it was', (down as any).shadowMap === FULL.shadowMap, { down });
 
 // switching on hands everything back at once — no 5s-smooth streak per notch
 G.setFullDetail(true);

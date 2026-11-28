@@ -24,6 +24,14 @@ const ratios: number[] = [];
 stub.renderer.setPixelRatio = (r: number) => { ratios.push(r); };
 stub.renderer.xr = { isPresenting: false };
 const G: any = await import('../../client/lib/render/governor.js');
+// the 'detail' lever's sun: a shed and a restore must not resize the sun's shadow map. A size that goes there and back
+// (2048 -> 1024 -> 2048) while a model is not being drawn leaves that model on a destroyed depth texture: three r186's
+// observer records the map size per render object only when the object draws (render lab, 2026-11-28 cold read, headless
+// WebGL 2), and the lever is an automatic generator of exactly that pattern. Watched from here to the end of the run.
+const sunSizes: number[] = []; let sunDisposed = 0;
+{ const ms = stub.sun.shadow.mapSize, set0 = ms.set; ms.set = function (w: number, h: number) { sunSizes.push(w); return set0.call(this, w, h); }; }
+stub.sun.shadow.map = { dispose: () => { sunDisposed++; } };
+const sunMap0 = stub.sun.shadow.map;
 const hist = () => (G.governorDebug().history as string[]);
 const pixelMoves = () => hist().filter((h) => /pixels/.test(h)).length;
 // one frame as main.js runs it: the pulse decides, the NEXT frame's 'pixel-ratio' system applies before 'render'
@@ -102,4 +110,8 @@ check('control — desktop, slow: the governor DOES move the pixel ratio', ratio
   FB.setShare(0.2); tick(72);
   check('…and the cap only lowers: a smaller share stays', FB.budgetStats().share === 0.2, FB.budgetStats().share);
   FB.reportPending('governor-xr-test', 0); stub.renderer.xr.isPresenting = false; }
+{ const shed = hist().some((h) => /detail/.test(h) && h.startsWith('−')), restored = hist().some((h) => /detail/.test(h) && !h.startsWith('−'));
+  check('the detail lever (setup): the run shed it and restored it', shed && restored, hist().filter((h) => /detail/.test(h)).slice(-4));
+  check('…and neither touched the sun\'s shadow map: no size set, no dispose, the same map', sunSizes.length === 0 && sunDisposed === 0 && stub.sun.shadow.map === sunMap0,
+    { sunSizes, sunDisposed, mapKept: stub.sun.shadow.map === sunMap0 }); }
 console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);

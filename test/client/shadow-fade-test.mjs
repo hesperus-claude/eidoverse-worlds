@@ -74,7 +74,7 @@ if (CASE) {
   // a holder that asked (11-23), so `held` puts the body lamp's request on it.
   // (The contend case below asks the other question -- whether the lamp
   // actually HOLDS that slot.)
-  const snap = () => { const d = rig.rigDebug(); return { pref: d.shadows.pref, map: renderer.shadowMap.enabled, sun: d.shadows.sunCasting, lamp: d.shadows.slotIsCaster, shapeOn: renderer.shadowMap.enabled && sun.castShadow, bornAsk: lamp().shadow.needsUpdate === true }; };   // sun/lamp = EFFECTIVE casting: the switch is uniform-level since 09-27
+  const snap = () => { const d = rig.rigDebug(); return { pref: d.shadows.pref, map: renderer.shadowMap.enabled, sun: d.shadows.sunCasting, lamp: d.shadows.slotIsCaster, shapeOn: renderer.shadowMap.enabled && sun.castShadow, bornAsk: lamp().shadow.needsUpdate === true, sunBornAsk: sun.shadow.needsUpdate === true }; };   // sun/lamp = EFFECTIVE casting: the switch is uniform-level since 09-27
 
   const holdLamp = () => { rig.requestLight('lamp:body:janus:1', { keep: true, intensity: 8, range: 10, shadows: true, pos: [0, 1, 0] }); updateRig(1000); };
   if (CASE === 'boot-on' || CASE === 'boot-off') { const boot = snap(); holdLamp(); out({ boot, held: snap() }); }
@@ -104,8 +104,15 @@ if (CASE) {
     let disposed = 0; const held = { dispose: () => { disposed++; } }; lamp().shadow.map = held;
     rig.setLampShadow({ map: lamp().shadow.mapSize.x });
     const lampSame = { disposed, kept: lamp().shadow.map === held, ask: lamp().shadow.needsUpdate === true };
+    // a size changed and changed back before any frame (a select nudged up and back on a slow page): the map must not be
+    // disposed, since three's observer will see no size change; three resizes a target itself at its next draw
+    // (RenderTarget.setSize disposes on a size change), so no dispose is needed for a real change either
+    let disp2 = 0; const held2 = { dispose: () => { disp2++; } }; lamp().shadow.map = held2;
+    const size0 = lamp().shadow.mapSize.x;
+    rig.setShadowRes(4096); rig.setShadowRes(1024);
+    const back = { disposed: disp2, kept: lamp().shadow.map === held2, size: lamp().shadow.mapSize.x, size0 };
     lamp().shadow.map = null;
-    out({ before, onRes, offRes, same, lampSame });
+    out({ before, onRes, offRes, same, lampSame, back });
   }
   if (CASE === 'bias') {
     // A SMALLER MAP SHOWING MORE LIGHT is a bias symptom, not a resolution
@@ -398,6 +405,9 @@ const bootOffChecks = (r, c = check) => {
   // that breaks every later frame (three r186 recreates the depth texture at a map's first render; casting-slot-test)
   c('pref off at boot: the casting slot still asks for its one draw at birth (switching on later is not its first draw)', r.boot.bornAsk === true,
     'slot 0 never drawn while the switch is off');
+  // the sun too: on a GPU its target happens to be initialised by the depth pre-warm (warmqueue.js), which is an
+  // accident of another module; the rule is the slot's, asked for here, not inherited
+  c('pref off at boot: the sun asks for its one draw at birth too', r.boot.sunBornAsk === true, 'the sun never asked while the switch is off');
 };
 const flipChecks = (r, c = check) => {
   c('setShadows(false) keeps the pipeline shape (no scene recompile)', r.off.shapeOn === true);
@@ -533,7 +543,8 @@ if (ARGV.includes('--mutants')) {
     check('resize: a resolution change asks the casting slot nobody holds to redraw in that frame', r.onRes.lamp === true && r.onRes.lampMap === 512, JSON.stringify(r.onRes));
     check('resize: with the shadows switch off it asks the sun and the casting slot all the same', r.offRes.sun === true && r.offRes.lamp === true, JSON.stringify(r.offRes));
     check('resize (control): setting the size a map already has asks for nothing', !r.same.sun && !r.same.lamp, JSON.stringify(r.same));
-    check('resize: setLampShadow with the size the slot already has leaves its map alone (a dispose recreates the texture with no size change to see)', r.lampSame.disposed === 0 && r.lampSame.kept && !r.lampSame.ask, JSON.stringify(r.lampSame)); }
+    check('resize: setLampShadow with the size the slot already has leaves its map alone (a dispose recreates the texture with no size change to see)', r.lampSame.disposed === 0 && r.lampSame.kept && !r.lampSame.ask, JSON.stringify(r.lampSame));
+    check('resize: a size changed and changed back before a frame disposes no map (three\'s observer sees no size change)', r.back.disposed === 0 && r.back.kept && r.back.size === r.back.size0, JSON.stringify(r.back)); }
 }
 
 S.done();
