@@ -41,6 +41,7 @@ import { perf } from '../render/perf.js';
 import { renderCensusTake, renderCensusTick, renderCensusPeek, setXRCurtain, drawStats } from '../render/render.js';
 import { warm, P_AMBIENT } from '../render/warmqueue.js';
 import { xrPrefs, xrResScale } from './xr-prefs.js';
+import { foveationFor } from './xrfoveation.js';
 import { CURL_PROBE, curlProbeTake, sampleFingerCurl, bindCurlSource } from './xr-fingercurl.js';
 import { scaleState, puppetScale, avatarEyeY, loadSavedScale, sampleDeviceScale, bindScaleHost } from './xr-scale.js';
 
@@ -596,10 +597,9 @@ async function enterVR({ retryOf = null } = {}) {
     if (!floor) tee('[xr] NO floor reference space granted — using local (eye-level origin); floor height is a guess');
     const onLine = `[xr] session on ${renderer.backend?.isWebGPUBackend ? 'WebGPU' : 'WebGL'} refspace=${floor ?? 'local'} features=${JSON.stringify(session.enabledFeatures ?? [])} xrctx=${JSON.stringify(globalThis.__xrCtx ?? 'default')}`;
     console.log(onLine); tee(onLine);
-    // fixed foveation (Basis's split): 1 standalone, 0 on PC where the periphery blur shows; ?fov=0..1 overrides
-    { const standalone = /OculusBrowser|Quest|Pico|Wolvic|Android/i.test(navigator.userAgent) && !/Windows|Macintosh|Linux x86/i.test(navigator.userAgent);
-      const fov = CONFIG.params.has('fov') ? THREE.MathUtils.clamp(+CONFIG.params.get('fov') || 0, 0, 1) : (standalone ? 1 : 0);
-      try { renderer.xr.setFoveation(fov); tee(`[xr] foveation ${fov} (${standalone ? 'standalone' : 'pc'}${CONFIG.params.has('fov') ? ', ?fov' : ''})`); } catch { /* not all runtimes */ } }
+    // fixed foveation (Basis's split): 1 standalone, 0 on PC where the periphery blur shows; ?fov=0..1 overrides (xrfoveation.js)
+    { const { fov, standalone, override } = foveationFor(navigator.userAgent, CONFIG.params.has('fov') ? CONFIG.params.get('fov') : null);
+      try { renderer.xr.setFoveation(fov); tee(`[xr] foveation ${fov} (${standalone ? 'standalone' : 'pc'}${override ? ', ?fov' : ''})`); } catch { /* not all runtimes */ } }
     rig.position.set(myState.pos.x, myState.pos.y, myState.pos.z);
     recentre.x = recentre.z = recentre.y = 0; recentre.pending = true;   // fold the head's playspace pose in on the first tracked frame
     rig.rotation.y = wrapPi(myState.yaw);   // headset-forward = body-forward at entry
