@@ -168,7 +168,7 @@ export function initVideoPanel() {
     body.appendChild(meRow);
 
     body.appendChild(selectRow('bounce light',
-      'Lamp light bouncing off walls, floors and furniture into the rest of a room, where the world asks for it. Baked a probe a frame after the room settles, then cheap to draw. off: none. low: fewer, coarser probes (quicker to bake). high: more probes and sharper captures (longer to bake). Worlds that ask for none look the same either way. Changes live.',
+      'Lamp light bouncing off walls, floors and furniture into the rest of a room, where the world asks for it. Off by default for now: the bake has not been measured on headsets and laptops yet, so you opt in. Baked a probe a frame after the room settles (never while in VR), then cheap to draw. off: none. low: fewer, coarser probes (quicker to bake). high: more probes and sharper captures (longer to bake). Worlds that ask for none look the same either way. Changes live.',
       GI_LEVELS.map((v) => [v, v]), giPref(),
       (v) => { setGiPref(v); flashHint(`bounce light: ${v}`); }));
 

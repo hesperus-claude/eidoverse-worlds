@@ -6,7 +6,8 @@
 // scene hung the page (render-lab 11-09, probes/gi-grid.js). Baked once the room's static content has settled (the realizers'
 // queue drained to P.FAR, the lanes idle, 1.5 s quiet), and rebaked only when what the bake sees changes (its signature):
 // Godot never rebakes by itself, and bakes only geometry flagged static, so what moves and editor gizmos stay out.
-// No gi-volume or the dial off: three's grid code never loads and nothing is built.
+// No gi-volume or the dial off (its default): three's grid code never loads and nothing is built. No bake step runs while an
+// immersive session presents (nobody has run the bake in a headset); what is owed waits for the session to end.
 import { THREE, TSL, scene, camera, renderer, backendName } from '../core.js';
 import { bus } from '../base.js';
 import { state, onWorldChange } from '../state.js';
@@ -271,7 +272,9 @@ export function updateGi() {
   if (globalThis.__gpuLost?.fired) return;   // a lost device draws nothing (gpulost.js)
   const t = performance.now();   // the view walked nearer another volume than the live one: replan (a quiet world only)
   if (candidates.length && !dirtyAt && !starting && t - viewCheckAt > 500) { viewCheckAt = t; if (nearestView(candidates, GI_BOUNDS.grids).some((p) => !live.has(p.id))) touch(); }
-  if (dirtyAt && !starting && performance.now() - dirtyAt > QUIET_MS && !laneBusy() && pending(P.FAR) === 0 && state.hydrated && renderer.initialized !== false) startBake();
+  const xr = renderer.xr?.isPresenting === true;
+  if (xr) { /* hold: a grid already baked still draws */ }
+  else if (dirtyAt && !starting && t - dirtyAt > QUIET_MS && !laneBusy() && pending(P.FAR) === 0 && state.hydrated && renderer.initialized !== false) startBake();
   else if (job) stepBake();
   for (const { grid, plan } of live.values()) grid.intensity = plan.intensity * glowScale();   // its lamps dim by day as the rig's do
 }
