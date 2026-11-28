@@ -390,6 +390,44 @@ if (G) {
 }
 
 if (G) {
+  // ---- what moves, one level down (cold read 11-27, B4 B5 B6). A child thing's object hangs under its parent's (models.js
+  // execMount: parent.add(child)), so a mover under a static parent is cut from the walk; a part that moves (openable.part, a
+  // motion slot's node) leaves out only that part; and a mover's pose stream neither rebakes nor holds an owed rebake back.
+  await fresh();
+  const table = box(0.8, 0.4, 0.8), cup = box(0, 0.5, 0), shelf = box(0.2, 0.2, 0);
+  table.add(cup); table.add(shelf);
+  roomMeshes.set('table', table); roomMeshes.set('cup', cup); roomMeshes.set('shelf', shelf);
+  St.hydrate(giRoom({ bounces: 0 }, { table: { pos: [0.8, 0, 0.8] }, cup: { pos: [0, 0.5, 0], parent: { to: 'table' }, grabbable: {} }, shelf: { pos: [0.2, 0.2, 0], parent: { to: 'table' } } }));
+  await run(300);
+  const ch = proxyMeshes(), cupG = cup.children[0].geometry;
+  check('M1 a grabbable cup that hangs under a static table is no part of the proxy; the table and a static shelf under it are',
+    !ch.includes(cupG) && ch.includes(table.children[0].geometry) && ch.includes(shelf.children[0].geometry), { cupBaked: ch.includes(cupG), meshes: ch.length });
+  const j0 = jobsOf();
+  cup.position.set(0.3, 0.5, 0.3); edit((es) => { es.cup.pos = [0.3, 0.5, 0.3]; }); await run(300);
+  check('M1 …and carrying that cup about rebakes nothing', jobsOf() === j0, [j0, jobsOf()]);
+
+  await fresh();
+  const house = box(0, 1.5, 0, 2.9), door = box(0, 1, 1.4, 0.8), fan = box(0, 2.5, 0, 0.6), crate = box(-1, 0.3, -1);
+  door.name = 'Door'; fan.name = 'Fan'; house.add(door); house.add(fan);
+  roomMeshes.set('house', house); roomMeshes.set('crate', crate);
+  St.hydrate(giRoom({ bounces: 0 }, { house: { pos: [0, 0, 0], openable: { open: false, part: 'Door' }, 'motion:fan': { type: 'spin', node: 'Fan' } }, crate: { pos: [-1, 0, -1], openable: { open: false } } }));
+  await run(300);
+  const hm = proxyMeshes(), inP = (g) => hm.includes(g.children[0].geometry);
+  check('M2 a house whose door is an openable part and whose fan a motion slot\'s node keeps its walls in the bake and leaves out only the door and the fan; a crate that opens whole stays out whole',
+    inP(house) && !inP(door) && !inP(fan) && !inP(crate), { walls: inP(house), door: inP(door), fan: inP(fan), crate: inP(crate) });
+
+  await fresh();
+  LR.requestLight('complight:m3', { authored: true, pos: [0, 2.5, 0], intensity: 20, range: 6, decay: 2 });
+  St.hydrate(giRoom({ bounces: 0 }, { lamp: { pos: [0, 2.5, 0], light: { intensity: 20 } }, mug: { pos: [0.5, 1, 0.5], grabbable: {} } })); await run(300);
+  const j1 = jobsOf();
+  LR.requestLight('complight:m3', { authored: true, pos: [0, 2.5, 0], intensity: 5, range: 6, decay: 2 });
+  edit((es) => { es.lamp.light = { intensity: 5 }; });
+  for (let s = 0; s < 30; s++) { edit((es) => { es.mug.pos = [0.5 + 0.01 * (s % 2), 1, 0.5]; }); await run(50); }   // 30 s of carrying, a pose a second
+  check('M3 a rebake that is owed (a lamp dimmed) runs though someone carries a mug about the room the whole time (its poses do not hold the bake back)', j1 === 1 && jobsOf() === 2, [j1, jobsOf()]);
+  LR.releaseLight('complight:m3');
+}
+
+if (G) {
   // (2) where GI can't run it is off, and says why where the lead's capture rig looks (giDebug)
   St.reset(); const before = quiet();
   core.renderer.backend = { isWebGLBackend: true, extensions: { has: () => false } };
