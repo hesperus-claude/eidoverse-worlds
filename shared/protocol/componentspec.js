@@ -487,12 +487,12 @@ export const COMPONENTS = {
                help: "on a thing with a zone {shape: 'box', size} (or global): {kind: 'speed', factor? (× a body's own speed inside, 0.05..10; absent 1), modes? (a list of walk | swim | fly | climb, e.g. ['swim']; absent, every mode)}. Where speed volumes overlap, only those whose modes take the body's current mode count, and the highest zone priority among them decides" },
   // a zone effect: the world's baked diffuse bounce inside it, an irradiance probe volume (three's LightProbeGrid; Godot LightmapGI's
   // probes, Bevy's irradiance volumes, Unity's probe volume); look only
-  "gi-volume": { on: "thing", fields: { strength: "number", spacing: "number", bounces: "int" },
-               ranges: { strength: { min: 0, max: 16 }, spacing: { min: 0.25, max: 8 }, bounces: { min: 0, max: 2 } }, units: { spacing: "m", strength: "×" },
-               absentMeans: { strength: "1: the bounce as baked", spacing: "1.5 m between probes", bounces: "1: light off one surface, then another" },
-               docs: { strength: "× the baked bounce light, 0..16 (as Godot VoxelGIData.energy scales its bake)", spacing: "metres between light probes, 0.25..8 (Unity probe spacing): the owner's detail; each viewer's GI setting may widen it",
+  "gi-volume": { on: "thing", fields: { energy: "number", spacing: "number", bounces: "int" },
+               ranges: { energy: { min: 0, max: 16 }, spacing: { min: 0.25, max: 8 }, bounces: { min: 0, max: 2 } }, units: { spacing: "m", energy: "×" },
+               absentMeans: { energy: "1: the bounce as baked", spacing: "1.5 m between probes", bounces: "1: light off one surface, then another" },
+               docs: { energy: "× the baked bounce light, 0..16 (Godot's word: VoxelGIData.energy and LightmapGI's energy scale their bake)", spacing: "metres between light probes, 0.25..8 (Unity probe spacing): the owner's detail; each viewer's GI setting may widen it",
                  bounces: "how many times light bounces after the first hit, 0..2 (0: lamp light off the first surface only)" },
-               help: "global illumination for a static room, on a thing with a zone {shape: 'box', size} (the volume: the zone's box, world-axis-aligned; not global): {strength? ×, spacing? m, bounces? 0..2}. The room's lamps and opaque things are baked into a grid of light probes; each viewer's GI setting decides the cost (or none)" },
+               help: "global illumination for a static room, on a thing with a zone {shape: 'box', size} (the volume: the zone's box, world-axis-aligned; not global): {energy? ×, spacing? m, bounces? 0..2}. The room's lamps and opaque things are baked into a grid of light probes; each viewer's GI setting decides the cost (or none)" },
   // the ground's other two layers, each a component of its own beside the bag (shared/terrainshape.js groundArgs gathers
   // them): PARTITION keys, pieces of one shared ground, so whoever may shape the ground may change any of them
   "terrain-feature": { on: "world", keyed: true, key: "partition", fields: { type: "string", x: "number", z: "number", x1: "number", z1: "number", x2: "number", z2: "number", radius: "number", height: "number", edge: "number", order: "number" },

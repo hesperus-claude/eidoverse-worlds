@@ -1,6 +1,6 @@
 // gi — the world's baked bounce light: an irradiance probe volume (three r186's LightProbeGrid: L2 SH probes in one 3D
 // texture) over each gi-volume (componentspec). At run time it is Godot's LightmapGI probes or Bevy's irradiance volumes, not
-// VoxelGI: no voxels, no live relighting; only that the client bakes it resembles VoxelGI. The world owns the look (the component and its strength), each viewer's ew-gi dial the cost
+// VoxelGI: no voxels, no live relighting; only that the client bakes it resembles VoxelGI. The world owns the look (the component and its energy), each viewer's ew-gi dial the cost
 // (render/gipref.js). A grid is baked a probe a frame through the shared frame budget, from a PROXY of the room (its opaque
 // unskinned meshes at their world matrices and the placed lights near it), never the live scene: baking the live client
 // scene hung the page (render-lab 11-09, probes/gi-grid.js). Baked once the room's static content has settled (the realizers'
@@ -25,7 +25,7 @@ const TIERS = { low: { cube: 8, cap: 250 }, high: { cube: 16, cap: 1000 } };
 const fin = Number.isFinite, v3 = (x) => Array.isArray(x) && x.length === 3 && x.every(fin);
 const clamp = (x, lo, hi, d) => (fin(x) ? Math.min(hi, Math.max(lo, x)) : d);   // the registry's ranges (componentspec gi-volume)
 
-/** The volumes in a fold (shared/zone.js foldOfView): [{id, center, size, strength, spacing, bounces, blend}], world-axis-aligned. */
+/** The volumes in a fold (shared/zone.js foldOfView): [{id, center, size, energy, spacing, bounces, blend}], world-axis-aligned. */
 export function giVolumesOf(st) {
   const out = [];
   for (const id of Object.keys(st?.entities ?? {}).sort()) {
@@ -34,7 +34,7 @@ export function giVolumesOf(st) {
     const pose = worldPose(st, id); if (!pose) continue;
     const scale = v3(pose.scale) ? pose.scale.map(Math.abs) : [1, 1, 1];
     out.push({ id, center: [...pose.pos], size: c.zone.size.map((x, i) => Math.abs(x) * scale[i]),
-      strength: clamp(g.strength, 0, 16, 1), spacing: clamp(g.spacing, 0.25, 8, 1.5), bounces: Math.round(clamp(g.bounces, 0, 2, 1)),
+      energy: clamp(g.energy, 0, 16, 1), spacing: clamp(g.spacing, 0.25, 8, 1.5), bounces: Math.round(clamp(g.bounces, 0, 2, 1)),
       blend: clamp(c.zone.blend, 0, 1e3, 0) });
   }
   return out;
@@ -44,12 +44,12 @@ export function giVolumesOf(st) {
  *  past the level's probe cap the spacing widens. falloff: one probe cell past the zone (its floor and walls are on its faces), plus its blend. */
 export function planGrid(vol, level) {
   const tier = TIERS[level];
-  if (!tier || !vol || !(vol.strength > 0)) return null;
+  if (!tier || !vol || !(vol.energy > 0)) return null;
   const countsAt = (s) => vol.size.map((e) => Math.max(2, Math.round(e / s) + 1));
   let s = vol.spacing, counts = countsAt(s);
   while (counts[0] * counts[1] * counts[2] > tier.cap) counts = countsAt(s *= 1.1);
   const cell = Math.max(...vol.size.map((e, i) => e / (counts[i] - 1)));
-  return { id: vol.id, center: vol.center, size: vol.size, counts, cube: tier.cube, bounces: vol.bounces, intensity: vol.strength, falloff: cell + vol.blend };
+  return { id: vol.id, center: vol.center, size: vol.size, counts, cube: tier.cube, bounces: vol.bounces, intensity: vol.energy, falloff: cell + vol.blend };
 }
 export const plansOf = (st, level) => giVolumesOf(st).map((v) => planGrid(v, level)).filter(Boolean);
 

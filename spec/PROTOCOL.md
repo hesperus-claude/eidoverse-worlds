@@ -339,9 +339,9 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
   `[1]` (eidosim carries no layers between things), so a collider whose layer leaves out 1 is met by hulls alone, and
   only by those that scan it; a dynamic thing must keep 1 in its layer. A still collider's mask is unread. Every
   stored world (no layer, no mask) collides as before. `solidOff(c, kind, mask)` is the one reading.
-- **A GI volume is `gi-volume {strength?, spacing?, bounces?}`** on a thing with a box `zone`, not a global one: an
+- **A GI volume is `gi-volume {energy?, spacing?, bounces?}`** on a thing with a box `zone`, not a global one: an
   irradiance probe volume (three's LightProbeGrid; Godot LightmapGI's probes, Bevy's irradiance volumes): the world's lamps and opaque things inside it are baked into light probes `spacing` m
-  apart (0.25..8, absent 1.5) with `bounces` more bounces (0..2, absent 1), lit × `strength` (0..16, absent 1). Look only:
+  apart (0.25..8, absent 1.5) with `bounces` more bounces (0..2, absent 1), lit × `energy` (0..16, absent 1). Look only:
   the look is the owner's, and each viewer's GI setting decides the cost, or none. client/lib/render/gi.js
 - **A physics volume is `physics-volume {kind, factor?, modes?}`** on a thing with a box or global `zone` (Godot Area3D's
   overrides, Unreal's Physics Volume): with `kind: speed`, a body inside moves at `factor` × its own speed (walking,
