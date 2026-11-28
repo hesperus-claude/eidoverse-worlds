@@ -15,7 +15,8 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/post-test.mjs
 // Mutations (each must go red, run by hand): build on strength 0 (P1); ignore ew-bloom (P1c); rebuild on a strength edit
 // (P2b); keep the pipeline at strength 0 (P2c); XR through the pipeline (P3); dispose on XR (P3b); batching off bypasses
-// the pipeline (P4); outputColorTransform false (P2t); no fallback on a throw (P6); error scope ignored (P6b); a stale scope
+// the pipeline (P4); outputColorTransform false (P2t); no fallback on a throw (P6); the renderer's state not put back after a throw (P6d);
+// error scope ignored (P6b); a stale scope
 // fails the newer pipeline (P6c); a scene or camera change keeps the old pipeline (P10); world-pass mark dropped (P7).
 import { fileURLToPath } from "node:url";
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
@@ -79,12 +80,18 @@ const setPref = (on) => { try { post.setBloomPref(on); } catch (e) { return e; }
 if (process.argv.includes('--case')) {
   const rows = [];
   const row = (n, ok, d) => rows.push([n, !!ok, d]);
-  setBloom(1); frame();
+  setBloom(1); renderer.xr.enabled = true; frame();   // xr.enabled true: a page with a headset attached, not presenting
   throwOnQuad = new Error('simulated: the output pass failed');
   const d = frame();
   row('P6 the pipeline throws mid-frame: that same frame is drawn plain (renderer.render(scene, camera) after it)', d.some((x) => x.sc === scene && x.cam === camera) && !d.some((x) => x.threw), show(d));
   row('P6 …into the canvas: the target the failed pass left bound is unbound first', bound === null, String(bound));
   row('P6 …the readout: not active, failed, with the message; a clientlog line said it', dbg().active === false && /fail/i.test(String(dbg().why)) && /output pass failed/.test(String(dbg().why)) && tees.some((l) => /post/.test(l) && /output pass failed/.test(l)), { why: dbg().why, tees });
+  // the pipeline swaps the renderer's output transform and xr.enabled around its quad (three RenderPipeline.render, no
+  // try/finally): a throw there must not leave them swapped, or the fallback and every later plain frame are drawn wrong
+  { const fb = d.find((x) => x.sc === scene);
+    row('P6d the fallback frame is drawn with the renderer\'s tone curve and colour space (not the ones the pipeline swapped in)', fb?.toneMapping === THREE.ACESFilmicToneMapping && fb?.colorSpace === THREE.SRGBColorSpace, [fb?.toneMapping, fb?.colorSpace]);
+    row('P6d …and xr.enabled as it was before the frame (true) while it draws', fb?.xr === true, fb?.xr);
+    row('P6d …and the renderer keeps all three after it', renderer.toneMapping === THREE.ACESFilmicToneMapping && renderer.outputColorSpace === THREE.SRGBColorSpace && renderer.xr.enabled === true, [renderer.toneMapping, renderer.outputColorSpace, renderer.xr.enabled]); }
   const made = pipelinesMade, d2 = frame();
   row('P6 …later frames are plain and build nothing (dropped for this page)', plain(d2) && pipelinesMade === made && !live(), { d: show(d2), pipelinesMade });
   setBloom(2); const d3 = frame();
