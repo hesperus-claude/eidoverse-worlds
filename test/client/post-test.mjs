@@ -15,8 +15,8 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/post-test.mjs
 // Mutations (each must go red, run by hand): build on strength 0 (P1); ignore ew-bloom (P1c); rebuild on a strength edit
 // (P2b); keep the pipeline at strength 0 (P2c); XR through the pipeline (P3); dispose on XR (P3b); batching off bypasses
-// the pipeline (P4); outputColorTransform false (P2t); no fallback on a throw (P6); error scope ignored (P6b); world-pass
-// mark dropped (P7).
+// the pipeline (P4); outputColorTransform false (P2t); no fallback on a throw (P6); error scope ignored (P6b); a stale scope
+// fails the newer pipeline (P6c); a scene or camera change keeps the old pipeline (P10); world-pass mark dropped (P7).
 import { fileURLToPath } from "node:url";
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { mock } from 'bun:test';
@@ -68,8 +68,10 @@ check('P0 post.js and render.js import headless', !imported, imported);
 const frame = () => { draws.length = 0; try { R.renderWorld?.(); } catch (e) { draws.push({ threw: e?.message ?? String(e) }); } return draws.slice(); };
 const plain = (d) => d.length === 1 && d[0].sc === scene && d[0].cam === camera;
 const viaPipe = (d) => d.length >= 1 && d.every((x) => x.sc?.isQuadMesh && x.sc.name === 'Render Pipeline') && !d.some((x) => x.sc === scene);
-const dbg = () => { try { return post.postDebug(); } catch (e) { return { error: e?.message ?? String(e) }; } };
-const live = () => dbg()._pipe ?? null;
+// the readout without its live objects: a row's detail goes through JSON.stringify (suite.ts), and _pipe is cyclic (a
+// failing row that carried it threw inside the reporter, and every row after it went unrun)
+const dbg = () => { try { const { _pipe, ...r } = post.postDebug(); return r; } catch (e) { return { error: e?.message ?? String(e) }; } };
+const live = () => { try { return post.postDebug()._pipe ?? null; } catch { return null; } };
 const show = (d) => d.map((x) => x.threw ? `threw ${x.threw}` : x.sc === scene ? 'scene' : x.sc?.name ?? x.sc?.type ?? '?');
 const setBloom = (s) => { try { post.setBloom(s); } catch (e) { return e; } };
 const setPref = (on) => { try { post.setBloomPref(on); } catch (e) { return e; } };
@@ -229,6 +231,35 @@ console.log('SYNCGATE — on WebGL the pipeline\'s scene pass is the world\'s ow
   check('P7 a link met on the canvas pass defers (the plain frame, control)', Array.isArray(asked[0]), asked.map(Array.isArray));
   check('P7 …a link met in the pipeline\'s scene pass defers the same way', Array.isArray(asked[1]), asked.map(Array.isArray));
   check('P7 …a link met in someone\'s own target still blocks (a bake, control)', asked[2] === null, asked.map(Array.isArray));
+}
+
+console.log('STALE SCOPE — a WebGPU error scope from a pipeline already gone does not drop the one built after it');
+{
+  setBloom(0); frame(); setBloom(1);
+  const pop0 = device.popErrorScope; let release = null; device.popErrorScope = function () { this.scopes--; return new Promise((q) => { release = q; }); };
+  frame();                                          // pipeline A's first frame: its scope is still open (not resolved)
+  const a = live(); device.popErrorScope = pop0;
+  setBloom(0); frame(); setBloom(1); frame();       // A is torn down, B built and drawing
+  const b = live();
+  release?.({ message: 'simulated: a late validation error from the pipeline before' });
+  for (let i = 0; i < 4; i++) await Promise.resolve();
+  const d = frame();
+  check('P6c a late error from a torn-down pipeline\'s scope leaves the newer pipeline drawing (not failed, not rebuilt)', !!a && !!b && a !== b && live() === b && viaPipe(d) && !dbg().failed, { aB: !!a && !!b && a !== b, same: live() === b, d: show(d), failed: dbg().failed });
+}
+
+console.log('SCENE / CAMERA — a pass asked for another scene or camera builds a pipeline for them');
+{
+  setBloom(1); frame();
+  const p = live(), made = pipelinesMade, cam2 = new THREE.PerspectiveCamera(), scene2 = new THREE.Scene();
+  let gone = false; p?.scenePass?.renderTarget?.addEventListener('dispose', () => { gone = true; });
+  const run = (sc, cam) => { draws.length = 0; try { post.postPass(renderer, sc, cam)?.(); } catch (e) { draws.push({ threw: e?.message ?? String(e) }); } return draws.slice(); };
+  run(scene, cam2);
+  const q = live();
+  check('P10 another camera: the old pipeline is disposed and one new one draws through the new camera', gone && q !== p && q?.scenePass?.camera === cam2 && pipelinesMade === made + 1, { gone, cam: q?.scenePass?.camera === cam2, built: pipelinesMade - made });
+  run(scene2, cam2);
+  check('P10 …another scene: the same, through the new scene', live() !== q && live()?.scenePass?.scene === scene2 && pipelinesMade === made + 2, { scene: live()?.scenePass?.scene === scene2, built: pipelinesMade - made });
+  frame();
+  check('P10 …and the live frame again: its own scene and camera', live()?.scenePass?.scene === scene && live()?.scenePass?.camera === camera && pipelinesMade === made + 3, { built: pipelinesMade - made });
 }
 
 console.log('WEBGPU — a validation error in a new pipeline\'s first frame drops it');
