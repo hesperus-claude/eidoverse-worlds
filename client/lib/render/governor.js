@@ -24,8 +24,8 @@
 //
 // Slow and smooth are fractions of a TARGET rate (targetFps, below), not absolute numbers: on a flat display the target
 // is min(measured refresh, 60) and the fractions are 26/60 and 52/60, so a 60 Hz display decides exactly as the old
-// absolute 26 and 52 did (test/client/governor-refresh-test.ts G1 pins that); a 30 Hz panel restores above 26 instead
-// of never; a 144 Hz desktop is still held to 60 (60 fps is plenty, and a fast panel must not shed at 100). In a headset
+// absolute 26 and 52 did (test/client/governor-refresh-test.ts G1 pins that); a 48 or 50 Hz panel restores above 42–43
+// instead of never (a 30 Hz panel is not recognised yet: refresh.js says why); a 144 Hz desktop is still held to 60 (60 fps is plenty, and a fast panel must not shed at 100). In a headset
 // the target is the session's own refresh, and slow is below 0.9 of it: below refresh is a dropped frame there, felt as
 // judder, and the headset guidance is to hold the display rate. Smooth is above 0.97 (an integer count over a ~1 s
 // window, so a held 72 Hz reads 72–73 and two drops a second still count as held).
