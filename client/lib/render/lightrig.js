@@ -98,6 +98,9 @@ function bornDrawn(l) { l.shadow.needsUpdate = true; }
 function sizeShadowMap(l, n) {
   if (l.shadow.mapSize.x === n && l.shadow.mapSize.y === n) return false;
   l.shadow.mapSize.set(n, n);
+  // a cube map: three r186's RenderTarget.setSize writes the size onto the cube texture's image array but not onto its
+  // six faces, which are recreated at their birth size, so the faces are given the new size here too
+  if (l.isPointLight && l.shadow.map) for (const t of [l.shadow.map.texture, l.shadow.map.depthTexture]) { const f = Array.isArray(t?.image) ? t.image[0] : null; if (f) { f.width = n; f.height = n; } }
   if (l.castShadow) bornDrawn(l);
   return true;
 }
@@ -111,8 +114,8 @@ export function setLampShadow({ map, texels, dist, forward, up, side } = {}) {
   if (!pl) return null;
   if (Number.isFinite(map)) {
     const n = Math.max(16, Math.min(2048, Math.round(map)));
-    // no dispose: three resizes the target itself at the next draw (RenderTarget.setSize disposes on a size change), and
-    // a dispose with no size change for its observer to see (a size changed and changed back) was the same break
+    // no dispose: three resizes a target at its next draw (RenderTarget.setSize disposes on a size change; a cube's faces
+    // need sizeShadowMap's help), and a dispose with no size change for its observer to see was the same break
     sizeShadowMap(pl, n);
   }
   if (Number.isFinite(texels)) _biasTexels = Math.max(0, texels);
