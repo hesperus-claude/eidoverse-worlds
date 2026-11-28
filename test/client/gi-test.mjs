@@ -470,6 +470,25 @@ if (G) {
 }
 
 if (G) {
+  // ---- the volume's box (cold read 11-27, A7 A8): a turned host turns its zone, so the grid covers the world box that
+  // holds the turned zone; a volume with no extent on a side is no grid
+  const r4 = (x) => Math.round(x * 1e4) / 1e4;
+  const one = (q, scale = [1, 1, 1], size = [6, 3, 9]) => G.giVolumesOf({ entities: { room: { c: { transform: { pos: [0, 1.5, 0], q, scale }, zone: { shape: 'box', size }, 'gi-volume': {} } } } })[0];
+  const s90 = one([0, Math.SQRT1_2, 0, Math.SQRT1_2])?.size.map(r4), s45 = one([0, Math.sin(Math.PI / 8), 0, Math.cos(Math.PI / 8)])?.size.map(r4);
+  check('V1 a room turned a quarter about y gets its grid over where the room is (9 × 3 × 6 in world axes); turned 45°, over the world box that holds it ((6 + 9)/√2 a side)',
+    same(s90, [9, 3, 6]) && same(s45, [r4(15 / Math.SQRT2), 3, r4(15 / Math.SQRT2)]), [s90, s45]);
+  const hung = G.giVolumesOf({ entities: { hall: { c: { transform: { pos: [0, 0, 0], q: [0, Math.SQRT1_2, 0, Math.SQRT1_2], scale: [1, 1, 1] } } },
+    room: { c: { transform: { pos: [2, 1.5, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] }, parent: { to: 'hall' }, zone: { shape: 'box', size: [6, 3, 9] }, 'gi-volume': {} } } } })[0];
+  check('V1 …and so does a room hung from a turned parent (its world pose: centre and box)', same(hung?.size.map(r4), [9, 3, 6]) && same(hung?.center.map(r4), [0, 1.5, -2]), hung);
+  const flat = one([0, 0, 0, 1], [1, 0, 1]), thin = one([0, 0, 0, 1], [1, 1, 1], [6, 0, 9]);
+  check('V2 a volume with no extent on a side (its host scaled flat, or a zone 0 m tall) plans no grid (three divides by the grid\'s extent in every lit shader)',
+    G.planGrid(flat, 'low') === null && G.planGrid(thin, 'low') === null && G.planGrid(one([0, 0, 0, 1]), 'low') !== null, [G.planGrid(flat, 'low'), G.planGrid(thin, 'low')]);
+  const help = /"gi-volume":[\s\S]*?help: "([^"]*)"/.exec(read('shared/protocol/componentspec.js'))?.[1] ?? '';
+  check('V3 the registry\'s help says what the client does with a turned host (the grid covers the world box around the turned zone), not that the volume is world-axis-aligned',
+    /turned/.test(help) && !/world-axis-aligned/.test(help), help);
+}
+
+if (G) {
   // (2) where GI can't run it is off, and says why where the lead's capture rig looks (giDebug)
   St.reset(); const before = quiet();
   core.renderer.backend = { isWebGLBackend: true, extensions: { has: () => false } };
