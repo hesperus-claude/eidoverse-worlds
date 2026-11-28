@@ -171,18 +171,39 @@ try {
     const postF = async () => { p.hold(); const d = post.postPass(p.renderer, S, cam); if (d) d(); else p.renderer.render(S, cam); return p.grab(); };
     const at = (v3) => { const v = v3.clone().project(cam); return [(v.x + 1) / 2 * p.W, (1 - v.y) / 2 * p.H]; };
     const foot = at(new T.Vector3(0, 0.02, 0.56)), open = at(new T.Vector3(2.2, 0, 1.0));
+    // proof the AO ran in the frame a row compares: the pre-pass's draws in that frame, and the AO target's darkest texel
+    const r = p.renderer, ro0 = r.renderObject; let preDraws = 0;
+    r.renderObject = function (o, ...x) { const pipe = post.postDebug()._pipe; if (pipe?.pre && r.getRenderTarget() === pipe.pre.renderTarget) preDraws++; return ro0.call(this, o, ...x); };
+    // …and GTAO's own quad (three names it 'AO') drawn into its target in that frame (a RedFormat target reads back empty
+    // on WebGL 2 here, so the value itself is PA2's to show)
+    const render0 = r.render; let aoQuads = 0;
+    r.render = function (sc, ...x) { if (sc?.isQuadMesh && sc.name === 'AO' && r.getRenderTarget() === post.postDebug()._pipe?.occl?._aoRenderTarget) aoQuads++; return render0.call(this, sc, ...x); };
+    const postProved = async () => { preDraws = 0; aoQuads = 0; const px = await postF(); return { px, preDraws, aoQuads }; };
+    // PA1: frames until two in a row read the same; the proof is the last frame's
     const shot = async (light) => { S.add(light); await p.renderer.compileAsync(S, cam);
-      globalThis.__setA(0); const a = await p.settle(plainF); globalThis.__setA(3); const b = await p.settle(postF); const dbg = post.postDebug();
-      globalThis.__setA(0); await postF(); S.remove(light);
-      return { a, b, active: dbg.active, why: dbg.why, passes: dbg.passes }; };
-    const D = await shot(sun), I = await shot(amb);
+      globalThis.__setA(0); const a = await p.settle(plainF); globalThis.__setA(3);
+      let prev = null, b = null, proof = null; for (let i = 0; i < 90 && !b; i++) { await new Promise((q) => requestAnimationFrame(q)); const f = await postProved(); if (prev && f.px.every((v, j) => v === prev[j])) { b = f.px; proof = { preDraws: f.preDraws, aoQuads: f.aoQuads }; } prev = f.px; }
+      const dbg = post.postDebug(); globalThis.__setA(0); await postF(); S.remove(light);
+      return { a, b, proof, active: dbg.active, why: dbg.why, passes: dbg.passes }; };
+    // PA2: under load a frame can repeat before AO lands, so poll for the claim itself, on a drawn floor, within 90 frames
+    const claim = async (light) => { S.add(light); await p.renderer.compileAsync(S, cam);
+      globalThis.__setA(0); const a = await p.settle(plainF); const f0 = a ? p.lum(a, ...foot, 0, 3) : null, o0 = a ? p.lum(a, ...open, 0, 3) : null;
+      globalThis.__setA(3); let hit = null, last = null, n = 0;
+      for (; n < 90 && !hit; n++) { await new Promise((q) => requestAnimationFrame(q)); const f = await postProved(); const f1 = p.lum(f.px, ...foot, 0, 3), o1 = p.lum(f.px, ...open, 0, 3);
+        last = { foot: [f0, f1], open: [o0, o1], preDraws: f.preDraws, aoQuads: f.aoQuads };
+        if (o0 > 20 && o1 > 20 && f1 < f0 * 0.9 && (f0 - f1) > 3 * Math.abs(o0 - o1)) hit = last; }
+      const dbg = post.postDebug(); globalThis.__setA(0); await postF(); S.remove(light);
+      return { hit: !!hit, frames: n, ...(hit ?? last ?? {}), settledPlain: !!a, active: dbg.active, why: dbg.why, passes: dbg.passes }; };
+    const D = await shot(sun), I = await claim(amb); r.renderObject = ro0; r.render = render0;
     return { direct: { settled: !!D.a && !!D.b, active: D.active, why: D.why, passes: D.passes, diff: D.a && D.b ? p.diff(D.a, D.b) : null, foot: D.a ? [p.lum(D.a, ...foot, 0, 3), p.lum(D.b, ...foot, 0, 3)] : null },
-      indirect: { settled: !!I.a && !!I.b, active: I.active, why: I.why, passes: I.passes, foot: I.a ? [p.lum(I.a, ...foot, 0, 3), p.lum(I.b, ...foot, 0, 3)] : null, open: I.a ? [p.lum(I.a, ...open, 0, 3), p.lum(I.b, ...open, 0, 3)] : null }, at: { foot, open } };`);
+      proof: D.proof, indirect: I, at: { foot, open } };`);
   console.log(`  · ${JSON.stringify(ao)}`);
   check("PA1 AO in direct light only (a directional light, no ambient): the AO frame is the plain frame (every channel within 1 of 255): the direct term is not darkened",
     ao.direct.settled && ao.direct.active === true && ao.direct.passes === 'ao' && ao.direct.diff && ao.direct.diff.max <= 1 && ao.direct.foot[0] > 20, JSON.stringify(ao.direct));
-  const [f0, f1] = ao.indirect.foot ?? [], [o0, o1] = ao.indirect.open ?? [];
-  check("PA2 AO in ambient light only: the floor at the box's foot darkens (by more than a tenth), the open floor moves far less", ao.indirect.settled && ao.indirect.active === true && f1 < f0 * 0.9 && (f0 - f1) > 3 * Math.abs(o0 - o1), JSON.stringify(ao.indirect));
+  check("PA1 …and AO ran in the frame it compares: the pre-pass drew the floor and the box, and GTAO drew its quad into its target",
+    !!ao.proof && ao.proof.preDraws >= 2 && ao.proof.aoQuads >= 1, JSON.stringify(ao.proof));
+  check("PA2 AO in ambient light only: within 90 frames the floor at the box's foot darkens (by more than a tenth) while the open floor, drawn (over 20), moves far less",
+    ao.indirect.hit === true && ao.indirect.active === true && ao.indirect.settledPlain, JSON.stringify(ao.indirect));
 
   // PA3: AO on keeps every shadow. A see-through caster (transparent: true, opacity 1) above the floor, lit by a shadowing
   // sun only (so, per PA1, the AO frame should be the plain frame), against an opaque one as the control
@@ -254,6 +275,25 @@ try {
   check("PA7 the AO pre-pass draws the floor and the box, and none of the grid, the line segments, the sprite, a depthWrite-false dome or a mesh the sky marks noPrePass",
     JSON.stringify(kept.pre) === JSON.stringify(["box", "floor"]), JSON.stringify(kept));
   check("PA7 …while the scene pass draws all seven", ["box", "dome", "edges", "floor", "grid", "sky", "sprite"].every((n) => kept.scene?.includes(n)), JSON.stringify(kept));
+
+  // PA8: the pre-pass writes the view-space normal (its MRT): at a floor texel it holds the floor's up vector in view space.
+  // Without the MRT it would hold the lit colour and GTAO would read colour as normals. Read at y and at H - y (the
+  // read origin differs by backend): one of the two is floor
+  const normals = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js'), T = p.THREE, r = p.renderer;
+    const S = new T.Scene(); S.background = new T.Color(0, 0, 0); S.add(new T.AmbientLight(0xffffff, 1.5));
+    const cam = new T.PerspectiveCamera(50, p.W / p.H, 0.1, 100); cam.position.set(0, 2.2, 4.2); cam.lookAt(0, 0.3, 0); cam.updateMatrixWorld(true);
+    S.add(new T.Mesh(new T.PlaneGeometry(12, 12).rotateX(-Math.PI / 2), new T.MeshStandardNodeMaterial({ color: 0x999999 })));
+    const postF = async () => { p.hold(); const d = post.postPass(r, S, cam); if (d) d(); else r.render(S, cam); return p.grab(); };
+    await r.compileAsync(S, cam); globalThis.__setA(3); for (let i = 0; i < 6; i++) { await new Promise((q) => requestAnimationFrame(q)); await postF(); }
+    const t = post.postDebug()._pipe?.pre?.renderTarget; if (!t) { globalThis.__setA(0); await postF(); return { error: 'no pre-pass' }; }
+    const v = new T.Vector3(2.2, 0, 1.0).project(cam), x = Math.round((v.x + 1) / 2 * t.width), y = Math.round((1 - v.y) / 2 * t.height);
+    const read = async (yy) => { const px = await r.readRenderTargetPixelsAsync(t, x, yy, 1, 1, 0); return [...px].slice(0, 3).map((h) => Math.round((px instanceof Uint16Array ? T.DataUtils.fromHalfFloat(h) : px instanceof Uint8Array ? h / 255 : h) * 1000) / 1000); };
+    const want = new T.Vector3(0, 1, 0).transformDirection(cam.matrixWorldInverse);
+    const out = { at: [x, y], want: want.toArray().map((n) => Math.round(n * 1000) / 1000), a: await read(y), b: await read(t.height - 1 - y) };
+    globalThis.__setA(0); await postF(); return out;`);
+  console.log(`  · ${JSON.stringify(normals)}`);
+  const near = (n: number[] | undefined) => !!n && !!normals.want && n.every((c, i) => Math.abs(c - normals.want[i]) < 0.05);
+  check("PA8 the pre-pass holds the view-space normal at a floor texel (the floor's up vector seen from the camera), not the lit colour", !normals.error && (near(normals.a) || near(normals.b)), JSON.stringify(normals));
 
   // PA9 LAST (a failure drops the pipeline for the page): a throw inside the AO pre-pass. post.js draws the frame plain;
   // the renderer must be left as the plain path expects it (three's PassNode.updateBefore has no try/finally: MRT, the AO

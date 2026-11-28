@@ -347,9 +347,11 @@ console.log('SYNCGATE — on WebGL the pipeline\'s scene pass is the world\'s ow
   rt = null; be.createRenderPipeline(ro, null);
   rt = live()?.scenePass?.renderTarget ?? { stand: 'no pipeline' }; be.createRenderPipeline(ro, null);
   rt = { isRenderTarget: true, name: 'a bake' }; be.createRenderPipeline(ro, null);
+  post.setAo(1); frame(); rt = live()?.pre?.renderTarget ?? { stand: 'no pre-pass' }; be.createRenderPipeline(ro, null); post.setAo(0); frame();
   check('P7 a link met on the canvas pass defers (the plain frame, control)', Array.isArray(asked[0]), asked.map(Array.isArray));
   check('P7 …a link met in the pipeline\'s scene pass defers the same way', Array.isArray(asked[1]), asked.map(Array.isArray));
   check('P7 …a link met in someone\'s own target still blocks (a bake, control)', asked[2] === null, asked.map(Array.isArray));
+  check('P7 …a link met in the AO pre-pass defers too (it is the world drawn again: its first build is the world\'s, not a bake\'s)', Array.isArray(asked[3]), asked.map(Array.isArray));
 }
 
 console.log('STALE SCOPE — a WebGPU error scope from a pipeline already gone does not drop the one built after it');
