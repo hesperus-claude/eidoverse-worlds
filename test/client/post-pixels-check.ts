@@ -181,6 +181,33 @@ try {
   const [f0, f1] = ao.indirect.foot ?? [], [o0, o1] = ao.indirect.open ?? [];
   check("PA2 AO in ambient light only: the floor at the box's foot darkens (by more than a tenth), the open floor moves far less", ao.indirect.settled && ao.indirect.active === true && f1 < f0 * 0.9 && (f0 - f1) > 3 * Math.abs(o0 - o1), JSON.stringify(ao.indirect));
 
+  // PA3: AO on keeps every shadow. A see-through caster (transparent: true, opacity 1) above the floor, lit by a shadowing
+  // sun only (so, per PA1, the AO frame should be the plain frame), against an opaque one as the control
+  const shadows = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js'), T = p.THREE, r = p.renderer, out = {};
+    const was = r.shadowMap.enabled; r.shadowMap.enabled = true;
+    try { for (const transparent of [false, true]) {
+      const S = new T.Scene(); S.background = new T.Color(0, 0, 0);
+      const cam = new T.PerspectiveCamera(50, p.W / p.H, 0.1, 100); cam.position.set(0, 2.2, 4.2); cam.lookAt(0, 0.3, 0); cam.updateMatrixWorld(true);
+      const floor = new T.Mesh(new T.PlaneGeometry(12, 12).rotateX(-Math.PI / 2), new T.MeshStandardNodeMaterial({ color: 0xb0b0b0, roughness: 0.9 })); floor.receiveShadow = true; S.add(floor);
+      const caster = new T.Mesh(new T.BoxGeometry(1, 0.1, 1), new T.MeshStandardNodeMaterial({ color: 0x808080, transparent, opacity: 1 })); caster.position.set(0, 1.2, 0); caster.castShadow = true; S.add(caster);
+      const sun = new T.DirectionalLight(0xffffff, 3); sun.position.set(0, 6, 0.001); sun.castShadow = true;
+      Object.assign(sun.shadow.camera, { left: -4, bottom: -4, right: 4, top: 4, near: 0.5, far: 12 }); sun.shadow.camera.updateProjectionMatrix(); S.add(sun);
+      const at = (v3) => { const v = v3.clone().project(cam); return [(v.x + 1) / 2 * p.W, (1 - v.y) / 2 * p.H]; };
+      const under = at(new T.Vector3(0, 0, 0.42)), open = at(new T.Vector3(2.2, 0, 1.0));
+      const plainF = () => { p.hold(); r.setRenderTarget(null); r.render(S, cam); return p.grab(); };
+      const postF = async () => { p.hold(); const d = post.postPass(r, S, cam); if (d) d(); else r.render(S, cam); return p.grab(); };
+      await r.compileAsync(S, cam); globalThis.__setA(0); const a = await p.settle(plainF); globalThis.__setA(3); const b = await p.settle(postF);
+      out[transparent ? 'seeThrough' : 'opaque'] = { passes: post.postDebug().passes, under: a && b ? [p.lum(a, ...under, 0, 2), p.lum(b, ...under, 0, 2)].map(Math.round) : null, open: a && b ? [p.lum(a, ...open, 0, 3), p.lum(b, ...open, 0, 3)].map(Math.round) : null };
+      globalThis.__setA(0); await postF(); sun.shadow.map?.dispose?.(); sun.dispose?.();
+    } } finally { r.shadowMap.enabled = was; }
+    return out;`);
+  console.log(`  · ${JSON.stringify(shadows)}`);
+  const sh = (k: string) => shadows[k] ?? {};
+  check("PA3 control: an opaque caster's shadow is the same with AO on (the floor under it is dark in both, far darker than the open floor)",
+    sh("opaque").passes === "ao" && !!sh("opaque").under && sh("opaque").under[0] < sh("opaque").open[0] * 0.5 && Math.abs(sh("opaque").under[1] - sh("opaque").under[0]) <= 2, JSON.stringify(shadows));
+  check("PA3 a see-through caster (transparent: true) keeps its shadow with AO on: the floor under it stays dark (the shadow map is not drawn opaque-only inside the pre-pass)",
+    sh("seeThrough").passes === "ao" && !!sh("seeThrough").under && sh("seeThrough").under[0] < sh("seeThrough").open[0] * 0.5 && Math.abs(sh("seeThrough").under[1] - sh("seeThrough").under[0]) <= 2, JSON.stringify(shadows));
+
   // PA9 LAST (a failure drops the pipeline for the page): a throw inside the AO pre-pass. post.js draws the frame plain;
   // the renderer must be left as the plain path expects it (three's PassNode.updateBefore has no try/finally: MRT, the AO
   // context, renderer.transparent would stay as the pass set them), so the next plain frame is the plain picture
