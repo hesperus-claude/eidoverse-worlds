@@ -42,7 +42,7 @@ A file's directory says who runs it.
 | `tools/` | someone or the server, by hand: CLIs (`world.ts`, the translator), `assets/` (converters), `operator/` (a server's operator), `import-v1/` (the v1 importer), `vectors/` (conformance vector generators), `water/` (water data and previews), `mv-module.ts` (moves a file and fixes its importers) |
 | `services/` | a server, always on: the show bots (`captionbot/`, `voicebot/`, `chatbridge/`), each with its own `package.json` |
 | `bench/` | someone measuring: benches and one-off measurements, never the test gate |
-| `deploy/` | the VPS: install and ops scripts |
+| `deploy/` | an operator's machine: install and ops scripts for the VPS; `home/`, a sandboxed server on a machine that is not only a server |
 | `spec/` | an implementer somewhere else: the CC0 contract, and only what they need |
 | `docs/` | a reader |
 
