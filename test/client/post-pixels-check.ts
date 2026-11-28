@@ -44,7 +44,7 @@ try {
     S.add(new THREE.AmbientLight(0xffffff, 0.4)); const sun = new THREE.DirectionalLight(0xffffff, 2.5); sun.position.set(2, 3, 4); S.add(sun);
     const lit = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), new THREE.MeshStandardNodeMaterial({ color: new THREE.Color(0.8, 0.35, 0.2), roughness: 0.5 }));
     lit.position.set(-1.6, 0, 0); S.add(lit);
-    // the emitter: linear radiance 12 (well above the threshold of 2), added only for the glow rows
+    // the emitter: linear radiance 12 (well above the knee's top, 3, at exposure 1), added only for the glow rows
     const hot = new THREE.Mesh(new THREE.SphereGeometry(0.45, 32, 16), new THREE.MeshStandardNodeMaterial({ color: 0x000000, emissive: 0xffffff, emissiveIntensity: 12 }));
     hot.position.set(1.6, 0, 0);
     const c2 = document.createElement('canvas'); c2.width = W; c2.height = H; const g2 = c2.getContext('2d', { willReadFrequently: true });
@@ -121,7 +121,8 @@ try {
   check("PX4 a pixel-ratio change (the render-scale governor's lever): the scene pass's target follows the drawing buffer", !!after.target && after.target[0] === after.buffer[0] && after.target[1] === after.buffer[1], JSON.stringify(after));
 
   // PX6: an emitter at 60× white: the bloom's bright target (BloomNode's high-pass output, half resolution, half float) holds
-  // 12 at its centre, Godot's glow_hdr_luminance_cap, per channel after the threshold; uncapped it would hold 60
+  // 12 / exposure at its centre (Godot's glow_hdr_luminance_cap, on the exposed colour), per channel after the threshold;
+  // uncapped it would hold 60
   const cap = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js'), T = p.THREE;
     const hot = new T.Mesh(new T.SphereGeometry(0.8, 32, 16), new T.MeshStandardNodeMaterial({ color: 0x000000, emissive: 0xffffff, emissiveIntensity: 60 }));
     p.S.add(hot); await p.renderer.compileAsync(p.S, p.cam);
