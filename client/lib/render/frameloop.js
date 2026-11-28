@@ -15,6 +15,7 @@ import { renderer, XR_BOOT } from '../core.js';
 import { BC } from '../debug/breadcrumbs.js';
 import { perf } from './perf.js';
 import { tick as budgetTick } from './framebudget.js';
+import { noteFrameInterval } from './refresh.js';
 globalThis.__perf = perf;   // harness: xr-lifecycle-probe reads frameNo to prove the desktop loop ticks after a session ends
 
 const systems = [];
@@ -70,6 +71,7 @@ function frame(now) {
     // hitch. doubled = waited one extra vsync; spikes = beyond any pacing explanation (>40 ms), the real events.
     if (dtMs > 40) windowSpikes++;
     else if (dtMs > 25) windowDoubled++;
+    noteFrameInterval(dtMs, renderer.xr?.isPresenting);   // the display's cadence, for the governor's target (refresh.js)
   }
   const t = now / 1000;
   globalThis._sceneTime = t;

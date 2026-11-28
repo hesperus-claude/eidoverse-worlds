@@ -18,9 +18,17 @@
 //   pixels     render scale, −0.25 steps to 0.7
 //   detail     LOD bias 2 (far bodies at half rate) + shadow map 1024
 //
-// Pacing: a shed needs 3 consecutive slow seconds (<26 fps) and resets the counter, one lever per window, so a hitch
-// cannot cascade the ladder. A restore needs 5 consecutive smooth seconds (>52 fps). The band between counts toward
-// neither, except the cruise lever below (§22j).
+// Pacing: a shed needs 3 consecutive slow seconds and resets the counter, one lever per window, so a hitch cannot
+// cascade the ladder. A restore needs 5 consecutive smooth seconds. The band between counts toward neither, except the
+// cruise lever below (§22j).
+//
+// Slow and smooth are fractions of a TARGET rate (targetFps, below), not absolute numbers: on a flat display the target
+// is min(measured refresh, 60) and the fractions are 26/60 and 52/60, so a 60 Hz display decides exactly as the old
+// absolute 26 and 52 did (test/client/governor-refresh-test.ts G1 pins that); a 30 Hz panel restores above 26 instead
+// of never; a 144 Hz desktop is still held to 60 (60 fps is plenty, and a fast panel must not shed at 100). In a headset
+// the target is the session's own refresh, and slow is below 0.9 of it: below refresh is a dropped frame there, felt as
+// judder, and the headset guidance is to hold the display rate. Smooth is above 0.97 (an integer count over a ~1 s
+// window, so a held 72 Hz reads 72–73 and two drops a second still count as held).
 //
 // Loading grace (§16.2.D): while the engine is LOADING (warm items, loadwork lanes, promote tails), storm fps is not a
 // performance regime and lever moves make it worse (render-target and shadow-map reallocs, §16.1g): both directions
@@ -37,6 +45,7 @@ import { setEmitterQuality, emitterQuality, emitterCount } from '../realize/emit
 import { setGrassDensity, getGrassDensity, hasGrass } from '../terrain.js';
 import { setLodBias } from '../player/remotes.js';
 import { setSystemEvery, getSystemEvery } from './frameloop.js';
+import { refreshEstimate } from './refresh.js';
 import { toast } from '../ui/ui.js';
 import { statusChip, clearStatusChip } from '../ui/statuschips.js';
 
@@ -54,7 +63,7 @@ const building = () => typeof document !== 'undefined' && document.body?.classLi
 
 // ---- the resident's render-scale dial (§22k) --------------------------------
 // The MANUAL override, a persisted preference like clouds⚙ and grass⚙: 'auto' lets the cruise drive; a pinned factor
-// sets the base outright and turns the cruise off. The emergency <26 fps pixels lever still sheds below a pinned base
+// sets the base outright and turns the cruise off. The emergency (slow-regime) pixels lever still sheds below a pinned base
 // (and restores to it): a crisis outranks a preference, only while it lasts.
 const RS_KEY = 'ew-render-scale';
 export const RENDER_SCALES = ['auto', '1', '0.85', '0.7'];
@@ -301,9 +310,9 @@ let shedDetail = false;
 let grassDial = 1;
 
 // ---- the cruise lever (§22j) ------------------------------------------------
-// A pixel-bound machine lives in the dead band (26–52 fps), and resolution is the only lever that moves it. So pixels
+// A pixel-bound machine lives in the dead band (26–52 fps at 60 Hz), and resolution is the only lever that moves it. So pixels
 // alone also answers a SUSTAINED mid-band cruise, gentler than the emergency ladder: an 8 s streak (vs 3) and a floor
-// of 70% of BASE (vs the emergency 0.7 absolute). Restore is the shared +0.125 above 52 fps. ?cruise=off disables it.
+// of 70% of BASE (vs the emergency 0.7 absolute). Restore is the shared +0.125 in the smooth regime. ?cruise=off disables it.
 const CRUISE = (CONFIG.params.get('cruise') ?? 'on') !== 'off';
 const cruiseFloor = () => Math.max(0.7, residentBase() * 0.7);
 const cruiseActive = () => CRUISE && renderScale === 'auto' && !fullDetail;   // a pinned scale is the resident's word
@@ -312,6 +321,36 @@ let midFor = 0;
 let slowFor = 0;
 let goodFor = 0;
 const history = [];   // recent lever moves, for the debug surface
+
+// ---- the target rate and the two thresholds (header: Pacing) ----------------
+// [numerator, denominator]: integer arithmetic keeps a 60 Hz target's thresholds exactly 26 and 52
+const FLAT_SLOW = [26, 60], FLAT_SMOOTH = [52, 60];
+const XR_SLOW = [9, 10], XR_SMOOTH = [97, 100];
+const FLAT_CAP_HZ = 60;
+// a headset with no reported frameRate and no measured cadence yet: the lowest rate current headsets run at. A measured
+// cadence below it is not believed either (a runtime reprojecting at half rate would read as a 45 Hz "display" and the
+// governor would call the drops smooth).
+const XR_DEFAULT_HZ = 72;
+const presentingNow = () => !!renderer.xr?.isPresenting;
+/** The frame rate this display should hold: the governor's thresholds are fractions of it. */
+export function targetFps() {
+  if (presentingNow()) {
+    const fr = renderer.xr.getSession?.()?.frameRate;   // WebXR's nominal refresh, where the runtime reports it
+    if (Number.isFinite(fr) && fr > 0) return fr;
+    return Math.max(XR_DEFAULT_HZ, refreshEstimate(true) ?? 0);
+  }
+  return Math.min(FLAT_CAP_HZ, refreshEstimate(false) ?? FLAT_CAP_HZ);   // no estimate yet: behave as 60
+}
+function thresholds(target = targetFps()) {
+  const [sn, sd] = presentingNow() ? XR_SLOW : FLAT_SLOW, [gn, gd] = presentingNow() ? XR_SMOOTH : FLAT_SMOOTH;
+  return { target, slowBelow: (target * sn) / sd, smoothAbove: (target * gn) / gd };
+}
+/** One pulse's regime: 'slow' (counts toward a shed), 'smooth' (toward a restore) or 'mid' (the dead band). */
+function regime(fps, t = thresholds()) {
+  if (fps > 0 && fps < t.slowBelow) return 'slow';
+  if (fps > t.smoothAbove) return 'smooth';
+  return 'mid';
+}
 
 // ---- loading grace + the calm signal (§16.2.D) ------------------------------
 
@@ -322,13 +361,13 @@ function loadingBusy() {
   return budgetBusy() || promoteTailPending() > 0;
 }
 
-// The share of each frame background work may use (framebudget), from the regime this pulse measured: smooth gets
-// the old 6 ms at 60 Hz; a slow machine gives loading less of a frame it is already missing; a headset's frames are
-// shorter and a missed one is felt, so it is capped lower.
+// The share of each frame background work may use (framebudget), from the regime this pulse measured (the same
+// target-relative regime the ladder reads): smooth gets the old 6 ms at 60 Hz; a slow machine gives loading less of a
+// frame it is already missing; a headset's frames are shorter and a missed one is felt, so it is capped lower.
 const XR_SHARE_CAP = 0.25;
-function backgroundShare(fps) {
-  const s = fps > 52 ? 0.36 : fps >= 26 ? 0.3 : 0.2;
-  return renderer.xr?.isPresenting ? Math.min(s, XR_SHARE_CAP) : s;
+function backgroundShare(r, fps) {
+  const s = r === 'smooth' ? 0.36 : r === 'mid' && fps > 0 ? 0.3 : 0.2;   // no window measured yet (0) shares as slow, as before
+  return presentingNow() ? Math.min(s, XR_SHARE_CAP) : s;
 }
 
 let grace = false;        // the last pulse was held by loading grace
@@ -337,7 +376,7 @@ let calmFor = 0;          // consecutive smooth AND non-busy seconds (not consum
 let calmReached = false;  // sticky: arrival proved smooth once this session
 const calmWaiters = [];
 
-/** Resolves once smoothness (the restore ladder's >52fps read, fed at 1Hz)
+/** Resolves once smoothness (the restore ladder's smooth read, fed at 1Hz)
  *  has held 5 consecutive seconds with the busy predicate false at each 1Hz
  *  sample (a job that starts and ends between two samples goes unseen).
  *  Sticky: this is a storm-edge signal for boot-deferred extras, and once
@@ -349,15 +388,16 @@ export function whenCalm() {
 
 /** Feed once per second with the measured fps. */
 export function governPerformance(fps) {
+  const r = regime(fps);
   // the share follows the machine, not the storm: a second that loading itself slowed must not shrink loading's slice
-  if (!loadingBusy()) setShare(backgroundShare(fps));
+  if (!loadingBusy()) setShare(backgroundShare(r, fps));
   // …but the headset's cap holds while loading too (entering VR mid-load is the usual cold entry). Only ever lowers it.
   else if (renderer.xr?.isPresenting) setShare(Math.min(budgetStats().share, XR_SHARE_CAP));
   if (loadingBusy()) {
     // freeze BOTH directions and reset every streak: a storm-dip shed and a splash-smooth restore are both answers
     // to loading, not to the machine
     if (!grace) { grace = true; graceDipped = false; }
-    if (fps > 0 && fps < 26 && !graceDipped) {
+    if (r === 'slow' && !graceDipped) {
       // one history line per grace spell, and only when grace swallowed a would-be slow second
       graceDipped = true;
       if (history.length < 60) history.push(`⏸ grace held ${Math.round(fps)}fps @${Math.round(performance.now() / 1000)}s`);
@@ -369,7 +409,7 @@ export function governPerformance(fps) {
     return;
   }
   grace = false;
-  if (fps > 0 && fps < 26) {
+  if (r === 'slow') {
     goodFor = 0;
     calmFor = 0;
     midFor = 0;
@@ -383,7 +423,7 @@ export function governPerformance(fps) {
         }
       }
     }
-  } else if (fps > 52) {
+  } else if (r === 'smooth') {
     slowFor = 0;
     midFor = 0;
     calmFor++;
@@ -418,7 +458,7 @@ export function governPerformance(fps) {
 }
 
 export const governorDebug = () => ({
-  pixelRatio, slowFor, goodFor, midFor, renderScale, fullDetail,
+  pixelRatio, slowFor, goodFor, midFor, renderScale, fullDetail, ...thresholds(),
   grace, calmFor, calm: calmReached,
   casterBudget: getCasterBudget(), slotCap: getSlotCap(),
   emitters: emitterQuality(), grass: getGrassDensity(),
