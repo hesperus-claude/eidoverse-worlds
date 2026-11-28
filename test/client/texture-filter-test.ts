@@ -1,8 +1,10 @@
 // texture-filter — texture filtering at grazing angles (anisotropy) is the VIEWER's quality dial, never the world's look:
 // pref ew-anisotropy 1/2/4/8/16, default 4 (Godot's rendering/textures/default_filters/anisotropic_filtering_level; Unity's
 // Anisotropic Textures quality setting), clamped to what the renderer reports it can do (three's getMaxAnisotropy), and
-// set on a model's textures BEFORE their upload, since the sampler is built from it then (both of three's backends read
-// texture.anisotropy when a texture's version changes: WebGPUTextureUtils.updateSampler, WebGLTextureUtils.setTextureParameters).
+// set on a model's textures BEFORE their upload: WebGL 2 sets a sampler's parameters only then
+// (WebGLTextureUtils.setTextureParameters, called from createTexture/updateTexture; WebGLBackend.updateSampler is empty),
+// while WebGPU builds its sampler later, at first bind (Bindings -> WebGPUTextureUtils.updateSampler), so the two
+// backends agree only on a level set before the upload.
 //
 // Runs the REAL client/lib/assets.js loadGLB: a glTF with two textures (base colour + normal) parsed by three's GLTFLoader
 // and primed through primeTextures. Below it, test/stubs/texture-filter-stub.mjs: lod-loader-stub's renderer that never

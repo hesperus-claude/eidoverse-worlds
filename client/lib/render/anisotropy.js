@@ -1,10 +1,19 @@
 // anisotropy: texture filtering at grazing angles, a viewer's quality dial (never the look). A floor ahead of you or a
 // long wall seen edge-on stays sharp instead of blurring through its mips. Godot's default_filters/anisotropic_filtering_level
-// (default 4x) and Unity's Anisotropic Textures quality setting. Applied before the upload to a model's textures
-// (assets.js primeTextures) and to an image loaded by itself, a material component's texture or a library picture
-// (queueTexturePrime): both of three's backends build the sampler from texture.anisotropy then, so a change applies to
-// what loads later, and to what is already here on reload. Not reached: a picture from an https link (pictures.js
-// linkTexture, a CanvasTexture uploaded at its first draw), the terrain's and the vegetation's own textures.
+// (default 4x) and Unity's Anisotropic Textures quality setting.
+//
+// Set before the upload, because that is when WebGL 2 (every headset's backend) sets a sampler's parameters; WebGPU
+// builds its sampler later, at first bind (again when the texture's version changes), so a write made after the load is
+// lost on one backend and wins on the other. A change of the dial applies to what loads later, and to what is already
+// here on reload (a cached image keeps the level it was born at).
+//   Reached: a model's textures (assets.js primeTextures); an image through the image door (globalThis.loadImageTexture
+//   -> queueTexturePrime): a material component's library texture, a hung library picture, and every toolkit module
+//   that loads an image there. A caller that knows better states its own level to the door ({ anisotropy }), which
+//   stands in place of the dial and is clamped the same way: vegetation's atlases 4, and 1 for the fast-shade albedo;
+//   particle sprites 1.
+//   Not reached: models that toolkit modules load through their own loader (globalThis.GLTFLoader); a picture or a
+//   material component's texture from an https link (pictures.js linkTexture, a CanvasTexture); canvases with a fixed
+//   level (XR panels, texts: 4); the terrain's layer textures (assets.js noiseTexture canvases: three's 1).
 const KEY = 'ew-anisotropy';
 export const ANISO_LEVELS = [1, 2, 4, 8, 16];
 export const ANISO_DEFAULT = 4;
