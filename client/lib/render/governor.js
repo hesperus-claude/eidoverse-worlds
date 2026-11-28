@@ -10,7 +10,7 @@
 // content last:
 //
 //   casters    the shadow-caster budget halves toward 2 (castShadow is in no pipeline key: a free toggle, §12.1)
-//   lights     the light-slot cap drops by one (idle slots are uniform zeros)
+//   lights     RESTORE ONLY: never sheds (below); a cap left lowered still climbs back here, in this order
 //   emitters   per-emitter instance counts thin (auto → med → low)
 //   cosmetics  the 'autos' system (cloud drift, grass wind, billboards) runs at half rate
 //   grass      the meadow thins (instanced count, no rebuild)
@@ -39,7 +39,7 @@ import { renderer, sun, BASE_PIXEL_RATIO } from '../core.js';
 import { CONFIG, bus } from '../base.js';
 import { busy as budgetBusy, setShare, budgetStats } from './framebudget.js';
 import { promoteTailPending, modelQuality } from '../realize/models.js';
-import { setSlotCap, getSlotCap, maxSlots, litCount,
+import { setSlotCap, getSlotCap, maxSlots,
   setCasterBudget, getCasterBudget, getCasterCeiling, casterCount, shadowsOn, shadowRes } from './lightrig.js';
 import { setEmitterQuality, emitterQuality, emitterCount } from '../realize/emitters.js';
 import { setGrassDensity, getGrassDensity, hasGrass } from '../terrain.js';
@@ -179,13 +179,13 @@ const LEVERS = [
   },
   {
     name: 'lights',
-    shed() {
-      // a cap cut only relieves GPU if something is lit: an empty world must not eat shed windows
-      if (getSlotCap() === 0 || litCount() === 0) return false;
-      setSlotCap(getSlotCap() - 1);
-      if (!building()) toast('turned a light down to keep the frame rate — it still glows', 'warn', 6000);
-      return true;
-    },
+    // Retired from shedding (critique 2026-11-25 C.2): three evaluates every light slot on every lit fragment, lit or
+    // idle (an idle slot is uniform zeros, still computed: lab 11-23), so lowering the cap made a lamp go dark and bought
+    // no GPU time. Lose fidelity before meaning: a lamp going dark changes what the world is. It may shed again only once a
+    // dark slot is actually cheap (the gated slot, a separate branch), measured. Until then restore() stays, so a cap
+    // lowered by anything else (an older build's shed, a tool calling setSlotCap) still comes back, and 'keep full
+    // detail' still unwinds it. test/client/full-detail-test.ts L1–L6.
+    shed() { return false; },
     restore() {
       if (getSlotCap() >= maxSlots()) return false;
       setSlotCap(getSlotCap() + 1);
