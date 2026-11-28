@@ -82,7 +82,20 @@ function fail(e) {
   teardown();
 }
 
+// The renderer state a pipeline frame changes and puts back only when nothing throws (three's RenderPipeline.render and
+// PassNode.updateBefore have no try/finally). Read before the frame; written back if it throws, so the fallback frame and
+// every plain frame after it draw as main does.
+const STATE = [
+  ['target', (r) => r.getRenderTarget?.() ?? null, (r, v) => r.setRenderTarget?.(v)],
+  ['toneMapping', (r) => r.toneMapping, (r, v) => { r.toneMapping = v; }],
+  ['outputColorSpace', (r) => r.outputColorSpace, (r, v) => { r.outputColorSpace = v; }],
+  ['xr', (r) => r.xr?.enabled, (r, v) => { if (r.xr) r.xr.enabled = v; }],
+];
+const snapshot = (renderer) => STATE.map(([, get]) => get(renderer));
+const restore = (renderer, saved) => STATE.forEach(([, , set], i) => set(renderer, saved[i]));
+
 function draw(renderer, scene, camera, key) {
+  const saved = snapshot(renderer);
   try {
     if (!built) build(renderer, scene, camera, key);
     const b = built, device = renderer.backend?.device;
@@ -92,9 +105,9 @@ function draw(renderer, scene, camera, key) {
     finally { if (watch) device.popErrorScope().then((err) => { if (err && built === b) fail(err); }, () => {}); }
     active = true; why = null;
   } catch (e) {
+    restore(renderer, saved);   // a pass that threw can leave its target bound and the output transform swapped
     fail(e);
     active = false; why = `failed: ${failed}`;
-    renderer.setRenderTarget(null);   // a pass that threw can leave its target bound
     renderer.render(scene, camera);
   }
 }
