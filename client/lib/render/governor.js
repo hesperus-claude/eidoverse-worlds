@@ -276,23 +276,17 @@ const LEVERS = [
       if (shedDetail) return false;
       shedDetail = true;
       if (avatarDetail === 'auto') setLodBias(2);   // far bodies animate at half rate
-      if (shadowsOn() && sun.shadow.mapSize.width > 1024) {
-        // mapSize is a uniform + texture realloc, not pipeline shape (§12.1): no recompile either way
-        sun.shadow.mapSize.set(1024, 1024);
-        sun.shadow.map?.dispose();
-        sun.shadow.map = null;
-      }
+      // The sun's shadow map is not resized here any more. A size that goes there and back (2048 -> 1024 -> 2048) while
+      // a model is not being drawn (hidden, or out of view) leaves that model on a destroyed depth texture: three r186's
+      // NodeMaterialObserver records light.shadow.mapSize per render object only when the object draws, and recreates
+      // the texture when the map draws. This lever made that pattern by itself. It may come back once three's observer
+      // watches the depth texture (not in r186, nor, by reading, r187).
       return true;
     },
     restore() {
       if (!shedDetail) return false;
       shedDetail = false;
       if (avatarDetail === 'auto') setLodBias(1);
-      if (shadowsOn() && sun.shadow.mapSize.width < shadowRes()) {
-        sun.shadow.mapSize.set(shadowRes(), shadowRes());
-        sun.shadow.map?.dispose();
-        sun.shadow.map = null;
-      }
       return true;
     },
   },

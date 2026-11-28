@@ -71,10 +71,12 @@ for (let i = 0; i < N_SLOTS; i++) {
   rigGroup.add(pl);
 }
 scene.add(rigGroup);
-/** A casting-shaped slot's map is drawn once at birth, whoever holds it and whatever the gate says (three draws a map
- *  whose needsUpdate is set, at any shadow.intensity, and clears it). Why: three r186 destroys and recreates a shadow
- *  map's depth texture at the map's FIRST render (Textures.updateRenderTarget), and the bind groups built before that,
- *  every classic-material model's, keep the destroyed texture. A slot first drawn when its first asker arrived, after
+/** A casting-shaped slot's map is drawn at birth, whoever holds it and whatever the gate says: it asks three for one
+ *  draw (three draws a map whose needsUpdate is set, at any shadow.intensity, and clears the flag only if that draw left
+ *  the depth texture's version alone, so a first draw, which recreates the texture, is drawn again the next frame). Why:
+ *  three r186 destroys and recreates a shadow map's depth texture at the map's FIRST render
+ *  (Textures.updateRenderTarget), and the bind groups built before that, every classic-material model's, keep the
+ *  destroyed texture. A slot first drawn when its first asker arrived, after
  *  the world's models, broke every later frame: black on WebGPU ("Destroyed texture [ShadowDepthTexture] used in a
  *  submit"), refused draws on WebGL 2. Drawn at birth, before anything samples it, the texture is already the render
  *  target's own. Before the slot drew only for a holder that asked, it drew from the first frame, so this never showed. */
@@ -87,7 +89,12 @@ function bornDrawn(l) { l.shadow.needsUpdate = true; }
  *  drawing (a slot nobody asked, any map while shadows are off) kept the two apart: resized now, drawn when a light asked
  *  later, and every classic-material model kept the destroyed texture (render lab 2026-11-27: 33 errors a second on
  *  WebGPU, refused draws on WebGL 2). Returns whether the size changed. three r187 fixes the first draw (its #35093,
- *  and Textures.updateTexture creates a target's textures with the target); its observer still watches only mapSize. */
+ *  and Textures.updateTexture creates a target's textures with the target); its observer still watches only mapSize.
+ *  What this door cannot close: the observer records the size per render object only when that object draws, so a
+ *  size that goes there and back while a model is not drawn (hidden, out of view) leaves that model on the destroyed
+ *  texture all the same (cold read, 2026-11-28, headless WebGL 2). The governor no longer makes that pattern; a viewer
+ *  changing the resolution setting there and back still can. The rig's own resizes go through here (the resolution
+ *  setting, the lamp dial); nothing else in the client resizes a shadow map. */
 function sizeShadowMap(l, n) {
   if (l.shadow.mapSize.x === n && l.shadow.mapSize.y === n) return false;
   l.shadow.mapSize.set(n, n);
@@ -104,12 +111,9 @@ export function setLampShadow({ map, texels, dist, forward, up, side } = {}) {
   if (!pl) return null;
   if (Number.isFinite(map)) {
     const n = Math.max(16, Math.min(2048, Math.round(map)));
-    // three only reallocates the target once the old one is disposed; a map whose size did not change is left alone
-    // (disposing it would recreate its texture with no size change for three's observer to see: the same break)
-    if (sizeShadowMap(pl, n)) {
-      pl.shadow.map?.dispose?.();
-      pl.shadow.map = null;
-    }
+    // no dispose: three resizes the target itself at the next draw (RenderTarget.setSize disposes on a size change), and
+    // a dispose with no size change for its observer to see (a size changed and changed back) was the same break
+    sizeShadowMap(pl, n);
   }
   if (Number.isFinite(texels)) _biasTexels = Math.max(0, texels);
   if (Number.isFinite(dist)) _workDist = Math.max(0.01, dist);
@@ -165,6 +169,7 @@ export function setShadows(on) {
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = ({ basic: THREE.BasicShadowMap, pcf: THREE.PCFShadowMap, soft: THREE.PCFSoftShadowMap })[CONFIG.params.get('shadowtype')] ?? THREE.PCFSoftShadowMap;   // ?shadowtype=basic|pcf|soft, a diagnostic
 sun.castShadow = true;
+bornDrawn(sun);   // as the casting slots: drawn at birth whatever the switch says (the pre-warm initialising it is incidental)
 applyShadowPref(shadowsOn());
 // shadow map resolution (persisted; the video settings row). A live change is a realloc, no recompile.
 const RES_KEY = 'ew-shadow-res';
