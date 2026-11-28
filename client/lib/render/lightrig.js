@@ -166,7 +166,7 @@ scene.add(rigGroup);
  *  target's own. Before the slot drew only for a holder that asked, it drew from the first frame, so this never showed. */
 function bornDrawn(l) { l.shadow.needsUpdate = true; }
 /** Resize a light's shadow map; a casting-shaped light's map is redrawn in the frame its size changes, whoever holds it
- *  and whatever the gate or the shadows switch says. Why: the same destroyed texture as bornDrawn, by another
+ *  and whatever the gate, the budget or the shadows switch says. Why: the same destroyed texture as bornDrawn, by another
  *  door. three r186 refreshes a classic material's bind group only when its observer sees a change, and for a shadow map
  *  it watches light.shadow.mapSize alone (NodeMaterialObserver.getLightsData): the refresh comes in the frame the SIZE
  *  changes, the new texture in the frame the map is next DRAWN (ShadowNode.renderShadow, setSize). A map that is not
@@ -335,7 +335,7 @@ export const SHADOW_RES = [1024, 2048, 4096];
 export const shadowRes = () => { const v = +stored(RES_KEY); return SHADOW_RES.includes(v) ? v : 2048; };
 // one dial for every caster: the sun takes n, the casting lamp slots scale SHADOW_MAP by n/2048 (setLampShadow sizes them all)
 const lampMapFor = (n) => Math.round(SHADOW_MAP * (n / 2048));
-const sizeSpotMaps = (n) => { const m = 2 * lampMapFor(n); for (let i = 0; i < N_SCAST; i++) spotSlots[i].shadow.mapSize.set(m, m); };
+const sizeSpotMaps = (n) => { const m = 2 * lampMapFor(n); for (let i = 0; i < N_SCAST; i++) sizeShadowMap(spotSlots[i], m); };
 export function setShadowRes(n) {
   localStorage.setItem(RES_KEY, String(n));
   sizeShadowMap(sun, n);
