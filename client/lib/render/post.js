@@ -86,6 +86,26 @@ function wanted() {
   return [key, null];
 }
 
+// What the AO pre-pass draws: surfaces that write depth. Not lines or points (GridHelper, LineSegments, gizmo lines), sprites,
+// a mesh whose material writes no depth (sky domes, overlay gizmos: in a depth/normal buffer it would paint normals over
+// the depth of what is behind it), or anything marked userData.noPrePass (sky.js marks the sky it owns). Each skipped
+// object is one draw call and one program variant the pre-pass no longer pays for.
+export const inPrePass = (o, m) => !!o?.isMesh && !o.isLine2 && !o.isLineSegments2 && !o.isSprite && m?.depthWrite !== false && o.userData?.noPrePass !== true;
+// the renderer's per-object hook (three Renderer.setRenderObjectFunction), for the pre-pass's own draw only: a shadow map
+// drawn inside it installs and restores its own
+const prePassObjects = (renderer, prev) => function (object, scene, camera, geometry, material, ...rest) {
+  if (!inPrePass(object, material)) return;
+  return prev ? prev.call(renderer, object, scene, camera, geometry, material, ...rest) : renderer.renderObject(object, scene, camera, geometry, material, ...rest);
+};
+function filterPrePass(pre) {
+  const up = pre.updateBefore.bind(pre);
+  pre.updateBefore = (frame) => {
+    const r = frame.renderer, prev = r.getRenderObjectFunction();
+    r.setRenderObjectFunction(prePassObjects(r, prev));
+    try { return up(frame); } finally { r.setRenderObjectFunction(prev); }
+  };
+}
+
 function teardown() {
   const b = built; built = null;
   if (!b) return;
@@ -105,6 +125,7 @@ function build(renderer, scene, camera, key) {
     pre.renderTarget.isWorldPass = true;
     pre.transparent = false;
     pre.setMRT(mrt({ output: normalView }));
+    filterPrePass(pre);
     occl = gtaoNode(pre.getTextureNode('depth'), pre.getTextureNode(), camera);
     occl.resolutionScale = AO_RESOLUTION; occl.radius.value = AO_RADIUS; occl.scale.value = aoStrength;
     scenePass.contextNode = aoContext(occl.getTextureNode().sample(screenUV).r);

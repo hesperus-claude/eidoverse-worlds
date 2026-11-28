@@ -798,6 +798,9 @@ async function buildSky(a, world, wantAudio) {
     // warm the sky's own pipelines off the render path through the warm queue: detach, compile against the live scene,
     // re-add. Not the domes: a cold cloud-dome link takes minutes on WebGL and would starve every model pipeline behind
     // it; they compile after the world near you has loaded (finishSky).
+    // the sky is not a surface for ambient occlusion: kept out of AO's depth/normal pre-pass (post.js inPrePass), which
+    // would otherwise build another variant of the giant cloud programs
+    for (const o of skyOwned) o.traverse?.((c) => { c.userData.noPrePass = true; });
     const bigDomes = new Set(skyInner?.domes ?? []);
     const warmed = new Set();
     for (const o of skyOwned) {
@@ -1043,6 +1046,7 @@ async function renderSkyMesh(a) {
     skyMesh.scale.setScalar(280);
     skyMesh.material.fog = false;   // fogged, a 280-unit dome would render as pure fog colour
     skyMesh.userData.noCamCollide = true;
+    skyMesh.userData.noPrePass = true;   // not a surface for ambient occlusion (post.js inPrePass)
     scene.add(skyMesh);
   }
   impl = 'skymesh';
