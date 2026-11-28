@@ -35,15 +35,25 @@ export const GI_BOUNDS = Object.freeze({ grids: 1, lights: 16, meshes: 256 });
 const fin = Number.isFinite, v3 = (x) => Array.isArray(x) && x.length === 3 && x.every(fin);
 const clamp = (x, lo, hi, d) => (fin(x) ? Math.min(hi, Math.max(lo, x)) : d);   // the registry's ranges (componentspec gi-volume)
 
-/** The volumes in a fold (shared/zone.js foldOfView): [{id, center, size, energy, spacing, bounces, blend}], world-axis-aligned. */
+/** The world-axis extent of a box of `size` (its own axes) turned by the quaternion q: e_i = Σ_j |R_ij| s_j. */
+function turnedExtent(q, s) {
+  const n = Math.hypot(...q) || 1, [x, y, z, w] = q.map((c) => c / n);
+  const R = [[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+    [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+    [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]];
+  return R.map((row) => row.reduce((a, r, j) => a + Math.abs(r) * s[j], 0));
+}
+/** The volumes in a fold (shared/zone.js foldOfView): [{id, center, size, energy, spacing, bounces, blend}]. A grid is
+ *  world-axis-aligned (three's LightProbeGrid), so `size` is the world box that holds the zone's box as its host stands:
+ *  turned, the box around the turned zone (Godot's LightmapGI, Unity's probe volumes: axis-aligned too). */
 export function giVolumesOf(st) {
   const out = [];
   for (const id of Object.keys(st?.entities ?? {}).sort()) {
     const c = st.entities[id].c, g = c['gi-volume'];
     if (id === '@world' || !g || typeof g !== 'object' || c.zone?.shape !== 'box' || c.zone.global === true || !v3(c.zone.size) || offChain(st, id)) continue;
     const pose = worldPose(st, id); if (!pose) continue;
-    const scale = v3(pose.scale) ? pose.scale.map(Math.abs) : [1, 1, 1];
-    out.push({ id, center: [...pose.pos], size: c.zone.size.map((x, i) => Math.abs(x) * scale[i]),
+    const scale = v3(pose.scale) ? pose.scale.map(Math.abs) : [1, 1, 1], q = Array.isArray(pose.q) && pose.q.length === 4 && pose.q.every(fin) ? pose.q : [0, 0, 0, 1];
+    out.push({ id, center: [...pose.pos], size: turnedExtent(q, c.zone.size.map((x, i) => Math.abs(x) * scale[i])),
       energy: clamp(g.energy, 0, 16, 1), spacing: clamp(g.spacing, 0.25, 8, 1.5), bounces: Math.round(clamp(g.bounces, 0, 2, 1)),
       blend: clamp(c.zone.blend, 0, 1e3, 0) });
   }
@@ -52,9 +62,10 @@ export function giVolumesOf(st) {
 
 /** One volume's grid at a dial level, or null (off, or nothing to light). Probes sit on the zone's faces and `spacing` apart;
  *  past the level's probe cap the spacing widens. falloff: one probe cell past the zone (its floor and walls are on its faces), plus its blend. */
+const MIN_EXTENT = 0.01;   // m: a side thinner than this is no room, and three divides by the grid's extent in every lit shader
 export function planGrid(vol, level) {
   const tier = TIERS[level];
-  if (!tier || !vol || !(vol.energy > 0)) return null;
+  if (!tier || !vol || !(vol.energy > 0) || !vol.size.every((e) => e >= MIN_EXTENT)) return null;
   const countsAt = (s) => vol.size.map((e) => Math.max(2, Math.round(e / s) + 1));
   let s = vol.spacing, counts = countsAt(s);
   while (counts[0] * counts[1] * counts[2] > tier.cap) counts = countsAt(s *= 1.1);
