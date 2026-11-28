@@ -35,7 +35,9 @@ async function spriteTexture(path) {
     textureCache.set(path, (async () => {
       await primeFiles([path]);
       const bytes = globalThis.Deno.readFileSync(path);
-      return globalThis.loadImageTexture(bytes, { srgb: true });
+      // anisotropy 1: a particle is a camera-facing card sampled about 1:1, so the viewer's dial (for surfaces at a grazing
+      // angle) would buy it nothing
+      return globalThis.loadImageTexture(bytes, { srgb: true, anisotropy: 1 });
     })().catch((e) => {
       // A missing sprite is not a missing emitter: the builder's procedural dot always works.
       console.warn(`[emitters] sprite ${path} unavailable — using the preset's own look`, e);

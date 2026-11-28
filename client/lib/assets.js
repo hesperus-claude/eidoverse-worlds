@@ -13,7 +13,7 @@ const BODY_FIRST = CONFIG.params.get('bodyfirst') !== '0';
 import { THREE, renderer, camera, scene } from './core.js';
 import { report, bus, CONFIG } from './base.js';
 import { versionReady } from './version.js';
-import { textureAnisotropy } from './render/anisotropy.js';
+import { textureAnisotropy, statedAnisotropy } from './render/anisotropy.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
@@ -236,11 +236,10 @@ async function primeTextures(obj, work) {
 // (materials.js primes its shared cloud noise itself); spreads, never gates
 const texPrimeQueue = [];
 let texPrimePumping = false;
-function queueTexturePrime(tex) {
-  // the viewer's texture filtering, as primeTextures gives a model's own: an image that is not inside a model (a material
-  // component's texture, a picture) comes through here, and the sampler is built from it at the upload below
-  const aniso = textureAnisotropy(renderer);
-  if (tex.anisotropy < aniso) tex.anisotropy = aniso;
+function queueTexturePrime(tex, level) {
+  // the texture filtering, set before the upload below (WebGL 2 sets a sampler's parameters only then): the caller's own
+  // level when it stated one (loadImageTexture's { anisotropy }), else the viewer's, as primeTextures gives a model's own
+  tex.anisotropy = textureAnisotropy(renderer, level);
   texPrimeQueue.push(tex);
   if (texPrimePumping) return;
   texPrimePumping = true;
@@ -697,9 +696,12 @@ const imageTexCache = new WeakMap(); // bytes object -> Map<opts key, Promise<Te
 // the full 12-byte KTX2 identifier, matched byte-for-byte so nothing else routes to the transcoder
 const KTX2_MAGIC = [0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a];
 globalThis.loadImageTexture = async (bytes, opts = {}) => {
-  // only srgb + flipY alter the constructed texture; wrap/anisotropy are caller-side and agree per URL
+  // srgb, flipY and a stated anisotropy alter the constructed texture (the last is fixed at the upload, inside this
+  // call, so a caller cannot set it afterwards: it states it here, and a texture at another level is another texture);
+  // wrap is caller-side and agrees per URL
   const cacheable = typeof bytes === 'object' && bytes !== null;
-  const key = `${opts.srgb ? 's' : 'l'}:${opts.flipY !== false ? 'f' : 'n'}`;
+  const aniso = statedAnisotropy(opts.anisotropy);   // null: the viewer's dial
+  const key = `${opts.srgb ? 's' : 'l'}:${opts.flipY !== false ? 'f' : 'n'}${aniso === null ? '' : `:a${aniso}`}`;
   if (cacheable) {
     const hit = imageTexCache.get(bytes)?.get(key);
     if (hit) return hit;
@@ -719,7 +721,7 @@ globalThis.loadImageTexture = async (bytes, opts = {}) => {
         tex.userData.ewShared = true;   // served from cache — teardowns must skip it
         tex.dispose = () => {};         // session-pinned, same as the raster path
       }
-      queueTexturePrime(tex);           // initTexture sums literal mip bytes
+      queueTexturePrime(tex, aniso);    // initTexture sums literal mip bytes
       return tex;
     }
     // the toolkit's contract (render_scene.mjs loadImageTexture): the flip is baked into the pixels and tex.flipY
@@ -740,7 +742,7 @@ globalThis.loadImageTexture = async (bytes, opts = {}) => {
       tex.userData.ewShared = true;   // served from cache — teardowns must skip it
       tex.dispose = () => {};         // session-pinned (see above)
     }
-    queueTexturePrime(tex);           // upload spread, ahead of the compile
+    queueTexturePrime(tex, aniso);    // upload spread, ahead of the compile
     return tex;
   })();
   if (cacheable) {

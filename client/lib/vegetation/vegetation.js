@@ -119,12 +119,14 @@ export async function refreshFloraDefs() {
 }
 
 // ── map loading ──────────────────────────────────────────────────────────────
-async function loadMap(name, { srgb = false } = {}) {
+// anisotropy: vegetation's own level, stated to the image door so it is set BEFORE the upload (on WebGL 2 the
+// sampler's parameters are fixed then; a write after the load was lost there and won on WebGPU), in place of the
+// viewer's dial (render/anisotropy.js), which is for surfaces at a grazing angle, not for subpixel blades
+async function loadMap(name, { srgb = false, anisotropy = 4 } = {}) {
     try {
         const bytes = await Deno.readFile(ASSET_DIR + name);
-        const t = await globalThis.loadImageTexture(bytes, srgb ? { srgb: true } : {});
+        const t = await globalThis.loadImageTexture(bytes, srgb ? { srgb: true, anisotropy } : { anisotropy });
         t.wrapS = t.wrapT = T3.ClampToEdgeWrapping;
-        t.anisotropy = 4;
         return t;
     } catch { return null; }
 }
@@ -183,9 +185,9 @@ async function sampleBladePalette(name, cols, loops) {
     } catch { return null; }   // no palette → caller keeps the atlas-card path
 }
 
-async function loadSpeciesMaps(base) {
+async function loadSpeciesMaps(base, { albedoAnisotropy = 4 } = {}) {
     const [albedo, normal, rough, transl] = await Promise.all([
-        loadMap(`${base}_albedo.png`, { srgb: true }),
+        loadMap(`${base}_albedo.png`, { srgb: true, anisotropy: albedoAnisotropy }),
         loadMap(`${base}_normal.png`),
         loadMap(`${base}_roughness.png`),
         loadMap(`${base}_translucency.png`, { srgb: true }),
@@ -610,7 +612,9 @@ export async function createFlora(opts = {}) {
     const wantOpaque = !!o.opaqueBlades && spec.archetype === 'blades' && !!spec.maps;
     const palette = wantOpaque ? await sampleBladePalette(spec.maps + '_albedo.png', 8, 4) : null;
     if (wantOpaque && !palette) console.warn('[grass2] opaque-blade palette sample failed — atlas cards fallback');
-    const maps = (spec.maps && !palette) ? await loadSpeciesMaps(spec.maps) : null;
+    // fastShade (§22l, below) drops the albedo's anisotropy 4 → 1: known here, before the load, so it is the level
+    // the atlas uploads at on both backends
+    const maps = (spec.maps && !palette) ? await loadSpeciesMaps(spec.maps, { albedoAnisotropy: o.fastShade ? 1 : 4 }) : null;
     let bladeFit = null;
     if (spec.archetype === 'blades' && spec.maps) {
         try { bladeFit = JSON.parse(await Deno.readTextFile(ASSET_DIR + spec.maps + '_fit.json')); }
@@ -684,9 +688,8 @@ export async function createFlora(opts = {}) {
     // Off (the default), everything below is byte-identical to upstream.
     const fast = !!o.fastShade;
     // fastShade also drops albedo anisotropy 4 → 1 (grazing-angle taps land
-    // where blades are subpixel). Sampler state on the shared texture: fine,
-    // the atlas is species-specific and the kill-switch boots a fresh page.
-    if (fast && maps && maps.albedo) maps.albedo.anisotropy = 1;
+    // where blades are subpixel): stated at the load above (loadSpeciesMaps),
+    // since a write here would come after the upload.
     const hasTransl = !!(maps && maps.transl) && !fast;
     const MatClass = hasTransl ? T3.MeshSSSNodeMaterial : T3.MeshStandardNodeMaterial;
     const mat = new MatClass({
