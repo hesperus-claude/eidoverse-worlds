@@ -14,6 +14,7 @@
 //   · a junk pref accepted                                       → A2
 //   · no clamp to getMaxAnisotropy                               → A4
 //   · queueTexturePrime without the assignment (assets.js)      → I1, I2, I3
+//   · queueTexturePrime writing the renderer's 0 (no floor at 1) → I5
 //   · setAnisotropy writing a value not in the list              → M2
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/texture-filter-test.ts
@@ -163,7 +164,10 @@ async function image(pref: string | null, max = 16) {
   const c = await image('16', 8);
   check('I3 16 on a GPU that reports 8: 8', c.at[0] === 8 && c.now === 8, c);
   const one = await image('1');
-  check('I4 (control) ew-anisotropy=1: three\'s 1, as before', one.at[0] === 1 && one.now === 1, one); }
+  check('I4 (control) ew-anisotropy=1: three\'s 1, as before', one.at[0] === 1 && one.now === 1, one);
+  // a WebGL 2 context without EXT_texture_filter_anisotropic reports 0: the door must not write that 0 (A4c's twin)
+  const z = await image('8', 0);
+  check('I5 the image door on a renderer that reports 0 (no EXT_texture_filter_anisotropic): it stays three\'s 1', z.at[0] === 1 && z.now === 1, z); }
 
 console.log('MODULE — render/anisotropy.js: the levels, the getter and the setter the Settings rows call');
 { let M: any = null, why = '';
