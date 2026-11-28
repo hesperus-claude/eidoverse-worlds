@@ -211,6 +211,8 @@ console.log('MATERIALS — the mesh a material was prepared for is marked, so th
   mats.prepareMaterial(part.material, part);
   check('SW1 prepareMaterial(mat, receiver) marks the receiver for both sweeps', !swept(part), JSON.stringify(part.userData));
   check('SW2 ...and keeps what the receiver already carried', part.userData.meshPart === true);
+  // marked never means bare: the sweeps it now skips were its second coat, the factory's wetness and cloud shade are still on it
+  check('SW7 ...and its material carries the factory\'s own wetness and cloud shade (colour and roughness wrapped)', part.material.userData.envWrapped === true && !!part.material.colorNode && !!part.material.roughnessNode, JSON.stringify(part.material.userData));
   // a second mesh given an already prepared material (a clone path, a shared material): the mesh is new even if the material is not
   const again = new THREE.Mesh(new THREE.BufferGeometry(), part.material);
   mats.prepareMaterial(again.material, again);
