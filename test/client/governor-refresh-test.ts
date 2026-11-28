@@ -19,6 +19,8 @@ plugin({ name: 'governor-refresh-stub', setup(b) {
     '^(\\.\\.?/)+(ui/)?statuschips\\.js$', '^\\.\\./core\\.js$', '^\\.\\./assets\\.js$', '^\\.\\./colliders\\.js$', '^(\\.\\.?/)+(render/)?lightgizmo\\.js$', '^\\.\\./world\\.js$',
     '^(\\.\\.?/)+(render/)?materials\\.js$'])
     stubResolve(b, new RegExp(f), () => ({ path: STUB }));
+  // the real frameloop.js (P5) imports breadcrumbs.js, whose only import is net.js: a leaf stands in for it
+  stubResolve(b, /^\.\.\/net\.js$/, (a) => (/[\\/]debug[\\/]breadcrumbs\.js$/.test(a.importer) ? { path: fileURLToPath(new URL('../stubs/net-leaf-stub.mjs', import.meta.url)) } : undefined));
 } });
 const mem = new Map<string, string>();
 (globalThis as any).localStorage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => mem.set(k, String(v)), removeItem: (k: string) => mem.delete(k) };
@@ -149,5 +151,42 @@ const rep = (ms: number[], n: number) => Array.from({ length: n }, (_, i) => ms[
   check('E8 catch-up pairs (a 62 ms frame, then a 4.7 ms one) do not raise a 30 Hz panel', e?.hz() === 30, e?.hz()); }
 { const e = mk(); feed(e, [0, -5, NaN, 5000, ...rep([1000 / 144], 100)]);
   check('E9 resumes and nonsense intervals are ignored; 144 Hz reads 144', e?.hz() === 144, e?.hz()); }
+{ const e = mk(); feed(e, rep([250], 300)); feed(e, rep([1], 300));
+  check('E10 a throttled 4 Hz tab (250 ms frames) and 1 ms bursts are not cadence: no estimate', e != null && e.hz() == null, e?.hz()); }
+
+// ---- P: pins added after the mutants (each row names the mutant it kills) ------------------------------------------
+// M4: a headset's measured cadence below 72 is not believed (half-rate reprojection would read as a 45 Hz "display")
+stub.renderer.xr.isPresenting = true; session = {};
+cadence(45, 300, true);
+check('P1 no frameRate, a steady 45 Hz cadence in the session: target stays 72, so 45 fps is slow', dbg().target === 72 && regimeOf(45) === 'slow', { target: dbg().target });
+stub.renderer.xr.isPresenting = false;
+// M15: headset frames never feed the flat estimate (F2 left a 30 Hz panel measured; a 72 Hz session must not raise it)
+stub.renderer.xr.isPresenting = true; cadence(72, 300, true); stub.renderer.xr.isPresenting = false; cadence(30, 2);
+check('P2 a 30 Hz panel stays 30 after a 72 Hz headset session', dbg().target === 30, dbg().target);
+// M18: before the first fps window (0) the share is the slow one, as before
+cadence(60, 300);   // ratchets the flat estimate to 60 again
+tick(53); tick(0);
+check('P3 fps 0 (no window measured yet): the background share is 0.2, as before', FB.budgetStats().share === 0.2, FB.budgetStats().share);
+// M19: loading grace's history line follows the regime too: 20 fps is slow at 60 Hz, mid at 30 Hz
+{ FB.reportPending('governor-refresh-test', 1);
+  const h0 = hist().length; tick(20); tick(53);
+  const at60 = hist().slice(h0).some((h) => /grace held/.test(h));
+  FB.reportPending('governor-refresh-test', 0); tick(53);
+  R?.resetRefresh(); cadence(30, 300);
+  FB.reportPending('governor-refresh-test', 1);
+  const h1 = hist().length; tick(20); tick(29);
+  const at30 = hist().slice(h1).some((h) => /grace held/.test(h));
+  FB.reportPending('governor-refresh-test', 0);
+  check('P4 loading grace logs a held slow second at 60 Hz (20 fps) but not at 30 Hz, where 20 fps is not slow', at60 && !at30, { at60, at30 }); }
+// M20: the REAL frame loop feeds the estimator (frameloop.js is stubbed for the governor above; imported here by its
+// absolute path, which the stub's specifier patterns do not match, so this is the module the client runs)
+{ R?.resetRefresh();
+  let cb: any = null; (globalThis as any).requestAnimationFrame = (f: any) => { cb = f; return 1; };
+  (globalThis as any).location ??= { search: '' };   // breadcrumbs.js reads ?bc at load
+  const FL: any = await import(fileURLToPath(new URL('../../client/lib/render/frameloop.js', import.meta.url)));
+  FL.startFrame();
+  const t0 = performance.now();
+  for (let i = 1; i <= 300 && cb; i++) { const f = cb; cb = null; f(t0 + (i * 1000) / 30); }
+  check('P5 the real frame loop feeds the estimator: 300 frames at 30 Hz read as a 30 Hz panel', R?.refreshEstimate(false) === 30, R?.refreshEstimate(false)); }
 
 T.done();
