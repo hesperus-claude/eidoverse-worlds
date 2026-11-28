@@ -1691,7 +1691,7 @@
    "fog": "× this renderer's own fog curve",
    "exposure": "× this renderer's tone mapping",
    "bloom": "how strongly what is brighter than white glows round its edges, 0..3: the owner's look (Godot glow_intensity, Filament BloomOptions.strength); each viewer's glow setting decides whether it is drawn, and a headset draws none",
-   "ao": "how strongly corners, contacts and creases are shaded from the ambient light, 0..3: the owner's look (Godot ssao_intensity; indirect light only, Godot's ssao_light_affect 0); each viewer's ambient occlusion setting decides whether it is drawn, and a headset draws none",
+   "ao": "how strongly corners, contacts and creases are shaded from the ambient light, 0..3: the owner's look, Godot's ssao_intensity (a linear multiplier on the occlusion; Godot's default 2), with Godot's ssao_power 1.5 and ssao_radius 1 m; indirect light only (Godot's ssao_light_affect 0); each viewer's ambient occlusion setting decides whether it is drawn (off by default on WebGL 2), and a headset draws none",
    "ambient": "× this renderer's ambient curve",
    "forecast": "a weather policy {seed, states: [name | {state, weight}], dwell: [min, max] s, k: [min, max], transition: s, epoch (stamped)}",
    "override": "a weather act inside a forecast segment {state, k?, ts} (stamped)",

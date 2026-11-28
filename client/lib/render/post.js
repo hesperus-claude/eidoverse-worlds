@@ -1,10 +1,10 @@
 // post — the passes after the scene: the post-processing pipeline (Godot's Environment glow and SSAO, Filament's View
 // BloomOptions and AmbientOcclusionOptions). Two passes, each the world's look and each viewer's cost: bloom (sky.bloom:
-// glow strength 0..3; ew-bloom on/off) and ambient occlusion (sky.ao: occlusion strength 0..3; ew-ao on/off); absent =
-// none, every world's look before the fields; both prefs default on. R: "the world owner should
+// glow strength 0..3; ew-bloom on/off, default on) and ambient occlusion (sky.ao: Godot's ssao_intensity 0..3; ew-ao on/off,
+// default off on WebGL 2 and on elsewhere); absent = none, every world's look before the fields. R: "the world owner should
 // control *what* lighting, and the user should only control perf/quality of said lighting so they can run it".
 //
-// AO is GTAO (three's GTAONode) from a normal/depth pre-pass at half resolution, applied INSIDE lighting through a copy of three's
+// AO is GTAO (three's GTAONode, blurred) from a normal/depth pre-pass at half resolution, applied INSIDE lighting through a copy of three's
 // builtinAOContext (aoContext below, which skips unlit materials): it feeds the material's ambientOcclusion, which only indirect light reads (indirect diffuse and
 // specular), so direct light and its shadows are never darkened twice: Godot's ssao_light_affect 0, its default.
 // One three RenderPipeline (TSL): [pre-pass → GTAO →] pass(scene, camera) [→ BloomNode] → the pipeline's output pass. three moves tone mapping
@@ -19,16 +19,58 @@
 // the rest of the page, the frame drawn plain, a clientlog line written; postDebug() says why. A reload tries again.
 import { THREE, renderer as pageRenderer } from '../core.js';
 import { tee } from '../base.js';
-import { pass, mrt, normalView, screenUV, context, Fn, smoothstep, max, vec4, uniform } from 'three/tsl';
+import { pass, mrt, normalView, screenUV, context, Fn, smoothstep, max, min, vec4, uniform, float, pow, clamp, texture } from 'three/tsl';
 import { bloom as bloomNode } from 'three/addons/tsl/display/BloomNode.js';
-import { ao as gtaoNode } from 'three/addons/tsl/display/GTAONode.js';
+import GTAONode from 'three/addons/tsl/display/GTAONode.js';
+import { depthAwareBlur } from 'three/addons/tsl/display/depthAwareBlur.js';
 
 export const BLOOM_PREF = 'ew-bloom', AO_PREF = 'ew-ao';
 export const BLOOM_MAX = 3, AO_MAX = 3;              // the registry's ranges (componentspec sky.bloom, sky.ao)
-// GTAO at half resolution, radius 0.5 m: contact and corner shading at room scale (lab 11-06; Godot's ssao_radius default is
-// 1, half resolution is Godot's default too). sky.ao is GTAO's scale, an exponent on visibility (pow(v, ao)): 0 none, 1
-// GTAO's own, more darker (Godot's ssao_intensity, default 2, is the same kind of dial)
-export const AO_RADIUS = 0.5, AO_RESOLUTION = 0.5;
+// AO at Godot 4.6's defaults where three's GTAO has the same dial: ssao_radius 1.0 m, half resolution, and Godot's mapping
+// from occlusion to what lighting reads (ssao.glsl): visibility = pow(clamp(1 - min(intensity × obscurance, 0.98), 0, 1),
+// power), with obscurance = 1 - GTAO's own visibility (its scale held at 1), intensity the world's sky.ao (Godot's
+// ssao_intensity, a linear multiplier, default 2) and power Godot's ssao_power default, 1.5. Then a separable depth-aware
+// blur (three's depthAwareBlur, horizontal and vertical, at the AO's half resolution) for Godot's edge-aware blur passes.
+// Godot applies its intensity and power before its blur; here they are applied after it, when the AO is read.
+export const AO_RADIUS = 1, AO_RESOLUTION = 0.5, AO_POWER = 1.5, AO_CLAMP = 0.98, AO_BLUR = true;
+// three's GTAONode with a separable depth-aware blur of its result, as three's SSAONode blurs its own (horizontal into a
+// second target, vertical back into the AO target), so the result has no dither on smooth surfaces
+class BlurredGTAONode extends GTAONode {
+  constructor(depthNode, normalNode, camera) {
+    super(depthNode, normalNode, camera);
+    this.blur = AO_BLUR; this._blurCamera = camera;
+    this._blurTarget = new THREE.RenderTarget(1, 1, { depthBuffer: false, format: THREE.RedFormat });
+    this._blurTarget.texture.name = 'GTAO.Blur';
+    this._blurInput = texture(this._aoRenderTarget.texture);
+    this._blurStep = uniform(new THREE.Vector2());
+    this._blurMaterial = new THREE.NodeMaterial(); this._blurMaterial.name = 'GTAO.Blur';
+    this._blurQuad = new THREE.QuadMesh(this._blurMaterial); this._blurQuad.name = 'GTAO.Blur';
+    this._blurState = undefined;   // RendererUtils makes one on first use (a null would be written into)
+  }
+  setSize(width, height) { super.setSize(width, height); this._blurTarget.setSize(this._aoRenderTarget.width, this._aoRenderTarget.height); }
+  updateBefore(frame) {
+    super.updateBefore(frame);
+    if (!this.blur) return;
+    const r = frame.renderer, w = this._aoRenderTarget.width, h = this._aoRenderTarget.height;
+    this._blurState = THREE.RendererUtils.resetRendererState(r, this._blurState);
+    try {
+      r.setClearColor(0xffffff, 1);
+      this._blurInput.value = this._aoRenderTarget.texture; this._blurStep.value.set(1 / w, 0);
+      r.setRenderTarget(this._blurTarget); this._blurQuad.render(r);
+      this._blurInput.value = this._blurTarget.texture; this._blurStep.value.set(0, 1 / h);
+      r.setRenderTarget(this._aoRenderTarget); this._blurQuad.render(r);
+    } finally { THREE.RendererUtils.restoreRendererState(r, this._blurState); }
+  }
+  setup(builder) {
+    const out = super.setup(builder);
+    this._blurMaterial.contextNode = context(builder.getSharedContext());
+    this._blurMaterial.fragmentNode = depthAwareBlur(this._blurInput, this.depthNode, this._blurStep, this._blurCamera, 2, this.radius);
+    this._blurMaterial.needsUpdate = true;
+    return out;
+  }
+  dispose() { super.dispose(); this._blurTarget.dispose(); this._blurMaterial.dispose(); }
+}
+
 // What feeds the bloom is Godot's glow first pass at its defaults (servers/rendering/renderer_rd/shaders/effects/copy.glsl):
 // on the EXPOSED colour, feedback = smoothstep(threshold, threshold + knee, max(r, g, b)), then min(colour × feedback, cap).
 // Godot multiplies by exposure first; three applies toneMappingExposure later, inside the tone curve of the pipeline's output
@@ -75,10 +117,10 @@ const strengthOf = (s, max) => { const n = typeof s === 'number' ? s : NaN; retu
 let bloomStrength = 0, aoStrength = 0;
 /** The world's glow strength (sky.js applyTuning, like its exposure). A live edit moves the uniform; nothing rebuilds. */
 export function setBloom(s) { bloomStrength = strengthOf(s, BLOOM_MAX); if (built?.glow) built.glow.strength.value = bloomStrength; }
-/** The world's ambient occlusion strength (sky.js applyTuning). A live edit moves GTAO's scale; nothing rebuilds. */
-export function setAo(s) { aoStrength = strengthOf(s, AO_MAX); if (built?.occl) built.occl.scale.value = aoStrength; }
+/** The world's ambient occlusion intensity (sky.js applyTuning; Godot's ssao_intensity). A live edit moves a uniform; nothing rebuilds. */
+export function setAo(s) { aoStrength = strengthOf(s, AO_MAX); if (built?.aoIntensity) built.aoIntensity.value = aoStrength; }
 
-let built = null;          // { pipe, scenePass, pre, occl, glow, scene, camera, key, frames }
+let built = null;          // { pipe, scenePass, pre, occl, aoIntensity, glow, cap, scene, camera, key, frames }
 let failed = null;         // why the pipeline was dropped for this page
 let builds = 0, active = false, why = 'no pass asked: the world sets no sky.bloom or sky.ao';
 
@@ -124,7 +166,7 @@ function build(renderer, scene, camera, key) {
   const scenePass = pass(scene, camera);
   // the world's own pass for syncgate: a WebGL link met here defers a frame, as it does on the plain frame's canvas pass
   scenePass.renderTarget.isWorldPass = true;
-  let pre = null, occl = null, glow = null;
+  let pre = null, occl = null, glow = null, aoIntensity = null;
   if (key.includes('ao')) {
     // samples 0: GTAO gathers depth, and a multisampled depth texture can't be gathered (lab 11-06: WGSL validation
     // failed and the page hung at msaa=1). Opaque only, as three's GTAO example and Godot's depth pre-pass draw it.
@@ -133,9 +175,11 @@ function build(renderer, scene, camera, key) {
     pre.transparent = false;
     pre.setMRT(mrt({ output: normalView }));
     filterPrePass(pre);
-    occl = gtaoNode(pre.getTextureNode('depth'), pre.getTextureNode(), camera);
-    occl.resolutionScale = AO_RESOLUTION; occl.radius.value = AO_RADIUS; occl.scale.value = aoStrength;
-    scenePass.contextNode = aoContext(occl.getTextureNode().sample(screenUV).r);
+    occl = new BlurredGTAONode(pre.getTextureNode('depth'), pre.getTextureNode(), camera);
+    occl.resolutionScale = AO_RESOLUTION; occl.radius.value = AO_RADIUS; occl.scale.value = 1;
+    aoIntensity = uniform(aoStrength);
+    const obscurance = float(1).sub(occl.getTextureNode().sample(screenUV).r);
+    scenePass.contextNode = aoContext(pow(clamp(float(1).sub(min(aoIntensity.mul(obscurance), AO_CLAMP)), 0, 1), AO_POWER));
   }
   const color = scenePass.getTextureNode('output');
   let cap = null;
@@ -146,7 +190,7 @@ function build(renderer, scene, camera, key) {
     pipe.outputNode = color.add(glow);
   } else pipe.outputNode = color;
   builds++;
-  built = { pipe, scenePass, pre, occl, glow, cap, scene, camera, key, frames: 0 };
+  built = { pipe, scenePass, pre, occl, aoIntensity, glow, cap, scene, camera, key, frames: 0 };
 }
 
 function fail(e) {
