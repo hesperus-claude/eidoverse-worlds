@@ -269,6 +269,17 @@ check('B4 leaving the session forgets the back-off: a new session restores after
 { fresh(); for (let t = 0; t < 30 && !dbg().detailShed; t++) tick(36);
   const hold = plantRun(60, () => 73);
   check('B5 a restore that holds (no relapse) leaves the need at 5', hold.restores === 1 && dbg().restoreNeed === 5, { hold, need: dbg().restoreNeed }); }
+// pins for the back-off's surviving mutants (no cap; window ignored; another lever's restore counted)
+const newSession = () => { stub.renderer.xr.isPresenting = false; session = null; tick(53); stub.renderer.xr.isPresenting = true; session = { frameRate: 72 }; fresh(); tick(72); };
+{ newSession(); plantRun(400, (shed) => (shed ? 73 : 36));
+  check('B7 the wait is capped: after 400 s of relapses the next restore needs 80 s, not more', dbg().restoreNeed === 80, dbg().restoreNeed); }
+{ newSession(); for (let t = 0; t < 12; t++) tick(36);           // lod, then detail, shed
+  for (let t = 0; t < 45; t++) tick(73);                          // both restored and held long past 20 s
+  const need0 = dbg().restoreNeed; for (let t = 0; t < 3; t++) tick(36);
+  check('B8 a shed long after the lever\'s restore is a new slow spell, not a relapse: the need stays 5', need0 === 5 && dbg().restoreNeed === 5, { need0, need: dbg().restoreNeed, detail: dbg().detailShed }); }
+{ newSession(); for (let t = 0; t < 6; t++) tick(73);            // a restore happens (the stub's casters always restore)
+  for (let t = 0; t < 3; t++) tick(36);                           // …then lod sheds, a lever never restored this session
+  check('B9 only a lever\'s OWN recent restore makes a relapse: another lever shed just after is not one', dbg().restoreNeed === 5, dbg().restoreNeed); }
 stub.renderer.xr.isPresenting = false; session = null;
 // B6 (control): the same cliff on a flat 60 Hz display still cycles as before (no back-off off the headset, for now)
 { R?.resetRefresh(); cadence(60, 300); fresh(); tick(53);
