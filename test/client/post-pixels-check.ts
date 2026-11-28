@@ -208,6 +208,26 @@ try {
   check("PA3 a see-through caster (transparent: true) keeps its shadow with AO on: the floor under it stays dark (the shadow map is not drawn opaque-only inside the pre-pass)",
     sh("seeThrough").passes === "ao" && !!sh("seeThrough").under && sh("seeThrough").under[0] < sh("seeThrough").open[0] * 0.5 && Math.abs(sh("seeThrough").under[1] - sh("seeThrough").under[0]) <= 2, JSON.stringify(shadows));
 
+  // PA4: AO leaves unlit materials alone (pictures, texts, quads, screens, the sky dome): a basic-material box on a
+  // basic-material floor, no lights at all, AO at 3; the floor at the box's foot is the plain frame's
+  const unlit = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js'), T = p.THREE, r = p.renderer, out = {};
+    for (const [k, Mat] of [['node', T.MeshBasicNodeMaterial], ['classic', T.MeshBasicMaterial]]) {
+      const S = new T.Scene(); S.background = new T.Color(0, 0, 0);
+      const cam = new T.PerspectiveCamera(50, p.W / p.H, 0.1, 100); cam.position.set(0, 2.2, 4.2); cam.lookAt(0, 0.3, 0); cam.updateMatrixWorld(true);
+      const mat = new Mat({ color: new T.Color(0.5, 0.5, 0.5) });
+      S.add(new T.Mesh(new T.PlaneGeometry(12, 12).rotateX(-Math.PI / 2), mat)); const box = new T.Mesh(new T.BoxGeometry(1, 1, 1), mat); box.position.set(0, 0.5, 0); S.add(box);
+      const at = (v3) => { const v = v3.clone().project(cam); return [(v.x + 1) / 2 * p.W, (1 - v.y) / 2 * p.H]; };
+      const foot = at(new T.Vector3(0, 0.02, 0.56));
+      const plainF = () => { p.hold(); r.setRenderTarget(null); r.render(S, cam); return p.grab(); };
+      const postF = async () => { p.hold(); const d = post.postPass(r, S, cam); if (d) d(); else r.render(S, cam); return p.grab(); };
+      await r.compileAsync(S, cam); globalThis.__setA(0); const a = await p.settle(plainF); globalThis.__setA(3); const b = await p.settle(postF);
+      out[k] = { passes: post.postDebug().passes, foot: a && b ? [p.lum(a, ...foot, 0, 3), p.lum(b, ...foot, 0, 3)].map(Math.round) : null, diff: a && b ? p.diff(a, b) : null };
+      globalThis.__setA(0); await postF(); }
+    return out;`);
+  console.log(`  · ${JSON.stringify(unlit)}`);
+  check("PA4 AO leaves unlit materials alone: MeshBasicNodeMaterial and MeshBasicMaterial, AO at 3, draw the plain frame (every channel within 1 of 255), the box's foot included",
+    ["node", "classic"].every((k) => unlit[k]?.passes === "ao" && !!unlit[k]?.diff && unlit[k].diff.max <= 1 && unlit[k].foot[0] > 60), JSON.stringify(unlit));
+
   // PA9 LAST (a failure drops the pipeline for the page): a throw inside the AO pre-pass. post.js draws the frame plain;
   // the renderer must be left as the plain path expects it (three's PassNode.updateBefore has no try/finally: MRT, the AO
   // context, renderer.transparent would stay as the pass set them), so the next plain frame is the plain picture

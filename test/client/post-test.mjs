@@ -280,6 +280,14 @@ console.log('AO — sky.ao, the world\'s ambient occlusion: a normal/depth pre-p
     p?.occl && [p.occl.scale.value, p.occl.radius.value, p.occl.resolutionScale]);
   const ctx = p?.scenePass?.contextNode?.getFlowContextData?.() ?? p?.scenePass?.contextNode?.value;
   check('A2 …and the scene pass carries the AO into lighting (three\'s builtinAOContext: getAO, the ambientOcclusion that only indirect light reads)', typeof ctx?.getAO === 'function', ctx && Object.keys(ctx));
+  {
+    // three's BasicLightingModel multiplies its indirect term by the material's ambientOcclusion, so an unlit material
+    // (pictures, texts, quads, screens, the sky dome) would be darkened by AO; three's own context already skips transparents
+    const getAO = ctx?.getAO, ask = (m) => { try { return getAO?.(null, { material: m }); } catch (e) { return 'threw ' + e?.message; } };
+    const lit = ask(new THREE.MeshStandardNodeMaterial()), unlitNode = ask(new THREE.MeshBasicNodeMaterial()), unlitClassic = ask(new THREE.MeshBasicMaterial()), glass = ask(new THREE.MeshStandardNodeMaterial({ transparent: true }));
+    check('AU1 the AO context darkens a lit material (MeshStandardNodeMaterial: an AO node)', !!lit?.isNode, typeof lit);
+    check('AU1 …and leaves unlit ones alone: MeshBasicNodeMaterial and MeshBasicMaterial get no AO (the input, null), as a transparent one does', unlitNode === null && unlitClassic === null && glass === null, [unlitNode, unlitClassic, glass].map((x) => x === null ? 'null' : typeof x));
+  }
   check('A2 …no bloom asked: the output is the scene pass\'s colour, no BloomNode', !p?.glow, !!p?.glow);
   check('A2 …the readout: active, the live AO strength', dbg().active === true && dbg().ao === 1.5 && dbg().why == null, dbg());
   setAo(2.5); frame();
