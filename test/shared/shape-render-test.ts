@@ -326,9 +326,10 @@ await tryRow('SK', async () => {
 // ===================================================================== gi-volume: the world's baked bounce in a zone (an irradiance probe volume: Godot LightmapGI's probes, Bevy)
 await tryRow('GV', async () => {
   const V = COMPONENTS['gi-volume'];
-  check('GV1 gi-volume: on a thing; strength (0..16), spacing (m, 0.25..8), bounces (int 0..2); absent meanings written, no stored defaults', V?.on === 'thing' && keys(V?.fields) === keys({ strength: 1, spacing: 1, bounces: 1 }) && V.fields.bounces === 'int'
-    && V.ranges?.strength?.min === 0 && V.ranges?.strength?.max === 16 && V.ranges?.spacing?.min === 0.25 && V.ranges?.spacing?.max === 8 && V.ranges?.bounces?.min === 0 && V.ranges?.bounces?.max === 2 && V.units?.spacing === 'm'
-    && ['strength', 'spacing', 'bounces'].every((k) => !!V.absentMeans?.[k] && !!V.docs?.[k]) && !V.defaults, V);
+  check('GV1 gi-volume: on a thing; energy (0..16, Godot\'s word for a bake\'s scale), spacing (m, 0.25..8), bounces (int 0..2); absent meanings written, no stored defaults', V?.on === 'thing' && keys(V?.fields) === keys({ energy: 1, spacing: 1, bounces: 1 }) && V.fields.bounces === 'int'
+    && V.ranges?.energy?.min === 0 && V.ranges?.energy?.max === 16 && V.ranges?.spacing?.min === 0.25 && V.ranges?.spacing?.max === 8 && V.ranges?.bounces?.min === 0 && V.ranges?.bounces?.max === 2 && V.units?.spacing === 'm'
+    && ['energy', 'spacing', 'bounces'].every((k) => !!V.absentMeans?.[k] && !!V.docs?.[k]) && !V.defaults, V);
+  check('GV1 …its help and PROTOCOL §4 spell it energy, and neither says strength', /energy\?/.test(V?.help ?? '') && !/strength/.test(JSON.stringify([V?.help, V?.docs, V?.absentMeans])) && /`gi-volume \{energy\?, spacing\?, bounces\?\}`/.test(read('spec/PROTOCOL.md')), V?.help);
   const W = scratchWorld('w2r-gi').seed({ room: { pos: [0, 1.5, 0] }, ball: { pos: [5, 1, 0] }, sky2: { pos: [9, 1, 0] } });
   const C = (id: string) => W.state().entities[id].c;
   let r = W.call('set', { id: 'room', component: 'gi-volume', value: {} });
@@ -340,14 +341,14 @@ await tryRow('GV', async () => {
   r = W.call('set', { id: 'sky2', component: 'gi-volume', value: {} });
   check('GV2 …and on a global zone (a grid needs an extent)', code(r) === 'shape', r.refused);
   r = W.call('set', { id: 'room', component: 'zone', value: { shape: 'box', size: [6, 3, 9] } });
-  const r2 = W.call('set', { id: 'room', component: 'gi-volume', value: { strength: 1.5, spacing: 1, bounces: 2 } });
-  check('GV3 on a box zone it is stored as written', r.ok && r2.ok && JSON.stringify(C('room')['gi-volume']) === JSON.stringify({ strength: 1.5, spacing: 1, bounces: 2 }), [r.refused, r2.refused, C('room')['gi-volume']]);
+  const r2 = W.call('set', { id: 'room', component: 'gi-volume', value: { energy: 1.5, spacing: 1, bounces: 2 } });
+  check('GV3 on a box zone it is stored as written', r.ok && r2.ok && JSON.stringify(C('room')['gi-volume']) === JSON.stringify({ energy: 1.5, spacing: 1, bounces: 2 }), [r.refused, r2.refused, C('room')['gi-volume']]);
   const r3 = W.call('set', { id: 'room', component: 'gi-volume', value: {} });
   check('GV3 …an empty one too, and nothing is filled in (absent means the default)', r3.ok && JSON.stringify(C('room')['gi-volume']) === '{}', [r3.refused, C('room')['gi-volume']]);
-  const bad = [{ spacing: 0.1 }, { spacing: 9 }, { bounces: 3 }, { bounces: 1.5 }, { strength: -1 }, { strength: 17 }, { strength: 'bright' }].map((value) => code(W.call('set', { id: 'room', component: 'gi-volume', value })));
-  check('GV4 out of range, not an int or not a number is refused (spacing 0.1 / 9, bounces 3 / 1.5, strength −1 / 17 / a string), and the stored one is kept', bad.every((c) => c === 'shape' || c === 'bounds') && JSON.stringify(C('room')['gi-volume']) === '{}', bad);
-  const unk = W.call('set', { id: 'room', component: 'gi-volume', value: { energy: 2 } });
-  check('GV4 …an unknown field is refused (schema)', code(unk) === 'schema', unk.refused);
+  const bad = [{ spacing: 0.1 }, { spacing: 9 }, { bounces: 3 }, { bounces: 1.5 }, { energy: -1 }, { energy: 17 }, { energy: 'bright' }].map((value) => code(W.call('set', { id: 'room', component: 'gi-volume', value })));
+  check('GV4 out of range, not an int or not a number is refused (spacing 0.1 / 9, bounces 3 / 1.5, energy −1 / 17 / a string), and the stored one is kept', bad.every((c) => c === 'shape' || c === 'bounds') && JSON.stringify(C('room')['gi-volume']) === '{}', bad);
+  const unk = W.call('set', { id: 'room', component: 'gi-volume', value: { strength: 2 } });
+  check('GV4 …an unknown field is refused (schema): the old spelling strength among them (renamed while trial, no alias)', code(unk) === 'schema', unk.refused);
   const dz = W.call('delete', { id: 'room', component: 'zone' });
   check('GV4 …and its zone can\'t be taken from under it', !dz.ok && C('room').zone !== undefined, [dz.refused, C('room').zone]);
   r = W.call('set', { id: '@world', component: 'gi-volume', value: {} });

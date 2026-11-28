@@ -32,9 +32,9 @@ if (G) {
     hall: { c: { transform: { pos: [10, 0, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] }, ...extra.hall } },
     room: { c: { transform: { pos: [0, 1.5, 0], q: [0, 0, 0, 1], scale: [1, 1, 1] }, parent: { to: 'hall' }, zone, 'gi-volume': gi, ...extra.room } } } });
 
-  const v = G.giVolumesOf(room({ strength: 2 }));
-  check('G1 a thing with a box zone and gi-volume is one volume: its world centre, the zone\'s size, the fields read (absent: strength 1, spacing 1.5, bounces 1)',
-    v.length === 1 && v[0].id === 'room' && same(v[0].center, [10, 1.5, 0]) && same(v[0].size, [6, 3, 9]) && v[0].strength === 2 && v[0].spacing === 1.5 && v[0].bounces === 1, v);
+  const v = G.giVolumesOf(room({ energy: 2 }));
+  check('G1 a thing with a box zone and gi-volume is one volume: its world centre, the zone\'s size, the fields read (absent: energy 1, spacing 1.5, bounces 1)',
+    v.length === 1 && v[0].id === 'room' && same(v[0].center, [10, 1.5, 0]) && same(v[0].size, [6, 3, 9]) && v[0].energy === 2 && v[0].spacing === 1.5 && v[0].bounces === 1, v);
   check('G1 …no zone, a sphere zone, a global zone or a switched-off host: no volume',
     G.giVolumesOf(room({}, null)).length === 0 && G.giVolumesOf(room({}, { shape: 'sphere', radius: 2 })).length === 0
     && G.giVolumesOf(room({}, { shape: 'box', size: [6, 3, 9], global: true })).length === 0 && G.giVolumesOf(room({}, undefined, { hall: { disabled: true } })).length === 0,
@@ -50,9 +50,10 @@ if (G) {
   check('G4 the viewer\'s probe cap widens the owner\'s spacing (low ≤ 250, high ≤ 1000), never under 2 a side, high finer than low',
     bl && bh && prod(bl.counts) <= 250 && prod(bh.counts) <= 1000 && prod(bh.counts) > prod(bl.counts) && [...bl.counts, ...bh.counts].every((n) => n >= 2), [bl?.counts, bh?.counts]);
   check('G5 dial off: no grid', G.planGrid(v[0], 'off') === null && G.plansOf(room({}), 'off').length === 0, [G.planGrid(v[0], 'off')]);
-  check('G5 …strength 0: no grid either (nothing to light)', G.planGrid(G.giVolumesOf(room({ strength: 0 }))[0], 'high') === null, '');
-  const wild = G.giVolumesOf(room({ spacing: 0.01, bounces: 9, strength: 99 }))[0];
-  check('G6 a value past the registry\'s range reads at its bound (spacing ≥ 0.25 m, bounces ≤ 2, strength ≤ 16)', wild?.spacing === 0.25 && wild?.bounces === 2 && wild?.strength === 16, wild);
+  check('G5 …energy 0: no grid either (nothing to light)', G.planGrid(G.giVolumesOf(room({ energy: 0 }))[0], 'high') === null, '');
+  const wild = G.giVolumesOf(room({ spacing: 0.01, bounces: 9, energy: 99 }))[0];
+  check('G6 the old spelling `strength` is no field (renamed energy while trial, no alias): it reads as absent', G.giVolumesOf(room({ strength: 3 }))[0]?.energy === 1, G.giVolumesOf(room({ strength: 3 }))[0]);
+  check('G6 a value past the registry\'s range reads at its bound (spacing ≥ 0.25 m, bounces ≤ 2, energy ≤ 16)', wild?.spacing === 0.25 && wild?.bounces === 2 && wild?.energy === 16, wild);
   // three fades a grid from its outermost probes; a room's floor, walls and ceiling ARE its zone's faces (or just past them):
   // a hard edge there dropped the bounce off every surface it was for (render-lab 11-09: luma off 45.4, low 45.9; fade 0: 57)
   const cell = Math.max(...lo.size.map((e, i) => e / (lo.counts[i] - 1)));
@@ -170,10 +171,10 @@ if (G) {
   // night bake gives 0.319). What a bake holds is the room, not the hour.
   St.reset(); LR.setDayness(0.966); LP.bakes.length = 0;
   LR.requestLight('complight:bulb', { authored: true, pos: [0, 2, 0], intensity: 10, range: 5, decay: 2, dayAware: true });   // G16's lamp, inside the room
-  St.hydrate(giRoom({ bounces: 1, strength: 2 }));
+  St.hydrate(giRoom({ bounces: 1, energy: 2 }));
   await run(250);
   const day = LR.glowScale(), shown = LP.bakes[0]?.grid?.intensity;
-  check('G13 a bake step runs with the grid at its volume\'s strength, whatever the hour (the bounce pass reads it)', day < 0.01 && LP.bakes.length === 54 && LP.bakes.every((x) => x.intensity === 2), [day, LP.bakes.length, [...new Set(LP.bakes.map((x) => x.intensity))]]);
+  check('G13 a bake step runs with the grid at its volume\'s energy, whatever the hour (the bounce pass reads it)', day < 0.01 && LP.bakes.length === 54 && LP.bakes.every((x) => x.intensity === 2), [day, LP.bakes.length, [...new Set(LP.bakes.map((x) => x.intensity))]]);
   check('G13 …and the frame still shows the grid dimmed by day', Math.abs(shown - 2 * day) < 1e-12, [shown, 2 * day]);
   LR.setDayness(null);
   // G16 pins TODAY'S behaviour (the plan critique of 11-25, a second suspect for the loose per-patch fit, r = 0.43): the
