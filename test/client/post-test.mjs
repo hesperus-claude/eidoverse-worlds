@@ -288,6 +288,15 @@ console.log('AO — sky.ao, the world\'s ambient occlusion: a normal/depth pre-p
     check('AU1 the AO context darkens a lit material (MeshStandardNodeMaterial: an AO node)', !!lit?.isNode, typeof lit);
     check('AU1 …and leaves unlit ones alone: MeshBasicNodeMaterial and MeshBasicMaterial get no AO (the input, null), as a transparent one does', unlitNode === null && unlitClassic === null && glass === null, [unlitNode, unlitClassic, glass].map((x) => x === null ? 'null' : typeof x));
   }
+  {
+    // what the pre-pass draws (its own render-object hook): surfaces that write depth, not the sky or helpers
+    const ip = post.inPrePass, T = THREE, mesh = (m) => new T.Mesh(new T.BoxGeometry(), m), q = (o) => { try { return ip?.(o, o.material); } catch (e) { return 'threw'; } };
+    const sky = mesh(new T.MeshBasicNodeMaterial()); sky.userData.noPrePass = true;
+    const cases = { box: q(mesh(new T.MeshStandardNodeMaterial())), picture: q(mesh(new T.MeshBasicNodeMaterial())), grid: q(new T.GridHelper(4, 4)), lines: q(new T.LineSegments(new T.BufferGeometry(), new T.LineBasicMaterial())),
+      points: q(new T.Points(new T.BufferGeometry(), new T.PointsMaterial())), sprite: q(new T.Sprite(new T.SpriteMaterial())), noDepth: q(mesh(new T.MeshBasicNodeMaterial({ depthWrite: false }))), sky: q(sky) };
+    check('AP1 the pre-pass draws surfaces that write depth (a box, a picture quad), not lines, a grid, points, sprites, a mesh that writes no depth, or what the sky marks noPrePass',
+      typeof ip === 'function' && cases.box === true && cases.picture === true && ['grid', 'lines', 'points', 'sprite', 'noDepth', 'sky'].every((k) => cases[k] === false), cases);
+  }
   check('A2 …no bloom asked: the output is the scene pass\'s colour, no BloomNode', !p?.glow, !!p?.glow);
   check('A2 …the readout: active, the live AO strength', dbg().active === true && dbg().ao === 1.5 && dbg().why == null, dbg());
   setAo(2.5); frame();

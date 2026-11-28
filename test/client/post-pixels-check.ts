@@ -228,6 +228,30 @@ try {
   check("PA4 AO leaves unlit materials alone: MeshBasicNodeMaterial and MeshBasicMaterial, AO at 3, draw the plain frame (every channel within 1 of 255), the box's foot included",
     ["node", "classic"].every((k) => unlit[k]?.passes === "ao" && !!unlit[k]?.diff && unlit[k].diff.max <= 1 && unlit[k].foot[0] > 60), JSON.stringify(unlit));
 
+  // PA7: the pre-pass draws only depth-writing surfaces: no grid, line segments, sprite or depthWrite-false mesh, and
+  // nothing the sky marks noPrePass; the scene pass still draws them all
+  const kept = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js'), T = p.THREE, r = p.renderer;
+    const S = new T.Scene(); S.background = new T.Color(0, 0, 0); S.add(new T.AmbientLight(0xffffff, 1.5));
+    const cam = new T.PerspectiveCamera(50, p.W / p.H, 0.1, 100); cam.position.set(0, 2.2, 4.2); cam.lookAt(0, 0.3, 0); cam.updateMatrixWorld(true);
+    const add = (o, name) => { o.name = name; S.add(o); return o; };
+    add(new T.Mesh(new T.PlaneGeometry(12, 12).rotateX(-Math.PI / 2), new T.MeshStandardNodeMaterial({ color: 0x999999 })), 'floor');
+    add(new T.Mesh(new T.BoxGeometry(1, 1, 1), new T.MeshStandardNodeMaterial({ color: 0x888888 })), 'box').position.set(0, 0.5, 0);
+    add(new T.GridHelper(6, 6), 'grid');
+    add(new T.LineSegments(new T.EdgesGeometry(new T.BoxGeometry(1.2, 1.2, 1.2)), new T.LineBasicNodeMaterial({ color: 0xffff00 })), 'edges').position.set(0, 0.6, 0);
+    add(new T.Sprite(new T.SpriteNodeMaterial({ color: 0xff00ff })), 'sprite').position.set(1.5, 1, 0);
+    add(new T.Mesh(new T.SphereGeometry(30, 16, 8), new T.MeshBasicNodeMaterial({ color: 0x223344, side: T.BackSide, depthWrite: false })), 'dome');
+    const sky = add(new T.Mesh(new T.SphereGeometry(25, 16, 8), new T.MeshBasicNodeMaterial({ color: 0x334455, side: T.BackSide })), 'sky'); sky.userData.noPrePass = true;
+    const seen = { pre: new Set(), scene: new Set() }, ro0 = r.renderObject;
+    r.renderObject = function (o, ...a) { const pipe = post.postDebug()._pipe, rt = r.getRenderTarget(); if (pipe && rt === pipe.pre?.renderTarget) seen.pre.add(o.name); else if (pipe && rt === pipe.scenePass.renderTarget) seen.scene.add(o.name); return ro0.call(this, o, ...a); };
+    const postF = async () => { p.hold(); const d = post.postPass(r, S, cam); if (d) d(); else r.render(S, cam); return p.grab(); };
+    try { await r.compileAsync(S, cam); globalThis.__setA(3); for (let i = 0; i < 4; i++) { await new Promise((q) => requestAnimationFrame(q)); await postF(); } }
+    finally { r.renderObject = ro0; globalThis.__setA(0); await postF(); }
+    return { pre: [...seen.pre].sort(), scene: [...seen.scene].sort() };`);
+  console.log(`  · ${JSON.stringify(kept)}`);
+  check("PA7 the AO pre-pass draws the floor and the box, and none of the grid, the line segments, the sprite, a depthWrite-false dome or a mesh the sky marks noPrePass",
+    JSON.stringify(kept.pre) === JSON.stringify(["box", "floor"]), JSON.stringify(kept));
+  check("PA7 …while the scene pass draws all seven", ["box", "dome", "edges", "floor", "grid", "sky", "sprite"].every((n) => kept.scene?.includes(n)), JSON.stringify(kept));
+
   // PA9 LAST (a failure drops the pipeline for the page): a throw inside the AO pre-pass. post.js draws the frame plain;
   // the renderer must be left as the plain path expects it (three's PassNode.updateBefore has no try/finally: MRT, the AO
   // context, renderer.transparent would stay as the pass set them), so the next plain frame is the plain picture
