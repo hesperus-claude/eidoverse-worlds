@@ -19,7 +19,7 @@
 //   detail     LOD bias 2 (far bodies at half rate) + shadow map 1024
 //
 // Pacing: a shed needs 3 consecutive slow seconds and resets the counter, one lever per window, so a hitch cannot
-// cascade the ladder. A restore needs 5 consecutive smooth seconds. The band between counts toward neither, except the
+// cascade the ladder. A restore needs 5 consecutive smooth seconds (more after a relapse in a headset: the back-off below). The band between counts toward neither, except the
 // cruise lever below (§22j).
 //
 // Slow and smooth are fractions of a TARGET rate (targetFps, below), not absolute numbers: on a flat display the target
@@ -322,6 +322,29 @@ let slowFor = 0;
 let goodFor = 0;
 const history = [];   // recent lever moves, for the debug surface
 
+// ---- relapse back-off (cold read 2026-11-27 F2) ------------------------------
+// A headset falls off a vsync cliff (72 → 36), so one lever can jump the whole band: slow at full quality, smooth with
+// one notch shed, slow again once it is restored. Undamped that is shed/restore every 8 s for good (shadows popping, the
+// detail chip flashing). So a lever shed again within RELAPSE_S of its own restore doubles the smooth streak the NEXT
+// restore needs (5 → 10 → 20 → 40 → 80 s); a restore that holds leaves it alone. Session-scoped like everything here:
+// forgotten when presenting starts or stops, never written anywhere. Every lever still moves both ways; after a relapse
+// a restore is only slower. Headset only for now (BACKOFF_FLAT): the 60 Hz trace itself relapses (governor-refresh G1:
+// cosmetics 4 s and 6 s after a restore, pixels 11 s after), so damping a flat display changes what it does today, and
+// that is the leads' call. Flipping BACKOFF_FLAT also covers the cruise's pixel step.
+const RESTORE_STREAK = 5, RESTORE_STREAK_MAX = 80, RELAPSE_S = 20;
+const BACKOFF_FLAT = false;
+let pulse = 0;                     // governPerformance calls: the governor's own 1 Hz clock
+let restoreNeed = RESTORE_STREAK;  // smooth seconds the next restore needs
+const restoredAt = new Map();      // lever name → pulse of its last restore
+let backoffPresenting = false;
+const backoffOn = () => presentingNow() || BACKOFF_FLAT;
+function noteShed(name) {
+  const at = restoredAt.get(name);
+  if (!backoffOn() || at == null || pulse - at > RELAPSE_S) return;
+  restoreNeed = Math.min(RESTORE_STREAK_MAX, restoreNeed * 2);
+  if (history.length < 60) history.push(`⟲ ${name} relapsed: next restore after ${restoreNeed}s @${Math.round(performance.now() / 1000)}s`);
+}
+
 // ---- the target rate and the two thresholds (header: Pacing) ----------------
 // [numerator, denominator]: integer arithmetic keeps a 60 Hz target's thresholds exactly 26 and 52
 const FLAT_SLOW = [26, 60], FLAT_SMOOTH = [52, 60];
@@ -388,6 +411,8 @@ export function whenCalm() {
 
 /** Feed once per second with the measured fps. */
 export function governPerformance(fps) {
+  pulse++;
+  if (presentingNow() !== backoffPresenting) { backoffPresenting = presentingNow(); restoreNeed = RESTORE_STREAK; restoredAt.clear(); }
   const r = regime(fps);
   // the share follows the machine, not the storm: a second that loading itself slowed must not shrink loading's slice
   if (!loadingBusy()) setShare(backgroundShare(r, fps));
@@ -418,6 +443,7 @@ export function governPerformance(fps) {
       for (const lever of LEVERS) {
         if (lever.shed()) {
           slowFor = 0;   // one lever per slow window — a hitch cannot cascade
+          noteShed(lever.name);
           if (history.length < 60) history.push(`− ${lever.name} @${Math.round(performance.now() / 1000)}s`);
           break;
         }
@@ -433,11 +459,12 @@ export function governPerformance(fps) {
       while (calmWaiters.length) calmWaiters.shift()();
     }
     goodFor++;
-    if (goodFor > 4) {
+    if (goodFor >= restoreNeed) {
       // unwind back-to-front: pixels return before the meadow regrows
       for (let i = LEVERS.length - 1; i >= 0; i--) {
         if (LEVERS[i].restore()) {
           goodFor = 0;
+          restoredAt.set(LEVERS[i].name, pulse);
           if (history.length < 60) history.push(`+ ${LEVERS[i].name} @${Math.round(performance.now() / 1000)}s`);
           break;
         }
@@ -452,13 +479,14 @@ export function governPerformance(fps) {
     if (cruiseActive() && midFor > 7 && pixelRatio > cruiseFloor() && !renderer.xr?.isPresenting) {
       setPR(Math.max(cruiseFloor(), pixelRatio - 0.25));
       midFor = 0;
+      noteShed('pixels');   // a no-op while BACKOFF_FLAT is off (the cruise never runs in a headset)
       if (history.length < 60) history.push(`− pixels (cruise) @${Math.round(performance.now() / 1000)}s`);
     }
   }
 }
 
 export const governorDebug = () => ({
-  pixelRatio, slowFor, goodFor, midFor, renderScale, fullDetail, ...thresholds(),
+  pixelRatio, slowFor, goodFor, midFor, renderScale, fullDetail, ...thresholds(), restoreNeed,
   grace, calmFor, calm: calmReached,
   casterBudget: getCasterBudget(), slotCap: getSlotCap(),
   emitters: emitterQuality(), grass: getGrassDensity(),
