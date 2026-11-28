@@ -179,6 +179,7 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
   check('…live: no reload button (the pipeline is built and dropped as it goes)', !!glow && !row(glow).querySelector('button.reload'));
   const aoBox = boxes.find((b) => row(b).textContent?.includes('ambient occlusion'));
   check('an "ambient occlusion" check shows the viewer\'s ew-ao (on by default), its hint saying the world decides how strongly, ambient light only, none in a headset', !!aoBox && aoBox.checked === true && /world/.test(aoBox.title) && /ambient/.test(aoBox.title) && /headset/.test(aoBox.title), aoBox?.title);
+  check('…and its hint says it is off by default on WebGL 2 (the headsets\' backend), where the extra pass costs most', !!aoBox && /WebGL 2/.test(aoBox.title) && /default/.test(aoBox.title), aoBox?.title);
   if (aoBox) { aoBox.checked = false; fire(aoBox, 'change'); }
   check('unchecking it calls setAoPref(false) once and says so in the hint bar, live (no reload)', since(c1, 'setAoPref').length === 1 && since(c1, 'setAoPref')[0][1] === false && /ambient occlusion: off/.test(ui.el.hint.innerHTML) && !row(aoBox!).querySelector('button.reload'), JSON.stringify(since(c1, 'setAoPref')));
   check('antialiasing starts on', msaa.checked);

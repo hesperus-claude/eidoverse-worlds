@@ -257,7 +257,21 @@ console.log('AO — sky.ao, the world\'s ambient occlusion: a normal/depth pre-p
   const setAo = (s) => { try { post.setAo(s); } catch (e) { return e; } };
   const setAoPref = (on) => { try { post.setAoPref(on); } catch (e) { return e; } };
   setBloom(0); setAo(0); frame(); localStorage.removeItem('ew-ao');
-  check('A0 ew-ao defaults on (absent in storage)', post.aoPref?.() === true, post.aoPref?.());
+  check('A0 ew-ao defaults on (absent in storage) on WebGPU', post.aoPref?.() === true, post.aoPref?.());
+  {
+    // the pre-pass draws the scene a second time; the WebGL 2 backend (every headset's, and the fallback) is draw-call bound
+    const gl = { ...renderer, backend: { isWebGLBackend: true } }, gpu = renderer;
+    const pref = (r) => { try { return post.aoPref?.(r); } catch (e) { return 'threw'; } };
+    check('A0b unchosen, ew-ao is off on the WebGL 2 backend and on on WebGPU', pref(gl) === false && pref(gpu) === true, [pref(gl), pref(gpu)]);
+    setBloom(0); setAo(1.5);
+    let d = []; draws.length = 0; try { post.postPass(gl, scene, camera)?.(); } catch (e) { draws.push({ threw: e?.message }); } d = draws.slice();
+    check('A0b …so on WebGL 2 a world\'s sky.ao 1.5 draws plain and builds nothing; the readout says it is the WebGL 2 default', d.length === 0 && !live() && /ew-ao/.test(String(dbg().why)) && /default/.test(String(dbg().why)) && /WebGL/.test(String(dbg().why)), { d: show(d), why: dbg().why });
+    setAoPref(true);
+    check('A0b …a viewer who turns it on gets it on WebGL 2 too (the setting stands whatever the backend)', pref(gl) === true && localStorage.getItem('ew-ao') === 'on', [pref(gl), localStorage.getItem('ew-ao')]);
+    setAoPref(false);
+    check('A0b …and one who turns it off has it off on WebGPU', pref(gpu) === false, pref(gpu));
+    setAoPref(true); setAo(0); frame();   // chosen on from here (the in-memory choice outlives storage)
+  }
   setBloom(1); frame();
   let p = live();
   check('A1 sky.ao absent with bloom on: no pre-pass, no AO node, the scene pass carries no AO context', !!p && !p.pre && !p.occl && p.scenePass.contextNode == null, p && { pre: !!p.pre, occl: !!p.occl, ctx: !!p.scenePass.contextNode });
