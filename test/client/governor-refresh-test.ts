@@ -225,6 +225,8 @@ const noisy = (hz: number, pct: number, n: number) => Array.from({ length: n }, 
   check('C2 a 72 Hz headset with ±8% jitter for 600 s still reads 72, not 75', e?.hz() === 72, e?.hz()); }
 { seed = 11; const e = mk(); feed(e, noisy(90, 0.08, 54000));
   check('C3 a 90 Hz headset with ±8% jitter for 600 s still reads 90', e?.hz() === 90, e?.hz()); }
+{ const e = mk(); feed(e, rep([...Array(15).fill(1000 / 84.6), ...Array(15).fill(1000 / 85.4)], 300));
+  check('C5 an unsnapped rate still builds a run: blocks at 84.6 and 85.4 Hz agree (within 2%) and read 85', e != null && Math.abs(e.hz() - 85) <= 0.5, e?.hz()); }
 { const e = mk(); feed(e, rep([20], 300)); feed(e, rep([1000 / 60], 15)); feed(e, rep([20], 300));
   check('C4 one lucky 60 Hz block in a 50 Hz page does not raise it: nothing rises until two blocks agree', e?.hz() === 50, e?.hz()); }
 
