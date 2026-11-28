@@ -15,7 +15,7 @@ import { headsetSeenRecently as _headsetSeenRecently, migrateHeadsetSeen as _mig
 import { guardPixelRatioInXR } from './xr/xrpixelratio.js';
 import { separateXRPass } from './xr/xrpass.js';
 import { tolerateNullXRFramebuffer } from './xr/xr_nullfb.js';
-import { patchShadowNodeForXR } from './xr/xrshadow.js';
+import { patchShadowNodeForXR, patchShadowNodeDrawsAll } from './xr/xrshadow.js';
 import { installSyncGate } from './render/syncgate.js';
 
 export { THREE, TSL };
@@ -121,6 +121,9 @@ renderer.setSize(innerWidth, innerHeight);
 // call, the shadow pass included, so the map would be drawn from the eyes. Same cure as render.js renderAside: xr off
 // around the pass, so the sun camera is honoured (the way Unity renders its map once per frame from the light).
 globalThis.__xrShadowPatched = patchShadowNodeForXR(THREE.ShadowNode?.prototype);   // xrshadow.js — importable, so the patch is TESTED (test/client/xrshadow-test.mjs); the global lets boot-check assert it was APPLIED
+// …and every caster in every map: the AO pre-pass (post.js) draws opaque only, and a map first drawn inside it would lose
+// its see-through casters for the frame (xrshadow.js patchShadowNodeDrawsAll)
+globalThis.__shadowDrawsAll = patchShadowNodeDrawsAll(THREE.ShadowNode?.prototype);
 // Spectators start a notch lower — an audience laptop's job is 30fps for an
 // hour, not maximum sharpness. Adaptive scaling adjusts from here.
 export const BASE_PIXEL_RATIO = Math.min(devicePixelRatio, CONFIG.spectate ? 1.5 : 2);
