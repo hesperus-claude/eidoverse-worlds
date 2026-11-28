@@ -289,9 +289,13 @@ console.log('AO — sky.ao, the world\'s ambient occlusion: a normal/depth pre-p
   check('A2 …a pre-pass of the live scene through the live camera, without MSAA (GTAO gathers depth; a multisampled depth hung the page, lab 11-06)',
     p?.pre?.isPassNode && p.pre.scene === scene && p.pre.camera === camera && p.pre.options?.samples === 0 && p.pre.renderTarget.samples === 0, p?.pre && { samples: p.pre.options?.samples, rt: p.pre.renderTarget.samples });
   check('A2 …its MRT writes the view normal as its output, and it draws opaque only (three\'s GTAO example: prePass.transparent = false)', !!p?.pre?._mrt?.has?.('output') && p.pre.transparent === false, p?.pre && { mrt: [...(p.pre._mrt?.outputNodes ? Object.keys(p.pre._mrt.outputNodes) : [])], transparent: p.pre.transparent });
-  check('A2 …GTAO reads the pre-pass\'s depth and normal: strength 1.5 as its scale (an exponent on visibility), radius 0.5 m, half resolution',
-    !!p?.occl && Math.abs(p.occl.scale.value - 1.5) < 1e-9 && Math.abs(p.occl.radius.value - 0.5) < 1e-9 && p.occl.resolutionScale === 0.5 && p.occl.depthNode?.value === p.pre.renderTarget.depthTexture,
+  check('A2 …GTAO reads the pre-pass\'s depth and normal at Godot\'s defaults: radius 1 m (ssao_radius), half resolution, its own visibility (scale 1)',
+    !!p?.occl && Math.abs(p.occl.scale.value - 1) < 1e-9 && Math.abs(p.occl.radius.value - 1) < 1e-9 && p.occl.resolutionScale === 0.5 && p.occl.depthNode?.value === p.pre.renderTarget.depthTexture,
     p?.occl && [p.occl.scale.value, p.occl.radius.value, p.occl.resolutionScale]);
+  check('A2 …sky.ao is Godot\'s ssao_intensity, a linear multiplier on obscurance: 1.5 in its own uniform; power 1.5 (ssao_power) and clamp 0.98 (Godot\'s) are named',
+    Math.abs(p?.aoIntensity?.value - 1.5) < 1e-9 && post.AO_POWER === 1.5 && post.AO_CLAMP === 0.98 && post.AO_RADIUS === 1, [p?.aoIntensity?.value, post.AO_POWER, post.AO_CLAMP, post.AO_RADIUS]);
+  check('A2 …and the AO is blurred, depth-aware, at its own resolution (three\'s depthAwareBlur, horizontal then vertical) before lighting reads it',
+    p?.occl?.blur === true && !!p.occl._blurTarget && typeof p.occl._blurMaterial?.isNodeMaterial === 'boolean', p?.occl && { blur: p.occl.blur, target: !!p.occl._blurTarget });
   const ctx = p?.scenePass?.contextNode?.getFlowContextData?.() ?? p?.scenePass?.contextNode?.value;
   check('A2 …and the scene pass carries the AO into lighting (three\'s builtinAOContext: getAO, the ambientOcclusion that only indirect light reads)', typeof ctx?.getAO === 'function', ctx && Object.keys(ctx));
   {
@@ -314,9 +318,9 @@ console.log('AO — sky.ao, the world\'s ambient occlusion: a normal/depth pre-p
   check('A2 …no bloom asked: the output is the scene pass\'s colour, no BloomNode', !p?.glow, !!p?.glow);
   check('A2 …the readout: active, the live AO strength', dbg().active === true && dbg().ao === 1.5 && dbg().why == null, dbg());
   setAo(2.5); frame();
-  check('A2b a live sky edit 1.5 → 2.5 moves the scale uniform and builds nothing', live() === p && Math.abs(p.occl.scale.value - 2.5) < 1e-9 && pipelinesMade === made0 + 1, { same: live() === p, s: p?.occl?.scale.value });
+  check('A2b a live sky edit 1.5 → 2.5 moves the intensity uniform and builds nothing', live() === p && Math.abs(p?.aoIntensity?.value - 2.5) < 1e-9 && pipelinesMade === made0 + 1, { same: live() === p, s: p?.aoIntensity?.value });
   setAo(9); frame();
-  check('A2b …above 3 is held at 3', dbg().ao === 3 && Math.abs(p.occl.scale.value - 3) < 1e-9, dbg().ao);
+  check('A2b …above 3 is held at 3', dbg().ao === 3 && Math.abs(p?.aoIntensity?.value - 3) < 1e-9, dbg().ao);
   const m1 = pipelinesMade; setBloom(1); frame(); const pb = live();
   check('A2c bloom joins: one rebuild, the new pipeline carries both (pre-pass, AO, BloomNode)', pipelinesMade === m1 + 1 && !!pb?.pre && !!pb?.occl && !!pb?.glow && pb.glow.inputNode?.value === pb.scenePass.renderTarget.texture, { made: pipelinesMade - m1 });
   const disposed = [];

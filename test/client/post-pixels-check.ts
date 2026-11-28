@@ -295,6 +295,60 @@ try {
   const near = (n: number[] | undefined) => !!n && !!normals.want && n.every((c, i) => Math.abs(c - normals.want[i]) < 0.05);
   check("PA8 the pre-pass holds the view-space normal at a floor texel (the floor's up vector seen from the camera), not the lit colour", !normals.error && (near(normals.a) || near(normals.b)), JSON.stringify(normals));
 
+  // PA5: sky.ao is Godot's ssao_intensity: what lighting reads is pow(clamp(1 - min(intensity × (1 - v), 0.98), 0, 1), 1.5)
+  // for GTAO's visibility v (ssao.glsl). GTAO is made to write v = 0.4 everywhere, so in ambient light only, with no tone
+  // curve, the floor is the plain floor × (1 - 0.6 k)^1.5: 0.586 at k 0.5, 0.253 at 1, 0.98's floor (0.0028) at 2
+  const mapping = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js'), T = p.THREE, r = p.renderer, TSL = await import('three/tsl');
+    const S = new T.Scene(); S.background = new T.Color(0, 0, 0); S.add(new T.AmbientLight(0xffffff, 1));
+    const cam = new T.PerspectiveCamera(50, p.W / p.H, 0.1, 100); cam.position.set(0, 2.2, 4.2); cam.lookAt(0, 0.3, 0); cam.updateMatrixWorld(true);
+    S.add(new T.Mesh(new T.PlaneGeometry(12, 12).rotateX(-Math.PI / 2), new T.MeshStandardNodeMaterial({ color: new T.Color(0.6, 0.6, 0.6), roughness: 1 })));
+    const tm0 = r.toneMapping; r.toneMapping = T.NoToneMapping;
+    const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const floorLin = (px) => { let t = 0, n = 0; for (let y = Math.round(p.H * 0.6); y < Math.round(p.H * 0.9); y++) for (let x = Math.round(p.W * 0.3); x < Math.round(p.W * 0.7); x++) { t += lin(px[(y * p.W + x) * 4 + 1]); n++; } return t / n; };
+    const plainF = () => { p.hold(); r.setRenderTarget(null); r.render(S, cam); return p.grab(); };
+    const postF = async () => { p.hold(); const d = post.postPass(r, S, cam); if (d) d(); else r.render(S, cam); return p.grab(); };
+    const out = {};
+    try {
+      await r.compileAsync(S, cam); globalThis.__setA(0); const a = await p.settle(plainF); out.plain = a ? floorLin(a) : null;
+      globalThis.__setA(1); await postF(); const occl = post.postDebug()._pipe?.occl; if (!occl) return { error: 'no AO node', why: post.postDebug().why };
+      const q = new T.QuadMesh(new T.NodeMaterial()); q.material.fragmentNode = TSL.vec4(0.4, 0.4, 0.4, 1);
+      occl.updateBefore = (frame) => { const fr = frame.renderer, rt0 = fr.getRenderTarget(); fr.setRenderTarget(occl._aoRenderTarget); q.render(fr); fr.setRenderTarget(rt0); };
+      for (const k of [0.5, 1, 2]) { globalThis.__setA(k); const b = await p.settle(postF); out['k' + k] = b && out.plain ? Math.round(floorLin(b) / out.plain * 1000) / 1000 : null; }
+    } finally { r.toneMapping = tm0; globalThis.__setA(0); await postF(); }
+    return out;`);
+  console.log(`  · ${JSON.stringify(mapping)}`);
+  check("PA5 sky.ao is Godot's ssao_intensity with ssao_power 1.5: with GTAO at 0.4 the ambient-lit floor reads 0.586 / 0.253 / 0.003 of plain at sky.ao 0.5 / 1 / 2 (each within 0.03)",
+    !mapping.error && Math.abs(mapping["k0.5"] - 0.586) < 0.03 && Math.abs(mapping.k1 - 0.253) < 0.03 && Math.abs(mapping.k2 - 0.0028) < 0.03 && mapping.plain > 0.1, JSON.stringify(mapping));
+
+  // PA6: the AO is blurred. GTAO alone dithers (its 4×4 noise at half resolution: lab 11-06 saw it on cloth); the
+  // measure is the mean |p − the mean of its 4 neighbours| (8-bit green) on the floor in front of the box, with the
+  // pipeline's blur switched off and on in the same pipeline
+  const grain = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js'), T = p.THREE, r = p.renderer;
+    const S = new T.Scene(); S.background = new T.Color(0, 0, 0); S.add(new T.AmbientLight(0xffffff, 1.5));
+    const cam = new T.PerspectiveCamera(50, p.W / p.H, 0.1, 100); cam.position.set(0, 2.2, 4.2); cam.lookAt(0, 0.3, 0); cam.updateMatrixWorld(true);
+    const mat = new T.MeshStandardNodeMaterial({ color: new T.Color(0.7, 0.7, 0.7), roughness: 0.9 });
+    S.add(new T.Mesh(new T.PlaneGeometry(12, 12).rotateX(-Math.PI / 2), mat)); const box = new T.Mesh(new T.BoxGeometry(1, 1, 1), mat); box.position.set(0, 0.5, 0); S.add(box);
+    const at = (v3) => { const v = v3.clone().project(cam); return [Math.round((v.x + 1) / 2 * p.W), Math.round((1 - v.y) / 2 * p.H)]; };
+    const [x0, y0] = at(new T.Vector3(-0.6, 0, 0.75)), [x1, y1] = at(new T.Vector3(0.6, 0, 0.52));
+    const hf = (px) => { let t = 0, n = 0; for (let y = Math.min(y0, y1) + 1; y < Math.max(y0, y1); y++) for (let x = Math.min(x0, x1) + 1; x < Math.max(x0, x1); x++) {
+      const g = (xx, yy) => px[(yy * p.W + xx) * 4 + 1]; t += Math.abs(g(x, y) - (g(x - 1, y) + g(x + 1, y) + g(x, y - 1) + g(x, y + 1)) / 4); n++; } return n ? Math.round(t / n * 1000) / 1000 : null; };
+    const plainF = () => { p.hold(); r.setRenderTarget(null); r.render(S, cam); return p.grab(); };
+    const postF = async () => { p.hold(); const d = post.postPass(r, S, cam); if (d) d(); else r.render(S, cam); return p.grab(); };
+    const [u0, v0] = at(new T.Vector3(-1.2, 0, 1.6)), [u1, v1] = at(new T.Vector3(1.2, 0, 0.55));
+    const hf2 = (px) => { let t = 0, n = 0; for (let y = Math.min(v0, v1) + 1; y < Math.max(v0, v1); y++) for (let x = Math.min(u0, u1) + 1; x < Math.max(u0, u1); x++) {
+      const g = (xx, yy) => px[(yy * p.W + xx) * 4 + 1]; t += Math.abs(g(x, y) - (g(x - 1, y) + g(x + 1, y) + g(x, y - 1) + g(x, y + 1)) / 4); n++; } return n ? Math.round(t / n * 1000) / 1000 : null; };
+    await r.compileAsync(S, cam); globalThis.__setA(0); const a = await p.settle(plainF);
+    const res = { box: [x0, y0, x1, y1], wide: [u0, v0, u1, v1], plain: a ? [hf(a), hf2(a)] : null };
+    for (const k of [1, 2]) { globalThis.__setA(k); await postF(); const occl = post.postDebug()._pipe?.occl;
+      if (occl && 'blur' in occl) { occl.blur = false; const b0 = await p.settle(postF); occl.blur = true; const b1 = await p.settle(postF); res['k' + k] = { off: b0 ? [hf(b0), hf2(b0)] : null, on: b1 ? [hf(b1), hf2(b1)] : null }; }
+      else { const b = await p.settle(postF); res['k' + k] = { noBlur: b ? [hf(b), hf2(b)] : null }; } }
+    globalThis.__setA(0); await postF();
+    return res;`);
+  console.log(`  · ${JSON.stringify(grain)}`);
+  const halves = (g: any) => !!g?.on && !!g?.off && g.on[0] < g.off[0] * 0.5 && g.on[1] < g.off[1] * 0.6;
+  check("PA6 the AO is blurred: on the floor in front of the box (ambient light only), the pixel-to-pixel variation the AO adds is at least halved by the blur, at sky.ao 1 and 2 (near the box: under half; the wider floor: under 0.6)",
+    grain.plain?.[0] === 0 && halves(grain.k1) && halves(grain.k2), JSON.stringify(grain));
+
   // PA9 LAST (a failure drops the pipeline for the page): a throw inside the AO pre-pass. post.js draws the frame plain;
   // the renderer must be left as the plain path expects it (three's PassNode.updateBefore has no try/finally: MRT, the AO
   // context, renderer.transparent would stay as the pass set them), so the next plain frame is the plain picture
