@@ -24,7 +24,7 @@ const argOf = (f) => { const i = ARGV.indexOf(f); return i < 0 ? null : ARGV[i +
 const CASE = argOf('--case');
 
 // main: four casting slots; default: today's dial (one); nocache: ?shadowcache=0, the lab's A/B switch
-const CASES = { main: { dial: '4', url: '' }, default: { dial: null, url: '' }, nocache: { dial: '4', url: '?shadowcache=0' }, convert: { dial: null, url: '' }, born: { dial: '4', url: '' }, bornoff: { dial: '4', url: '', shadows: 'off' }, convertoff: { dial: null, url: '', shadows: 'off' } };
+const CASES = { main: { dial: '4', url: '' }, default: { dial: null, url: '' }, nocache: { dial: '4', url: '?shadowcache=0' }, convert: { dial: null, url: '' }, born: { dial: '4', url: '' }, bornoff: { dial: '4', url: '', shadows: 'off' }, convertoff: { dial: null, url: '', shadows: 'off' }, resize: { dial: '4', url: '' } };
 
 if (CASE) {
   const C = CASES[CASE];
@@ -54,6 +54,7 @@ if (CASE) {
   const bornAsking = { points: slots.filter((pl) => pl.castShadow).map((pl) => pl.shadow.needsUpdate === true), spots: (rig.rigDebug()._spotSlots ?? []).filter((sl) => sl.castShadow).map((sl) => sl.shadow.needsUpdate === true) };
   const drawsSeen = slots.map(() => 0);
   const spotDrawsSeen = new Map();   // spot slot -> maps drawn (the convertoff rows)
+  let sunDraws = 0;
   let t = 1000;
   /** One client frame (see the header); `cams` are the frame's view renders (an XR mirror is a second one). */
   const frame = (ms = 16, cams = [camera]) => {
@@ -65,6 +66,7 @@ if (CASE) {
       // and clears needsUpdate
       slots.forEach((pl, i) => { if (pl.castShadow && (pl.shadow.needsUpdate || pl.shadow.autoUpdate)) { pl.shadow.camera.far = pl.distance || pl.shadow.camera.far; pl.shadow.needsUpdate = false; drawsSeen[i]++; } });
       for (const sl of rig.rigDebug()._spotSlots ?? []) if (sl.castShadow && (sl.shadow.needsUpdate || sl.shadow.autoUpdate)) { sl.shadow.needsUpdate = false; spotDrawsSeen.set(sl, (spotDrawsSeen.get(sl) ?? 0) + 1); }
+      if (stub.sun.castShadow && (stub.sun.shadow.needsUpdate || stub.sun.shadow.autoUpdate)) { stub.sun.shadow.needsUpdate = false; sunDraws++; }   // three's ShadowNode, the same rule
     }
   };
   const frames = (n, ms) => { for (let i = 0; i < n; i++) frame(ms); };
@@ -93,6 +95,58 @@ if (CASE) {
     check('BO1 with ew-shadows off at boot every casting-shaped slot still asks for its draw at birth', bornAsking.points.length === 4 && bornAsking.points.every(Boolean) && bornAsking.spots.length === 2 && bornAsking.spots.every(Boolean), bornAsking);
     frame(); frames(10);
     check('BO2 ...drawn once, and nothing casts while the switch is off', drawsSeen.slice(0, 4).every((n) => n === 1) && d().shadows.anyCasting === false, { drawsSeen });
+    out();
+  }
+
+  if (CASE === 'resize') {
+    // A SHADOW MAP IS REDRAWN IN THE FRAME ITS SIZE CHANGES, WHOEVER HOLDS IT AND WHATEVER THE SWITCH SAYS. three r186
+    // refreshes a classic material's bind group only when its observer sees a change (NodeMaterialObserver), and for a
+    // shadow map it watches light.shadow.mapSize alone: the refresh happens in the frame the SIZE changes, while the
+    // texture is recreated in the frame the map is next DRAWN. A slot nobody asked (or any map while the shadows
+    // switch is off) is not drawn, so the two came apart: resize now, a light asks later, and every classic-material
+    // model kept the destroyed texture (render lab 2026-11-27 night, b-triggers: 33 errors a second on WebGPU, refused
+    // draws on WebGL 2; 0 with the redraw in the same frame). The mock cannot show the GPU half; these rows pin the ask.
+    const spots = (rig.rigDebug()._spotSlots ?? []).filter((sl) => sl.castShadow);
+    const sun = stub.sun;
+    const asking = () => ({ sun: sun.shadow.needsUpdate === true, points: slots.slice(0, 4).map((pl) => pl.shadow.needsUpdate === true), spots: spots.map((sl) => sl.shadow.needsUpdate === true) });
+    frame(); frames(5);
+    const a0 = asking();
+    check('RZ0 (setup) dial 4, no light: four point slots and two spot slots casting-shaped, nothing waiting to draw', spots.length === 2 && a0.points.length === 4 && !a0.points.some(Boolean) && !a0.spots.some(Boolean) && d().shadows.slots.every((s) => s.holder === null), a0);
+    let seen = drawsSeen.slice();
+    rig.setShadowRes(4096);
+    const a1 = asking();
+    check('RZ1 a resolution change resizes every map', sun.shadow.mapSize.x === 4096 && slots.slice(0, 4).every((pl) => pl.shadow.mapSize.x === 512) && spots.every((sl) => sl.shadow.mapSize.x === 1024), { sun: sun.shadow.mapSize.x, points: slots.slice(0, 4).map((pl) => pl.shadow.mapSize.x), spots: spots.map((sl) => sl.shadow.mapSize.x) });
+    check('RZ2 a casting-shaped spot slot nobody asked is asked to redraw as its size changes', a1.spots.length === 2 && a1.spots.every(Boolean), a1);
+    check('RZ3 ...and every casting point slot nobody asked', a1.points.every(Boolean), a1);
+    frame();
+    check('RZ4 the next frame draws each resized map once, past the budget of 2', drawsSeen.slice(0, 4).every((n, i) => n === seen[i] + 1) && !asking().spots.some(Boolean), { drawsSeen, seen });
+    seen = drawsSeen.slice(); frames(20);
+    check('RZ5 ...once: twenty idle frames draw nothing more', drawsSeen.every((n, i) => n === seen[i]) && !asking().spots.some(Boolean) && !asking().points.some(Boolean), { drawsSeen, seen });
+    rig.setShadows(false); frames(3);
+    const sunBefore = sunDraws; seen = drawsSeen.slice();
+    rig.setShadowRes(1024);
+    const a2 = asking();
+    check('RZ6 with the shadows switch off a resize still asks: the sun, the point slots, the spot slots', a2.sun === true && a2.points.every(Boolean) && a2.spots.every(Boolean), a2);
+    frame(); frames(10);
+    check('RZ7 ...each drawn once, and nothing casts while the switch is off', sunDraws === sunBefore + 1 && drawsSeen.slice(0, 4).every((n, i) => n === seen[i] + 1) && d().shadows.anyCasting === false && sun.shadow.autoUpdate === false, { sunDraws, sunBefore, drawsSeen, seen });
+    seen = drawsSeen.slice(); const sunSame = sunDraws;
+    rig.setShadowRes(1024); const a3 = asking(); frames(5);
+    check('RZ8 (control) setting the size it already has asks for nothing', !a3.sun && !a3.points.some(Boolean) && !a3.spots.some(Boolean) && sunDraws === sunSame && drawsSeen.every((n, i) => n === seen[i]), a3);
+    // the lamp dial's own door: the same size again must not dispose a map (a recreated texture with no size change is
+    // one three's observer cannot see: measured, a dispose alone gave 41 errors a second)
+    let disposed = 0; const held = { dispose: () => { disposed++; } }; slots[0].shadow.map = held;
+    rig.setLampShadow({ map: slots[0].shadow.mapSize.x });
+    check('RZ9 setLampShadow with the size a slot already has leaves its map alone', disposed === 0 && slots[0].shadow.map === held && slots[0].shadow.needsUpdate !== true, { disposed, kept: slots[0].shadow.map === held });
+    slots[0].shadow.map = null;
+    // XR2 (the cold reader's, a pin): a resize while a light holds a slot and casts: the cache hands it off once and settles
+    const other = sun.shadow.mapSize.x === 4096 ? 2048 : 4096;
+    rig.setShadows(true); frames(3);
+    rig.requestLight('room:r', { authored: true, intensity: 20, range: 5, shadows: true, pos: [0, 2, -4] });
+    settle();
+    const kslot = slotOf('room:r'); const h0 = ho('room:r'); const dr0 = drawsSeen[kslot];
+    rig.setShadowRes(other); frame();
+    const h1 = ho('room:r'); frames(20);
+    check('XR2 a resize under a casting holder: one handoff in that frame, a draw, then quiet', h1 - h0 === 1 && ho('room:r') - h1 === 0 && drawsSeen[kslot] - dr0 === 1 && cache('room:r').deferred === 0, { h0, h1, hEnd: ho('room:r'), draws: drawsSeen[kslot] - dr0, c: cache('room:r') });
     out();
   }
 
