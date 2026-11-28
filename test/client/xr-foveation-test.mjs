@@ -8,7 +8,7 @@
 // Run: BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/xr-foveation-test.mjs
 // Mutations that must turn a named check red:
 //   xrfoveation.js: the old `Windows|Macintosh|Linux x86` exclusion restored (F1, F3)
-//   xrfoveation.js: the override ignored (F8); the override not clamped (F9)
+//   xrfoveation.js: the override ignored (F8); the override not clamped (F9); Android dropped from the tokens (F12)
 //   xr.js: the entry call no longer goes through foveationFor (F11)
 import fs from 'node:fs';
 import { suite } from '../gate/suite.ts';
@@ -40,6 +40,7 @@ check('F7 desktop Linux Chrome: pc, 0', is(at(UA.linuxChrome), 0, false), at(UA.
   check('F8 ?fov= overrides either way (0.5 on a Quest, 0.25 on PC), and says so', r?.fov === 0.5 && r?.override === true && p?.fov === 0.25 && p?.override === true, [r, p]); }
 { const hi = at(UA.windowsChrome, '2'), lo = at(UA.quest3Desktop, '-1'), junk = at(UA.quest3Desktop, 'abc');
   check('F9 ?fov= is clamped to [0, 1] and a non-number reads 0, as before', hi?.fov === 1 && lo?.fov === 0 && junk?.fov === 0, [hi, lo, junk]); }
+check('F12 an Android phone browser (Chrome, no headset token) stays standalone, 1, as before', is(at('Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36'), 1, true));
 check('F10 no user agent (an old runtime): pc, 0', is(at(''), 0, false) && is(at(undefined), 0, false), [at(''), at(undefined)]);
 { const src = fs.readFileSync(new URL('../../client/lib/xr/xr.js', import.meta.url), 'utf8');
   const calls = /foveationFor\(\s*navigator\.userAgent\s*,\s*CONFIG\.params\.has\('fov'\)\s*\?\s*CONFIG\.params\.get\('fov'\)\s*:\s*null\s*\)/.test(src);
