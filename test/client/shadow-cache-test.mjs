@@ -24,7 +24,7 @@ const argOf = (f) => { const i = ARGV.indexOf(f); return i < 0 ? null : ARGV[i +
 const CASE = argOf('--case');
 
 // main: four casting slots; default: today's dial (one); nocache: ?shadowcache=0, the lab's A/B switch
-const CASES = { main: { dial: '4', url: '' }, default: { dial: null, url: '' }, nocache: { dial: '4', url: '?shadowcache=0' }, convert: { dial: null, url: '' } };
+const CASES = { main: { dial: '4', url: '' }, default: { dial: null, url: '' }, nocache: { dial: '4', url: '?shadowcache=0' }, convert: { dial: null, url: '' }, born: { dial: '4', url: '' }, bornoff: { dial: '4', url: '', shadows: 'off' }, convertoff: { dial: null, url: '', shadows: 'off' } };
 
 if (CASE) {
   const C = CASES[CASE];
@@ -34,7 +34,7 @@ if (CASE) {
     stubResolve(build, /^(\.\.?\/)+base\.js$/, () => ({ path: here('../stubs/core-stub.mjs') }));
     stubResolve(build, /^(\.\.?\/)+(render\/)?warmqueue\.js$/, () => ({ path: here('../stubs/lod-client-stub.mjs') }));   // warmDepth resolves at once
   } });
-  localStorage.removeItem('ew-shadows');
+  if (C.shadows) localStorage.setItem('ew-shadows', C.shadows); else localStorage.removeItem('ew-shadows');
   localStorage.removeItem('ew-shadow-res');
   if (C.dial == null) localStorage.removeItem('ew-lamp-shadows'); else localStorage.setItem('ew-lamp-shadows', C.dial);
   const stub = await import('../stubs/core-stub.mjs');
@@ -50,7 +50,10 @@ if (CASE) {
 
   camera.position.set(0, 1.6, 0); camera.updateMatrixWorld(true);   // looking down -Z
   const slots = rig.rigDebug()._slots;
+  // what each casting-shaped slot asked of three at birth, before any frame and any light (the BD rows)
+  const bornAsking = { points: slots.filter((pl) => pl.castShadow).map((pl) => pl.shadow.needsUpdate === true), spots: (rig.rigDebug()._spotSlots ?? []).filter((sl) => sl.castShadow).map((sl) => sl.shadow.needsUpdate === true) };
   const drawsSeen = slots.map(() => 0);
+  const spotDrawsSeen = new Map();   // spot slot -> maps drawn (the convertoff rows)
   let t = 1000;
   /** One client frame (see the header); `cams` are the frame's view renders (an XR mirror is a second one). */
   const frame = (ms = 16, cams = [camera]) => {
@@ -61,7 +64,7 @@ if (CASE) {
       // three's PointShadowNode: a map draws when needsUpdate || autoUpdate, with far = light.distance || camera.far,
       // and clears needsUpdate
       slots.forEach((pl, i) => { if (pl.castShadow && (pl.shadow.needsUpdate || pl.shadow.autoUpdate)) { pl.shadow.camera.far = pl.distance || pl.shadow.camera.far; pl.shadow.needsUpdate = false; drawsSeen[i]++; } });
-      for (const sl of rig.rigDebug()._spotSlots ?? []) if (sl.castShadow && (sl.shadow.needsUpdate || sl.shadow.autoUpdate)) sl.shadow.needsUpdate = false;
+      for (const sl of rig.rigDebug()._spotSlots ?? []) if (sl.castShadow && (sl.shadow.needsUpdate || sl.shadow.autoUpdate)) { sl.shadow.needsUpdate = false; spotDrawsSeen.set(sl, (spotDrawsSeen.get(sl) ?? 0) + 1); }
     }
   };
   const frames = (n, ms) => { for (let i = 0; i < n; i++) frame(ms); };
@@ -78,8 +81,57 @@ if (CASE) {
     rig.requestLight('room:a', { authored: true, intensity: 20, range: 5, shadows: true, pos: [0, 2, -4] });
     settle();
     const pl = slots[slotOf('room:a')];
+    check('N0 ?shadowcache=0: the slots are drawn once at birth all the same', bornAsking.points.length === 4 && bornAsking.points.every(Boolean) && bornAsking.spots.every(Boolean), bornAsking);
     check('N1 ?shadowcache=0: a casting slot redraws every frame as before (autoUpdate on)', pl.shadow.autoUpdate === true && rig.shadowCacheOn?.() === false, { autoUpdate: pl.shadow.autoUpdate });
     check('N2 ...and it is casting', d().shadows.slots[slotOf('room:a')].drawing === true);
+    out();
+  }
+
+  if (CASE === 'bornoff') {
+    // the viewer's shadows switch off at boot: the maps are drawn at birth all the same, or switching it on later would be
+    // the late first draw
+    check('BO1 with ew-shadows off at boot every casting-shaped slot still asks for its draw at birth', bornAsking.points.length === 4 && bornAsking.points.every(Boolean) && bornAsking.spots.length === 2 && bornAsking.spots.every(Boolean), bornAsking);
+    frame(); frames(10);
+    check('BO2 ...drawn once, and nothing casts while the switch is off', drawsSeen.slice(0, 4).every((n) => n === 1) && d().shadows.anyCasting === false, { drawsSeen });
+    out();
+  }
+
+  if (CASE === 'born') {
+    // A CASTING-SHAPED SLOT'S MAP IS DRAWN ONCE AT BIRTH, WHOEVER HOLDS IT. three r186 destroys and recreates a shadow
+    // map's depth texture at the map's first render, and the bind groups built before that (every classic-material
+    // model's) keep the destroyed one. So a slot whose first asker arrives after the world's models have drawn broke
+    // every later frame: black on WebGPU ("Destroyed texture [ShadowDepthTexture] used in a submit", each frame),
+    // refused draws and missing models on WebGL2 (render lab 2026-11-27, probes/late-caster.js, late-point-x4.js,
+    // destroyed-tex.ts). Drawn at birth, the texture is the render target's own before anything samples it. The mock
+    // cannot show the GPU half; these rows pin the ask, and that it is one draw and not a standing one.
+    const spots = (rig.rigDebug()._spotSlots ?? []).filter((sl) => sl.castShadow);
+    check('BD0 (setup) dial 4: four casting point slots and two casting-shaped spot slots, none holding a light', bornAsking.points.length === 4 && bornAsking.spots.length === 2 && d().shadows.slots.every((s) => s.holder === null), bornAsking);
+    check('BD1 every casting point slot asks three for one draw at birth', bornAsking.points.length === 4 && bornAsking.points.every(Boolean), bornAsking.points);
+    check('BD2 ...and every casting-shaped spot slot', bornAsking.spots.length === 2 && bornAsking.spots.every(Boolean), bornAsking.spots);
+    frame();
+    check('BD3 the first frame draws each of them once, with no light asking', drawsSeen.slice(0, 4).every((n) => n === 1) && spots.every((sl) => sl.shadow.needsUpdate === false), { drawsSeen, spots: spots.map((sl) => sl.shadow.needsUpdate) });
+    const seen = drawsSeen.slice(); frames(30);
+    check('BD4 ...once: thirty idle frames draw nothing more, and no slot is left on autoUpdate', drawsSeen.every((n, i) => n === seen[i]) && slots.slice(0, 4).every((pl) => pl.shadow.autoUpdate === false) && spots.every((sl) => sl.shadow.autoUpdate === false && sl.shadow.needsUpdate === false), { drawsSeen, seen });
+    check('BD5 ...and it is not "casting": no shadow is shown for a slot nobody asked', d().shadows.slots.every((s) => s.drawing === false) && d().shadows.anyCasting === false, d().shadows.slots.map((s) => s.drawing));
+    rig.requestLight('room:late', { authored: true, intensity: 20, range: 5, shadows: true, pos: [0, 2, -4] });
+    settle();
+    check('BD6 (control) a light that asks later still gets its own draw', (cache('room:late').handoffs ?? 0) >= 1 && d().shadows.slots[slotOf('room:late')].drawing === true, cache('room:late'));
+    out();
+  }
+
+  if (CASE === 'convertoff') {
+    // the viewer's shadows switch is off when the first spot asks: the slot still converts (pipeline shape follows the
+    // world's ask), and its map must be drawn once then, at its birth as a caster, or switching shadows on later would
+    // be its late first draw (the born-drawn why is in the born case)
+    rig.requestLight('spot:desk', { authored: true, intensity: 30, range: 5, shadows: true, pos: [1, 3, -5], q: [-Math.SQRT1_2, 0, 0, Math.SQRT1_2], spot: { angle: 0.6, inner: 0.4 } });
+    box([1.2, 0.25, -5.2]);
+    settle();
+    const sl = (rig.rigDebug()._spotSlots ?? [])[0];
+    const srow = () => d().shadows.spotSlots?.find((r) => r.holder === 'spot:desk') ?? null;
+    check('VO1 (setup) shadows off at boot: the asking spot converts a slot all the same, and it does not cast', (d().shadows.spotConversions ?? []).length === 1 && sl?.castShadow === true && srow()?.drawing === false, { c: d().shadows.spotConversions, row: srow() });
+    check('VO2 ...and the converted slot\'s map is drawn once at its conversion, before shadows come on', spotDrawsSeen.get(sl) === 1, { draws: spotDrawsSeen.get(sl) ?? 0 });
+    rig.setShadows(true); settle();
+    check('VO3 (control) switching shadows on: the spot casts', srow()?.drawing === true, srow());
     out();
   }
 
@@ -115,6 +167,7 @@ if (CASE) {
     box([0.5, 0.25, -2]);
     settle();
     const k = 'lamp:body:me:0';
+    check('D0 at the default dial the one casting slot asks for its draw at birth too, and no spot slot is casting-shaped', bornAsking.points.length === 1 && bornAsking.points[0] === true && bornAsking.spots.length === 0, bornAsking);
     check('D1 (setup) one casting slot, held by the body lamp', d().shadows.castingSlots === 1 && slotOf(k) === 0, { n: d().shadows.castingSlots, slot: slotOf(k) });
     const [n30] = over([k], () => frames(30));
     check('D2 the body lamp lights a skinned, moving body: it redraws every frame, as today', n30 === 30 && cache(k).reason === 'deforming', { n30, c: cache(k) });
