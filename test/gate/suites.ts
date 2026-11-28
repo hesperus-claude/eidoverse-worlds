@@ -175,6 +175,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["render-aside", "client/render-aside-test.mjs", 1], // renderAside: an off-eye render while presenting leaves the XR state as it was
   ["quadcolour", "client/quadcolour-test.mjs", 1], // the VR panel grade (quadgrade.js) as numbers: the JS twin of the shader
   ["headset-seen", "client/headset-seen-test.mjs", 1], // the stored headset bit is history, and says so (#197)
+  ["xr-foveation", "client/xr-foveation-test.mjs", 1], // the session's starting foveation from the user agent: a Quest in its default (desktop-mode) UA is standalone; ?fov= overrides
   ["full-detail", "client/full-detail-test.ts", 1], // "keep full detail" (governor.js setFullDetail) pins every placement full
   ["finger-curl", "client/finger-curl-test.mjs", 1], // the analog finger-curl filter (xr-fingercurl.js sampleFingerCurl)
   ["backend-choice", "client/backend-choice-test.mjs", 1], // the renderer choice (backend_choice.js) as a pure matrix; ?xr=0 is not an XR boot
