@@ -370,6 +370,26 @@ if (G) {
 }
 
 if (G) {
+  // ---- a volume nudged (cold read 11-27, A9): a grid is a Light, so one leaving and one joining recompiles every lit
+  // material. A move or a resize that keeps the probe counts moves the grid in place and rebakes it; only new counts (a new
+  // atlas size) build a new grid.
+  const r4 = (x) => Math.round(x * 1e4) / 1e4, gridsIn = () => [...inScene].filter((o) => o.isLightProbeGrid);
+  await fresh();
+  St.hydrate(giRoom({ bounces: 0 })); await run(300);
+  const g0 = LP.made[0], a0 = added.length, r0 = removed.length, j0 = jobsOf();
+  for (let i = 1; i <= 5; i++) { edit((es) => { es.room.zone = { shape: 'box', size: [3 + i * 0.01, 3, 3] }; }); await run(150); }   // 1 cm wider every 3 s
+  check('N1 five 1 cm resizes of a volume, 3 s apart: the same grid stays in the scene (none leaves or joins), resized in place, and rebaked',
+    LP.made.length === 1 && added.length === a0 && removed.length === r0 && gridsIn()[0] === g0 && r4(g0.width) === 3.05 && jobsOf() > j0,
+    { made: LP.made.length, adds: added.length - a0, removes: removed.length - r0, width: g0?.width, jobs: jobsOf() - j0 });
+  edit((es) => { es.room.pos = [0.3, 1.5, 0]; }); await run(200);
+  check('N1 …moved 30 cm: the same grid, standing at its new centre', LP.made.length === 1 && gridsIn()[0] === g0 && r4(g0.position.x) === 0.3 && removed.length === r0, { made: LP.made.length, x: g0?.position.x });
+  edit((es) => { es.room.zone = { shape: 'box', size: [6, 3, 3] }; }); await run(300);
+  check('N1 …made twice as wide (5 × 3 × 3 probes where it had 3 × 3 × 3): a new grid in its place, the old one freed',
+    LP.made.length === 2 && gridsIn().length === 1 && gridsIn()[0] === LP.made[1] && g0.disposed === true && same(LP.made[1].resolution.toArray(), [5, 3, 3]),
+    { made: LP.made.length, inScene: gridsIn().length, res: LP.made[1]?.resolution?.toArray?.() });
+}
+
+if (G) {
   // (2) where GI can't run it is off, and says why where the lead's capture rig looks (giDebug)
   St.reset(); const before = quiet();
   core.renderer.backend = { isWebGLBackend: true, extensions: { has: () => false } };

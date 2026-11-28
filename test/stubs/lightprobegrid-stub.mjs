@@ -9,13 +9,14 @@ export const imported = true;
 export const failNext = { n: 0, message: 'stub bake failure' };   // a test asks the next n bake calls to throw
 export class LightProbeGrid extends THREE.Object3D {
   constructor(w, h, d, nx, ny, nz) {
-    super(); this.isLightProbeGrid = true; this.size = [w, h, d]; this.resolution = new THREE.Vector3(nx, ny, nz); this.falloff = 0; this.intensity = 1; this.disposed = false;
+    super(); this.isLightProbeGrid = true; this.size = [w, h, d]; this.width = w; this.height = h; this.depth = d; this.resolution = new THREE.Vector3(nx, ny, nz); this.falloff = 0; this.intensity = 1; this.disposed = false;
     made.push(this);
   }
   bake(renderer, baked, opts) {
     if (failNext.n > 0) { failNext.n--; throw new Error(failNext.message); }
     bakes.push({ grid: this, scene: baked, children: [...baked.children], intensity: this.intensity, ...opts });   // children: what the proxy held at this step
   }
+  updateBoundingBox() { this.boxUpdates = (this.boxUpdates ?? 0) + 1; }   // three's: its box from position and width/height/depth
   dispose() { this.disposed = true; }
 }
 export const GRID_UNIFORMS = ['_min', '_max', '_resolution', '_intensity', '_falloff'];
