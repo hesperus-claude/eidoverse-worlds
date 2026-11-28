@@ -4,8 +4,8 @@
 // none, every world's look before the fields; both prefs default on. R: "the world owner should
 // control *what* lighting, and the user should only control perf/quality of said lighting so they can run it".
 //
-// AO is GTAO (three's GTAONode) from a normal/depth pre-pass at half resolution, applied INSIDE lighting through three's
-// builtinAOContext: it feeds the material's ambientOcclusion, which only indirect light reads (indirect diffuse and
+// AO is GTAO (three's GTAONode) from a normal/depth pre-pass at half resolution, applied INSIDE lighting through a copy of three's
+// builtinAOContext (aoContext below, which skips unlit materials): it feeds the material's ambientOcclusion, which only indirect light reads (indirect diffuse and
 // specular), so direct light and its shadows are never darkened twice: Godot's ssao_light_affect 0, its default.
 // One three RenderPipeline (TSL): [pre-pass → GTAO →] pass(scene, camera) [→ BloomNode] → the pipeline's output pass. three moves tone mapping
 // and the output colour space into that output pass, so they are applied once, after bloom: the same place the plain
@@ -19,7 +19,7 @@
 // the rest of the page, the frame drawn plain, a clientlog line written; postDebug() says why. A reload tries again.
 import { THREE } from '../core.js';
 import { tee } from '../base.js';
-import { pass, mrt, normalView, screenUV, builtinAOContext, Fn, smoothstep, max, vec4, uniform } from 'three/tsl';
+import { pass, mrt, normalView, screenUV, context, Fn, smoothstep, max, vec4, uniform } from 'three/tsl';
 import { bloom as bloomNode } from 'three/addons/tsl/display/BloomNode.js';
 import { ao as gtaoNode } from 'three/addons/tsl/display/GTAONode.js';
 
@@ -47,6 +47,14 @@ const godotHighPass = (cap) => Fn(({ input, threshold, smoothWidth }) =>
   input.mul(smoothstep(threshold, threshold.add(smoothWidth), max(input.r, max(input.g, input.b)))).min(vec4(cap)));
 // what three multiplies the scene colour by before its curve: toneMappingExposure, or nothing with no curve (ToneMappingNode)
 const exposure = (r) => (r.toneMapping === THREE.NoToneMapping ? 1 : Math.max(r.toneMappingExposure ?? 1, 1e-4));
+// three's builtinAOContext, less the unlit materials: BasicLightingModel multiplies its indirect term by ambientOcclusion,
+// so a MeshBasic(Node)Material (pictures, texts, quads, screens, the sky dome) would be darkened by AO. Transparents are
+// skipped as three skips them (they are not in the pre-pass's depth).
+// (MeshBasicNodeMaterial carries isMeshBasicMaterial too: NodeMaterial copies the classic material's defaults, flag included)
+const unlit = (m) => m?.isMeshBasicMaterial === true;
+const aoContext = (aoNode) => context({
+  getAO: (input, { material }) => (material?.transparent === true || unlit(material) ? input : input !== null ? input.mul(aoNode) : aoNode),
+});
 const WATCH_FRAMES = 3;                             // a new pipeline's first frames run inside a WebGPU error scope
 
 const readPref = (key) => { try { return localStorage.getItem(key) !== 'off'; } catch { return true; } };
@@ -99,7 +107,7 @@ function build(renderer, scene, camera, key) {
     pre.setMRT(mrt({ output: normalView }));
     occl = gtaoNode(pre.getTextureNode('depth'), pre.getTextureNode(), camera);
     occl.resolutionScale = AO_RESOLUTION; occl.radius.value = AO_RADIUS; occl.scale.value = aoStrength;
-    scenePass.contextNode = builtinAOContext(occl.getTextureNode().sample(screenUV).r);
+    scenePass.contextNode = aoContext(occl.getTextureNode().sample(screenUV).r);
   }
   const color = scenePass.getTextureNode('output');
   let cap = null;
