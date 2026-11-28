@@ -42,11 +42,18 @@ const same = (a: any, b: any) => JSON.stringify(a) === JSON.stringify(b);
 check('default is off (the governor drives, as upstream)', G.getFullDetail() === false && dbg().fullDetail === false);
 check('(setup) the scene starts at full detail', same(visible(), FULL), visible());
 
-// CONTROL: switch off, a long slow stretch walks the whole ladder down
+// CONTROL: switch off, a long slow stretch walks the whole ladder down — every lever but the lamps (below)
+const toasts0 = stub.toasts.length;
 for (let i = 0; i < 150; i++) tick(12);
 const down = visible();
 const moved = Object.keys(FULL).filter((k) => (down as any)[k] !== (FULL as any)[k]);
-check('control — off, slow: every lever shed', moved.length === Object.keys(FULL).length, { down, unmoved: Object.keys(FULL).filter((k) => !moved.includes(k)) });
+const SHEDDABLE = Object.keys(FULL).filter((k) => k !== 'slotCap');
+check('control — off, slow: every lever shed', SHEDDABLE.every((k) => moved.includes(k)), { down, unmoved: SHEDDABLE.filter((k) => !moved.includes(k)) });
+// LOSE FIDELITY BEFORE MEANING (critique 2026-11-25 C.2, §4): three evaluates every light slot on every lit fragment,
+// lit or idle (lab 11-23), so lowering the slot cap darkens a lamp and buys no GPU time. The ladder no longer does it.
+check('L1 off, slow for 150 s with two lamps lit: the slot cap never drops (no lamp goes dark)', down.slotCap === FULL.slotCap, { slotCap: down.slotCap });
+check('L2 …no "lights" rung in the history', !(dbg().history as string[]).some((h) => /lights/.test(h)), (dbg().history as string[]).filter((h) => /lights/.test(h)));
+check('L3 …and no "turned a light down" toast', !stub.toasts.slice(toasts0).some((t: any) => /light/.test(t.msg)), stub.toasts.slice(toasts0).map((t: any) => t.msg));
 
 // switching on hands everything back at once — no 5s-smooth streak per notch
 G.setFullDetail(true);
@@ -89,5 +96,17 @@ check('in a headset: switching on does not resize the headset view', ratios.leng
 stub.renderer.xr.isPresenting = false;
 bus.emit('xr:exit-resized'); G.applyPendingPixelRatio();
 check('…and after exit the desktop comes back at the base ratio, not the shed one', ratios.at(-1) === 1 && dbg().pixelRatio === 1, { writes: ratios.slice(w0), now: dbg().pixelRatio });
+
+// A CAP LEFT LOWERED (by anything but the ladder: an older build's shed, a tool) still comes back, both ways out
+G.setFullDetail(false); G.applyPendingPixelRatio();
+for (let i = 0; i < 80; i++) tick(72);                       // smooth: unwind whatever is shed
+S.slotCap = 2;
+for (let i = 0; i < 40; i++) tick(72);
+check('L4 a slot cap left lowered is restored by smooth seconds, a notch at a time, to the full pool', S.slotCap === 4, visible());
+S.slotCap = 1;
+G.setFullDetail(true);
+check('L5 …and "keep full detail" hands it back at once', S.slotCap === 4, visible());
+G.setFullDetail(false);
+check('L6 the debug surface still reports slotCap (the lab\'s tools read it)', dbg().slotCap === 4, dbg().slotCap);
 
 T.done();
