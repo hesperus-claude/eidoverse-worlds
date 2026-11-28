@@ -103,8 +103,9 @@ const LR = await import('../../client/lib/render/lightrig.js');
 }
 
 const added = [], removed = [];
-core.scene.add = (o) => { added.push(o); };
-core.scene.remove = (o) => { removed.push(o); };
+const inScene = new Set();   // what the live scene holds now (the rows below count grids in it)
+core.scene.add = (o) => { added.push(o); inScene.add(o); };
+core.scene.remove = (o) => { removed.push(o); inScene.delete(o); };
 let objectReads = 0;
 const roomMeshes = new Map();
 { const world = new core.THREE.Scene(), g = new core.THREE.Group(); world.add(g); const box = new core.THREE.Mesh(new core.THREE.BoxGeometry(3, 3, 3), new core.THREE.MeshStandardMaterial()); box.position.set(0, 1.5, 0); g.add(box); roomMeshes.set('walls', g); }
@@ -114,7 +115,8 @@ core.renderer.backend = { isWebGPUBackend: true };
 const regs = [];   // what gi.js registers with three's node library (G12), and how many bake steps had run by then
 core.renderer.library = { addLight: (nodeClass, lightClass) => regs.push({ nodeClass, lightClass, bakesBefore: LP.bakes.length }) };
 let now = 1e6; performance.now = () => now;
-const run = async (frames) => { for (let i = 0; i < frames; i++) { now += 20; FB.tick(now); G.updateGi(); await new Promise((r) => setImmediate(r)); } };
+let perFrame = null;   // a row's own work each frame, before the bake's step (another lane's ask, a look at the scene)
+const run = async (frames) => { for (let i = 0; i < frames; i++) { now += 20; FB.tick(now); perFrame?.(); G.updateGi(); await new Promise((r) => setImmediate(r)); } };
 const giRoom = (gi, things = {}) => ({ entities: { walls: { pos: [0, 0, 0] }, room: { pos: [0, 1.5, 0], zone: { shape: 'box', size: [3, 3, 3] }, ...(gi ? { 'gi-volume': gi } : {}) }, ...things } });   // things: more entities beside the room
 const quiet = () => ({ made: LP.made.length, bakes: LP.bakes.length, loads: gridModuleLoads, objectReads, added: added.length, dbg: G.giDebug?.() });
 
@@ -237,6 +239,62 @@ if (G) {
 }
 check('G10 Video settings carry the GI row through the dial\'s own module (videopanel.js reads render/gipref.js, not the bake)', /from '\.\.\/render\/gipref\.js'/.test(read('client/lib/ui/videopanel.js')) && /giPref\(\)/.test(read('client/lib/ui/videopanel.js')) && /setGiPref\(/.test(read('client/lib/ui/videopanel.js')), '');
 check('G10 …the frame loop steps it, hands it the world\'s objects, and EW.gi reads giDebug (main.js)', /registerSystem\('gi', updateGi\)/.test(read('client/main.js')) && /setGiObjects\(\(\) => entities\)/.test(read('client/main.js')) && /\bgi: giDebug\b/.test(read('client/main.js')), '');
+
+if (G) {
+  // ---- pins: what holds today, written so the mutants the rows above let live go red (the cold read of 11-27: its rows
+  // X3 X4 X11 X12 X16, and two more for the debounce and the frame budget)
+  const BUS = await import('../stubs/gi-base-stub.mjs'), LW = await import('../stubs/loadwork-stub.mjs'), T = core.THREE;
+  const jobsOf = () => LP.bakes.filter((b) => b.pass === 0 && b.start === 0).length;   // each bake job starts at probe 0, pass 0
+  const box = (x, y, z, size = 0.5, mat) => { const w = new T.Scene(), g = new T.Group(); w.add(g); const m = new T.Mesh(new T.BoxGeometry(size, size, size), mat ?? new T.MeshStandardMaterial()); m.position.set(x, y, z); g.add(m); return g; };
+  const fresh = async () => { St.reset(); await run(5); LP.bakes.length = 0; LP.made.length = 0; added.length = 0; removed.length = 0; for (const k of [...roomMeshes.keys()]) if (k !== 'walls') roomMeshes.delete(k); };
+  const proxyMeshes = () => (LP.bakes.at(-1)?.children ?? []).filter((o) => o.isMesh).map((m) => m.geometry);   // what the last bake step's proxy held
+  const edit = (fn) => { const nx = structuredClone(St.state.st); fn(nx.entities); St.applyView(nx); };
+
+  await fresh(); LW.lanes.busy = true;
+  St.hydrate(giRoom({ bounces: 0 })); await run(300);
+  const held = LP.bakes.length; LW.lanes.busy = false; await run(300);
+  check('P1 no bake starts while the load lanes are busy, and it starts once they drain', held === 0 && LP.bakes.length === 27, [held, LP.bakes.length]);
+
+  await fresh(); let early = 0;
+  perFrame = () => { if (LP.bakes.length < 27 && LP.made.some((g) => inScene.has(g))) early++; };
+  St.hydrate(giRoom({ bounces: 1 })); await run(300); perFrame = null;
+  check('P2 a grid joins the scene only once every probe holds direct light (never while pass 0 is part done), and once',
+    early === 0 && added.filter((o) => o.isLightProbeGrid).length === 1 && LP.bakes.length === 54, [early, added.length, LP.bakes.length]);
+
+  await fresh();
+  LR.requestLight('complight:pin', { authored: true, pos: [0, 2.5, 0], intensity: 20, range: 6, decay: 2 });
+  roomMeshes.set('m0', box(-1, 0.5, 0.3));
+  St.hydrate(giRoom({ bounces: 0 }, { lamp: { pos: [0, 2.5, 0], light: { intensity: 20 } }, m0: { pos: [-1, 0, 0.3] } })); await run(300);
+  const j0 = jobsOf();
+  LR.requestLight('complight:pin', { authored: true, pos: [0, 2.5, 0], intensity: 40, range: 6, decay: 2 });
+  edit((es) => { es.lamp.light = { intensity: 40 }; }); await run(300);
+  const j1 = jobsOf();
+  check('P3 a lamp turned up rebakes once (the signature holds each light as it stands)', j0 === 1 && j1 === 2, [j0, j1]);
+  roomMeshes.get('m0').children[0].position.set(1, 0.5, -0.3);
+  edit((es) => { es.m0.pos = [1, 0, -0.3]; }); await run(300);
+  check('P4 a static thing moved across the room rebakes once (its world matrix is in the signature; its pose is near the volume)', jobsOf() === j1 + 1, [j1, jobsOf()]);
+  const glass = box(0.5, 0.5, 0.5, 0.5, new T.MeshStandardMaterial({ transparent: true, opacity: 0.3 })), skin = box(-0.5, 0.5, -0.5);
+  skin.children[0].isSkinnedMesh = true;
+  roomMeshes.set('glass', glass); roomMeshes.set('skin', skin);
+  edit((es) => { es.glass = { pos: [0.5, 0, 0.5] }; es.skin = { pos: [-0.5, 0, -0.5] }; }); await run(300);
+  const last = proxyMeshes();
+  check('P5 a transparent mesh and a skinned one are no part of the proxy', !last.includes(glass.children[0].geometry) && !last.includes(skin.children[0].geometry) && last.length === 2, last.length);
+  LR.releaseLight('complight:pin');
+
+  await fresh();
+  St.hydrate(giRoom({ bounces: 0 })); await run(60);
+  const quietEarly = LP.bakes.length; await run(60);
+  check('P6 a bake waits for 1.5 s of quiet: no step in the first 1.2 s after the world arrives, under way by 2.4 s', quietEarly === 0 && LP.bakes.length > 0, [quietEarly, LP.bakes.length]);
+
+  await fresh();
+  St.hydrate(giRoom({ bounces: 2 })); await run(100);
+  const b0 = LP.bakes.length;
+  perFrame = () => { FB.ask('hog', { gpu: true }); };   // another lane takes each frame's gpu unit before the bake asks
+  await run(40); perFrame = null;
+  const hogged = LP.bakes.length - b0; await run(200);
+  check('P7 a bake step goes through the shared frame budget: while another lane holds each frame\'s gpu unit no step runs, and the bake finishes after',
+    b0 > 0 && b0 < 81 && hogged === 0 && LP.bakes.length === 81, [b0, hogged, LP.bakes.length]);
+}
 
 if (G) {
   // (2) where GI can't run it is off, and says why where the lead's capture rig looks (giDebug)
