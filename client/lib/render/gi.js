@@ -241,8 +241,13 @@ function nearestView(plans, n) {
   return plans.map((p, i) => { const d = boxOf(p).distanceToPoint(_eye); return { p, i, d: live.has(p.id) ? Math.max(0, d - 1) : d, v: p.size[0] * p.size[1] * p.size[2] }; })
     .sort((a, c) => a.d - c.d || a.v - c.v || a.i - c.i).slice(0, n).sort((a, c) => a.i - c.i).map((r) => r.p);
 }
+/** Does the view hold a gi-volume at all? A scan of its own entries: no fold, no allocation. */
+function anyVolume(st) { const es = st?.entities; if (es) for (const id in es) if (es[id]?.['gi-volume'] !== undefined) return true; return false; }
+let replans = 0;
 async function replan() {
-  const all = failed || giSupport(renderer) ? [] : plansOf(foldOfView(state.st), giPref());
+  replans++;   // GI off here, the dial off, or no gi-volume in the world: no fold (8 ms at 10k things, 39 ms at 50k)
+  const level = giPref();
+  const all = failed || giSupport(renderer) || level === 'off' || !anyVolume(state.st) ? [] : plansOf(foldOfView(state.st), level);
   const plans = all.length > GI_BOUNDS.grids ? nearestView(all, GI_BOUNDS.grids) : all;
   const keep = new Set(plans.map((p) => p.id)), n = GI_BOUNDS.grids;
   candidates = all.length > n ? all : [];
@@ -295,9 +300,9 @@ export function updateGi() {
   else if (job) stepBake();
   for (const { grid, plan } of live.values()) grid.intensity = plan.intensity * glowScale();   // its lamps dim by day as the rig's do
 }
-/** EW.gi: the dial, why GI is off here (null: it isn't), each grid, the volumes refused a grid (GI_BOUNDS.grids) and why, what
+/** EW.gi: the dial, why GI is off here (null: it isn't), how many replans this page has run, each grid, the volumes refused a grid (GI_BOUNDS.grids) and why, what
  *  the last proxy held and what its bounds cut, and the bake in progress (null when none). */
-export const giDebug = () => ({ level: giPref(), off: failed ?? giSupport(renderer),
+export const giDebug = () => ({ level: giPref(), off: failed ?? giSupport(renderer), replans,
   grids: [...live.values()].map((l) => ({ id: l.plan.id, counts: l.plan.counts, cube: l.plan.cube, shown: l.added })),
   refused: refused.map((r) => ({ ...r })), proxy: proxyStats && { ...proxyStats, cut: { ...proxyStats.cut } },
   baking: job ? job.queue.map((q) => `${q.l.plan.id} ${q.i}/${q.steps.length}`) : null });
