@@ -1,4 +1,4 @@
-// shared/zone.js — a world's water bodies, dry pockets and physics volumes in world space (zone + water / water-exclusion / physics-volume: componentspec.js),
+// shared/zone.js — a world's water bodies, dry pockets, physics volumes and interiors in world space (zone + water / water-exclusion / physics-volume / interior: componentspec.js),
 // and the waters/airs shared/water.js reads (mediumAt, inBox, waterPath, swimStep). Pure.
 import { worldPose, offChain } from "./protocol/simlayer.js";
 import { qRotate, qConj } from "./rot.js";
@@ -124,18 +124,70 @@ export function fogSlots({ waters = [], airs = [] } = {}, { maxWater = MAX_WATER
 
 // the components and change kinds a rebuild of the bodies reads (client/lib/realize/watervolumes.js; state.js's events)
 const READS = new Set(["zone", "water", "water-exclusion", "physics-volume", "disabled"]);
-/** Does a world change touch what zonesOf read? `entities`: the view's (state.st.entities); `owners`: the ids that held a body
- *  or an exclusion at the last build (a removed one still counts). */
-export function zoneChangeTouches(ev, entities, owners) {
+// one change filter for every zone effect's reader: `reads` the components it reads, `holds(c)` a record that holds one,
+// `worldKey` the @world key it reads (or none)
+function touches(ev, entities, owners, reads, holds, worldKey) {
   if (ev?.type === "hydrated" || ev?.type === "reset") return true;
-  if (ev?.type === "world") return ev.key === "water";
+  if (ev?.type === "world") return worldKey !== null && ev.key === worldKey;
   if (ev?.type !== "change") return false;
-  const { what, comp: name } = ev; if (what === "comp" && !READS.has(name)) return false;
+  const { what, comp: name } = ev; if (what === "comp" && !reads.has(name)) return false;
   const id = ev.id; if (owners.has(id)) return true;
-  const c = entities?.[id]; if (c && (c.zone || c.water || c["water-exclusion"] || c["physics-volume"])) return true;
+  const c = entities?.[id]; if (c && holds(c)) return true;
   for (const v of owners) for (let p = entities?.[v]?.parent?.to, n = 0; p && n < 33; p = entities?.[p]?.parent?.to, n++) if (p === id) return true;   // a carrier above one
   return false;
 }
+/** Does a world change touch what zonesOf read? `entities`: the view's (state.st.entities); `owners`: the ids that held a body
+ *  or an exclusion at the last build (a removed one still counts). */
+export const zoneChangeTouches = (ev, entities, owners) => touches(ev, entities, owners, READS, (c) => c.zone || c.water || c["water-exclusion"] || c["physics-volume"], "water");
+
+// ---- interior: a box where the sky's ambient is replaced (componentspec interior; Godot ReflectionProbe.interior +
+// ambient_color / ambient_color_energy). The renderer cuts the sky hemisphere and the environment map inside and puts a
+// flat ambient in their place (client/lib/render/interior.js); this is the one reading of which boxes there are.
+/** absent interior fields: white, at 0.25 (a dim neutral room; the energy means what sky.ambientLightEnergy's does) */
+export const INTERIOR_DEFAULTS = Object.freeze({ color: Object.freeze([1, 1, 1]), energy: 0.25 });
+const rgb01 = (c) => v3(c) && c.every((x) => x >= 0 && x <= 1);
+/** The interior boxes in world space, in zone order (cmp): [{id, global, priority, weight, blend, color, energy, center?, size?, q?,
+ *  toLocal?}]. A box or global zone only (the door refuses the other shapes); zone.weight 0..1 (absent 1), zone.blend m
+ *  (absent 0: a hard edge). A switched-off thing, or one under one, holds none. */
+export function interiorsOf(st, { poseOf = (id) => worldPose(st, id) } = {}) {
+  const out = [];
+  for (const id of Object.keys(st?.entities ?? {})) {
+    const c = st.entities[id]?.c ?? {}, a = c.interior;
+    if (id === "@world" || !a || typeof a !== "object" || !c.zone || offChain(st, id)) continue;
+    const z = c.zone, priority = Number.isInteger(z.priority) ? z.priority : 0;
+    const weight = fin(z.weight) ? Math.max(0, Math.min(1, z.weight)) : 1, blend = fin(z.blend) && z.blend > 0 ? z.blend : 0;
+    const color = rgb01(a.ambientColor) ? [...a.ambientColor] : [...INTERIOR_DEFAULTS.color];
+    const energy = fin(a.ambientColorEnergy) && a.ambientColorEnergy >= 0 ? a.ambientColorEnergy : INTERIOR_DEFAULTS.energy;
+    const base = { id, priority, weight, blend, color, energy };
+    if (z.global === true) { out.push({ ...base, global: true }); continue; }
+    if (z.shape !== "box" || !v3(z.size)) continue;
+    const pose = poseOf(id); if (!pose) continue;
+    const scale = v3(pose.scale) ? pose.scale.map(Math.abs) : [1, 1, 1], q = pose.q ?? [0, 0, 0, 1], center = [...pose.pos];
+    out.push({ ...base, global: false, center, q, size: z.size.map((x, i) => Math.abs(x) * scale[i]), toLocal: (p) => qRotate(qConj(q), [p[0] - center[0], p[1] - center[1], p[2] - center[2]]) });
+  }
+  return out.sort(cmp);
+}
+/** How far p is outside an interior box, metres (0 inside or on it; a global one: 0 everywhere). */
+export function interiorDistance(b, p) {
+  if (b.global) return 0;
+  const l = b.toLocal(p); let s = 0;
+  for (let k = 0; k < 3; k++) { const d = Math.abs(l[k]) - b.size[k] / 2; if (d > 0) s += d * d; }
+  return Math.sqrt(s);
+}
+/** The interiors the GPU holds (`max` slots, the renderer's budget): the nearest to `eye` first (0 inside; a global one 0),
+ *  then the higher priority, then the later id. Returned in blend order: the highest priority first, a tie the later id
+ *  first (the zone rule: the later id wins), each taking what those before it left of the sky. A thousand boxes cost a
+ *  visitor's GPU what `max` do. */
+export function interiorSlots(list, eye, max) {
+  const n = Math.max(0, Math.floor(max) || 0);
+  const kept = (list ?? []).map((b) => ({ b, d: interiorDistance(b, eye) }))
+    .sort((x, y) => x.d - y.d || y.b.priority - x.b.priority || (x.b.id < y.b.id ? 1 : x.b.id > y.b.id ? -1 : 0)).slice(0, n).map((x) => x.b);
+  return kept.sort((x, y) => y.priority - x.priority || (x.id < y.id ? 1 : x.id > y.id ? -1 : 0));
+}
+const INTERIOR_READS = new Set(["zone", "interior", "disabled"]);
+/** Does a world change touch what interiorsOf read? (zoneChangeTouches' shape: `owners`, the ids that held an interior at the
+ *  last build) */
+export const interiorChangeTouches = (ev, entities, owners) => touches(ev, entities, owners, INTERIOR_READS, (c) => c.interior, null);
 
 /** The view (view.js viewState) as the fold shape zonesOf reads: each record's transform, parent and components, and @world's water. */
 export function foldOfView(view) {

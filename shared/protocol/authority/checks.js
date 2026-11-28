@@ -444,6 +444,8 @@ export function zoneRules(s, ids) {
         return { code: "shape", reason: `${id}.physics-volume.modes is ${JSON.stringify(off.length ? off : pa.modes)}${off.length ? ", not a mode" : ""}: a non-empty list of ${VOLUME_MODES.join(" | ")}`,
           fix: `modes: any of ${VOLUME_MODES.join(", ")}, or leave it out for every mode` }; } }
     if (c["physics-volume"] !== undefined && !(c.zone?.shape === "box" || c.zone?.global === true)) return { code: c.zone === undefined ? "needs" : "shape", reason: `${id}.physics-volume: ${c.zone === undefined ? "a physics-volume on a thing needs a sibling zone {shape, size} (its extent)" : `it reads a box zone or a global one (shape '${c.zone.shape}' isn't read yet)`}`, fix: zoneFix(id, "a physics-volume") };
+    // interior reads a box zone or a global one (shared/zone.js interiorsOf)
+    if (c.interior !== undefined && !(c.zone?.shape === "box" || c.zone?.global === true)) return { code: c.zone === undefined ? "needs" : "shape", reason: `${id}.interior: ${c.zone === undefined ? "an interior on a thing needs a sibling zone {shape, size} (its extent)" : `it reads a box zone or a global one (shape '${c.zone.shape}' isn't read yet)`}`, fix: zoneFix(id, "an interior") };
     const has = ZONED.filter((k) => c[k] !== undefined); if (!has.length) continue;
     if (has.length > 1) return { code: "shape", reason: `${id} has both water and water-exclusion: a thing is a water body or a dry pocket, not both`, fix: "put the dry pocket on a child thing with its own zone" };
     if (c.zone === undefined) return { code: "needs", reason: `${id}.${has[0]}: ${has[0]} on a thing needs a sibling zone {shape, size} (its extent)`, fix: zoneFix(id, has[0]) };

@@ -3,7 +3,7 @@
 // base.js (docs/design/RENDERER-SEAM.md), so modules that never touch the GPU import THAT.
 //
 // Import rule: from the client, core imports base.js (which imports nothing at all) and the render/ and xr/ boot helpers
-// it installs (gpulost, backend_choice, syncgate, xr/*), none of which imports core. The module graph
+// it installs (gpulost, backend_choice, syncgate, interior, xr/*), none of which imports core. The module graph
 // stays acyclic at load time even where the runtime call graph is circular.
 
 import * as THREE from 'three';
@@ -17,6 +17,7 @@ import { separateXRPass } from './xr/xrpass.js';
 import { tolerateNullXRFramebuffer } from './xr/xr_nullfb.js';
 import { patchShadowNodeForXR } from './xr/xrshadow.js';
 import { installSyncGate } from './render/syncgate.js';
+import { makeInterior } from './render/interior.js';
 
 export { THREE, TSL };
 
@@ -180,7 +181,11 @@ addEventListener('resize', () => {
 // ------------------------------------------------------------ base lighting
 // The sky module owns these once a sky verb lands; these are the "empty world"
 // defaults so a fresh world is not pitch black.
-export const hemi = new THREE.HemisphereLight(0xbfd4ff, 0x283024, 0.75);
+// The sky's hemisphere is cut inside `interior` boxes (render/interior.js): its own light class, mapped to its node here,
+// before any material exists, so every lit material is born reading the boxes (zero of them until a world has one)
+export const interior = makeInterior(THREE, TSL);
+renderer.library.addLight(interior.InteriorHemisphereLightNode, interior.InteriorHemisphereLight);
+export const hemi = new interior.InteriorHemisphereLight(0xbfd4ff, 0x283024, 0.75);
 scene.add(hemi);
 export const sun = new THREE.DirectionalLight(0xfff2e0, 2.2);
 sun.position.set(14, 22, 10);

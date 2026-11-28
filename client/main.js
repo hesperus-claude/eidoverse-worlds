@@ -5,6 +5,7 @@
 // handle in mybody.js, my body's physics in localbody.js, consent in consent.js, voice mouths in voicemouths.js,
 // /commands in lib/ui/commands/. lite.js is the renderer-free sibling.
 import { updateWater, updateWaterView, setWaterObjects, setWaterClock, setSkyHider, waterDebug, applyEnvLight } from './lib/realize/watervolumes.js';
+import { updateInteriors, setInteriorObjects, interiorDebug } from './lib/realize/interiors.js';
 
 import { say } from './lib/net.js';
 import { updateHelm, helmHull } from './lib/player/vehicles.js';
@@ -511,6 +512,7 @@ registerSystem('materials', (dt, t, now) => updateMaterials(now)); // weather �
 registerSystem('rig', (dt, t, now) => updateRig(now));          // light slots follow requests
 registerSystem('sounds', () => tickSounds(), { every: 2 });      // panners follow entities, the listener the camera
 setWaterObjects(() => entities);
+setInteriorObjects(() => entities);
 setClimbObjects(() => entities);   // climb routes resolve through their hosts' live objects (client/lib/player/climb.js)
 setWaterClock(serverNow);
 setSkyHider(hideSkyForWater);
@@ -552,6 +554,7 @@ registerSystem('send-pose', (dt, t, now) => sendPose(now));
 // XR: read hands → fill intent (updateMe already moved the body) → rig follows
 registerSystem('xr', (dt) => updateXR(dt));
 registerSystem('water-view', () => updateWaterView());   // after the camera's last move this frame (movement, XR): the level's fog and background
+registerSystem('interiors', () => updateInteriors());     // after the camera's last move too: the interior boxes nearest the eye take the slots
 registerSystem('xrvignette', (dt) => tickXRVignette(dt));   // comfort tunnel, on the XR camera (Settings › VR)
 registerSystem('pixel-ratio', () => applyPendingPixelRatio());   // a resize clears the canvas: before the draw, never after
 registerSystem('instances', () => tickInstances());   // a thing's instanced copies take its pose after everything that moves a thing this frame (motion, build drags, XR grabs): never a frame behind
@@ -563,6 +566,7 @@ bus.on('xr:stand', () => xrDismountMe('menu'));
 bus.on('xr:mic', async () => { const { xrMicPress } = await import('./lib/xr/vrmic.js'); await xrMicPress(); });   // a bounded permission try in VR (vrmic.js)
 bus.on('xr:select', (id) => sceneSelect(id));
 globalThis.__waterDebug = waterDebug;
+globalThis.__interiorDebug = interiorDebug;
 let _pulseAt = 0;
 registerSystem('pulse', (dt, t, now) => {
   if (now - _pulseAt < 1000) return;

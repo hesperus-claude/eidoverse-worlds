@@ -485,6 +485,15 @@ export const COMPONENTS = {
                  factor: "speed: × a body's own speed inside (walking, running, wading, swimming): < 1 slows (mud, deep snow), > 1 boosts; 0.05..10. The authority's track widens inside a boost, never narrows",
                  modes: "which movement modes it touches: walk | swim | fly | climb (Unreal's per-mode settings); absent: all. Main's slow water translates to ['swim']" },
                help: "on a thing with a zone {shape: 'box', size} (or global): {kind: 'speed', factor? (× a body's own speed inside, 0.05..10; absent 1), modes? (a list of walk | swim | fly | climb, e.g. ['swim']; absent, every mode)}. Where speed volumes overlap, only those whose modes take the body's current mode count, and the highest zone priority among them decides" },
+  // a zone effect for the look: inside, the sky's ambient (its hemisphere and its environment map, diffuse and specular) is
+  // replaced by a flat one; Godot ReflectionProbe's interior + ambient_color / ambient_color_energy (ambient_mode Color).
+  // shared/zone.js interiorsOf is the one reader; client/lib/render/interior.js draws it. The sun and the fill are not cut
+  interior: { on: "thing", fields: { ambientColor: "vec3", ambientColorEnergy: "number" },
+               ranges: { ambientColor: { min: 0, max: 1 }, ambientColorEnergy: { min: 0, max: 16 } },
+               absentMeans: { ambientColor: "white", ambientColorEnergy: "0.25: a dim neutral room (Godot's default is 1 with a black colour, a black room)" },
+               docs: { ambientColor: "the colour of the light that stands in for the sky's inside, a linear [r, g, b] 0..1 (Godot ReflectionProbe ambient_color; as sky.ambientLightColor: a hue, its brightness the energy)",
+                 ambientColorEnergy: "how bright the inside's ambient looks, 0..16, the same at every hour; the same number looks the same as sky.ambientLightEnergy (a white surface returns energy / π). Godot ReflectionProbe ambient_color_energy" },
+               help: "on a thing with a zone {shape: 'box', size} (or global: the whole world is indoors): inside it the sky's ambient (its hemisphere and its environment, reflections too) gives way to {ambientColor? linear [r, g, b] 0..1 (absent white), ambientColorEnergy? 0..16 (absent 0.25: a dim room)}; the sun, the fill and lamps are not cut (a roof shadows the sun). The zone's blend (m, a fade outside the box), weight (0..1: a porch at 0.5) and priority (where boxes overlap, the higher is in front) apply. Godot ReflectionProbe interior" },
   // the ground's other two layers, each a component of its own beside the bag (shared/terrainshape.js groundArgs gathers
   // them): PARTITION keys, pieces of one shared ground, so whoever may shape the ground may change any of them
   "terrain-feature": { on: "world", keyed: true, key: "partition", fields: { type: "string", x: "number", z: "number", x1: "number", z1: "number", x2: "number", z2: "number", radius: "number", height: "number", edge: "number", order: "number" },

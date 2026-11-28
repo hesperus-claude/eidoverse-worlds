@@ -280,7 +280,7 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
   `collider {shape, enabled?, blocks?, layer?, mask?}` (mesh, box or sphere; absent, its size decides), `places` (named places to walk to, in the
   thing's own frame; on `@world`, world coordinates),
   `openable`, `physics`, `grabbable`, `particles`, `script:<name>`, `zone`, `water` (a body),
-  `water-exclusion`, `physics-volume`,
+  `water-exclusion`, `physics-volume`, `interior`,
   `physics-joint:<name>` (the constraint between two bodies) and `joint` (a skeleton node), both
   reserved, and on
   `@world`: `about`, `bounds`, `spawn`, `roles:<identity>`, `default-role`,
@@ -339,6 +339,14 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
   `[1]` (eidosim carries no layers between things), so a collider whose layer leaves out 1 is met by hulls alone, and
   only by those that scan it; a dynamic thing must keep 1 in its layer. A still collider's mask is unread. Every
   stored world (no layer, no mask) collides as before. `solidOff(c, kind, mask)` is the one reading.
+- **An interior is `interior {ambientColor?, ambientColorEnergy?}`** on a thing with a box or global `zone` (Godot
+  ReflectionProbe's `interior` with `ambient_mode` Color, `ambient_color`, `ambient_color_energy`): a look effect only.
+  Inside it the renderer cuts the sky's ambient (the hemisphere and the environment map, diffuse and specular) and puts
+  a flat ambient in its place, `ambientColor` (linear [r, g, b] 0..1, absent white) at `ambientColorEnergy` (0..16, absent
+  0.25; the same number looks the same as `sky.ambientLightEnergy`). The zone's `blend` fades it outside the box, its
+  `weight` scales it, and where boxes overlap the higher `priority` is in front (a tie: the later id), each taking what
+  those in front left of the sky. The sun, the fill light and lamps are not cut. A renderer reads a bounded number of
+  boxes, the nearest the eye first; the rest let the sky in. shared/zone.js `interiorsOf`/`interiorSlots` is the one reading.
 - **A physics volume is `physics-volume {kind, factor?, modes?}`** on a thing with a box or global `zone` (Godot Area3D's
   overrides, Unreal's Physics Volume): with `kind: speed`, a body inside moves at `factor` × its own speed (walking,
   running, wading, the stroke, the 3D swim; 0.05..10, absent 1), in the movement modes it names (`modes`, a non-empty list of
