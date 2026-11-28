@@ -7,7 +7,7 @@
 // queue drained to P.FAR, the lanes idle, 1.5 s quiet), and rebaked only when what the bake sees changes (its signature):
 // Godot never rebakes by itself, and bakes only geometry flagged static, so what moves and editor gizmos stay out.
 // No gi-volume or the dial off: three's grid code never loads and nothing is built.
-import { THREE, TSL, scene, renderer, backendName } from '../core.js';
+import { THREE, TSL, scene, camera, renderer, backendName } from '../core.js';
 import { bus } from '../base.js';
 import { state, onWorldChange } from '../state.js';
 import { laneBusy } from './loadwork.js';
@@ -20,6 +20,15 @@ import { worldPose, offChain } from '../../../shared/protocol/simlayer.js';
 export { GI_LEVELS, giPref, setGiPref };
 
 const TIERS = { low: { cube: 8, cap: 250 }, high: { cube: 16, cap: 1000 } };
+// What one world's content may make a visitor's browser build (a world is untrusted content; cold read of 11-27):
+//   grids: live grids a world, the volumes nearest the view. Bevy without binding arrays (WebGPU, WebGL 2) takes "only the
+//     closest irradiance volume to the view". A grid is a Light: one 3D texture sampled seven times in every lit fragment
+//     shader, where 16 sampled textures a stage is the ceiling and a lamp-lit room already binds 14, and an id in every lit
+//     pipeline's key, so a grid joining or leaving recompiles every lit material.
+//   lights: the bake's lights, the strongest at the volume. Each is a real three light in every proxy material's shader;
+//     16 is the most the rig ever lights at once (lightrig's slot ceiling).
+//   meshes: the proxy's meshes, the largest. A bake step renders the whole proxy into six cube faces.
+export const GI_BOUNDS = Object.freeze({ grids: 1, lights: 16, meshes: 256 });
 
 // ---- pure: what to bake ----
 const fin = Number.isFinite, v3 = (x) => Array.isArray(x) && x.length === 3 && x.every(fin);
@@ -97,6 +106,7 @@ export function setGiObjects(fn) { objects = fn; }
 const live = new Map();          // volume id -> { grid, plan, key, added }
 let dirtyAt = 0, job = null, waited = 0, starting = false, LPG = null, failed = null;
 let baked = null;               // the signature of the static set the grids hold (or are baking)
+let refused = [], candidates = [], proxyStats = null, viewCheckAt = 0;   // volumes past GI_BOUNDS.grids; every volume, when some are; the last proxy's counts
 const QUIET_MS = 1500;           // a rebake waits for the world to stop changing
 function touch() { dirtyAt = performance.now(); }
 const boxOf = (p, pad = 0) => new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(...p.center), new THREE.Vector3(...p.size).addScalar(2 * pad));
@@ -104,7 +114,7 @@ const nearAny = (id) => { const pos = state.st.entities?.[id]?.pos; if (!v3(pos)
 // what can make or unmake a volume; anything else matters only while one is live
 const SHAPES = new Set(['gi-volume', 'zone', 'disabled']);
 onWorldChange((ev) => {
-  if (ev?.type === 'reset') { for (const id of [...live.keys()]) drop(id); job = null; baked = null; clearProxy(); }
+  if (ev?.type === 'reset') { for (const id of [...live.keys()]) drop(id); job = null; baked = null; clearProxy(); refused = []; candidates = []; proxyStats = null; }
   if (!giTouches(ev, nearAny)) return;
   const { what, comp: name } = ev;
   if (live.size || job || ev.type !== 'change' || what === 'born' || what === 'gone' || what === 'parent' || SHAPES.has(name)) touch();
@@ -121,10 +131,12 @@ const MOVES = (c) => !!c && ((c.grabbable !== undefined && c.grabbable?.enabled 
   || c.physics?.kind === 'dynamic' || c.physics?.kind === 'kinematic' || Object.keys(c).some((k) => k === 'motion' || k.startsWith('motion:')));
 function moves(id) { const es = state.st.entities ?? {}; for (let k = id, n = 0; k && n < 33; k = es[k]?.parent?.to, n++) if (MOVES(es[k])) return true; return false; }
 
-/** What a bake would see: the opaque, unskinned, static meshes near a volume (never an editor gizmo: a light's bulb) and every
- *  placed light near one (the rig's requests, not its slots: the pool lights ~8 of a room's lamps at a time). */
+/** What a bake would see: the opaque, unskinned, static meshes near a volume (never an editor gizmo: a light's bulb) and the
+ *  placed lights near one (the rig's requests, not its slots: the pool lights ~8 of a room's lamps at a time), each list cut
+ *  to its GI_BOUNDS: the largest meshes (a room's walls and floor carry its bounce), the strongest lights at the volume. */
+const _sz = new THREE.Vector3();
 function staticSet(plans) {
-  const boxes = plans.map((p) => boxOf(p, 1)), b = new THREE.Box3(), meshes = [];
+  const boxes = plans.map((p) => boxOf(p, 1)), b = new THREE.Box3(), found = [];
   for (const [id, obj] of objects()) {
     if (!obj?.parent || moves(id)) continue;
     obj.updateMatrixWorld(true);
@@ -132,11 +144,19 @@ function staticSet(plans) {
       if (!(x.isMesh || x.isInstancedMesh) || x.isSkinnedMesh || !x.geometry || !x.material || x.userData?.isGizmo) return;
       if ((Array.isArray(x.material) ? x.material : [x.material]).every((m) => m.transparent)) return;
       if (!boxes.some((bx) => bx.intersectsBox(b.setFromObject(x, false)))) return;
-      meshes.push(x);
+      found.push({ x, size: b.getSize(_sz).lengthSq() });
     });
   }
-  const lights = worldLights().filter((L) => boxes.some((bx) => bx.distanceToPoint(L.pos) <= L.range));
-  return { meshes, lights };
+  const meshes = top(found, GI_BOUNDS.meshes, (f) => f.size).map((f) => f.x);
+  const near = worldLights().filter((L) => boxes.some((bx) => bx.distanceToPoint(L.pos) <= L.range)), tight = plans.map((p) => boxOf(p));
+  const lights = top(near, GI_BOUNDS.lights, (L) => (fin(L.intensity) ? L.intensity : 0) / (1 + Math.min(...tight.map((bx) => bx.distanceToPoint(L.pos))) ** 2));
+  return { meshes, lights, cut: { meshes: found.length - meshes.length, lights: near.length - lights.length } };
+}
+/** The `n` of `xs` that score highest (ties: the earlier), in their own order. */
+function top(xs, n, score) {
+  if (xs.length <= n) return xs;
+  const keep = new Set(xs.map((x, i) => [score(x), i]).sort((a, c) => c[0] - a[0] || a[1] - c[1]).slice(0, n).map(([, i]) => i));
+  return xs.filter((_, i) => keep.has(i));
 }
 const r4 = (v) => Math.round(v * 1e4) / 1e4;
 /** The static set's signature: the plans, each mesh's geometry, materials and world matrix (an instanced one's count and
@@ -191,19 +211,31 @@ function giOff(why) {
   failed = `${why} (${backendName?.() ?? '?'})`;
   console.warn(`[gi] ${failed}; bounce light off on this page`);
   for (const id of [...live.keys()]) drop(id);
-  job = null; baked = null; clearProxy();
+  job = null; baked = null; clearProxy(); refused = []; candidates = []; proxyStats = null;
+}
+/** The `n` volumes nearest the view: the one it stands in (the smallest, where boxes nest), else the nearest box. A volume
+ *  with a live grid holds its ground for a metre, so a doorway does not flip-flop between two rooms. */
+const _eye = new THREE.Vector3();
+function nearestView(plans, n) {
+  camera.getWorldPosition(_eye);
+  return plans.map((p, i) => { const d = boxOf(p).distanceToPoint(_eye); return { p, i, d: live.has(p.id) ? Math.max(0, d - 1) : d, v: p.size[0] * p.size[1] * p.size[2] }; })
+    .sort((a, c) => a.d - c.d || a.v - c.v || a.i - c.i).slice(0, n).sort((a, c) => a.i - c.i).map((r) => r.p);
 }
 async function replan() {
-  const plans = failed || giSupport(renderer) ? [] : plansOf(foldOfView(state.st), giPref());
-  const keep = new Set(plans.map((p) => p.id));
+  const all = failed || giSupport(renderer) ? [] : plansOf(foldOfView(state.st), giPref());
+  const plans = all.length > GI_BOUNDS.grids ? nearestView(all, GI_BOUNDS.grids) : all;
+  const keep = new Set(plans.map((p) => p.id)), n = GI_BOUNDS.grids;
+  candidates = all.length > n ? all : [];
+  refused = all.filter((p) => !keep.has(p.id)).map((p) => ({ id: p.id, why: `${n === 1 ? 'one grid' : `${n} grids`} a world, the nearest the view: ${plans.map((q) => q.id).join(', ')}` }));
   for (const id of [...live.keys()]) if (!keep.has(id)) drop(id);
-  if (!plans.length) { job = null; baked = null; clearProxy(); return; }
+  if (!plans.length) { job = null; baked = null; clearProxy(); proxyStats = null; return; }
   if (!LPG) {   // registered before the first bake: three's bake registers its own node only when the library has none for the class
     const Grid = (await import('three/addons/lighting/LightProbeGrid.js')).LightProbeGrid;
     const { LightProbeGridNode } = await import('three/addons/tsl/lighting/LightProbeGridNode.js');
     if (!LPG) { renderer.library.addLight(sharedGridNode(LightProbeGridNode, TSL.renderGroup), Grid); LPG = Grid; }
   }
   const set = staticSet(plans), sig = signatureOf(plans, set);
+  proxyStats = { meshes: set.meshes.length, lights: set.lights.length, cut: set.cut };
   if (sig === baked && plans.every((p) => live.has(p.id))) return;   // the same room, baked or baking: nothing to do
   baked = sig; job = null;
   const queue = plans.map((plan) => {
@@ -237,11 +269,15 @@ function stepBake() {
  *  queue: pending(P.FAR)), bake one probe when the frame budget allows. */
 export function updateGi() {
   if (globalThis.__gpuLost?.fired) return;   // a lost device draws nothing (gpulost.js)
+  const t = performance.now();   // the view walked nearer another volume than the live one: replan (a quiet world only)
+  if (candidates.length && !dirtyAt && !starting && t - viewCheckAt > 500) { viewCheckAt = t; if (nearestView(candidates, GI_BOUNDS.grids).some((p) => !live.has(p.id))) touch(); }
   if (dirtyAt && !starting && performance.now() - dirtyAt > QUIET_MS && !laneBusy() && pending(P.FAR) === 0 && state.hydrated && renderer.initialized !== false) startBake();
   else if (job) stepBake();
   for (const { grid, plan } of live.values()) grid.intensity = plan.intensity * glowScale();   // its lamps dim by day as the rig's do
 }
-/** EW.gi: the dial, why GI is off here (null: it isn't), each grid, and the bake in progress (null when none). */
+/** EW.gi: the dial, why GI is off here (null: it isn't), each grid, the volumes refused a grid (GI_BOUNDS.grids) and why, what
+ *  the last proxy held and what its bounds cut, and the bake in progress (null when none). */
 export const giDebug = () => ({ level: giPref(), off: failed ?? giSupport(renderer),
   grids: [...live.values()].map((l) => ({ id: l.plan.id, counts: l.plan.counts, cube: l.plan.cube, shown: l.added })),
+  refused: refused.map((r) => ({ ...r })), proxy: proxyStats && { ...proxyStats, cut: { ...proxyStats.cut } },
   baking: job ? job.queue.map((q) => `${q.l.plan.id} ${q.i}/${q.steps.length}`) : null });
