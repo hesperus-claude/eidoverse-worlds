@@ -8,6 +8,10 @@
 //       frame with it differs from the frame without it); the casting slot unheld (spectating: no body lamp); no GL error
 //   LC1 a light that asks for shadows arrives late: it takes the casting slot and casts, and the 90 frames after raise no
 //       GL error and log no deleted-object bind
+//   LC2 a resize while no light holds the casting slot (the Video resolution setting), then a late asker: no GL error,
+//       and it casts (three refreshes a classic material's bind group only in the frame mapSize changes, and the map is
+//       redrawn only when drawn: a map not drawing at the resize kept the two apart, render lab 2026-11-27 night)
+//   LC3 shadows switched off, the resolution changed, shadows on again: no GL error
 //   bun test/client/late-caster-check.ts   (its own scratch server, library, world and Chromium)
 // Where there is no WebGL 2 to force (Windows: headless Chromium there gives a null forced context; any host whose
 // browser falls back to nothing) it prints an OPTIONAL line and checks nothing: these rows need a GL context to read.
@@ -95,6 +99,17 @@ try {
       await g.raf(60); const errs = g.errs(); await g.raf(30); return { cast: g.cast(), errs, errs2: g.errs() };`);
     check("LC1 a light that asks for shadows arrives late: it takes the casting slot and casts, and no GL error follows",
       s1.cast.holder === "lab:late" && s1.cast.casting === true && s1.errs.k === 0 && s1.errs2.k === 0 && consoleGl.length === 0, JSON.stringify({ ...s1, console: consoleGl.slice(0, 2) }));
+    await page("lc2");
+    const s2 = await js(`const g = globalThis, rig = g.rig; rig.setShadowRes(1024); await g.raf(20); const resized = g.errs(); ${LATE}
+      await g.raf(60); const errs = g.errs(); await g.raf(30); return { resized, cast: g.cast(), errs, errs2: g.errs() };`);
+    check("LC2 the casting slot resized while unheld, then a late asker: it casts, and no GL error follows",
+      s2.cast.holder === "lab:late" && s2.cast.casting === true && s2.resized.k === 0 && s2.errs.k === 0 && s2.errs2.k === 0 && consoleGl.length === 0, JSON.stringify({ ...s2, console: consoleGl.slice(0, 2) }));
+    await page("lc3");
+    const s3 = await js(`const g = globalThis, rig = g.rig; ${LATE} await g.raf(30); g.errs();
+      rig.setShadows(false); await g.raf(10); rig.setShadowRes(1024); await g.raf(20); const off = g.errs();
+      rig.setShadows(true); await g.raf(40); const on = g.errs(); await g.raf(20); return { off, on, on2: g.errs(), cast: g.cast() };`);
+    check("LC3 shadows off, the resolution changed, shadows on: it casts again, and no GL error follows",
+      s3.cast.casting === true && s3.off.k === 0 && s3.on.k === 0 && s3.on2.k === 0 && consoleGl.length === 0, JSON.stringify({ ...s3, console: consoleGl.slice(0, 2) }));
   }
 } catch (e) { check("the run threw", false, String((e as any)?.stack ?? e)); }
 console.log(`[late-caster-check] ${tally.passed} passed, ${tally.failed} failed${tally.note()}`);

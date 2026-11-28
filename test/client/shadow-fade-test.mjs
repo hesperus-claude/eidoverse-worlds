@@ -83,6 +83,30 @@ if (CASE) {
     const boot = at(); rig.setShadowRes(1024); const low = at(); rig.setShadowRes(2048);
     out({ boot, low, def: at() });
   }
+  if (CASE === 'resize') {
+    // a map RESIZED while it is not drawing (a casting slot nobody holds, any map while the switch is off) must be
+    // redrawn in that frame: three r186 refreshes a classic material's bind group only in the frame light.shadow.mapSize
+    // changes (NodeMaterialObserver), while the texture is recreated in the frame the map is next drawn, so a later
+    // first asker left every classic-material model on the destroyed texture (render lab 2026-11-27 night, 4080: 22 to
+    // 33 errors a second, for good). The mock cannot show the GPU half; this pins the ask. (three draws a map whose
+    // needsUpdate is set and clears it: the flags are cleared here by hand where a frame would draw.)
+    const ask = () => ({ sun: sun.shadow.needsUpdate === true, lamp: lamp().shadow.needsUpdate === true });
+    const drawn = () => { sun.shadow.needsUpdate = false; lamp().shadow.needsUpdate = false; };
+    drawn();
+    const before = { holder: rig.rigDebug().requests.find((r) => r.slot === 0)?.key ?? null, lampOn: rig.rigDebug().shadows.slotIsCaster };
+    rig.setShadowRes(4096);
+    const onRes = { ...ask(), sunMap: sun.shadow.mapSize.x, lampMap: lamp().shadow.mapSize.x }; drawn();
+    rig.setShadows(false); drawn();
+    rig.setShadowRes(1024);
+    const offRes = ask(); drawn();
+    rig.setShadowRes(1024);
+    const same = ask(); drawn();
+    let disposed = 0; const held = { dispose: () => { disposed++; } }; lamp().shadow.map = held;
+    rig.setLampShadow({ map: lamp().shadow.mapSize.x });
+    const lampSame = { disposed, kept: lamp().shadow.map === held, ask: lamp().shadow.needsUpdate === true };
+    lamp().shadow.map = null;
+    out({ before, onRes, offRes, same, lampSame });
+  }
   if (CASE === 'bias') {
     // A SMALLER MAP SHOWING MORE LIGHT is a bias symptom, not a resolution
     // one: normalBias offsets the lookup along the surface normal, so a bias
@@ -503,6 +527,13 @@ if (ARGV.includes('--mutants')) {
     check('boot with a stored 4096: sun 4096, lamp 512', r.boot.sun === 4096 && r.boot.lamp === 512, JSON.stringify(r.boot));
     check('1024: sun 1024, lamp 128', r.low.sun === 1024 && r.low.lamp === 128, JSON.stringify(r.low));
     check('2048 (default): sun 2048, lamp exactly its tuned 256', r.def.sun === 2048 && r.def.lamp === 256, JSON.stringify(r.def)); }
+  console.log('A RESIZE WHILE A MAP IS NOT DRAWING — redrawn in the frame its size changes');
+  { const r = await runCase('resize');
+    check('resize (setup): the casting slot is held by nobody and not casting', r.before.holder === null && r.before.lampOn === false, JSON.stringify(r.before));
+    check('resize: a resolution change asks the casting slot nobody holds to redraw in that frame', r.onRes.lamp === true && r.onRes.lampMap === 512, JSON.stringify(r.onRes));
+    check('resize: with the shadows switch off it asks the sun and the casting slot all the same', r.offRes.sun === true && r.offRes.lamp === true, JSON.stringify(r.offRes));
+    check('resize (control): setting the size a map already has asks for nothing', !r.same.sun && !r.same.lamp, JSON.stringify(r.same));
+    check('resize: setLampShadow with the size the slot already has leaves its map alone (a dispose recreates the texture with no size change to see)', r.lampSame.disposed === 0 && r.lampSame.kept && !r.lampSame.ask, JSON.stringify(r.lampSame)); }
 }
 
 S.done();
