@@ -241,15 +241,17 @@ if (G) {
 check('G10 Video settings carry the GI row through the dial\'s own module (videopanel.js reads render/gipref.js, not the bake)', /from '\.\.\/render\/gipref\.js'/.test(read('client/lib/ui/videopanel.js')) && /giPref\(\)/.test(read('client/lib/ui/videopanel.js')) && /setGiPref\(/.test(read('client/lib/ui/videopanel.js')), '');
 check('G10 …the frame loop steps it, hands it the world\'s objects, and EW.gi reads giDebug (main.js)', /registerSystem\('gi', updateGi\)/.test(read('client/main.js')) && /setGiObjects\(\(\) => entities\)/.test(read('client/main.js')) && /\bgi: giDebug\b/.test(read('client/main.js')), '');
 
+// the frame-loop rows below share these: a fresh world, a mesh, an edit of the view, what the last bake step's proxy held
+const BUS = await import('../stubs/gi-base-stub.mjs'), LW = await import('../stubs/loadwork-stub.mjs'), T = core.THREE;
+const jobsOf = () => LP.bakes.filter((b) => b.pass === 0 && b.start === 0).length;   // each bake job starts at probe 0, pass 0
+const box = (x, y, z, size = 0.5, mat) => { const w = new T.Scene(), g = new T.Group(); w.add(g); const m = new T.Mesh(new T.BoxGeometry(size, size, size), mat ?? new T.MeshStandardMaterial()); m.position.set(x, y, z); g.add(m); return g; };
+const fresh = async () => { St.reset(); await run(5); LP.bakes.length = 0; LP.made.length = 0; added.length = 0; removed.length = 0; for (const k of [...roomMeshes.keys()]) if (k !== 'walls') roomMeshes.delete(k); };
+const proxyMeshes = () => (LP.bakes.at(-1)?.children ?? []).filter((o) => o.isMesh).map((m) => m.geometry);   // what the last bake step's proxy held
+const edit = (fn) => { const nx = structuredClone(St.state.st); fn(nx.entities); St.applyView(nx); };
+
 if (G) {
   // ---- pins: what holds today, written so the mutants the rows above let live go red (the cold read of 11-27: its rows
   // X3 X4 X11 X12 X16, and two more for the debounce and the frame budget)
-  const BUS = await import('../stubs/gi-base-stub.mjs'), LW = await import('../stubs/loadwork-stub.mjs'), T = core.THREE;
-  const jobsOf = () => LP.bakes.filter((b) => b.pass === 0 && b.start === 0).length;   // each bake job starts at probe 0, pass 0
-  const box = (x, y, z, size = 0.5, mat) => { const w = new T.Scene(), g = new T.Group(); w.add(g); const m = new T.Mesh(new T.BoxGeometry(size, size, size), mat ?? new T.MeshStandardMaterial()); m.position.set(x, y, z); g.add(m); return g; };
-  const fresh = async () => { St.reset(); await run(5); LP.bakes.length = 0; LP.made.length = 0; added.length = 0; removed.length = 0; for (const k of [...roomMeshes.keys()]) if (k !== 'walls') roomMeshes.delete(k); };
-  const proxyMeshes = () => (LP.bakes.at(-1)?.children ?? []).filter((o) => o.isMesh).map((m) => m.geometry);   // what the last bake step's proxy held
-  const edit = (fn) => { const nx = structuredClone(St.state.st); fn(nx.entities); St.applyView(nx); };
 
   await fresh(); LW.lanes.busy = true;
   St.hydrate(giRoom({ bounces: 0 })); await run(300);
@@ -295,6 +297,55 @@ if (G) {
   const hogged = LP.bakes.length - b0; await run(200);
   check('P7 a bake step goes through the shared frame budget: while another lane holds each frame\'s gpu unit no step runs, and the bake finishes after',
     b0 > 0 && b0 < 81 && hogged === 0 && LP.bakes.length === 81, [b0, hogged, LP.bakes.length]);
+}
+
+if (G) {
+  // ---- bounds (cold read 11-27, A1 A3 A4): a world is untrusted content, and what its gi-volumes ask for is built in
+  // every visitor's browser. One live grid a world, the volume nearest the view (Bevy, without binding arrays: "only the
+  // closest irradiance volume to the view"); a grid is a Light, one 3D texture sampled seven times in every lit fragment
+  // shader (16 sampled textures a stage) and an id in every lit pipeline's key. The proxy: its strongest lights, its largest meshes.
+  const gridsIn = () => [...inScene].filter((o) => o.isLightProbeGrid);
+  const look = (x, y, z) => { core.camera.position.set(x, y, z); core.camera.updateMatrixWorld(true); };
+  await fresh();
+  const rooms = { entities: { walls: { pos: [0, 0, 0] } } };
+  for (const [i, x] of [0, 10, 20].entries()) rooms.entities[`v${i}`] = { pos: [x, 1.5, 0], zone: { shape: 'box', size: [3, 3, 3] }, 'gi-volume': { bounces: 0 } };
+  look(10.5, 1.6, 0);
+  St.hydrate(rooms); await run(300);
+  const d1 = G.giDebug();
+  check('B1 three gi-volumes in a world: one grid is built, baked and shown, the one the view stands in; giDebug lists the other two as refused, saying why',
+    LP.made.length === 1 && gridsIn().length === 1 && LP.bakes.length === 27 && same(d1.grids.map((g) => g.id), ['v1']) && same(d1.refused?.map((r) => r.id), ['v0', 'v2']) && d1.refused.every((r) => /one grid/.test(r.why)),
+    { made: LP.made.length, inScene: gridsIn().length, steps: LP.bakes.length, grids: d1.grids, refused: d1.refused });
+  look(20.2, 1.6, 0.4); await run(300);
+  const d2 = G.giDebug();
+  check('B1 …the view walks into another room: its grid is baked and shown in the first one\'s place, and the first leaves the scene and is freed',
+    same(d2.grids.map((g) => g.id), ['v2']) && gridsIn().length === 1 && gridsIn()[0] === LP.made.at(-1) && LP.made.length === 2 && LP.made[0].disposed === true && same(d2.refused?.map((r) => r.id), ['v0', 'v1']),
+    { grids: d2.grids, inScene: gridsIn().length, made: LP.made.length, refused: d2.refused });
+  look(21, 1.6, 0); await run(300);
+  check('B1 …and moving about inside it builds nothing more', LP.made.length === 2 && G.giDebug().baking === null, LP.made.length);
+  await fresh(); look(0, 1.6, 0);
+  const forty = { entities: { walls: { pos: [0, 0, 0] } } };
+  for (let i = 0; i < 40; i++) forty.entities[`v${String(i).padStart(2, '0')}`] = { pos: [0, 1.5, 0], zone: { shape: 'box', size: [3, 3, 3] }, 'gi-volume': { bounces: 0 } };
+  St.hydrate(forty); await run(600);
+  check('B1 …forty volumes in one world: one grid built and in the scene, one grid\'s 27 steps baked, 39 refused',
+    LP.made.length === 1 && gridsIn().length === 1 && LP.bakes.length === 27 && G.giDebug().refused?.length === 39, { made: LP.made.length, inScene: gridsIn().length, steps: LP.bakes.length, refused: G.giDebug().refused?.length });
+
+  await fresh();
+  for (let i = 0; i < 200; i++) LR.requestLight(`complight:h${String(i).padStart(3, '0')}`, { authored: true, pos: [(i % 10) * 0.1 - 0.5, 2, 0], intensity: 1 + i, range: 6, decay: 2 });
+  LR.requestLight('complight:far', { authored: true, pos: [0, 2, 7], intensity: 500, range: 9, decay: 2 });   // in range of the room, 5.5 m past its wall
+  St.hydrate(giRoom({ bounces: 0 })); await run(300);
+  const lit = (LP.bakes.at(-1)?.children ?? []).filter((o) => o.isLight).map((l) => l.intensity).sort((a, b) => a - b);
+  check('B2 two hundred lamps in a room light the proxy with the 16 strongest at the volume (each is a real three light in every proxy material\'s shader): a bright lamp far past the wall is weaker there than the room\'s own',
+    lit.length === 16 && lit[0] === 185 && lit[15] === 200 && G.giDebug().proxy?.cut?.lights === 185, { lit, proxy: G.giDebug().proxy });
+  for (let i = 0; i < 200; i++) LR.releaseLight(`complight:h${String(i).padStart(3, '0')}`);
+  LR.releaseLight('complight:far');
+
+  await fresh();
+  for (let i = 0; i < 600; i++) roomMeshes.set(`c${i}`, box(-1.2 + (i % 25) * 0.1, 0.1 + Math.floor(i / 25) * 0.1, 1, 0.05));
+  St.hydrate(giRoom({ bounces: 0 })); await run(300);
+  const pm = proxyMeshes();
+  check('B3 six hundred static meshes in a room: the proxy holds the 256 largest (each bake step draws the proxy into six cube faces), the walls among them',
+    pm.length === 256 && pm.includes(roomMeshes.get('walls').children[0].geometry) && G.giDebug().proxy?.cut?.meshes === 345, { meshes: pm.length, proxy: G.giDebug().proxy });
+  for (const k of [...roomMeshes.keys()]) if (k !== 'walls') roomMeshes.delete(k);
 }
 
 if (G) {
