@@ -79,6 +79,21 @@ scene.add(rigGroup);
  *  submit"), refused draws on WebGL 2. Drawn at birth, before anything samples it, the texture is already the render
  *  target's own. Before the slot drew only for a holder that asked, it drew from the first frame, so this never showed. */
 function bornDrawn(l) { l.shadow.needsUpdate = true; }
+/** Resize a light's shadow map; a casting-shaped light's map is redrawn in the frame its size changes, whoever holds it
+ *  and whatever the gate or the shadows switch says. Why: the same destroyed texture as bornDrawn, by another
+ *  door. three r186 refreshes a classic material's bind group only when its observer sees a change, and for a shadow map
+ *  it watches light.shadow.mapSize alone (NodeMaterialObserver.getLightsData): the refresh comes in the frame the SIZE
+ *  changes, the new texture in the frame the map is next DRAWN (ShadowNode.renderShadow, setSize). A map that is not
+ *  drawing (a slot nobody asked, any map while shadows are off) kept the two apart: resized now, drawn when a light asked
+ *  later, and every classic-material model kept the destroyed texture (render lab 2026-11-27: 33 errors a second on
+ *  WebGPU, refused draws on WebGL 2). Returns whether the size changed. three r187 fixes the first draw (its #35093,
+ *  and Textures.updateTexture creates a target's textures with the target); its observer still watches only mapSize. */
+function sizeShadowMap(l, n) {
+  if (l.shadow.mapSize.x === n && l.shadow.mapSize.y === n) return false;
+  l.shadow.mapSize.set(n, n);
+  if (l.castShadow) bornDrawn(l);
+  return true;
+}
 
 export const shadowsOn = () => _prefShadows;
 // The lamp's shadow dials, live (mapSize is a realloc and normalBias a uniform; neither is in a pipeline cache key).
@@ -89,10 +104,12 @@ export function setLampShadow({ map, texels, dist, forward, up, side } = {}) {
   if (!pl) return null;
   if (Number.isFinite(map)) {
     const n = Math.max(16, Math.min(2048, Math.round(map)));
-    pl.shadow.mapSize.set(n, n);
-    // three only reallocates the target once the old one is disposed
-    pl.shadow.map?.dispose?.();
-    pl.shadow.map = null;
+    // three only reallocates the target once the old one is disposed; a map whose size did not change is left alone
+    // (disposing it would recreate its texture with no size change for three's observer to see: the same break)
+    if (sizeShadowMap(pl, n)) {
+      pl.shadow.map?.dispose?.();
+      pl.shadow.map = null;
+    }
   }
   if (Number.isFinite(texels)) _biasTexels = Math.max(0, texels);
   if (Number.isFinite(dist)) _workDist = Math.max(0.01, dist);
@@ -157,7 +174,7 @@ export const shadowRes = () => { const v = +stored(RES_KEY); return SHADOW_RES.i
 const lampMapFor = (n) => Math.round(SHADOW_MAP * (n / 2048));
 export function setShadowRes(n) {
   localStorage.setItem(RES_KEY, String(n));
-  sun.shadow.mapSize.set(n, n);
+  sizeShadowMap(sun, n);
   if (slots[SHADOW_SLOT] && slots[SHADOW_SLOT].shadow.mapSize.x !== lampMapFor(n)) setLampShadow({ map: lampMapFor(n) });
 }
 sun.shadow.mapSize.set(shadowRes(), shadowRes());
