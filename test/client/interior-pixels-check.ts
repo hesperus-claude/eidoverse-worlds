@@ -11,7 +11,9 @@
 // page's sky never moves a row.
 // Mutations (must go red, by hand; see the PR text for the run): the hemisphere not cut (IP2, IP5); the environment not
 // cut (IP2, IP4); no stand-in (IP2's "not black", IP3); blend order reversed in zone.js (IP5); the blend unread (IP6); a
-// the environment node set only while a box exists, in the realizer (IP9b).
+// the environment node set only while a box exists, in the realizer (IP9b); no stand-in in the hemisphere (IP11); the stand-in
+// at half (IP11); the weight, the turn or the global unread on the GPU (IP12, IP13, IP14); the eye or the live pose unread in the
+// realizer (IP15, IP16).
 import { scratchBench, mkCheck } from "../harness/harness.ts";
 import { until } from "../gate/wait.ts";
 
@@ -70,6 +72,32 @@ try {
   check("IP9b …and no object the page had already drawn gets a new render pipeline while the box comes and goes (the page's own lit materials do not recompile)",
     live.before >= 4 && Array.isArray(live.again) && live.again.length === 0, JSON.stringify({ before: live.before, again: live.again, waited: live.waited, quiet: live.quiet }));
 
+  // IP15 / IP16: the realizer's own inputs, in the live page: the eye ranks the boxes (five in a row, one more than the
+  // slots: the eye at one end keeps the near four, at the other end the other four), and a box's live object moves its slot
+  const eyeRows = await js(`const S = await import('/lib/state.js'), W = await import('/lib/world.js'), { THREE, camera } = await import('/lib/core.js'), g = globalThis;
+    const frames = async (n) => { for (let i = 0; i < n; i++) await new Promise((r) => requestAnimationFrame(r)); };
+    const pin = { P: null }, mw = camera.updateMatrixWorld.bind(camera), wm = camera.updateWorldMatrix.bind(camera);
+    camera.updateMatrixWorld = (f) => { if (pin.P) camera.position.copy(pin.P); mw(f); }; camera.updateWorldMatrix = (p, c) => { if (pin.P) camera.position.copy(pin.P); wm(p, c); };
+    const base = S.state.st, rooms = {}; for (let i = 0; i < 5; i++) rooms['ip-row' + i] = { pos: [i * 20, 1.5, 0], q: [0, 0, 0, 1], zone: { shape: 'box', size: [6, 3, 6] }, interior: {}, mesh: { shape: 'box', size: [0.2, 0.2, 0.2] } };
+    S.applyView({ ...base, entities: { ...base.entities, ...rooms } });
+    // put the camera and the world back whatever happens, or the realizer keeps writing these rooms over the later rows' slots
+    try {
+    pin.P = new THREE.Vector3(-5, 1.5, 0); await frames(6); const west = g.__interiorDebug().ids.slice().sort();
+    pin.P = new THREE.Vector3(85, 1.5, 0); await frames(6); const east = g.__interiorDebug().ids.slice().sort();
+    // the live object of ip-row4 (world.js's map, which main.js hands the realizer) moved 3 m along x, its record left as it was
+    const o = W.entities.get('ip-row4'), x0 = g.__interiorDebug().held.find((h) => h.id === 'ip-row4')?.center?.[0];
+    let x1 = null; if (o) { o.position.x += 3; o.updateMatrixWorld(true); await frames(3); x1 = g.__interiorDebug().held.find((h) => h.id === 'ip-row4')?.center?.[0]; o.position.x -= 3; }
+    return { west, east, live: !!o, x0, x1 };
+    } finally {
+      pin.P = null; camera.updateMatrixWorld = mw; camera.updateWorldMatrix = wm;
+      S.applyView({ ...S.state.st, entities: Object.fromEntries(Object.entries(S.state.st.entities).filter(([k]) => !k.startsWith('ip-row'))) }); await frames(5);
+    }`).then(async (r: any) => ({ ...r, after: await js("return globalThis.__interiorDebug().count;") })).catch((e: any) => ({ error: String(e).slice(0, 300) }));
+  console.log(`  · ${JSON.stringify(eyeRows)}`);
+  check("IP15 the eye ranks the boxes: five rooms in a row, four slots; from the west end the four western rooms are held, from the east end the four eastern",
+    JSON.stringify(eyeRows.west) === JSON.stringify(["ip-row0", "ip-row1", "ip-row2", "ip-row3"]) && JSON.stringify(eyeRows.east) === JSON.stringify(["ip-row1", "ip-row2", "ip-row3", "ip-row4"]), JSON.stringify(eyeRows));
+  check("IP16 a box's live object is its pose: moving ip-row4's object 3 m (its record unchanged, as a carrier between records) moves its slot 3 m",
+    eyeRows.live && typeof eyeRows.x0 === "number" && Math.abs(eyeRows.x1 - eyeRows.x0 - 3) < 1e-6 && eyeRows.after === 0, JSON.stringify(eyeRows));
+
   const setup = await js(`const core = await import('/lib/core.js'), { THREE, TSL, renderer } = core, I = core.interior, R = await import('/lib/render/render.js'), Z = await import('/shared/zone.js'), g = globalThis;
     R.setWorldHold(true);
     const cv = renderer.domElement, W = cv.width, H = cv.height;
@@ -106,7 +134,7 @@ try {
     // what the backend builds: every render pipeline asked for, from here on
     const be = renderer.backend, mk = be.createRenderPipeline.bind(be); g.__pipes = 0; be.createRenderPipeline = (ro, p) => { g.__pipes++; return mk(ro, p); };
     await renderer.compileAsync(stock.S, cam); await renderer.compileAsync(ours.S, cam);
-    g.__ip = { THREE, I, renderer, stock, ours, cam, frame, settle, diff, at, lum, slots, room };
+    g.__ip = { THREE, I, renderer, stock, ours, cam, frame, settle, diff, at, lum, slots, room, env };
     return { backend: be.isWebGLBackend ? 'webgl' : 'webgpu', W, H };`);
   console.log(`  · ${JSON.stringify(setup)}`);
   check("IP-setup the page runs WebGL 2, as asked", setup.backend === "webgl", JSON.stringify(setup));
@@ -180,7 +208,45 @@ try {
   check("IP8 the weight is computed once a fragment: one interior loop in the wall's fragment shader, its result read more than once (the hemisphere and the environment's diffuse and specular)",
     shader.loops === 1 && shader.uses >= 3, JSON.stringify(shader).slice(0, 600));
 
-  const real = errors.filter((e) => !/popErrorScope|sky finish/.test(e));
+
+  // IP11: every material kind a visitor brings (a VRM body is MToon) gets the stand-in, at the level three's AmbientLight gives
+  // the same number: walls of PBR, Lambert, Phong, Toon and MToon in a default box, against AmbientLight(white, 0.25) alone
+  const kinds = await js(`const p = globalThis.__ip, { THREE, I, env, cam } = p;
+    const { MToonNodeMaterial } = await import('@pixiv/three-vrm-materials-mtoon/nodes');
+    const make = { pbr: () => new THREE.MeshStandardNodeMaterial({ color: 0xffffff, roughness: 1, metalness: 0 }), lambert: () => new THREE.MeshLambertNodeMaterial({ color: 0xffffff }),
+      phong: () => new THREE.MeshPhongNodeMaterial({ color: 0xffffff, specular: 0x000000 }), toon: () => new THREE.MeshToonNodeMaterial({ color: 0xffffff }), mtoon: () => new MToonNodeMaterial() };
+    const names = Object.keys(make), xs = names.map((_, i) => -3 + 1.5 * i);
+    const build = (lights) => { const S = new THREE.Scene(); S.background = p.ours.S.background; lights(S);
+      names.forEach((k, i) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.6), make[k]()); m.position.set(xs[i], 0, 0); S.add(m); }); return { S }; };
+    const ours = build((S) => { S.add(new I.InteriorHemisphereLight(0x88aaff, 0x443322, 1.2)); S.environmentNode = I.environmentNode(env); });
+    const amb = build((S) => S.add(new THREE.AmbientLight(0xffffff, 0.25)));
+    await p.renderer.compileAsync(ours.S, cam); await p.renderer.compileAsync(amb.S, cam);
+    const per = (px) => Object.fromEntries(names.map((k, i) => [k, p.at(px, [xs[i], 0, 0], 3).map(Math.round)]));
+    p.slots({ room: p.room([0, 0, 0], [9, 2, 1]) }); const a = per(await p.settle(p.frame(ours))); p.slots({});
+    const b = per(await p.settle(p.frame(amb)));
+    return { box: a, ambientLight: b, off: Math.max(...names.flatMap((k) => a[k].map((v, c) => Math.abs(v - b[k][c])))) };`).catch((e: any) => ({ error: String(e).slice(0, 400) }));
+  console.log(`  · ${JSON.stringify(kinds)}`);
+  check("IP11 inside a default box every material kind is lit by the stand-in, and at AmbientLight's level for the same number (white 0.25): PBR, Lambert, Phong, Toon and MToon (a VRM body) walls each within 3 of 255 per channel of AmbientLight(0.25) alone, none black",
+    !kinds.error && kinds.off <= 3 && Object.values(kinds.box).every((c: any) => c[0] > 15), JSON.stringify(kinds));
+
+  // IP12-IP14: the zone's weight, the box's turn and a global zone reach the GPU
+  const geo = await js(`const p = globalThis.__ip; const px = async (ents) => { p.slots(ents); const b = await p.settle(p.frame(p.ours)); p.slots({}); return b; };
+    const L = (b, x, y = 0) => Math.round(p.lum(p.at(b, [x, y, 0], 2))), out = {};
+    const open = await px({}); out.open = { left: L(open, -1.7), right: L(open, 1.7) };
+    out.weight = {}; for (const w of [1, 0.5, 0]) out.weight[w] = L(await px({ r: p.room([-1.7, 0, 0], [2, 2, 1], { ambientColorEnergy: 0 }, { weight: w }) }), -1.7);
+    const s = Math.SQRT1_2, rot = await px({ r: { c: { transform: { pos: [-1.7, 0, 0], q: [0, 0, s, s], scale: [1, 1, 1] }, zone: { shape: 'box', size: [0.4, 3, 1] }, interior: { ambientColorEnergy: 0 } } } });
+    out.rot = { above: L(rot, -1.7, 0.6), side: L(rot, -2.3, 0) };
+    const gl = await px({ g: { c: { transform: { pos: [50, 50, 50], q: [0, 0, 0, 1], scale: [1, 1, 1] }, zone: { shape: 'box', size: [1, 1, 1], global: true }, interior: { ambientColorEnergy: 0 } } } });
+    out.global = { left: L(gl, -1.7), right: L(gl, 1.7) }; return out;`);
+  console.log(`  · ${JSON.stringify(geo)}`);
+  check("IP12 zone.weight reaches the GPU: an energy-0 box at weight 1 is black, at 0 the open wall, at 0.5 between the two (over 20 from either)",
+    geo.weight["1"] < 3 && Math.abs(geo.weight["0"] - geo.open.left) <= 1 && geo.weight["0.5"] > geo.weight["1"] + 20 && geo.weight["0.5"] < geo.weight["0"] - 20, JSON.stringify(geo));
+  check("IP13 the box's turn reaches the GPU: a 0.4 × 3 m slab turned 90° about z lies along x: dark beside the wall's centre, the open wall's light above it",
+    geo.rot.side < 3 && Math.abs(geo.rot.above - geo.open.left) <= 1, JSON.stringify(geo.rot));
+  check("IP14 a global zone is everywhere: an energy-0 global zone placed 70 m away blacks out both walls", geo.global.left < 3 && geo.global.right < 3, JSON.stringify(geo.global));
+
+  // IP15 places five boxes on purpose: the realizer's one report that the fifth lets the sky in is expected
+  const real = errors.filter((e) => !/popErrorScope|sky finish/.test(e) && !/interior boxes nearest the eye/.test(e));
   check("IP10 no page errors", real.length === 0, JSON.stringify(real.slice(0, 4)));
 } catch (e) { check("the run threw", false, String((e as any)?.stack ?? e)); }
 function p0(c: number[]) { return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }

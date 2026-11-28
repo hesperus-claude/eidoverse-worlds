@@ -27,7 +27,11 @@ const MUTANTS: [string, string, string, string, string[]][] = [
   ["the weight is unread", "zone.js", "const weight = fin(z.weight) ? Math.max(0, Math.min(1, z.weight)) : 1", "const weight = 1", ["I3"]],
   ["ranked by priority, not nearness", "zone.js", ".sort((x, y) => x.d - y.d || y.b.priority - x.b.priority ||", ".sort((x, y) => y.b.priority - x.b.priority || x.d - y.d ||", ["I4"]],
   ["blended lowest priority first", "zone.js", "return kept.sort((x, y) => y.priority - x.priority ||", "return kept.sort((x, y) => x.priority - y.priority ||", ["I4"]],
-  ["no cap on the slots", "zone.js", ".slice(0, n).map((x) => x.b);", ".map((x) => x.b);", ["I4", "I5"]],
+  ["no cap on the slots", "zone.js", "const kept = ranked.slice(0, n).map(", "const kept = ranked.map(", ["I4", "I5"]],
+  ["the handover is a swap", "zone.js", "const fade = (d) => (d === 0 || edge === Infinity ? 1 :", "const fade = (d) => (true ? 1 :", ["I7"]],
+  ["a NaN turn holds a box", "zone.js", "if (!pose || !finN(pose.pos, 3) || (pose.q != null && !finN(pose.q, 4))) continue;", "if (!pose) continue;", ["I8"]],
+  ["energy unclamped in the reader", "zone.js", "? Math.min(INTERIOR_ENERGY_MAX, a.ambientColorEnergy) :", "? a.ambientColorEnergy :", ["I8"]],
+  ["the ids are unread", "zone.js", "for (const id of ids ?? Object.keys(st.entities)) {", "for (const id of Object.keys(st.entities)) {", ["I9"]],
   ["distance from the centre, not the box", "zone.js", "const d = Math.abs(l[k]) - b.size[k] / 2; if (d > 0) s += d * d;", "const d = Math.abs(l[k]); s += d * d;", ["I4"]],
   ["the filter misses interior", "zone.js", "const INTERIOR_READS = new Set([\"zone\", \"interior\", \"disabled\"]);", "const INTERIOR_READS = new Set([\"zone\", \"disabled\"]);", ["I6"]],
   ["the filter misses a carrier", "zone.js", "for (const v of owners) for (let p = entities?.[v]?.parent?.to, n = 0; p && n < 33; p = entities?.[p]?.parent?.to, n++) if (p === id) return true;   // a carrier above one", "", ["I6"]],
@@ -170,5 +174,33 @@ await C("I6", "shared/zone.js interiorChangeTouches: an interior, zone or disabl
     carrier: t({ type: "change", id: "ship", what: "pose" }), fresh, lamp: t({ type: "change", id: "lamp", what: "comp", comp: "light" }),
     sky: t({ type: "world", key: "sky" }), hydrated: t({ type: "hydrated" }), reset: t({ type: "reset" }) };
   return [r.interior && r.zone && r.carrier && r.fresh && !r.lamp && !r.sky && r.hydrated && r.reset, r]; });
+
+
+await C("I7", "the handover with more boxes than slots is never a swap on screen: six rooms in a row, the eye jittering ±5 mm where two rooms tie for the last slot, and the eye swept along the row in 1 cm steps: no box's weight on the GPU (0 when not kept) moves more than 0.02 in a step; a room the eye is inside keeps its full weight; with no more boxes than slots nothing fades", () => {
+  const miss = need("interiorsOf", "interiorSlots"); if (miss) return miss;
+  const e: any = {}; for (let i = 0; i < 6; i++) e[`r${i}`] = { c: { transform: tf([i * 10, 1.5, 0]), zone: { shape: "box", size: [8, 3, 8] }, interior: {} } };
+  const L = Z.interiorsOf({ entities: e }), seen = (eye: number[]) => new Map(Z.interiorSlots(L, eye, 4).map((b: any) => [b.id, b.weight]));
+  const step = (a: Map<string, number>, b: Map<string, number>) => Math.max(0, ...[...new Set([...a.keys(), ...b.keys()])].map((k) => Math.abs((a.get(k) ?? 0) - (b.get(k) ?? 0))));
+  let jitter = 0, prev = seen([19.995, 1.5, 0]);   // r0 and r4 both 16 m away from x = 20 (each 4 m half wide)
+  for (let i = 0; i < 100; i++) { const now = seen([20 + (i % 2 ? 0.005 : -0.005), 1.5, 0]); jitter = Math.max(jitter, step(prev, now)); prev = now; }
+  let sweep = 0, worstAt = 0; prev = seen([-10, 1.5, 0]);
+  for (let x = -10; x <= 60; x += 0.01) { const now = seen([x, 1.5, 0]); const d = step(prev, now); if (d > sweep) { sweep = d; worstAt = x; } prev = now; }
+  const inside = seen([20, 1.5, 0]).get("r2"), few = Z.interiorSlots(L.slice(0, 4), [30, 1.5, 0], 4).map((b: any) => b.weight);
+  return [jitter <= 0.02 && sweep <= 0.02 && inside === 1 && few.every((w: number) => w === 1), { jitter, sweep, worstAt: Math.round(worstAt * 100) / 100, inside, few }]; });
+
+await C("I8", "a hostile or broken record: a box whose pose is not finite (a NaN turn, an infinite centre) holds nothing and leaves the others as they are; an energy past 16 that reached the fold unchecked is read as 16", () => {
+  const miss = need("interiorsOf"); if (miss) return miss;
+  const st = { entities: { ok: { c: ROOM() }, hot: { c: ROOM({ ambientColorEnergy: 1e9 }, undefined, [0, 1.5, 30]) } } };
+  const poses: any = { ok: { pos: [0, 1.5, 0], q: [0, 0, 0, 1] }, hot: { pos: [0, 1.5, 30], q: [0, 0, 0, 1] }, nanq: { pos: [50, 0, 0], q: [NaN, NaN, NaN, NaN] }, far: { pos: [Infinity, 0, 0], q: [0, 0, 0, 1] } };
+  (st.entities as any).nanq = { c: ROOM({}, undefined, [50, 0, 0]) }; (st.entities as any).far = { c: ROOM() };
+  const L = Z.interiorsOf(st, { poseOf: (id: string) => poses[id] }), ids = L.map((b: any) => b.id).sort();
+  return [same(ids, ["hot", "ok"]) && L.find((b: any) => b.id === "hot")?.energy === 16 && same(L.find((b: any) => b.id === "ok")?.center, [0, 1.5, 0]), { ids, hot: L.find((b: any) => b.id === "hot")?.energy }]; });
+
+await C("I9", "interiorsOf({ids}) reads only those records (the renderer's per-frame pass over the boxes it found): with 2,000 other things beside one box, none of the others is even looked at", () => {
+  const miss = need("interiorsOf"); if (miss) return miss;
+  let looked = 0; const entities: any = { room: { c: ROOM() } };
+  for (let i = 0; i < 2000; i++) Object.defineProperty(entities, `t${i}`, { enumerable: true, get() { looked++; return { c: { transform: tf([i, 0, 0]) } }; } });
+  const L = Z.interiorsOf({ entities }, { ids: new Set(["room"]) }), some = looked; const all = Z.interiorsOf({ entities });
+  return [L.length === 1 && L[0].id === "room" && some === 0 && all.length === 1 && looked >= 2000, { kept: L.map((b: any) => b.id), looked: some, thenAll: looked }]; });
 
 S.done();
