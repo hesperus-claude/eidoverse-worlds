@@ -1,0 +1,23 @@
+# Carries each connection accepted on 127.0.0.1:8940 into the sandbox's network namespace, to the world server.
+[Unit]
+Description=eidoverse home server: proxy into the sandbox for the world server
+Requires=eidoverse-home.service eidoverse-home-web-proxy.socket
+After=eidoverse-home.service eidoverse-home-web-proxy.socket
+JoinsNamespaceOf=eidoverse-home.service
+
+[Service]
+ExecStart=/usr/lib/systemd/systemd-socket-proxyd --connections-max=512 127.0.0.1:8940
+PrivateNetwork=yes
+DynamicUser=yes
+ProtectSystem=strict
+ProtectHome=yes
+# WSL: the Windows disks
+InaccessiblePaths=-/mnt
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+RestrictNamespaces=yes
+SystemCallFilter=@system-service
+MemoryMax=256M
+TasksMax=64

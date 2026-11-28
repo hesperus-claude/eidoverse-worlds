@@ -1,0 +1,13 @@
+# The only way in to the world server: 127.0.0.1:8940 on the machine. PID 1 holds this socket in the host's network
+# namespace and hands each connection to the proxy inside the sandbox's. Loopback only: a tunnel or a TLS proxy on this
+# machine is the public face. Another port: `sudo systemctl edit eidoverse-home-web-proxy.socket` (an empty
+# `ListenStream=` line first, then yours; keep it on 127.0.0.1).
+[Unit]
+Description=eidoverse home server: the way in to the world server (127.0.0.1:8940)
+
+[Socket]
+ListenStream=127.0.0.1:8940
+FreeBind=no
+
+[Install]
+WantedBy=sockets.target

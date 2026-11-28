@@ -1,0 +1,11 @@
+# What start.sh leaves out of the code it exports to /opt/eidoverse-home/app (rsync --exclude-from): git metadata, a
+# .env (bun loads one from its working directory without a word, so a dev checkout's TRUST_NAMES=1 would be served),
+# and a checkout's own runtime state and secrets. test/server/home-units-test.ts runs it.
+.git
+/.env*
+/worlds
+/backups
+/assets/opt
+/.sessions.json
+/mcpl/tokens.json
+/mcpl/state.json

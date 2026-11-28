@@ -1,0 +1,41 @@
+# The home server's world server (the sequencer). Installed by start.sh, removed by stop.sh --purge; its sandbox is
+# the drop-in sandbox.conf. What differs on your machine (limits, a setting) goes in your own drop-in,
+# `sudo systemctl edit eidoverse-home`, which start.sh leaves alone. docs/operator/RUNNING-A-SERVER.md, "On your own machine".
+[Unit]
+Description=eidoverse home server: the world server (sandboxed, no network)
+# world state never lands on the machine's own disk: start.sh mounts a size-capped filesystem here
+AssertPathIsMountPoint=/var/lib/eidoverse-home
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+User=eidoverse-home
+Group=eidoverse-home
+WorkingDirectory=/opt/eidoverse-home/app
+ExecStart=/opt/eidoverse-home/bin/bun server/server.ts
+Restart=always
+RestartSec=5
+# JOIN_TOKEN and what else is yours to set; root's, 0600, read by systemd and never visible inside the sandbox
+EnvironmentFile=/etc/eidoverse-home/home.env
+Environment=HOME=/var/lib/eidoverse-home/home PORT=8940 HOST=127.0.0.1 EIDOVERSE_DIR=/opt/eidoverse-home/library
+Environment=WORLDS_DIR=/var/lib/eidoverse-home/worlds BACKUPS_DIR=/var/lib/eidoverse-home/backups
+Environment=OPT_DIR=/var/lib/eidoverse-home/opt SESSIONS_PATH=/var/lib/eidoverse-home/sessions.json
+Environment=AGENT_TOKENS_PATH=/etc/eidoverse-home/agent-tokens.json BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 TMPDIR=/tmp
+# no STUN lookups: there is no network to reach one, and no voice in here
+Environment=SFU_ICE_SERVERS=[]
+# the sandbox holds no shell, so the optimizer runs without its `ulimit` wrapper (0); the cgroup below is the cap.
+# No boot sweep: the library's variants would fill a 1 GB state disk.
+Environment=OPT_MEM_BUDGET_MB=0 SKIP_OPT_SWEEP=1
+
+# ---- limits: defaults a drop-in can move ----
+# no MemoryHigh: with no swap it slows a runaway process to a standstill; MemoryMax ends it and Restart= brings it back
+MemoryMax=4G
+MemorySwapMax=0
+TasksMax=256
+CPUQuota=400%
+LimitNOFILE=8192
+LimitCORE=0
+OOMPolicy=stop
+
+[Install]
+WantedBy=multi-user.target
