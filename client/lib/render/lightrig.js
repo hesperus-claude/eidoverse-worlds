@@ -138,6 +138,7 @@ function shapeSpotCaster(sl) {
   sl.shadow.camera.near = 0.03;   // as the world lamps: a lamp's own shade sits close (three's default is 0.5)
   sl.shadow.camera.updateProjectionMatrix();
   sl.shadow.bias = WORLD_DEPTH_BIAS;
+  bornDrawn(sl);
 }
 // When each conversion happened (rigDebug().shadows.spotConversions): a probe can see the one recompile and when.
 const _spotConversions = [];
@@ -154,12 +155,12 @@ function convertSpots(need) {
   }
 }
 scene.add(rigGroup);
-/** A casting-shaped slot's map is drawn at birth, whoever holds it and whatever the gate says: it asks three for one
- *  draw (three draws a map whose needsUpdate is set, at any shadow.intensity, and clears the flag only if that draw left
- *  the depth texture's version alone, so a first draw, which recreates the texture, is drawn again the next frame). Why:
- *  three r186 destroys and recreates a shadow map's depth texture at the map's FIRST render
- *  (Textures.updateRenderTarget), and the bind groups built before that, every classic-material model's, keep the
- *  destroyed texture. A slot first drawn when its first asker arrived, after
+/** A casting-shaped slot's map is drawn at birth (a point slot at boot, a spot slot when it is shaped: born
+ *  casting-shaped or converted), whoever holds it and whatever the gate says: it asks three for one draw (three draws
+ *  a map whose needsUpdate is set, at any shadow.intensity, and clears the flag only if that draw left the depth
+ *  texture's version alone, so a first draw, which recreates the texture, is drawn again the next frame). Why: three
+ *  r186 destroys and recreates a shadow map's depth texture at the map's FIRST render (Textures.updateRenderTarget),
+ *  and the bind groups built before that, every classic-material model's, keep the destroyed texture. A slot first drawn when its first asker arrived, after
  *  the world's models, broke every later frame: black on WebGPU ("Destroyed texture [ShadowDepthTexture] used in a
  *  submit"), refused draws on WebGL 2. Drawn at birth, before anything samples it, the texture is already the render
  *  target's own. Before the slot drew only for a holder that asked, it drew from the first frame, so this never showed. */
