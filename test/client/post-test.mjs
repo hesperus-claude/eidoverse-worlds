@@ -15,7 +15,7 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/post-test.mjs
 // Mutations (each must go red, run by hand): build on strength 0 (P1); ignore ew-bloom (P1c); rebuild on a strength edit
 // (P2b); keep the pipeline at strength 0 (P2c); XR through the pipeline (P3); dispose on XR (P3b); batching off bypasses
-// the pipeline (P4); outputColorTransform false (P2t); no fallback on a throw (P6); the renderer's state not put back after a throw (P6d);
+// the pipeline (P4); outputColorTransform false (P2t); no fallback on a throw (P6); the renderer's state not put back after a throw (P6d, P6e);
 // error scope ignored (P6b); a stale scope
 // fails the newer pipeline (P6c); a scene or camera change keeps the old pipeline (P10); world-pass mark dropped (P7).
 import { fileURLToPath } from "node:url";
@@ -40,15 +40,27 @@ const camera = new THREE.PerspectiveCamera();
 let bound = null, throwOnQuad = null;
 const draws = [];
 const device = { scopes: 0, nextError: null, pushErrorScope() { this.scopes++; }, popErrorScope() { this.scopes--; const e = this.nextError; this.nextError = null; return Promise.resolve(e); } };
+const passState = (r, sc, cam) => ({ mrt: r._mrt, ctx: r.contextNode, transparent: r.transparent, opaque: r.opaque, lighting: r.lighting,
+  autoClear: [r.autoClear, r.autoClearColor, r.autoClearDepth, r.autoClearStencil], layers: camera.layers.mask, override: scene.overrideMaterial });
 const renderer = {
   backend: { isWebGPUBackend: true, device },
   xr: { enabled: false, isPresenting: false, updateCamera() {}, getCamera: () => null },
   toneMapping: THREE.ACESFilmicToneMapping, outputColorSpace: THREE.SRGBColorSpace, toneMappingExposure: 1,
   info: { render: { drawCalls: 0, triangles: 0, points: 0, lines: 0, calls: 0 } },
   getRenderTarget: () => bound, setRenderTarget(t) { bound = t; },
+  // the rest of the state a pass sets around its draw (three PassNode.updateBefore) and puts back only if nothing throws
+  _mrt: null, getMRT() { return this._mrt; }, setMRT(m) { this._mrt = m; }, contextNode: { ctx: 'the renderer\'s own' },
+  transparent: true, opaque: true, lighting: true, autoClear: true, autoClearColor: true, autoClearDepth: true, autoClearStencil: true,
   render(sc, cam) {
-    draws.push({ sc, cam, toneMapping: this.toneMapping, colorSpace: this.outputColorSpace, xr: this.xr.enabled });
-    if (sc?.isQuadMesh && sc.name === 'Render Pipeline' && throwOnQuad) { const e = throwOnQuad; throwOnQuad = null; bound = { stale: true }; throw e; }
+    draws.push({ sc, cam, toneMapping: this.toneMapping, colorSpace: this.outputColorSpace, xr: this.xr.enabled, pass: passState(this, sc, cam) });
+    if (sc?.isQuadMesh && sc.name === 'Render Pipeline' && throwOnQuad) {
+      // a throw inside a nested pass (the AO pre-pass's MRT, the scene pass's AO context): its state is left as it set it
+      const e = throwOnQuad; throwOnQuad = null; bound = { stale: true };
+      this._mrt = { stale: 'mrt' }; this.contextNode = { stale: 'ao context' }; this.transparent = false; this.opaque = false; this.lighting = false;
+      this.autoClear = this.autoClearColor = this.autoClearDepth = this.autoClearStencil = false;
+      camera.layers.mask = 0x4; scene.overrideMaterial = { stale: 'override' };
+      throw e;
+    }
   },
   compileAsync: async () => {},
 };
@@ -80,6 +92,7 @@ const setPref = (on) => { try { post.setBloomPref(on); } catch (e) { return e; }
 if (process.argv.includes('--case')) {
   const rows = [];
   const row = (n, ok, d) => rows.push([n, !!ok, d]);
+  const ctx0 = renderer.contextNode, layers0 = camera.layers.mask;
   setBloom(1); renderer.xr.enabled = true; frame();   // xr.enabled true: a page with a headset attached, not presenting
   throwOnQuad = new Error('simulated: the output pass failed');
   const d = frame();
@@ -92,6 +105,13 @@ if (process.argv.includes('--case')) {
     row('P6d the fallback frame is drawn with the renderer\'s tone curve and colour space (not the ones the pipeline swapped in)', fb?.toneMapping === THREE.ACESFilmicToneMapping && fb?.colorSpace === THREE.SRGBColorSpace, [fb?.toneMapping, fb?.colorSpace]);
     row('P6d …and xr.enabled as it was before the frame (true) while it draws', fb?.xr === true, fb?.xr);
     row('P6d …and the renderer keeps all three after it', renderer.toneMapping === THREE.ACESFilmicToneMapping && renderer.outputColorSpace === THREE.SRGBColorSpace && renderer.xr.enabled === true, [renderer.toneMapping, renderer.outputColorSpace, renderer.xr.enabled]); }
+  // …and the rest of a pass's state (PassNode.updateBefore: MRT, contextNode, the opaque/transparent, lighting and autoClear
+  // flags, the camera's layers, the scene's override material), which a throw inside the AO pre-pass or the scene pass leaves
+  { const fb = d.find((x) => x.sc === scene)?.pass, now = passState(renderer), want = { mrt: null, ctx: ctx0, transparent: true, opaque: true, lighting: true, autoClear: [true, true, true, true], layers: layers0, override: null };
+    const same = (x) => !!x && Object.keys(want).every((k) => JSON.stringify(x[k]) === JSON.stringify(want[k]) && (k !== 'ctx' || x.ctx === ctx0));
+    const show2 = (x) => x && { ...x, ctx: x.ctx === ctx0 ? 'own' : x.ctx };
+    row('P6e the fallback frame is drawn with no MRT, the renderer\'s own contextNode, opaque, transparent, lighting and autoClear on, the camera\'s layers and no override material', same(fb), show2(fb));
+    row('P6e …and the renderer, camera and scene keep them after it', same(now), show2(now)); }
   const made = pipelinesMade, d2 = frame();
   row('P6 …later frames are plain and build nothing (dropped for this page)', plain(d2) && pipelinesMade === made && !live(), { d: show(d2), pipelinesMade });
   setBloom(2); const d3 = frame();

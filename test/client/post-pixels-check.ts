@@ -181,7 +181,34 @@ try {
   const [f0, f1] = ao.indirect.foot ?? [], [o0, o1] = ao.indirect.open ?? [];
   check("PA2 AO in ambient light only: the floor at the box's foot darkens (by more than a tenth), the open floor moves far less", ao.indirect.settled && ao.indirect.active === true && f1 < f0 * 0.9 && (f0 - f1) > 3 * Math.abs(o0 - o1), JSON.stringify(ao.indirect));
 
-  const real = errors.filter((e) => !/popErrorScope|sky finish/.test(e));
+  // PA9 LAST (a failure drops the pipeline for the page): a throw inside the AO pre-pass. post.js draws the frame plain;
+  // the renderer must be left as the plain path expects it (three's PassNode.updateBefore has no try/finally: MRT, the AO
+  // context, renderer.transparent would stay as the pass set them), so the next plain frame is the plain picture
+  const thrown = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js'), T = p.THREE, r = p.renderer;
+    const S = new T.Scene(); S.background = new T.Color(0, 0, 0);
+    const cam = new T.PerspectiveCamera(50, p.W / p.H, 0.1, 100); cam.position.set(0, 2.2, 4.2); cam.lookAt(0, 0.3, 0); cam.updateMatrixWorld(true);
+    S.add(new T.AmbientLight(0xffffff, 1.5));
+    const floor = new T.Mesh(new T.PlaneGeometry(12, 12).rotateX(-Math.PI / 2), new T.MeshStandardNodeMaterial({ color: 0x999999 })); S.add(floor);
+    const glass = new T.Mesh(new T.BoxGeometry(1, 1, 1), new T.MeshStandardNodeMaterial({ color: 0xff2020, transparent: true, opacity: 0.9 })); glass.position.set(0, 0.5, 0); S.add(glass);
+    const plainF = () => { p.hold(); r.setRenderTarget(null); r.render(S, cam); return p.grab(); };
+    const postF = async () => { p.hold(); const d = post.postPass(r, S, cam); if (d) d(); else r.render(S, cam); return p.grab(); };
+    await r.compileAsync(S, cam); globalThis.__setA(0); const ref = await p.settle(plainF); globalThis.__setA(3); await p.settle(postF);
+    const ctx0 = r.contextNode, pipe0 = post.postDebug()._pipe; let threw = false;
+    floor.onBeforeRender = () => { if (r.getRenderTarget() === pipe0?.pre?.renderTarget) { floor.onBeforeRender = () => {}; threw = true; throw new Error('simulated: a throw inside the AO pre-pass'); } };
+    let escaped = null, tries = 0;   // the pre-pass may skip a frame (a program still linking): try until it draws the floor
+    for (; !threw && tries < 30; tries++) { await new Promise((q) => requestAnimationFrame(q)); try { await postF(); } catch (e) { escaped = String(e); } }
+    const st = { threw, tries, escaped, failed: post.postDebug().failed, mrt: r.getMRT() !== null, ctxSame: r.contextNode === ctx0, transparent: r.transparent, opaque: r.opaque, target: r.getRenderTarget() === null };
+    const after = await p.settle(postF);
+    const gx = (px) => { const v = glass.position.clone().project(cam), x = Math.round((v.x + 1) / 2 * p.W), y = Math.round((1 - v.y) / 2 * p.H), i = (y * p.W + x) * 4; return px ? [px[i], px[i + 1], px[i + 2]] : null; };
+    st.diff = ref && after ? p.diff(ref, after) : null; st.glass = [gx(ref), gx(after)];
+    r.setMRT(null); r.transparent = true; r.opaque = true; r.contextNode = ctx0; globalThis.__setA(0);
+    return st;`);
+  console.log(`  · ${JSON.stringify(thrown)}`);
+  check("PA9 a throw inside the AO pre-pass: post.js catches it, drops the pipeline, and leaves the renderer plain (no MRT, its own contextNode, opaque and transparent drawn, canvas bound)",
+    thrown.threw && !thrown.escaped && /pre-pass/.test(String(thrown.failed)) && !thrown.mrt && thrown.ctxSame && thrown.transparent === true && thrown.opaque === true && thrown.target, JSON.stringify(thrown));
+  check("PA9 …so the next plain frame is the plain picture: the see-through box is drawn (every channel within 1 of 255)", !!thrown.diff && thrown.diff.max <= 1, JSON.stringify(thrown));
+
+  const real = errors.filter((e) => !/popErrorScope|sky finish|simulated: a throw inside the AO pre-pass/.test(e));
   check("PX5 no page errors", real.length === 0, JSON.stringify(real.slice(0, 4)));
 } catch (e) { check("the run threw", false, String((e as any)?.stack ?? e)); }
 console.log(`[post-pixels-check] ${tally.passed} passed, ${tally.failed} failed${tally.note()}`);
