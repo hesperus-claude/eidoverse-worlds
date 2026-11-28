@@ -243,4 +243,36 @@ session = { frameRate: 90 }; tick(90); tick(90);
 check('X14 a headset holding 90 Hz shares the 0.25 headset cap, not the desktop\'s smooth 0.36', FB.budgetStats().share === 0.25, FB.budgetStats().share);
 stub.renderer.xr.isPresenting = false; session = null;
 
+// ---- B: the headset band does not cycle (cold read F2) --------------------------------------------------------------
+// A headset falls off a vsync cliff (72 → 36), so one lever can jump the whole band: 36 fps at full detail is slow,
+// 73 with detail shed is smooth, the restore puts it back at 36. Undamped that is shed/restore every 8 s for good:
+// shadows popping, the detail chip flashing. A lever shed again within 20 s of its own restore doubles the smooth streak
+// the next restore needs (5 → 10 → 20 → 40 → 80 s), reset when the session starts or ends. Headset only for now: on a
+// flat display the old 60 Hz trace (G1) itself relapses, so the leads decide that separately (B6 pins flat unchanged).
+const plantRun = (secs: number, fps: (shed: boolean) => number) => {
+  let restores = 0; const at: number[] = [];
+  for (let t = 0; t < secs; t++) { const was = dbg().detailShed; tick(fps(was)); if (was && !dbg().detailShed) { restores++; at.push(t); } }
+  return { restores, at };
+};
+const fresh = () => { G.setFullDetail(true); G.setFullDetail(false); G.applyPendingPixelRatio(); };
+stub.renderer.xr.isPresenting = true; session = { frameRate: 72 }; fresh(); tick(72);
+const cyc = plantRun(120, (shed) => (shed ? 73 : 36));
+const gaps = cyc.at.slice(1).map((t, i) => t - cyc.at[i]);
+check('B1 72 Hz headset, 36 fps at full detail and 73 with it shed: at most 5 restores in 2 minutes (undamped: ~14)', cyc.restores > 0 && cyc.restores <= 5, cyc);
+// a gap is the 3 s shed streak plus the smooth wait the restore needed: the wait is what doubles
+const waits = gaps.map((g) => g - 3);
+check('B2 …each relapse doubles the wait: the smooth seconds before each restore go 10, 20, 40 (gap minus the 3 s shed)', waits.length >= 2 && waits.every((w, i) => i === 0 || w === 2 * waits[i - 1]), { at: cyc.at, gaps, waits });
+check('B3 …and the debug surface says how long the next restore needs (capped at 80 s)', dbg().restoreNeed > 5 && dbg().restoreNeed <= 80, dbg().restoreNeed);
+stub.renderer.xr.isPresenting = false; session = null; tick(53);
+stub.renderer.xr.isPresenting = true; session = { frameRate: 72 }; tick(72);
+check('B4 leaving the session forgets the back-off: a new session restores after 5 smooth seconds again', dbg().restoreNeed === 5, dbg().restoreNeed);
+{ fresh(); for (let t = 0; t < 30 && !dbg().detailShed; t++) tick(36);
+  const hold = plantRun(60, () => 73);
+  check('B5 a restore that holds (no relapse) leaves the need at 5', hold.restores === 1 && dbg().restoreNeed === 5, { hold, need: dbg().restoreNeed }); }
+stub.renderer.xr.isPresenting = false; session = null;
+// B6 (control): the same cliff on a flat 60 Hz display still cycles as before (no back-off off the headset, for now)
+{ R?.resetRefresh(); cadence(60, 300); fresh(); tick(53);
+  const flat = plantRun(120, (shed) => (shed ? 60 : 20));
+  check('B6 flat 60 Hz, 20 fps full / 60 shed: unchanged, the undamped 8 s cycle (≥ 12 restores) and the need stays 5', flat.restores >= 12 && (dbg().restoreNeed ?? 5) === 5, { flat, need: dbg().restoreNeed }); }
+
 T.done();
