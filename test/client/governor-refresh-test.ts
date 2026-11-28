@@ -4,7 +4,9 @@
 // reach 52, so it never restored and the cruise stepped its pixels down for good. After: one target rate (the session's
 // frameRate in a headset, else its measured cadence; on a flat display min(measured refresh, 60)), and the thresholds are
 // fractions of it chosen so a 60 Hz display decides EXACTLY as before (G1 is that display's decisions, recorded from the
-// tree before this change).
+// tree before this change). Round two (cold read, 11-27): a 60 Hz machine vsync-locked at 30/20/15 fps must never be read
+// as a slow panel (W rows; so a real 30 Hz panel is not recognised yet, and the panel rows use 50 Hz), and the rise-only
+// estimate must not creep (C rows).
 // The REAL governor.js runs over test/stubs/lod-client-stub.mjs (as governor-xr-test does): its levers below 'lod' answer
 // "nothing to shed", so the ladder that moves is lod → pixels → detail. Each pulse is read back through the governor's
 // own streak counters (exactly one of slowFor / goodFor / midFor grows: the regime it decided) and its history.
@@ -121,18 +123,18 @@ cadence(72, 2, true);
 check('X10 a new session forgets the last one\'s cadence (72 default until it measures)', dbg().target === 72, dbg().target);
 stub.renderer.xr.isPresenting = false; session = null;
 
-// ---- F2: a 30 Hz panel ---------------------------------------------------------------------------------------------
+// ---- F2: a 50 Hz panel (the slowest a cadence can name: 30 Hz is indistinguishable from a 60 Hz panel at half rate) --
 R?.resetRefresh();   // a fresh page on a different display (the estimate only ratchets up within a page)
-cadence(30, 300);
-check('F2 30 Hz panel measured: target 30, thresholds 13 / 26', dbg().target === 30 && dbg().slowBelow === 13 && dbg().smoothAbove === 26, { target: dbg().target, slowBelow: dbg().slowBelow, smoothAbove: dbg().smoothAbove });
+cadence(50, 300);
+check('F2 50 Hz panel measured: target 50, thresholds 50·26/60 and 50·52/60', dbg().target === 50 && dbg().slowBelow === (50 * 26) / 60 && dbg().smoothAbove === (50 * 52) / 60, { target: dbg().target, slowBelow: dbg().slowBelow, smoothAbove: dbg().smoothAbove });
 for (let i = 0; i < 40 && dbg().pixelRatio >= 1; i++) tick(10);
-check('(setup) a slow 30 Hz panel sheds pixels', dbg().pixelRatio < 1, dbg().pixelRatio);
+check('(setup) a slow 50 Hz panel sheds pixels', dbg().pixelRatio < 1, dbg().pixelRatio);
 { const pr = dbg().pixelRatio; const h0 = hist().length;
-  for (let i = 0; i < 30; i++) tick(29);
-  check('F3 30 Hz panel at 29 fps restores (old: never — 29 sat in the dead band and the cruise stepped pixels DOWN)',
+  for (let i = 0; i < 30; i++) tick(48);
+  check('F3 50 Hz panel at 48 fps restores (old: never — 48 sat in the dead band and the cruise stepped pixels DOWN)',
     dbg().pixelRatio > pr && hist().slice(h0).some((h) => h.startsWith('+')) && !hist().slice(h0).some((h) => /cruise/.test(h)), { pr, now: dbg().pixelRatio, moves: hist().slice(h0) }); }
-{ tick(29); const s = FB.budgetStats().share;
-  check('F4 30 Hz at 29: the background share is the smooth 0.36 (old: 0.3)', s === 0.36, s); }
+{ tick(48); const s = FB.budgetStats().share;
+  check('F4 50 Hz at 48: the background share is the smooth 0.36 (old: 0.3)', s === 0.36, s); }
 
 // ---- E: the estimator on its own (fresh instances) -----------------------------------------------------------------
 const mk = () => R?.makeRefreshEstimator();
@@ -141,14 +143,14 @@ const rep = (ms: number[], n: number) => Array.from({ length: n }, (_, i) => ms[
 { const e = mk(); check('E1 nothing measured: no estimate (the governor behaves as 60)', e != null && e.hz() == null, e?.hz()); }
 { const e = mk(); feed(e, rep([1000 / 60], 200)); check('E2 a steady 60 Hz cadence reads 60', e?.hz() === 60, e?.hz()); }
 { const e = mk(); feed(e, rep([10, 23.3], 200)); check('E3 timestamp jitter around 16.7 ms (10/23.3 alternating) still reads 60, not 100', e?.hz() === 60, e?.hz()); }
-{ const e = mk(); feed(e, rep([1000 / 30], 60)); check('E4 a slow cadence is not trusted at once: 30 Hz for 2 s gives no estimate yet', e != null && e.hz() == null, e?.hz());
-  feed(e, rep([1000 / 30], 200)); check('E5 …sustained, it is: a 30 Hz panel reads 30', e?.hz() === 30, e?.hz()); }
+{ const e = mk(); feed(e, rep([20], 100)); check('E4 a slow cadence is not trusted at once: 50 Hz for 2 s (6 blocks) gives no estimate yet', e != null && e.hz() == null, e?.hz());
+  feed(e, rep([20], 200)); check('E5 …sustained, it is: a 50 Hz panel reads 50', e?.hz() === 50, e?.hz()); }
 { const e = mk(); feed(e, rep([33.3, 50, 33.3, 33.3, 50, 66.7, 33.3, 50], 600));
   check('E6 a GPU-bound 60 Hz machine (33/50/67 ms frames, ~25 fps) is NOT read as a slow panel', e != null && e.hz() == null, e?.hz()); }
-{ const e = mk(); feed(e, rep([1000 / 60], 200)); feed(e, rep([1000 / 30], 600));
-  check('E7 the fastest sustained cadence holds: 60 Hz then a long 30 fps stretch stays 60', e?.hz() === 60, e?.hz()); }
-{ const e = mk(); feed(e, rep([...Array(18).fill(1000 / 30), 62, 4.7], 900));
-  check('E8 catch-up pairs (a 62 ms frame, then a 4.7 ms one) do not raise a 30 Hz panel', e?.hz() === 30, e?.hz()); }
+{ const e = mk(); feed(e, rep([1000 / 60], 200)); feed(e, rep([20], 600));
+  check('E7 the fastest sustained cadence holds: 60 Hz then a long 50 fps stretch stays 60', e?.hz() === 60, e?.hz()); }
+{ const e = mk(); feed(e, rep([...Array(298).fill(20), 36, 4], 3000));
+  check('E8 catch-up pairs (a 36 ms frame, then a 4 ms one) do not raise a 50 Hz panel', e?.hz() === 50, e?.hz()); }
 { const e = mk(); feed(e, [0, -5, NaN, 5000, ...rep([1000 / 144], 100)]);
   check('E9 resumes and nonsense intervals are ignored; 144 Hz reads 144', e?.hz() === 144, e?.hz()); }
 { const e = mk(); feed(e, rep([250], 300)); feed(e, rep([1], 300));
@@ -160,24 +162,24 @@ stub.renderer.xr.isPresenting = true; session = {};
 cadence(45, 300, true);
 check('P1 no frameRate, a steady 45 Hz cadence in the session: target stays 72, so 45 fps is slow', dbg().target === 72 && regimeOf(45) === 'slow', { target: dbg().target });
 stub.renderer.xr.isPresenting = false;
-// M15: headset frames never feed the flat estimate (F2 left a 30 Hz panel measured; a 72 Hz session must not raise it)
-stub.renderer.xr.isPresenting = true; cadence(72, 300, true); stub.renderer.xr.isPresenting = false; cadence(30, 2);
-check('P2 a 30 Hz panel stays 30 after a 72 Hz headset session', dbg().target === 30, dbg().target);
+// M15: headset frames never feed the flat estimate (F2 left a 50 Hz panel measured; a 72 Hz session must not raise it)
+stub.renderer.xr.isPresenting = true; cadence(72, 300, true); stub.renderer.xr.isPresenting = false; cadence(50, 2);
+check('P2 a 50 Hz panel stays 50 after a 72 Hz headset session', dbg().target === 50, dbg().target);
 // M18: before the first fps window (0) the share is the slow one, as before
 cadence(60, 300);   // ratchets the flat estimate to 60 again
 tick(53); tick(0);
 check('P3 fps 0 (no window measured yet): the background share is 0.2, as before', FB.budgetStats().share === 0.2, FB.budgetStats().share);
-// M19: loading grace's history line follows the regime too: 20 fps is slow at 60 Hz, mid at 30 Hz
+// M19: loading grace's history line follows the regime too: 22 fps is slow at 60 Hz (below 26), mid at 50 Hz (above 21.7)
 { FB.reportPending('governor-refresh-test', 1);
-  const h0 = hist().length; tick(20); tick(53);
+  const h0 = hist().length; tick(22); tick(53);
   const at60 = hist().slice(h0).some((h) => /grace held/.test(h));
   FB.reportPending('governor-refresh-test', 0); tick(53);
-  R?.resetRefresh(); cadence(30, 300);
+  R?.resetRefresh(); cadence(50, 300);
   FB.reportPending('governor-refresh-test', 1);
-  const h1 = hist().length; tick(20); tick(29);
-  const at30 = hist().slice(h1).some((h) => /grace held/.test(h));
+  const h1 = hist().length; tick(22); tick(48);
+  const at50 = hist().slice(h1).some((h) => /grace held/.test(h));
   FB.reportPending('governor-refresh-test', 0);
-  check('P4 loading grace logs a held slow second at 60 Hz (20 fps) but not at 30 Hz, where 20 fps is not slow', at60 && !at30, { at60, at30 }); }
+  check('P4 loading grace logs a held slow second at 60 Hz (22 fps) but not at 50 Hz, where 22 fps is not slow', at60 && !at50, { at60, at50 }); }
 // M20: the REAL frame loop feeds the estimator (frameloop.js is stubbed for the governor above; imported here by its
 // absolute path, which the stub's specifier patterns do not match, so this is the module the client runs)
 { R?.resetRefresh();
@@ -186,7 +188,57 @@ check('P3 fps 0 (no window measured yet): the background share is 0.2, as before
   const FL: any = await import(fileURLToPath(new URL('../../client/lib/render/frameloop.js', import.meta.url)));
   FL.startFrame();
   const t0 = performance.now();
-  for (let i = 1; i <= 300 && cb; i++) { const f = cb; cb = null; f(t0 + (i * 1000) / 30); }
-  check('P5 the real frame loop feeds the estimator: 300 frames at 30 Hz read as a 30 Hz panel', R?.refreshEstimate(false) === 30, R?.refreshEstimate(false)); }
+  let t = t0;
+  for (let i = 1; i <= 300 && cb; i++) { const f = cb; cb = null; t += 20; f(t); }
+  check('P5 the real frame loop feeds the estimator: 300 frames at 50 Hz read as a 50 Hz panel', R?.refreshEstimate(false) === 50, R?.refreshEstimate(false));
+  // R8 (cold read): headset frames go to the headset channel. Headset frames arrive through renderer.setAnimationLoop;
+  // here the same frame function is driven by hand with the stub's presenting flag up.
+  stub.renderer.xr.isPresenting = true;
+  for (let i = 1; i <= 300 && cb; i++) { const f = cb; cb = null; t += 1000 / 90; f(t); }
+  const xrHz = R?.refreshEstimate(true), flatHz = R?.refreshEstimate(false);
+  stub.renderer.xr.isPresenting = false;
+  check('P6 the real loop sends presenting frames to the headset channel: it reads 90, the flat panel still 50', xrHz === 90 && flatHz === 50, { xrHz, flatHz }); }
+
+// ---- W: a weak 60 Hz machine is never read as a slow panel (cold read F1, the dangerous direction) ------------------
+// A GPU-bound machine on a vsynced 60 Hz panel runs a steady 60/n. Believing that cadence made its crawl "smooth": the
+// governor stopped shedding, whenCalm() fired, quality came back, and it sat at 22 fps with the ladder inert.
+{ R?.resetRefresh();
+  for (let i = 0; i < 900; i++) R?.noteFrameInterval((2000 / 60) * (1 + 0.01 * Math.sin(i * 1.3)), false);
+  const t = dbg().target; const at30 = decide([30, 25], () => 53);
+  check('W1 60 Hz machine locked at 30 fps for 30 s: the target stays 60; 30 fps is mid (the cruise\'s), 25 is slow',
+    R != null && t === 60 && JSON.stringify(at30) === JSON.stringify([[30, 'mid'], [25, 'slow']]), { t, at30, est: R?.refreshDebug?.() }); }
+{ const e20 = mk(), e15 = mk(); feed(e20, rep([50], 600)); feed(e15, rep([1000 / 15], 600));
+  check('W2 locked at 20 and at 15 fps: no estimate (no rate under 45 Hz is believed)', e20 != null && e20.hz() == null && e15.hz() == null, [e20?.hz(), e15?.hz()]); }
+{ const e = mk(); feed(e, rep([...Array(110).fill(20), 60, ...Array(9).fill(20)], 2400));
+  check('W3 trust is a RUN: 50 Hz broken by an unsteady block every 8 blocks never reaches 8 in a row, no estimate', e != null && e.hz() == null, e?.hz()); }
+{ const e = mk(); feed(e, rep([...Array(60).fill(20), ...Array(60).fill(1000 / 48)], 2400));
+  check('W4 …at ONE rate: 50 and 48 Hz alternating every 4 blocks never builds a run, no estimate', e != null && e.hz() == null, e?.hz()); }
+{ const e = mk(); feed(e, rep([1000 / 60, 1000 / 60, 2000 / 60], 2700));
+  check('W5 a 60 Hz machine dropping every third frame (16.7/16.7/33.3 ms, 45 fps) is not a 45 Hz panel', e != null && e.hz() == null, e?.hz()); }
+
+// ---- C: the estimate does not creep (cold read F4: a rise-only maximum of noisy blocks crept 85 → 85.9, 72 → 75) ----
+let seed = 4242; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+const noisy = (hz: number, pct: number, n: number) => Array.from({ length: n }, () => (1000 / hz) * (1 + pct * (rnd() * 2 - 1)));
+{ seed = 5; const e = mk(); feed(e, noisy(85, 0.03, 1700));
+  check('C1 an 85 Hz panel (not on the snap list), ±3% jitter for 20 s, reads within 0.5 of 85', e != null && Math.abs(e.hz() - 85) <= 0.5, e?.hz()); }
+{ seed = 10; const e = mk(); feed(e, noisy(72, 0.08, 43200));
+  check('C2 a 72 Hz headset with ±8% jitter for 600 s still reads 72, not 75', e?.hz() === 72, e?.hz()); }
+{ seed = 11; const e = mk(); feed(e, noisy(90, 0.08, 54000));
+  check('C3 a 90 Hz headset with ±8% jitter for 600 s still reads 90', e?.hz() === 90, e?.hz()); }
+{ const e = mk(); feed(e, rep([20], 300)); feed(e, rep([1000 / 60], 15)); feed(e, rep([20], 300));
+  check('C4 one lucky 60 Hz block in a 50 Hz page does not raise it: nothing rises until two blocks agree', e?.hz() === 50, e?.hz()); }
+
+// ---- X11–X14: pins for the cold read's surviving mutants (R11–R14) --------------------------------------------------
+stub.renderer.xr.isPresenting = true;
+session = { frameRate: 100 };
+const x100 = decide([89, 90], () => 100);
+check('X11 a 100 Hz session: 89 is slow (below 0.9 × 100), 90 is not', JSON.stringify(x100) === JSON.stringify([[89, 'slow'], [90, 'mid']]), x100);
+session = { frameRate: 60 };
+check('X12 a REPORTED frameRate is trusted as given, even under 72 (a 60 Hz headset reads 60)', dbg().target === 60, dbg().target);
+session = { frameRate: 72 }; cadence(90, 300, true);
+check('X13 a reported frameRate outranks the measured cadence (72 reported, 90 measured: 72)', dbg().target === 72, dbg().target);
+session = { frameRate: 90 }; tick(90); tick(90);
+check('X14 a headset holding 90 Hz shares the 0.25 headset cap, not the desktop\'s smooth 0.36', FB.budgetStats().share === 0.25, FB.budgetStats().share);
+stub.renderer.xr.isPresenting = false; session = null;
 
 T.done();
