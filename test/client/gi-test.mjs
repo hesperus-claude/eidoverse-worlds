@@ -15,6 +15,7 @@ plugin({ name: 'gi-stubs', setup(build) {
   stubResolve(build, /^(\.\.?\/)+core\.js$/, () => ({ path: here('../stubs/gi-core-stub.mjs') }));
   stubResolve(build, /^(\.\.?\/)+base\.js$/, () => ({ path: here('../stubs/gi-base-stub.mjs') }));
   stubResolve(build, /^(\.\.?\/)+(render\/)?loadwork\.js$/, () => ({ path: here('../stubs/loadwork-stub.mjs') }));
+  stubResolve(build, /^(\.\.\/)+shared\/zone\.js$/, (args) => (/[\\/]render[\\/]gi[^\\/]*\.js$/.test(args.importer) ? { path: here('../stubs/gi-zone-count-stub.mjs') } : undefined));   // gi.js's folds, counted
   stubResolve(build, /^three\/addons\/(lighting|tsl\/lighting)\/LightProbeGrid(Node)?\.js$/, () => { gridModuleLoads++; return { path: here('../stubs/lightprobegrid-stub.mjs') }; });
 } });
 const read = (p) => fs.readFileSync(`${HERE}/../../${p}`, 'utf8');
@@ -425,6 +426,26 @@ if (G) {
   for (let s = 0; s < 30; s++) { edit((es) => { es.mug.pos = [0.5 + 0.01 * (s % 2), 1, 0.5]; }); await run(50); }   // 30 s of carrying, a pose a second
   check('M3 a rebake that is owed (a lamp dimmed) runs though someone carries a mug about the room the whole time (its poses do not hold the bake back)', j1 === 1 && jobsOf() === 2, [j1, jobsOf()]);
   LR.releaseLight('complight:m3');
+}
+
+if (G) {
+  // ---- what a world with no gi-volume pays (cold read 11-27, A10): foldOfView is 8 ms at 10k things and 39 ms at 50k
+  // (bun). A replan in such a world, or with the dial off, returns before it; a load finishing does not replan it at all.
+  const ZC = await import('../stubs/gi-zone-count-stub.mjs');
+  await fresh(); G.setGiPref('low');
+  const f0 = ZC.folds.n, p0 = G.giDebug().replans;
+  St.hydrate(giRoom(null, { lamp: { pos: [0, 2, 0], light: { intensity: 20 } } })); await run(150);
+  G.setGiPref('high'); await run(150); G.setGiPref('low'); await run(150);
+  const p1 = G.giDebug().replans;
+  check('A1 a world with no gi-volume: its replans (on arriving, and the dial turned twice) read no fold', typeof p0 === 'number' && p1 - p0 >= 2 && ZC.folds.n === f0, { folds: ZC.folds.n - f0, replans: p1 - p0 });
+  for (let i = 0; i < 3; i++) { BUS.bus.emit('lanes-idle'); await run(100); }
+  check('A1 …and loads finishing (lanes-idle) do not replan it at all', typeof p1 === 'number' && G.giDebug().replans === p1, G.giDebug().replans - p1);
+  await fresh(); G.setGiPref('off');
+  const f1 = ZC.folds.n, p2 = G.giDebug().replans;
+  St.hydrate(giRoom({ bounces: 0 })); await run(150); G.setGiPref('off'); await run(150);
+  check('A1 …nor a world that asks for one, with the dial off', G.giDebug().replans - p2 >= 2 && ZC.folds.n === f1 && LP.made.length === 0, { folds: ZC.folds.n - f1, replans: G.giDebug().replans - p2, made: LP.made.length });
+  G.setGiPref('low'); await run(300);
+  check('A1 …and turned on there, the fold is read and the grid built (the control)', ZC.folds.n > f1 && LP.made.length === 1, { folds: ZC.folds.n - f1, made: LP.made.length });
 }
 
 if (G) {
