@@ -65,10 +65,10 @@ if (G) {
     st.length === 210 && st.every((s) => s.count === 1) && same(st[0], { start: 0, count: 1, pass: 0 }) && same(st[104], { start: 104, count: 1, pass: 0 }) && same(st[105], { start: 0, count: 1, pass: 1 }) && same(st[209], { start: 104, count: 1, pass: 1 }), [st.length, st[0], st[105]]);
   check('G7 …no bounces: one pass', G.bakeSteps(8, 0).length === 8 && G.bakeSteps(8, 0).every((s) => s.pass === 0), G.bakeSteps(8, 0).length);
 
-  check('G8 the dial: off | low | high, low by default, stored in ew-gi; a bad value is ignored',
-    same(G.GI_LEVELS, ['off', 'low', 'high']) && G.giPref() === 'low' && (G.setGiPref('high'), G.giPref() === 'high' && localStorage.getItem('ew-gi') === 'high') && (G.setGiPref('ultra'), G.giPref() === 'high') && (G.setGiPref('off'), G.giPref() === 'off'), G.giPref());
+  check('G8 the dial: off | low | high, OFF by default (a visitor opts in until the bake is measured on real devices), stored in ew-gi; a bad value is ignored',
+    same(G.GI_LEVELS, ['off', 'low', 'high']) && G.giPref() === 'off' && (G.setGiPref('high'), G.giPref() === 'high' && localStorage.getItem('ew-gi') === 'high') && (G.setGiPref('ultra'), G.giPref() === 'high') && (G.setGiPref('off'), G.giPref() === 'off'), G.giPref());
   localStorage.setItem('ew-gi', 'banana');
-  check('G8 …a stored value that is no level reads as low', G.giPref() === 'low', G.giPref());
+  check('G8 …a stored value that is no level reads as off', G.giPref() === 'off', G.giPref());
 
   check('G9 a rebake follows the world: a reset, the volume, its zone, a light, a model, a switch-off',
     G.giTouches({ type: 'reset' }) && G.giTouches({ type: 'hydrated' }) && ['gi-volume', 'zone', 'light', 'model', 'mesh', 'disabled', 'hidden'].every((comp) => G.giTouches({ type: 'change', what: 'comp', comp, id: 'x' })), '');
@@ -346,6 +346,27 @@ if (G) {
   check('B3 six hundred static meshes in a room: the proxy holds the 256 largest (each bake step draws the proxy into six cube faces), the walls among them',
     pm.length === 256 && pm.includes(roomMeshes.get('walls').children[0].geometry) && G.giDebug().proxy?.cut?.meshes === 345, { meshes: pm.length, proxy: G.giDebug().proxy });
   for (const k of [...roomMeshes.keys()]) if (k !== 'walls') roomMeshes.delete(k);
+}
+
+if (G) {
+  // ---- a headset (cold read 11-27, A6): nobody has run the bake in one, so no bake step runs while an immersive session
+  // presents. The grid already baked still draws (and still dims by day).
+  await fresh();
+  core.renderer.xr.isPresenting = true;
+  St.hydrate(giRoom({ bounces: 0 })); await run(300);
+  const inXr = LP.bakes.length;
+  core.renderer.xr.isPresenting = false; await run(300);
+  check('H1 no bake step runs while an immersive session presents; the bake that was owed runs once the session ends', inXr === 0 && LP.bakes.length === 27, [inXr, LP.bakes.length]);
+  await fresh();
+  St.hydrate(giRoom({ bounces: 1 })); await run(90);
+  const b0 = LP.bakes.length;
+  core.renderer.xr.isPresenting = true; await run(100);
+  const during = LP.bakes.length - b0;
+  core.renderer.xr.isPresenting = false; await run(200);
+  check('H1 …a session that begins mid-bake holds it, and it goes on where it stood once the session ends (one job, every step once)',
+    b0 > 0 && b0 < 54 && during === 0 && LP.bakes.length === 54 && jobsOf() === 1, [b0, during, LP.bakes.length, jobsOf()]);
+  const vp = read('client/lib/ui/videopanel.js');
+  check('H2 the Video panel\'s help says the dial is off by default (a visitor opts in) and that no bake runs in VR', /Off by default/.test(vp) && /never while in VR/.test(vp), '');
 }
 
 if (G) {

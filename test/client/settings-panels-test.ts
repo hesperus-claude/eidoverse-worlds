@@ -196,12 +196,12 @@ console.log('VIDEO — renderer select persists PREF_BACKEND and needs a reload'
 
   console.log('VIDEO — bounce light (GI): the viewer\'s cost of the world\'s gi-volume (ew-gi), desk and VR');
   const gi = sel('bounce light');
-  check('a "bounce light" row with off / low / high, low by default', !!gi && [...gi.options].map((o) => o.value).join() === 'off,low,high' && gi.value === 'low', gi && [...gi.options].map((o) => o.value));
-  if (gi) { gi.value = 'off'; fire(gi, 'change'); }
-  check('choosing off stores ew-gi=off and says so in the hint bar', localStorage.getItem('ew-gi') === 'off' && ui.el.hint.innerHTML.includes('bounce light: off'), [localStorage.getItem('ew-gi'), ui.el.hint.innerHTML]);
+  check('a "bounce light" row with off / low / high, off by default (a visitor opts in)', !!gi && [...gi.options].map((o) => o.value).join() === 'off,low,high' && gi.value === 'off', gi && [...gi.options].map((o) => o.value));
+  if (gi) { gi.value = 'low'; fire(gi, 'change'); }
+  check('choosing low stores ew-gi=low and says so in the hint bar', localStorage.getItem('ew-gi') === 'low' && ui.el.hint.innerHTML.includes('bounce light: low'), [localStorage.getItem('ew-gi'), ui.el.hint.innerHTML]);
   check('…live: no reload button', !!gi && !row(gi).querySelector('button.reload'));
   const giList = () => quad.fields().find((x: any) => x.label === 'bounce light (GI)');
-  check('the VR quad lists it too, the current level active', giList()?.rows.map((r: any) => r.id).join() === 'off,low,high' && giList()?.rows.find((r: any) => r.active)?.id === 'off', JSON.stringify(giList()?.rows));
+  check('the VR quad lists it too, the current level active', giList()?.rows.map((r: any) => r.id).join() === 'off,low,high' && giList()?.rows.find((r: any) => r.active)?.id === 'low', JSON.stringify(giList()?.rows));
   const eGi = emitted.length;
   quad.dispatch('gi', 'high');
   check('quad dispatch(gi) stores it and repaints the quad', localStorage.getItem('ew-gi') === 'high' && giList()?.rows.find((r: any) => r.active)?.id === 'high' && emits(eGi, 'xr:repaint') === 1, localStorage.getItem('ew-gi'));
