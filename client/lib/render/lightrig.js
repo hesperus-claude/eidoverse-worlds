@@ -65,11 +65,20 @@ for (let i = 0; i < N_SLOTS; i++) {
     // bias stays small and negative; normalBias (derived from the texel size) does the heavy lifting
     pl.shadow.bias = -0.0005;
     pl.shadow.normalBias = SHADOW_BIAS_TEXELS * shadowTexel();
+    bornDrawn(pl);
   }
   slots.push(pl);
   rigGroup.add(pl);
 }
 scene.add(rigGroup);
+/** A casting-shaped slot's map is drawn once at birth, whoever holds it and whatever the gate says (three draws a map
+ *  whose needsUpdate is set, at any shadow.intensity, and clears it). Why: three r186 destroys and recreates a shadow
+ *  map's depth texture at the map's FIRST render (Textures.updateRenderTarget), and the bind groups built before that,
+ *  every classic-material model's, keep the destroyed texture. A slot first drawn when its first asker arrived, after
+ *  the world's models, broke every later frame: black on WebGPU ("Destroyed texture [ShadowDepthTexture] used in a
+ *  submit"), refused draws on WebGL 2. Drawn at birth, before anything samples it, the texture is already the render
+ *  target's own. Before the slot drew only for a holder that asked, it drew from the first frame, so this never showed. */
+function bornDrawn(l) { l.shadow.needsUpdate = true; }
 
 export const shadowsOn = () => _prefShadows;
 // The lamp's shadow dials, live (mapSize is a realloc and normalBias a uniform; neither is in a pipeline cache key).
