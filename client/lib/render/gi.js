@@ -95,10 +95,18 @@ export function giSupport(r) {
 // updateGi dims the grid by day every frame: a model first drawn by day kept the day's 0.0012 at night, one first drawn at
 // night kept 1 by day (render-lab 11-23: 23 of 25 model meshes; night frame luma 40.86 after a day preview, 45.55 without).
 // The render group is where three keeps a light's own values (AnalyticLightNode's colour): refreshed every render.
-const GRID_UNIFORMS = ['_min', '_max', '_resolution', '_intensity', '_falloff'];
+// These are three's PRIVATE field names (LightProbeGridNode.js, r186); gi-test W2 reads three's file for them, and replan asks
+// gridNodeProblem before it registers the node: a three upgrade that renames one turns GI off, saying which.
+export const GRID_UNIFORMS = Object.freeze(['_min', '_max', '_resolution', '_intensity', '_falloff']);
 /** three's grid light node (Base) with its uniforms in `group`. */
 export function sharedGridNode(Base, group) {
-  return class extends Base { constructor(light) { super(light); for (const k of GRID_UNIFORMS) this[k] = this[k].setGroup(group); } };
+  return class extends Base { constructor(light) { super(light); for (const k of GRID_UNIFORMS) if (typeof this[k]?.setGroup === 'function') this[k] = this[k].setGroup(group); } };
+}
+/** Why `Base` (three's LightProbeGridNode) can't take fix A: the uniforms it lacks, or null. */
+export function gridNodeProblem(Base) {
+  let n; try { n = new Base(null); } catch (e) { return `three's LightProbeGridNode would not construct: ${e?.message ?? e}`; }
+  const missing = GRID_UNIFORMS.filter((k) => typeof n?.[k]?.setGroup !== 'function');
+  return missing.length ? `three's LightProbeGridNode has no ${missing.join(', ')} uniform (renamed by a three upgrade?): the grid would keep its values per object` : null;
 }
 
 // ---- the live grids ----
@@ -111,7 +119,16 @@ let refused = [], candidates = [], proxyStats = null, viewCheckAt = 0;   // volu
 const QUIET_MS = 1500;           // a rebake waits for the world to stop changing
 function touch() { dirtyAt = performance.now(); }
 const boxOf = (p, pad = 0) => new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(...p.center), new THREE.Vector3(...p.size).addScalar(2 * pad));
-const nearAny = (id) => { const pos = state.st.entities?.[id]?.pos; if (!v3(pos)) return true; const v = new THREE.Vector3(...pos); for (const { plan } of live.values()) if (boxOf(plan, 2).containsPoint(v)) return true; return false; };
+/** A thing's world position from the view: its chain of parents, composed (simlayer worldPose over just that chain), or null. */
+function viewWorldPos(id) {
+  const es = state.st.entities ?? {}, chain = { entities: {} };
+  for (let k = id, n = 0; k && es[k] && !chain.entities[k] && n < 33; k = es[k].parent?.to, n++) {
+    const { pos, q, scale, scale3, parent } = es[k];
+    chain.entities[k] = { c: { transform: { pos: pos ?? [0, 0, 0], q: q ?? [0, 0, 0, 1], scale: scale3 ?? (fin(scale) ? [scale, scale, scale] : [1, 1, 1]) }, ...(parent?.to ? { parent: { to: parent.to } } : {}) } };
+  }
+  return chain.entities[id] ? worldPose(chain, id)?.pos ?? null : null;
+}
+const nearAny = (id) => { const pos = viewWorldPos(id); if (!v3(pos)) return true; const v = new THREE.Vector3(...pos); for (const { plan } of live.values()) if (boxOf(plan, 2).containsPoint(v)) return true; return false; };
 // what can make or unmake a volume; anything else matters only while one is live
 const SHAPES = new Set(['gi-volume', 'zone', 'disabled']);
 onWorldChange((ev) => {
@@ -257,6 +274,7 @@ async function replan() {
   if (!LPG) {   // registered before the first bake: three's bake registers its own node only when the library has none for the class
     const Grid = (await import('three/addons/lighting/LightProbeGrid.js')).LightProbeGrid;
     const { LightProbeGridNode } = await import('three/addons/tsl/lighting/LightProbeGridNode.js');
+    const why = gridNodeProblem(LightProbeGridNode); if (why) { giOff(why); return; }
     if (!LPG) { renderer.library.addLight(sharedGridNode(LightProbeGridNode, TSL.renderGroup), Grid); LPG = Grid; }
   }
   const set = staticSet(plans), sig = signatureOf(plans, set);
