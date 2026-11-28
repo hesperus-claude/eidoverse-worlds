@@ -449,6 +449,27 @@ if (G) {
 }
 
 if (G) {
+  // ---- (cold read 11-27, A12) a pose is near a volume by its world position, not its position in its parent
+  await fresh();
+  const crate = box(10, 0.5, 0); roomMeshes.set('crate', crate);
+  St.hydrate({ entities: { walls: { pos: [0, 0, 0] }, hall: { pos: [10, 0, 0] }, room: { pos: [0, 1.5, 0], parent: { to: 'hall' }, zone: { shape: 'box', size: [3, 3, 3] }, 'gi-volume': { bounces: 0 } },
+    crate: { pos: [0, 0.5, 0], parent: { to: 'hall' } } } });
+  await run(300);
+  const j0 = jobsOf();
+  crate.children[0].position.set(10.5, 0.5, 0.5); edit((es) => { es.crate.pos = [0.5, 0.5, 0.5]; }); await run(300);
+  check('W1 a static thing hung from a parent 10 m off, moved within the volume there, rebakes once', j0 === 1 && jobsOf() === 2, [j0, jobsOf()]);
+  // ---- (A13) gi.js moves five of three's PRIVATE fields to the render group (fix A): a three upgrade that renames one must not
+  // pass silently
+  const three = read('client/node_modules/three/examples/jsm/tsl/lighting/LightProbeGridNode.js'), names = G.GRID_UNIFORMS ?? [];
+  const made = (k) => new RegExp(`this\\.${k} = uniform\\(`).test(three);
+  check('W2 three\'s own LightProbeGridNode.js (this install) makes each uniform gi.js moves to the render group, under the private names gi.js reads',
+    names.length === 5 && names.every(made) && same(names, LP.GRID_UNIFORMS), { names, missing: names.filter((k) => !made(k)) });
+  class Renamed { constructor() { for (const k of ['_min', '_max', '_resolution', '_intensity', '_fade']) this[k] = { setGroup() { return this; } }; } }
+  check('W2 …and should a three upgrade rename one, gridNodeProblem names it (replan turns GI off with that reason); three\'s node as it is has none',
+    /_falloff/.test(G.gridNodeProblem?.(Renamed) ?? '') && G.gridNodeProblem?.(LP.LightProbeGridNode) === null, G.gridNodeProblem?.(Renamed));
+}
+
+if (G) {
   // (2) where GI can't run it is off, and says why where the lead's capture rig looks (giDebug)
   St.reset(); const before = quiet();
   core.renderer.backend = { isWebGLBackend: true, extensions: { has: () => false } };
