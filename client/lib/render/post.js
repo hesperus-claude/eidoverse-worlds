@@ -127,12 +127,22 @@ const STATE = [
   ['toneMapping', (r) => r.toneMapping, (r, v) => { r.toneMapping = v; }],
   ['outputColorSpace', (r) => r.outputColorSpace, (r, v) => { r.outputColorSpace = v; }],
   ['xr', (r) => r.xr?.enabled, (r, v) => { if (r.xr) r.xr.enabled = v; }],
+  // what a pass sets around its draw (PassNode.updateBefore): the AO pre-pass's MRT, the scene pass's AO context, the
+  // pre-pass's transparent = false, and the flags beside them
+  ['mrt', (r) => r.getMRT?.() ?? null, (r, v) => r.setMRT?.(v)],
+  ['contextNode', (r) => r.contextNode, (r, v) => { r.contextNode = v; }],
+  ...['transparent', 'opaque', 'lighting', 'autoClear', 'autoClearColor', 'autoClearDepth', 'autoClearStencil'].map((k) => [k, (r) => r[k], (r, v) => { r[k] = v; }]),
 ];
-const snapshot = (renderer) => STATE.map(([, get]) => get(renderer));
-const restore = (renderer, saved) => STATE.forEach(([, , set], i) => set(renderer, saved[i]));
+// …and on the camera and scene the pass drew (its layers, the scene's override material)
+const snapshot = (renderer, scene, camera) => [...STATE.map(([, get]) => get(renderer)), camera?.layers?.mask, scene?.overrideMaterial];
+const restore = (renderer, scene, camera, saved) => {
+  STATE.forEach(([, , set], i) => set(renderer, saved[i]));
+  if (camera?.layers) camera.layers.mask = saved[STATE.length];
+  if (scene) scene.overrideMaterial = saved[STATE.length + 1];
+};
 
 function draw(renderer, scene, camera, key) {
-  const saved = snapshot(renderer);
+  const saved = snapshot(renderer, scene, camera);
   try {
     if (!built) build(renderer, scene, camera, key);
     const b = built, device = renderer.backend?.device, e = exposure(renderer);
@@ -143,7 +153,7 @@ function draw(renderer, scene, camera, key) {
     finally { if (watch) device.popErrorScope().then((err) => { if (err && built === b) fail(err); }, () => {}); }
     active = true; why = null;
   } catch (e) {
-    restore(renderer, saved);   // a pass that threw can leave its target bound and the output transform swapped
+    restore(renderer, scene, camera, saved);   // a pass that threw can leave its target bound and the output transform swapped
     fail(e);
     active = false; why = `failed: ${failed}`;
     renderer.render(scene, camera);
