@@ -132,7 +132,7 @@ console.log('WORLD — a world that sets it gets a pipeline with its strength');
   check('P2 sky.bloom 1.2: the frame goes through one RenderPipeline (its output quad), not a bare scene render', viaPipe(d) && pipelinesMade === 1, { d: show(d), pipelinesMade });
   const p = live();
   check('P2 …the pipeline\'s scene pass draws the live scene through the live camera', p?.scenePass?.isPassNode && p.scenePass.scene === scene && p.scenePass.camera === camera, p && Object.keys(p));
-  check('P2 …its BloomNode holds the world\'s strength, radius 0.15 and threshold 2 (render lab 11-02)', p?.glow && Math.abs(p.glow.strength.value - 1.2) < 1e-9 && Math.abs(p.glow.radius.value - 0.15) < 1e-9 && Math.abs(p.glow.threshold.value - 2) < 1e-9,
+  check('P2 …its BloomNode holds the world\'s strength, radius 0.15 and, at exposure 1, threshold 1 (Godot glow_hdr_threshold)', p?.glow && Math.abs(p.glow.strength.value - 1.2) < 1e-9 && Math.abs(p.glow.radius.value - 0.15) < 1e-9 && Math.abs(p.glow.threshold.value - 1) < 1e-9,
     p?.glow && [p.glow.strength.value, p.glow.radius.value, p.glow.threshold.value]);
   check('P2 …the readout: active, the live strength, no reason', dbg().active === true && dbg().bloom === 1.2 && dbg().why == null, dbg());
   check('P2t tone mapping and colour space once, after bloom: the pipeline\'s output transform is on, with the renderer\'s curve', p?.pipe?.outputColorTransform === true && p.pipe._toneMapping === THREE.ACESFilmicToneMapping && p.pipe._outputColorSpace === THREE.SRGBColorSpace,
@@ -161,14 +161,24 @@ console.log('WORLD — a world that sets it gets a pipeline with its strength');
   check('P2d …and on again: through a new pipeline, the strength kept', viaPipe(d) && pipelinesMade === 3 && Math.abs(live()?.glow?.strength.value - 1) < 1e-9, { pipelinesMade });
 }
 
-console.log('CAP — what feeds the bloom is clamped per channel after the threshold (Godot glow_hdr_luminance_cap 12)');
+console.log('CAP — Godot\'s glow first pass: threshold, knee and cap on the exposed colour');
 {
   setBloom(1); frame();
   const p = live();
   const { bloom: bloomNode } = await import('../../client/node_modules/three/examples/jsm/tsl/display/BloomNode.js');
   const { vec4 } = await import('../../client/node_modules/three/build/three.tsl.js');
   const stockNode = bloomNode(vec4(0), 1, 0, 0), stock = stockNode.highPassFn; stockNode.dispose();
-  check('P9 the cap is a named constant at Godot\'s default, 12 (scene linear units before exposure)', post.BLOOM_LUMINANCE_CAP === 12, post.BLOOM_LUMINANCE_CAP);
+  check('P9 Godot\'s glow defaults, named: threshold 1 (glow_hdr_threshold), knee 2 (glow_hdr_scale), cap 12 (glow_hdr_luminance_cap)', post.BLOOM_THRESHOLD === 1 && post.BLOOM_KNEE === 2 && post.BLOOM_LUMINANCE_CAP === 12, [post.BLOOM_THRESHOLD, post.BLOOM_KNEE, post.BLOOM_LUMINANCE_CAP]);
+  // Godot compares and caps the EXPOSED colour (copy.glsl: color *= glow_exposure, then the threshold and the cap); three
+  // applies exposure later, in the output pass's tone curve, so the uniforms carry each value / exposure, every frame
+  const at = (e, tm = THREE.ACESFilmicToneMapping) => { renderer.toneMappingExposure = e; renderer.toneMapping = tm; frame(); const g = live()?.glow, c = live()?.cap;
+    return g && c ? [g.threshold.value, g.smoothWidth.value, c.value].map((v) => Math.round(v * 1e6) / 1e6) : null; };
+  const made = pipelinesMade, e2 = at(2), eHalf = at(0.5), none = at(2, THREE.NoToneMapping), e1 = at(1);
+  renderer.toneMappingExposure = 1; renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  const eq = (a, b) => !!a && a.every((v, i) => Math.abs(v - b[i]) < 1e-6);
+  check('P9b threshold, knee and cap apply after exposure: at exposure 2 the uniforms read 0.5 / 1 / 6, at 0.5 they read 2 / 4 / 24, at 1 they read 1 / 2 / 12', eq(e2, [0.5, 1, 6]) && eq(eHalf, [2, 4, 24]) && eq(e1, [1, 2, 12]), { e2, eHalf, e1 });
+  check('P9b …with no tone curve three applies no exposure, so neither do they (1 / 2 / 12 at exposure 2)', eq(none, [1, 2, 12]), none);
+  check('P9b …an exposure edit moves uniforms and builds nothing', live() === p && pipelinesMade === made, { same: live() === p, built: pipelinesMade - made });
   check('P9 …and the live BloomNode\'s high pass is ours (capped), not three\'s stock one', !!p?.glow && typeof p.glow.highPassFn === 'function' && p.glow.highPassFn !== stock, typeof p?.glow?.highPassFn);
 }
 

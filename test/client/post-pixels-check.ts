@@ -3,6 +3,7 @@
 // path's picture (tone mapping and the output colour space applied once, after bloom: three moves both into the
 // pipeline's output pass), a bright emitter does glow round its edge, the pipeline's targets exist only while it does,
 // and its scene pass follows the drawing buffer when the pixel ratio changes.
+// Godot's glow first pass (copy.glsl): threshold 1, knee 2, cap 12, on the brightest channel of the EXPOSED colour (PX6-PX8).
 //   bun test/client/post-pixels-check.ts   (its own scratch server, world and Chromium)
 // WebGL 2 only: headless Chromium here has a WebGPU adapter but destroys its device at once (the harness's GPU guard
 // says the same), so the WebGPU picture is the live check's; post-test pins the WebGPU-specific shape (the error scope).
@@ -49,12 +50,14 @@ try {
     const c2 = document.createElement('canvas'); c2.width = W; c2.height = H; const g2 = c2.getContext('2d', { willReadFrequently: true });
     const grab = () => { g2.clearRect(0, 0, W, H); g2.drawImage(cv, 0, 0); return g2.getImageData(0, 0, W, H).data; };
     // one frame of either path, read back in the same task
-    const plainFrame = () => { renderer.setRenderTarget(null); renderer.render(S, cam); return grab(); };
+    // exposure held the same way (sky.js applyTuning rewrites it ~1 Hz): null = whatever the page has
+    const holdE = () => { if (g.__want?.exposure != null) renderer.toneMappingExposure = g.__want.exposure; };
+    const plainFrame = () => { holdE(); renderer.setRenderTarget(null); renderer.render(S, cam); return grab(); };
     // the test's strengths, held: a ticking sky re-applies its tuning ~1 Hz (sky.js updateSky → render → applyTuning), and
     // that hands post.js the WORLD's bloom (none here) between our frames; every frame of ours re-asserts the test's value
-    const post = await import('/lib/render/post.js'); g.__want = { bloom: 0, ao: 0 };
+    const post = await import('/lib/render/post.js'); g.__want = { bloom: 0, ao: 0, exposure: 1 };
     g.__setB = (v) => { g.__want.bloom = v; post.setBloom(v); }; g.__setA = (v) => { g.__want.ao = v; post.setAo?.(v); };
-    const hold = () => { post.setBloom(g.__want.bloom); post.setAo?.(g.__want.ao); };
+    const hold = () => { post.setBloom(g.__want.bloom); post.setAo?.(g.__want.ao); holdE(); };
     const postFrame = async () => { hold(); const d = post.postPass(renderer, S, cam); if (d) d(); else renderer.render(S, cam); return grab(); };
     // frames until two in a row read the same (a WebGL program links in parallel and pops in a frame late, syncgate.js)
     const settle = async (f) => { let prev = null; for (let i = 0; i < 90; i++) { await new Promise((r) => requestAnimationFrame(r)); const px = await f(); if (prev && px.every((v, j) => v === prev[j])) return px; prev = px; } return null; };
@@ -122,7 +125,9 @@ try {
   const cap = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js'), T = p.THREE;
     const hot = new T.Mesh(new T.SphereGeometry(0.8, 32, 16), new T.MeshStandardNodeMaterial({ color: 0x000000, emissive: 0xffffff, emissiveIntensity: 60 }));
     p.S.add(hot); await p.renderer.compileAsync(p.S, p.cam);
+    globalThis.__want.exposure = 2;   // the cap is on the exposed colour (Godot): at exposure 2 the scene-linear target holds 12 / 2
     globalThis.__setB(1.5); await p.settle(p.postFrame);
+    globalThis.__want.exposure = 1;
     const rt = post.postDebug()._pipe?.glow?._renderTargetBright; if (!rt) return { error: 'no bright target' };
     const [cx, cy] = p.proj(hot), x = Math.round(cx * rt.width / p.W), y = Math.round(rt.height / 2);   // the emitter sits at the vertical centre: either y origin reads it
     const raw = await p.renderer.readRenderTargetPixelsAsync(rt, x - 1, y - 1, 3, 3);
@@ -131,7 +136,22 @@ try {
     p.S.remove(hot); globalThis.__setB(0); await p.postFrame();
     return { failed: post.postDebug().failed, size: [rt.width, rt.height], at: [x, y], max: Math.max(...rgb), rgb, type: raw?.constructor?.name };`);
   console.log(`  · ${JSON.stringify(cap)}`);
-  check("PX6 an emitter at 60× white feeds the bloom 12 per channel, not 60 (Godot's glow_hdr_luminance_cap, clamped after the threshold)", !cap.error && Math.abs(cap.max - 12) < 0.05, JSON.stringify(cap));
+  check("PX6 an emitter at 60× white, exposure 2, feeds the bloom 6 per channel (12 exposed: Godot's glow_hdr_luminance_cap, on the exposed colour after the threshold), not 60 or 12", !cap.error && Math.abs(cap.max - 6) < 0.05, JSON.stringify(cap));
+
+  // PX7, PX8: Godot's glow first pass on the exposed colour: feedback = smoothstep(1, 3, max(r, g, b) × exposure).
+  // The glow is the ring round an emitter, with the pipeline, less the same ring plain, at the same exposure.
+  const knee = await js(`const p = globalThis.__pp, T = p.THREE;
+    const ringGlow = async (emissive, k, e) => {
+      const m = new T.Mesh(new T.SphereGeometry(0.45, 32, 16), new T.MeshStandardNodeMaterial({ color: 0x000000, emissive, emissiveIntensity: k }));
+      m.position.set(1.6, 0, 0); p.S.add(m); await p.renderer.compileAsync(p.S, p.cam); globalThis.__want.exposure = e;
+      globalThis.__setB(0); const a = await p.settle(p.plainFrame); globalThis.__setB(3); const b = await p.settle(p.postFrame);
+      const [cx, cy] = p.proj(m), r = 0.45 / (2 * Math.tan(25 * Math.PI / 180) * 6) * p.H, ring = (px) => p.lum(px, cx, cy, r * 1.4, r * 2.4);
+      p.S.remove(m); globalThis.__want.exposure = 1; globalThis.__setB(0); await p.postFrame();
+      return a && b ? Math.round((ring(b) - ring(a)) * 100) / 100 : null; };
+    return { red25: await ringGlow(0xff0000, 2.5, 1), white07e1: await ringGlow(0xffffff, 0.7, 1), white07e4: await ringGlow(0xffffff, 0.7, 4) };`);
+  console.log(`  · ${JSON.stringify(knee)}`);
+  check("PX7 the threshold reads the brightest channel (Godot), not luminance: a pure red emitter at 2.5 glows (its luminance, 0.53, is under the threshold)", knee.red25 != null && knee.red25 > 2, JSON.stringify(knee));
+  check("PX8 the threshold is on the exposed colour: a white emitter at 0.7 does not glow at exposure 1 and does at exposure 4 (2.8 exposed)", knee.white07e1 != null && Math.abs(knee.white07e1) <= 1 && knee.white07e4 > 2, JSON.stringify(knee));
 
   const real = errors.filter((e) => !/popErrorScope|sky finish/.test(e));
   check("PX5 no page errors", real.length === 0, JSON.stringify(real.slice(0, 4)));
