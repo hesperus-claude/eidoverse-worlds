@@ -489,6 +489,41 @@ if (G) {
 }
 
 if (G) {
+  // ---- rows for the mutants the rows above let live (the final mutant batch of 11-27): range, the doorway, nested rooms,
+  // a thing riding a moving part
+  const look = (x, y, z) => { core.camera.position.set(x, y, z); core.camera.updateMatrixWorld(true); };
+  const ids = () => G.giDebug().grids.map((g) => g.id), inP = (g) => proxyMeshes().includes(g.children[0].geometry);
+  await fresh(); look(0, 1.6, 0);
+  LR.requestLight('complight:in', { authored: true, pos: [0, 2.5, 0], intensity: 20, range: 6, decay: 2 });
+  LR.requestLight('complight:away', { authored: true, pos: [0, 2.5, 30], intensity: 20, range: 3, decay: 2 });   // 28 m past the wall, its reach 3 m
+  St.hydrate(giRoom({ bounces: 0 })); await run(300);
+  const L = (LP.bakes.at(-1)?.children ?? []).filter((o) => o.isLight);
+  check('S1 a lamp whose reach ends far short of the volume lights no part of the bake', L.length === 1 && L[0].position.z === 0, L.map((l) => l.position.toArray()));
+  LR.releaseLight('complight:in'); LR.releaseLight('complight:away');
+
+  await fresh();
+  const side = (x) => ({ pos: [x, 1.5, 0], zone: { shape: 'box', size: [3, 3, 3] }, 'gi-volume': { bounces: 0 } });
+  look(1, 1.6, 0); St.hydrate({ entities: { walls: { pos: [0, 0, 0] }, a: side(1.5), b: side(4.5) } }); await run(300);
+  const first = ids();
+  look(3.2, 1.6, 0); await run(300);
+  const door = ids(), madeAtDoor = LP.made.length;
+  look(4.6, 1.6, 0); await run(300);
+  check('S2 two rooms side by side: a step through the door into the next keeps the first room\'s grid (a live grid holds its ground for a metre); a step further swaps it',
+    same(first, ['a']) && same(door, ['a']) && madeAtDoor === 1 && same(ids(), ['b']) && LP.made.length === 2, { first, door, madeAtDoor, last: ids(), made: LP.made.length });
+
+  await fresh(); look(0, 1.6, 0);
+  St.hydrate({ entities: { walls: { pos: [0, 0, 0] }, hall: { pos: [0, 5, 0], zone: { shape: 'box', size: [20, 10, 20] }, 'gi-volume': { bounces: 0 } }, room: side(0) } }); await run(300);
+  check('S3 a room inside a hall, the view in the room: the room\'s grid (the smallest box the view stands in)', same(ids(), ['room']), ids());
+
+  await fresh();
+  const house = box(0, 1.5, 0, 2.9), door2 = box(0, 1, 1.4, 0.8), sign = box(0, 0.3, 0.1, 0.2);
+  door2.name = 'Door'; house.add(door2); door2.add(sign);   // a socket that rides a part goes into the part's node (models.js execMount)
+  roomMeshes.set('house', house); roomMeshes.set('sign', sign);
+  St.hydrate(giRoom({ bounces: 0 }, { house: { pos: [0, 0, 0], openable: { open: false, part: 'Door' } }, sign: { pos: [0, 1.3, 1.5], parent: { to: 'house' }, socket: { part: 'Door' } } })); await run(300);
+  check('S4 a thing socketed on a moving part (a sign on a door that opens) swings with it, so it is no part of the bake; the house\'s walls are', !inP(sign) && inP(house), { sign: inP(sign), house: inP(house) });
+}
+
+if (G) {
   // (2) where GI can't run it is off, and says why where the lead's capture rig looks (giDebug)
   St.reset(); const before = quiet();
   core.renderer.backend = { isWebGLBackend: true, extensions: { has: () => false } };
