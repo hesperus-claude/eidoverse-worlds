@@ -146,22 +146,28 @@ export const zoneChangeTouches = (ev, entities, owners) => touches(ev, entities,
 /** absent interior fields: white, at 0.25 (a dim neutral room; the energy means what sky.ambientLightEnergy's does) */
 export const INTERIOR_DEFAULTS = Object.freeze({ color: Object.freeze([1, 1, 1]), energy: 0.25 });
 const rgb01 = (c) => v3(c) && c.every((x) => x >= 0 && x <= 1);
+/** the most energy a reader takes (the door's bound too, componentspec interior) */
+export const INTERIOR_ENERGY_MAX = 16;
+const finN = (v, n) => Array.isArray(v) && v.length === n && v.every(fin);
 /** The interior boxes in world space, in zone order (cmp): [{id, global, priority, weight, blend, color, energy, center?, size?, q?,
  *  toLocal?}]. A box or global zone only (the door refuses the other shapes); zone.weight 0..1 (absent 1), zone.blend m
- *  (absent 0: a hard edge). A switched-off thing, or one under one, holds none. */
-export function interiorsOf(st, { poseOf = (id) => worldPose(st, id) } = {}) {
+ *  (absent 0: a hard edge); energy clamped to 0..INTERIOR_ENERGY_MAX here as well as at the door. A switched-off thing, or one
+ *  under one, holds none, and nor does a box whose pose is not finite (a NaN turn would put the whole world inside it).
+ *  `ids`: read only these (a renderer's per-frame pass over the holders it found); absent, every entity. */
+export function interiorsOf(st, { poseOf = (id) => worldPose(st, id), ids = null } = {}) {
   const out = [];
-  for (const id of Object.keys(st?.entities ?? {})) {
+  if (!st?.entities) return out;
+  for (const id of ids ?? Object.keys(st.entities)) {
     const c = st.entities[id]?.c ?? {}, a = c.interior;
     if (id === "@world" || !a || typeof a !== "object" || !c.zone || offChain(st, id)) continue;
     const z = c.zone, priority = Number.isInteger(z.priority) ? z.priority : 0;
     const weight = fin(z.weight) ? Math.max(0, Math.min(1, z.weight)) : 1, blend = fin(z.blend) && z.blend > 0 ? z.blend : 0;
     const color = rgb01(a.ambientColor) ? [...a.ambientColor] : [...INTERIOR_DEFAULTS.color];
-    const energy = fin(a.ambientColorEnergy) && a.ambientColorEnergy >= 0 ? a.ambientColorEnergy : INTERIOR_DEFAULTS.energy;
+    const energy = fin(a.ambientColorEnergy) && a.ambientColorEnergy >= 0 ? Math.min(INTERIOR_ENERGY_MAX, a.ambientColorEnergy) : INTERIOR_DEFAULTS.energy;
     const base = { id, priority, weight, blend, color, energy };
     if (z.global === true) { out.push({ ...base, global: true }); continue; }
     if (z.shape !== "box" || !v3(z.size)) continue;
-    const pose = poseOf(id); if (!pose) continue;
+    const pose = poseOf(id); if (!pose || !finN(pose.pos, 3) || (pose.q != null && !finN(pose.q, 4))) continue;
     const scale = v3(pose.scale) ? pose.scale.map(Math.abs) : [1, 1, 1], q = pose.q ?? [0, 0, 0, 1], center = [...pose.pos];
     out.push({ ...base, global: false, center, q, size: z.size.map((x, i) => Math.abs(x) * scale[i]), toLocal: (p) => qRotate(qConj(q), [p[0] - center[0], p[1] - center[1], p[2] - center[2]]) });
   }
@@ -174,14 +180,21 @@ export function interiorDistance(b, p) {
   for (let k = 0; k < 3; k++) { const d = Math.abs(l[k]) - b.size[k] / 2; if (d > 0) s += d * d; }
   return Math.sqrt(s);
 }
+/** metres: a kept box this close to the first box left out fades its weight to 0 there, so the handover is never a swap */
+export const INTERIOR_HANDOVER = 2;
 /** The interiors the GPU holds (`max` slots, the renderer's budget): the nearest to `eye` first (0 inside; a global one 0),
- *  then the higher priority, then the later id. Returned in blend order: the highest priority first, a tie the later id
- *  first (the zone rule: the later id wins), each taking what those before it left of the sky. A thousand boxes cost a
- *  visitor's GPU what `max` do. */
-export function interiorSlots(list, eye, max) {
+ *  then the higher priority, then the later id. When some are left out, a kept box outside the eye's reach fades with how
+ *  near it is to the first one left out (weight × (edge − d) / handover, 0 at the edge): a box is at weight 0 when it is
+ *  handed over, so an eye jittering at the handover changes nothing on screen (a box the eye is inside keeps its weight).
+ *  Returned in blend order: the highest priority first, a tie the later id first (the zone rule: the later id wins), each
+ *  taking what those before it left of the sky. A thousand boxes cost a visitor's GPU what `max` do. */
+export function interiorSlots(list, eye, max, { handover = INTERIOR_HANDOVER } = {}) {
   const n = Math.max(0, Math.floor(max) || 0);
-  const kept = (list ?? []).map((b) => ({ b, d: interiorDistance(b, eye) }))
-    .sort((x, y) => x.d - y.d || y.b.priority - x.b.priority || (x.b.id < y.b.id ? 1 : x.b.id > y.b.id ? -1 : 0)).slice(0, n).map((x) => x.b);
+  const ranked = (list ?? []).map((b) => ({ b, d: interiorDistance(b, eye) }))
+    .sort((x, y) => x.d - y.d || y.b.priority - x.b.priority || (x.b.id < y.b.id ? 1 : x.b.id > y.b.id ? -1 : 0));
+  const edge = ranked.length > n ? ranked[n].d : Infinity;
+  const fade = (d) => (d === 0 || edge === Infinity ? 1 : Math.max(0, Math.min(1, (edge - d) / handover)));
+  const kept = ranked.slice(0, n).map(({ b, d }) => { const f = fade(d); return f === 1 ? b : { ...b, weight: b.weight * f }; });
   return kept.sort((x, y) => y.priority - x.priority || (x.id < y.id ? 1 : x.id > y.id ? -1 : 0));
 }
 const INTERIOR_READS = new Set(["zone", "interior", "disabled"]);

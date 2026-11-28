@@ -2673,7 +2673,7 @@
   },
   "docs": {
    "ambientColor": "the colour of the light that stands in for the sky's inside, a linear [r, g, b] 0..1 (Godot ReflectionProbe ambient_color; as sky.ambientLightColor: a hue, its brightness the energy)",
-   "ambientColorEnergy": "how bright the inside's ambient looks, 0..16, the same at every hour; the same number looks the same as sky.ambientLightEnergy (a white surface returns energy / π). Godot ReflectionProbe ambient_color_energy"
+   "ambientColorEnergy": "how bright the inside's ambient looks, 0..16, the same at every hour (a room with no lamp keeps this glow at night; a zone weight under 1 lets that share of the sky's own, which follows the day, back in). On a matte surface the same number looks the same as sky.ambientLightEnergy (a white surface returns energy / π); a metal also reflects it as a plain grey room, where an ambient light gives a metal nothing. Godot ReflectionProbe ambient_color_energy"
   },
   "on": "thing"
  },

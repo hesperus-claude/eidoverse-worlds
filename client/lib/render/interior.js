@@ -48,13 +48,19 @@ export function makeInterior(THREE, TSL) {
   })().toVar('interiorTerm');
   const skyLeft = term.w, standIn = term.xyz;
 
-  // the sky's hemisphere: three r186 HemisphereLightNode.setup, its irradiance × what is left of the sky
+  // Does this material read the scene's environment node? three r186 MeshStandardNodeMaterial.setupEnvironment: only a
+  // MeshStandardNodeMaterial (and its kin: physical, and those built on them) with no envNode or envMap of its own. The
+  // rest (Lambert, Phong, Toon, MToon: every VRM body) never see the environment's stand-in.
+  const readsSceneEnvironment = (builder) => builder.material?.isMeshStandardNodeMaterial === true && !builder.material.envNode && !builder.material.envMap && builder.environmentNode != null;
+  // the sky's hemisphere: three r186 HemisphereLightNode.setup, its irradiance × what is left of the sky; for a material
+  // that doesn't read the scene's environment, the stand-in too, as three's AmbientLightNode adds it (irradiance += A)
   class InteriorHemisphereLightNode extends THREE.HemisphereLightNode {
     static get type() { return 'InteriorHemisphereLightNode'; }
     setup(builder) {
       const { colorNode, groundColorNode, lightDirectionNode } = this;
       const hemiDiffuseWeight = normalWorld.dot(lightDirectionNode).mul(0.5).add(0.5);
       builder.context.irradiance.addAssign(mix(groundColorNode, colorNode, hemiDiffuseWeight).mul(skyLeft));
+      if (!readsSceneEnvironment(builder)) builder.context.irradiance.addAssign(standIn);
     }
   }
   class InteriorHemisphereLight extends THREE.HemisphereLight {}
@@ -64,7 +70,7 @@ export function makeInterior(THREE, TSL) {
 
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1);
   const FAR = 1e9;   // a global zone's half size: everywhere is inside
-  let written = [];
+  let written = [];   // what the slots hold, for debug: [{id, center, weight}]
   /** Write the slots (shared/zone.js interiorSlots: at most INTERIOR_SLOTS, in blend order): values only, never a node. */
   function setSlots(slots) {
     const list = (slots ?? []).slice(0, N);
@@ -79,8 +85,8 @@ export function makeInterior(THREE, TSL) {
     });
     for (let i = list.length; i < N; i++) { toBox.array[i].identity(); extent.array[i].set(0, 0, 0, 0); ambient.array[i].set(0, 0, 0, 0); }
     count.value = list.length;
-    written = list.map((b) => b.id);
+    written = list.map((b) => ({ id: b.id, center: b.global ? null : [...b.center], weight: b.weight ?? 1 }));
   }
-  const debug = () => ({ slots: N, count: count.value, ids: [...written] });
-  return { InteriorHemisphereLight, InteriorHemisphereLightNode, environmentNode, setSlots, debug, term, uniforms: { toBox, extent, ambient, count } };
+  const debug = () => ({ slots: N, count: count.value, ids: written.map((w) => w.id), held: written.map((w) => ({ ...w })) });
+  return { InteriorHemisphereLight, InteriorHemisphereLightNode, environmentNode, setSlots, debug };
 }

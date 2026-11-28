@@ -34,7 +34,7 @@ onWorldChange((ev) => { if (interiorChangeTouches(ev, state.st.entities, owners)
 export function updateInteriors() {
   if (dirty) { dirty = false; rebuilds++; fold = foldOfView(state.st); owners.clear(); for (const b of interiorsOf(fold)) owners.add(b.id); }
   if (!owners.size) { if (boxes.length) { boxes = []; interior.setSlots([]); } return; }
-  boxes = interiorsOf(fold, { poseOf: (id) => poseFor(fold, id) });
+  boxes = interiorsOf(fold, { poseOf: (id) => poseFor(fold, id), ids: owners });   // the holders only: never a walk of every entity a frame
   if (boxes.length > INTERIOR_SLOTS && !warned) { warned = true; report('interior', new Error(`the renderer reads the ${INTERIOR_SLOTS} interior boxes nearest the eye; the rest let the sky in until you come near`)); }
   camera.getWorldPosition(_eye);
   interior.setSlots(interiorSlots(boxes, [_eye.x, _eye.y, _eye.z], INTERIOR_SLOTS));

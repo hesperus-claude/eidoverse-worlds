@@ -346,7 +346,9 @@ lives in whatever reads it — a renderer, the authority's checks, a script.
   0.25; the same number looks the same as `sky.ambientLightEnergy`). The zone's `blend` fades it outside the box, its
   `weight` scales it, and where boxes overlap the higher `priority` is in front (a tie: the later id), each taking what
   those in front left of the sky. The sun, the fill light and lamps are not cut. A renderer reads a bounded number of
-  boxes, the nearest the eye first; the rest let the sky in. shared/zone.js `interiorsOf`/`interiorSlots` is the one reading.
+  boxes, the nearest the eye first; the rest let the sky in, and a kept box fades out as it nears the first one left out
+  (never a swap on screen). A box whose pose is not finite holds nothing. shared/zone.js `interiorsOf`/`interiorSlots` is
+  the one reading.
 - **A physics volume is `physics-volume {kind, factor?, modes?}`** on a thing with a box or global `zone` (Godot Area3D's
   overrides, Unreal's Physics Volume): with `kind: speed`, a body inside moves at `factor` × its own speed (walking,
   running, wading, the stroke, the 3D swim; 0.05..10, absent 1), in the movement modes it names (`modes`, a non-empty list of
