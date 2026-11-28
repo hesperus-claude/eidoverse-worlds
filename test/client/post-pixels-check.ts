@@ -56,6 +56,8 @@ try {
     // the test's strengths, held: a ticking sky re-applies its tuning ~1 Hz (sky.js updateSky → render → applyTuning), and
     // that hands post.js the WORLD's bloom (none here) between our frames; every frame of ours re-asserts the test's value
     const post = await import('/lib/render/post.js'); g.__want = { bloom: 0, ao: 0, exposure: 1 };
+    // this page runs WebGL 2, where ew-ao is off by default (post.js aoDefault): the AO rows choose it on, as a viewer would
+    const aoDefaultHere = post.aoPref?.(); post.setAoPref?.(true);
     g.__setB = (v) => { g.__want.bloom = v; post.setBloom(v); }; g.__setA = (v) => { g.__want.ao = v; post.setAo?.(v); };
     const hold = () => { post.setBloom(g.__want.bloom); post.setAo?.(g.__want.ao); holdE(); };
     const postFrame = async () => { hold(); const d = post.postPass(renderer, S, cam); if (d) d(); else renderer.render(S, cam); return grab(); };
@@ -66,9 +68,10 @@ try {
     const proj = (o) => { const v = o.position.clone().project(cam); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; };
     await renderer.compileAsync(S, cam);
     g.__pp = { THREE, renderer, S, cam, lit, hot, hold, grab, plainFrame, postFrame, settle, diff, lum, proj, W, H };
-    return { backend: renderer.backend.isWebGLBackend ? 'webgl' : 'webgpu', W, H, samples: renderer.samples };`);
+    return { backend: renderer.backend.isWebGLBackend ? 'webgl' : 'webgpu', W, H, samples: renderer.samples, aoDefaultHere };`);
   console.log(`  · ${JSON.stringify(setup)}`);
   check("PX-setup the page runs WebGL 2, as asked", setup.backend === "webgl", JSON.stringify(setup));
+  check("PX-setup …where ew-ao, unchosen, is off (a viewer turns it on; the rows below do)", setup.aoDefaultHere === false, JSON.stringify(setup));
 
   // PX1: nothing above threshold. The plain frame, then the pipeline at strength 1.5: the same picture
   const same = await js(`const p = globalThis.__pp, post = await import('/lib/render/post.js');

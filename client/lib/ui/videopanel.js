@@ -173,7 +173,7 @@ export function initVideoPanel() {
       'Lets what is brighter than white glow round its edges (lamps, fire, lit windows) as strongly as the world asks. Off saves a few full-screen passes; a world that asks for none looks the same either way, and costs nothing. Not drawn in a headset.',
       bloomPref(), (on) => { setBloomPref(on); flashHint(`glow: ${on ? 'on' : 'off'}`); }));
     body.appendChild(checkRow('ambient occlusion',
-      'Shades corners, contacts and creases where ambient light can\u2019t reach (under a table, where a chair meets the floor) as strongly as the world asks; direct light is never darkened. Off saves a depth-and-normal pass and the occlusion pass; a world that asks for none looks the same either way, and costs nothing. Not drawn in a headset.',
+      'Shades corners, contacts and creases where ambient light can\u2019t reach (under a table, where a chair meets the floor) as strongly as the world asks; direct light is never darkened. Off saves a depth-and-normal pass and the occlusion pass; a world that asks for none looks the same either way, and costs nothing. Off by default on the WebGL 2 renderer, where drawing the scene a second time costs the most; on by default on WebGPU. Not drawn in a headset.',
       aoPref(), (on) => { setAoPref(on); flashHint(`ambient occlusion: ${on ? 'on' : 'off'}`); }));
 
     body.appendChild(selectRow('particles',

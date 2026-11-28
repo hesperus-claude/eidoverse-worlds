@@ -17,7 +17,7 @@
 // session presents the eye pass is the plain render; the pipeline is kept (not rebuilt) for the desktop after exit.
 // A pipeline that fails (a throw building or drawing it; a WebGPU validation error in its first frames) is dropped for
 // the rest of the page, the frame drawn plain, a clientlog line written; postDebug() says why. A reload tries again.
-import { THREE } from '../core.js';
+import { THREE, renderer as pageRenderer } from '../core.js';
 import { tee } from '../base.js';
 import { pass, mrt, normalView, screenUV, context, Fn, smoothstep, max, vec4, uniform } from 'three/tsl';
 import { bloom as bloomNode } from 'three/addons/tsl/display/BloomNode.js';
@@ -59,11 +59,17 @@ const WATCH_FRAMES = 3;                             // a new pipeline's first fr
 
 const readPref = (key) => { try { return localStorage.getItem(key) !== 'off'; } catch { return true; } };
 const writePref = (key, on) => { try { localStorage.setItem(key, on ? 'on' : 'off'); } catch { /* private mode */ } };
-let bloomOn = readPref(BLOOM_PREF), aoOn = readPref(AO_PREF);
+let bloomOn = readPref(BLOOM_PREF);
 export const bloomPref = () => bloomOn;
 export function setBloomPref(on) { bloomOn = !!on; writePref(BLOOM_PREF, on); }
-export const aoPref = () => aoOn;
-export function setAoPref(on) { aoOn = !!on; writePref(AO_PREF, on); }
+// ew-ao: what this viewer chose ('on' | 'off'), or nothing. Unchosen, it is off on the WebGL 2 backend (every headset's,
+// and the fallback where WebGPU is missing) and on elsewhere: the pre-pass draws the scene a second time, and WebGL 2's
+// frame tracks draw calls (render lab, RTX 4080, 11-27). Read at each frame, so a WebGPU page that falls back at init
+// gets the WebGL 2 default.
+let aoChosen = (() => { try { const v = localStorage.getItem(AO_PREF); return v === 'on' || v === 'off' ? v : null; } catch { return null; } })();
+export const aoDefault = (r = pageRenderer) => !r?.backend?.isWebGLBackend;
+export const aoPref = (r = pageRenderer) => (aoChosen ? aoChosen === 'on' : aoDefault(r));
+export function setAoPref(on) { aoChosen = on ? 'on' : 'off'; writePref(AO_PREF, on); }
 
 const strengthOf = (s, max) => { const n = typeof s === 'number' ? s : NaN; return Number.isFinite(n) && n > 0 ? Math.min(n, max) : 0; };
 let bloomStrength = 0, aoStrength = 0;
@@ -77,12 +83,13 @@ let failed = null;         // why the pipeline was dropped for this page
 let builds = 0, active = false, why = 'no pass asked: the world sets no sky.bloom or sky.ao';
 
 // the passes this frame asks for ('' = none, else 'bloom', 'ao' or 'ao+bloom'), or why none
-function wanted() {
+function wanted(renderer) {
+  const aoOn = aoPref(renderer);
   if (failed) return ['', `failed: ${failed}`];
   const bloomAsked = bloomStrength > 0, aoAsked = aoStrength > 0;
   if (!bloomAsked && !aoAsked) return ['', 'no pass asked: the world sets no sky.bloom or sky.ao'];
   const key = [aoAsked && aoOn && 'ao', bloomAsked && bloomOn && 'bloom'].filter(Boolean).join('+');
-  if (!key) return ['', `off: this viewer's ${[bloomAsked && 'ew-bloom', aoAsked && 'ew-ao'].filter(Boolean).join(' and ')}`];
+  if (!key) return ['', `off: this viewer's ${[bloomAsked && 'ew-bloom', aoAsked && (aoChosen ? 'ew-ao' : 'ew-ao (off by default on WebGL 2)')].filter(Boolean).join(' and ')}`];
   return [key, null];
 }
 
@@ -192,7 +199,7 @@ function draw(renderer, scene, camera, key) {
 /** The live frame's main pass through the pipeline, or null for main's plain renderer.render (render.js renderWorld,
  *  through DrawBatches.render's `draw`). Builds, keeps or disposes the pipeline as the world and viewer ask. */
 export function postPass(renderer, scene, camera) {
-  const [key, whyNot] = wanted();
+  const [key, whyNot] = wanted(renderer);
   if (!key) { teardown(); active = false; why = whyNot; return null; }
   if (renderer.xr?.isPresenting) { active = false; why = 'xr: the headset\'s eye pass draws plain'; return null; }
   if (built && (built.key !== key || built.scene !== scene || built.camera !== camera)) teardown();
@@ -201,7 +208,7 @@ export function postPass(renderer, scene, camera) {
 
 /** Debug readout (EW.post): is the pipeline drawing, why not, the live strength. `_pipe`: the live objects, for tests. */
 export const postDebug = () => ({
-  active, why, bloom: bloomStrength, pref: bloomOn, ao: aoStrength, aoPref: aoOn, built: !!built, passes: built?.key ?? '', builds, failed,
+  active, why, bloom: bloomStrength, pref: bloomOn, ao: aoStrength, aoPref: aoPref(), aoChosen, built: !!built, passes: built?.key ?? '', builds, failed,
   target: built ? [built.scenePass.renderTarget.width, built.scenePass.renderTarget.height] : null,
   _pipe: built,
 });
