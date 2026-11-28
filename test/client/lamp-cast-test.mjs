@@ -75,11 +75,27 @@ if (CASE) {
   console.log(`BOOT — ew-lamp-shadows ${C.stored ?? '(absent)'}: ${N} casting slot(s)`);
   const born = d()._slots.map((pl) => pl.castShadow);
   check(`born: slots 0..${N - 1} cast and the rest do not (pipeline shape)`, born.every((c, i) => c === (i < N)), born.join(','));
+  // born drawn (casting-slot-test has the why): a casting slot draws only for a holder that asked, so a slot first drawn
+  // when its first asker arrives after the world's models breaks every later frame on a real GPU (three r186 recreates
+  // the depth texture at a map's first render). More casting slots than askers is the common case here: EVERY one of
+  // them asks three for its one draw at birth, not only slot 0.
+  const bornAsk = d()._slots.slice(0, N).map((pl) => pl.shadow.needsUpdate === true);
+  check(`born drawn: each of the ${N} casting slot(s) asks three for one draw at birth, before any light`, bornAsk.length === N && bornAsk.every(Boolean), bornAsk.join(','));
   check(`rigDebug().shadows.castingSlots is ${N}`, d().shadows.castingSlots === N, d().shadows.castingSlots);
   check(`one row per casting slot in rigDebug().shadows.slots`, castRows().length === N, castRows().length);
   check('lampShadowCount() reads the stored choice back', rig.lampShadowCount?.() === N, rig.lampShadowCount?.());
   check('LAMP_SHADOW_CHOICES are 1, 2, 4, 8', JSON.stringify(rig.LAMP_SHADOW_CHOICES) === '[1,2,4,8]', rig.LAMP_SHADOW_CHOICES);
   check('an idle casting slot draws nothing (no holder asked)', castRows().length === N && castRows().every((s) => !s.drawing), castRows());
+  { // a resize while no slot draws (nobody asked yet) asks EVERY casting slot for its draw in that frame, not only slot 0:
+    // three refreshes a classic material's bind group only in the frame mapSize changes (shadow-fade's resize case)
+    const slotsN = d()._slots.slice(0, N), held = slotsN.map((pl) => pl.shadow.needsUpdate);
+    slotsN.forEach((pl) => { pl.shadow.needsUpdate = false; });
+    rig.setShadowRes(4096);
+    const asked = slotsN.map((pl) => pl.shadow.needsUpdate === true);
+    rig.setShadowRes(2048);
+    slotsN.forEach((pl, i) => { pl.shadow.needsUpdate = held[i]; });
+    check(`a resolution change with no light asking asks each of the ${N} casting slot(s) to redraw in that frame`, asked.every(Boolean), asked.join(','));
+  }
 
   if (!FULL.includes(CASE)) { check('castShadow never flipped on any slot', shape() === bornShape); out(); process.exit(0); }
 

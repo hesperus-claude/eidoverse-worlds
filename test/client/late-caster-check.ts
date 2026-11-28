@@ -16,6 +16,7 @@
 //       against the noise floor of two boots at one size (three r186's RenderTarget.setSize writes the new size onto the
 //       cube texture's image array but the faces are recreated at their birth size: cold read 2026-11-28, 10,306 of
 //       57,600 pixels differed)
+//   LC5 at dial 4 (ew-lamp-shadows 4), four unheld casting slots resized, then four late askers: no GL error, all four draw
 //   bun test/client/late-caster-check.ts   (its own scratch server, library, world and Chromium)
 // Where there is no WebGL 2 to force (Windows: headless Chromium there gives a null forced context; any host whose
 // browser falls back to nothing) it prints an OPTIONAL line and checks nothing: these rows need a GL context to read.
@@ -131,6 +132,13 @@ try {
     check("LC4 a lamp's cube map resized live shows what a boot at that size shows (the lamp's shadow is in the frame; two boots at one size agree)",
       a.seen.n > 50 && c4.noise.n >= 0 && c4.noise.n < a.seen.n / 10 && b4.bootVsLive.n >= 0 && b4.bootVsLive.n <= Math.max(5, 2 * c4.noise.n) && a.errs.k === 0,
       JSON.stringify({ seen: a.seen, liveVsBase: a.liveVsBase, bootVsLive: b4.bootVsLive, noise: c4.noise, errs: a.errs }));
+    await page("lc5", { "ew-lamp-shadows": "4" });
+    const s5 = await js(`const g = globalThis, rig = g.rig; rig.setShadowRes(1024); await g.raf(20); const resized = g.errs();
+      for (let i = 0; i < 4; i++) rig.requestLight('lab:late' + i, { authored: true, intensity: 30, range: 6, shadows: true, pos: [0.8 - i * 0.5, 2.2, 1.2], color: 0xffffff });
+      await g.raf(60); const errs = g.errs(); await g.raf(30); const s = rig.rigDebug().shadows;
+      return { n: s.castingSlots, drawing: (s.slots ?? []).map((x) => x.drawing), resized, errs, errs2: g.errs() };`);
+    check("LC5 dial 4: four unheld casting slots resized, then four late askers: all four draw, and no GL error follows",
+      s5.n === 4 && s5.drawing.length === 4 && s5.drawing.every(Boolean) && s5.resized.k === 0 && s5.errs.k === 0 && s5.errs2.k === 0 && consoleGl.length === 0, JSON.stringify({ ...s5, console: consoleGl.slice(0, 2) }));
   }
 } catch (e) { check("the run threw", false, String((e as any)?.stack ?? e)); }
 console.log(`[late-caster-check] ${tally.passed} passed, ${tally.failed} failed${tally.note()}`);
