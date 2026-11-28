@@ -116,6 +116,7 @@ const nearAny = (id) => { const pos = state.st.entities?.[id]?.pos; if (!v3(pos)
 const SHAPES = new Set(['gi-volume', 'zone', 'disabled']);
 onWorldChange((ev) => {
   if (ev?.type === 'reset') { for (const id of [...live.keys()]) drop(id); job = null; baked = null; clearProxy(); refused = []; candidates = []; proxyStats = null; }
+  if (ev?.type === 'change' && (ev.what === 'pose' || ev.what === 'born') && moves(ev.id)) return;   // no part of the bake: a carried cup's poses neither rebake nor hold an owed rebake back
   if (!giTouches(ev, nearAny)) return;
   const { what, comp: name } = ev;
   if (live.size || job || ev.type !== 'change' || what === 'born' || what === 'gone' || what === 'parent' || SHAPES.has(name)) touch();
@@ -132,9 +133,17 @@ function drop(id) { const l = live.get(id); if (!l) return; scene.remove(l.grid)
 
 // What moves is no part of a static bake (Godot's gi_mode: Static bakes, Dynamic is only lit). Main has no per-thing flag, so
 // the components that move a thing decide: carryable (grabbable), simulated or animated (physics dynamic | kinematic), a
-// motion (any slot), an openable; the thing itself or anything it hangs under.
-const MOVES = (c) => !!c && ((c.grabbable !== undefined && c.grabbable?.enabled !== false) || c.openable !== undefined
-  || c.physics?.kind === 'dynamic' || c.physics?.kind === 'kinematic' || Object.keys(c).some((k) => k === 'motion' || k.startsWith('motion:')));
+// motion (any slot), an openable; the thing itself or anything it hangs under. An openable that names a part, and a motion slot
+// that names a node (motion:<slot> {node}), move only that node: the rest of the thing stays in the bake.
+const isMotion = (k) => k === 'motion' || k.startsWith('motion:');
+const MOVES = (c) => !!c && ((c.grabbable !== undefined && c.grabbable?.enabled !== false) || (c.openable !== undefined && typeof c.openable?.part !== 'string')
+  || c.physics?.kind === 'dynamic' || c.physics?.kind === 'kinematic' || Object.keys(c).some((k) => isMotion(k) && typeof c[k]?.node !== 'string'));
+/** The names of a thing's nodes that move while it stands still (openable.part, each motion slot's node). */
+const movingParts = (c) => [...(typeof c?.openable?.part === 'string' ? [c.openable.part] : []), ...Object.keys(c ?? {}).filter((k) => isMotion(k) && typeof c[k]?.node === 'string').map((k) => c[k].node)];
+/** A part by name under `root`: its first descendant so named (world.js findPart's rule). */
+function partNode(root, name) { let hit = null; root.traverse((c) => { if (!hit && c !== root && c.name === name) hit = c; }); return hit; }
+/** Visit `o` and what hangs under it, visible only (Object3D.traverseVisible), never entering a node `cut` says to leave. */
+function walk(o, cut, visit) { if (!o.visible) return; visit(o); for (const c of o.children) if (!cut(c)) walk(c, cut, visit); }
 function moves(id) { const es = state.st.entities ?? {}; for (let k = id, n = 0; k && n < 33; k = es[k]?.parent?.to, n++) if (MOVES(es[k])) return true; return false; }
 
 /** What a bake would see: the opaque, unskinned, static meshes near a volume (never an editor gizmo: a light's bulb) and the
@@ -143,10 +152,15 @@ function moves(id) { const es = state.st.entities ?? {}; for (let k = id, n = 0;
 const _sz = new THREE.Vector3();
 function staticSet(plans) {
   const boxes = plans.map((p) => boxOf(p, 1)), b = new THREE.Box3(), found = [];
-  for (const [id, obj] of objects()) {
-    if (!obj?.parent || moves(id)) continue;
+  // A thing's object holds its children's objects (models.js execMount), so each thing is walked from its own root and the walk
+  // never enters another thing's (each its own), a mover's, or a moving part; a thing hanging under a mover or a moving part is out.
+  const es = state.st.entities ?? {}, roots = new Set(), out = new Set();
+  for (const [id, obj] of objects()) { if (!obj) continue; roots.add(obj); if (moves(id)) out.add(obj); else for (const name of movingParts(es[id])) { const n = partNode(obj, name); if (n) out.add(n); } }
+  const under = (o) => { for (let p = o.parent; p; p = p.parent) if (out.has(p)) return true; return false; };
+  for (const [, obj] of objects()) {
+    if (!obj?.parent || out.has(obj) || under(obj)) continue;
     obj.updateMatrixWorld(true);
-    obj.traverseVisible((x) => {
+    walk(obj, (x) => roots.has(x) || out.has(x), (x) => {
       if (!(x.isMesh || x.isInstancedMesh) || x.isSkinnedMesh || !x.geometry || !x.material || x.userData?.isGizmo) return;
       if ((Array.isArray(x.material) ? x.material : [x.material]).every((m) => m.transparent)) return;
       if (!boxes.some((bx) => bx.intersectsBox(b.setFromObject(x, false)))) return;
