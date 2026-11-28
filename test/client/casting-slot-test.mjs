@@ -36,6 +36,19 @@ const lit = (k) => slotOf(k) >= 0 && (d().slotState[slotOf(k)] || {}).intensity 
 const drawing = () => d().shadows.slotIsCaster;   // the slot's EFFECTIVE casting: shape + map + the uniform half
 const bornShape = d()._slots.map((pl) => pl.castShadow).join(',');
 const shape = () => d()._slots.map((pl) => pl.castShadow).join(',');
+// what the casting slot asks of three at birth, read before any frame and any light (the BORN DRAWN rows below)
+const born = { needsUpdate: lamp().shadow.needsUpdate, intensity: lamp().shadow.intensity, autoUpdate: lamp().shadow.autoUpdate, holder: d().requests.find((r) => r.slot === CAST)?.key ?? null };
+
+console.log('BORN DRAWN — the casting slot\'s map is drawn once at birth, whoever holds it');
+// Why: three r186 destroys and recreates a shadow map's depth texture at the map's FIRST render
+// (Textures.updateRenderTarget), and the bind groups built before that (every classic-material model's) keep the
+// destroyed one. Since the slot draws only for a holder that asked, its first draw would come with its first asker;
+// when that is after the world's models have drawn, every later frame breaks on a real GPU: black on WebGPU
+// ("Destroyed texture [ShadowDepthTexture] used in a submit"), refused draws and missing models on WebGL2 (render lab
+// 2026-11-27). On e0a3991c3 the slot drew from frame 1 whoever held it, so this never showed. The mock cannot show the
+// GPU half; these rows pin the ask, and that it is one draw and not a standing one.
+check('born drawn: the casting slot asks three for one draw at birth, with nobody holding it', born.needsUpdate === true && born.holder === null, born);
+check('born drawn: ...and it is not casting: shown at intensity 0, no standing depth pass', born.intensity === 0 && born.autoUpdate === false, born);
 
 console.log('A PLACED LAMP ALONE — the lab "lamp" world: one point light inside its lantern glass');
 rig.requestLight('complight:streetlamp', { authored: true, intensity: 20, range: 9, pos: [0, 3, -4] });

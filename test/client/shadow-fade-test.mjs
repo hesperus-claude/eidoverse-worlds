@@ -74,7 +74,7 @@ if (CASE) {
   // a holder that asked (11-23), so `held` puts the body lamp's request on it.
   // (The contend case below asks the other question -- whether the lamp
   // actually HOLDS that slot.)
-  const snap = () => { const d = rig.rigDebug(); return { pref: d.shadows.pref, map: renderer.shadowMap.enabled, sun: d.shadows.sunCasting, lamp: d.shadows.slotIsCaster, shapeOn: renderer.shadowMap.enabled && sun.castShadow }; };   // sun/lamp = EFFECTIVE casting: the switch is uniform-level since 09-27
+  const snap = () => { const d = rig.rigDebug(); return { pref: d.shadows.pref, map: renderer.shadowMap.enabled, sun: d.shadows.sunCasting, lamp: d.shadows.slotIsCaster, shapeOn: renderer.shadowMap.enabled && sun.castShadow, bornAsk: lamp().shadow.needsUpdate === true }; };   // sun/lamp = EFFECTIVE casting: the switch is uniform-level since 09-27
 
   const holdLamp = () => { rig.requestLight('lamp:body:janus:1', { keep: true, intensity: 8, range: 10, shadows: true, pos: [0, 1, 0] }); updateRig(1000); };
   if (CASE === 'boot-on' || CASE === 'boot-off') { const boot = snap(); holdLamp(); out({ boot, held: snap() }); }
@@ -370,6 +370,10 @@ const bootOffChecks = (r, c = check) => {
     'slot 0 born casting with shadows off — boot disagrees with the switch');
   c('...nor once the body lamp holds it', r.held.lamp === false,
     'the holder\'s ask overrode the resident\'s switch');
+  // a slot never drawn until the switch turns on would have its FIRST draw then, after the world's models: on a real GPU
+  // that breaks every later frame (three r186 recreates the depth texture at a map's first render; casting-slot-test)
+  c('pref off at boot: the casting slot still asks for its one draw at birth (switching on later is not its first draw)', r.boot.bornAsk === true,
+    'slot 0 never drawn while the switch is off');
 };
 const flipChecks = (r, c = check) => {
   c('setShadows(false) keeps the pipeline shape (no scene recompile)', r.off.shapeOn === true);
