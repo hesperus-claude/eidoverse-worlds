@@ -158,6 +158,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["capsule-recovery", "client/capsule-recovery-test.mjs", 1], // a remote's capsule fallback: bounded retries, the identity guard across takeovers (revived D6)
   ["debug-tabs", "client/debug-tabs-test.ts", 1], // the debug window builds only the chosen tab's groups (revived D6)
   ["governor-xr", "client/governor-xr-test.ts", 1], // in a headset the frame governor never moves the pixel ratio (revived D6)
+  ["governor-refresh", "client/governor-refresh-test.ts", 1], // the governor's shed/restore thresholds follow the display's refresh (a 60 Hz panel decides exactly as before; a headset holds its rate)
   ["xr-entry-effects", "client/xr-entry-effects-test.mjs", 1], // the XR entry effect owner, executed: entering applies each effect once, exit undoes it (#197 review)
   ["xr-session-lifecycle", "client/xr-session-lifecycle-test.mjs", 1], // the XR session clock's lifecycle, executed (#197 Blocker 2); a frame waiting on an ended session is handed to the window clock, once
   ["xrpanels", "client/xrpanels-test.ts", 1], // the VR seam of the schema factory: panels as headset quads
