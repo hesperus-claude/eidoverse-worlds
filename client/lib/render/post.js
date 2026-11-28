@@ -19,7 +19,7 @@
 // the rest of the page, the frame drawn plain, a clientlog line written; postDebug() says why. A reload tries again.
 import { THREE } from '../core.js';
 import { tee } from '../base.js';
-import { pass, mrt, normalView, screenUV, builtinAOContext, Fn, luminance, smoothstep, mix, vec4 } from 'three/tsl';
+import { pass, mrt, normalView, screenUV, builtinAOContext, Fn, smoothstep, max, vec4, uniform } from 'three/tsl';
 import { bloom as bloomNode } from 'three/addons/tsl/display/BloomNode.js';
 import { ao as gtaoNode } from 'three/addons/tsl/display/GTAONode.js';
 
@@ -29,19 +29,24 @@ export const BLOOM_MAX = 3, AO_MAX = 3;              // the registry's ranges (c
 // 1, half resolution is Godot's default too). sky.ao is GTAO's scale, an exponent on visibility (pow(v, ao)): 0 none, 1
 // GTAO's own, more darker (Godot's ssao_intensity, default 2, is the same kind of dial)
 export const AO_RADIUS = 0.5, AO_RESOLUTION = 0.5;
-// Units: the threshold and the cap are the scene pass's linear values, BEFORE the renderer's exposure (three applies
-// toneMappingExposure inside the tone curve, in the pipeline's output pass, after bloom), so sky.exposure does not move
-// what blooms. Not a physical luminance (no nits). Godot thresholds after its exposure; see the report of 11-25.
-// radius 0.15, threshold 2: only what is well above white in the linear scene (emitters, lamp bodies, fire) blooms
-// (render lab 11-02: 0.4 / 1 spread lamp halos over whole shelves; Godot's glow_hdr_threshold default is 1)
-export const BLOOM_RADIUS = 0.15, BLOOM_THRESHOLD = 2;
-// the luminance cap, Godot's glow_hdr_luminance_cap at its default: what feeds the bloom is clamped per channel AFTER the
-// threshold, as Godot's glow first pass does (min(color * feedback, cap)), so one specular firefly can't light a halo many
+// What feeds the bloom is Godot's glow first pass at its defaults (servers/rendering/renderer_rd/shaders/effects/copy.glsl):
+// on the EXPOSED colour, feedback = smoothstep(threshold, threshold + knee, max(r, g, b)), then min(colour × feedback, cap).
+// Godot multiplies by exposure first; three applies toneMappingExposure later, inside the tone curve of the pipeline's output
+// pass, so the uniforms carry each value / exposure, set every frame (exposure() below): sky.exposure moves what blooms,
+// as it does in Godot. Not a physical luminance (no nits).
+// threshold 1 (glow_hdr_threshold), knee 2 (glow_hdr_scale). Render lab 11-02 saw lamp halos spread over whole shelves at
+// radius 0.4 / threshold 1 on three's 0.01 knee, before exposure, and moved to 0.15 / 2; Godot's knee is far softer (a
+// value of 1.5 feeds 16% of itself). radius 0.15 is ours (three's BloomNode radius, not a Godot field).
+export const BLOOM_RADIUS = 0.15, BLOOM_THRESHOLD = 1, BLOOM_KNEE = 2;
+// glow_hdr_luminance_cap at its default, per channel AFTER the threshold, so one specular firefly can't light a halo many
 // times its size (lab 11-02: the armchair's highlight). A constant until a world needs another.
 export const BLOOM_LUMINANCE_CAP = 12;
-// three's BloomNode high pass (a smoothstep on luminance over smoothWidth), then the cap
-const cappedHighPass = Fn(({ input, threshold, smoothWidth }) =>
-  mix(vec4(0), input, smoothstep(threshold, threshold.add(smoothWidth), luminance(input.rgb))).min(vec4(BLOOM_LUMINANCE_CAP)));
+// the high pass BloomNode calls with its own threshold and smoothWidth uniforms (here: threshold / exposure and knee /
+// exposure), and the cap / exposure uniform of this pipeline
+const godotHighPass = (cap) => Fn(({ input, threshold, smoothWidth }) =>
+  input.mul(smoothstep(threshold, threshold.add(smoothWidth), max(input.r, max(input.g, input.b)))).min(vec4(cap)));
+// what three multiplies the scene colour by before its curve: toneMappingExposure, or nothing with no curve (ToneMappingNode)
+const exposure = (r) => (r.toneMapping === THREE.NoToneMapping ? 1 : Math.max(r.toneMappingExposure ?? 1, 1e-4));
 const WATCH_FRAMES = 3;                             // a new pipeline's first frames run inside a WebGPU error scope
 
 const readPref = (key) => { try { return localStorage.getItem(key) !== 'off'; } catch { return true; } };
@@ -97,13 +102,15 @@ function build(renderer, scene, camera, key) {
     scenePass.contextNode = builtinAOContext(occl.getTextureNode().sample(screenUV).r);
   }
   const color = scenePass.getTextureNode('output');
+  let cap = null;
   if (key.includes('bloom')) {
     glow = bloomNode(color, bloomStrength, BLOOM_RADIUS, BLOOM_THRESHOLD);
-    glow.highPassFn = cappedHighPass;   // read when the node is set up, at its first frame
+    cap = uniform(BLOOM_LUMINANCE_CAP);
+    glow.highPassFn = godotHighPass(cap);   // read when the node is set up, at its first frame
     pipe.outputNode = color.add(glow);
   } else pipe.outputNode = color;
   builds++;
-  built = { pipe, scenePass, pre, occl, glow, scene, camera, key, frames: 0 };
+  built = { pipe, scenePass, pre, occl, glow, cap, scene, camera, key, frames: 0 };
 }
 
 function fail(e) {
@@ -112,19 +119,33 @@ function fail(e) {
   teardown();
 }
 
+// The renderer state a pipeline frame changes and puts back only when nothing throws (three's RenderPipeline.render and
+// PassNode.updateBefore have no try/finally). Read before the frame; written back if it throws, so the fallback frame and
+// every plain frame after it draw as main does.
+const STATE = [
+  ['target', (r) => r.getRenderTarget?.() ?? null, (r, v) => r.setRenderTarget?.(v)],
+  ['toneMapping', (r) => r.toneMapping, (r, v) => { r.toneMapping = v; }],
+  ['outputColorSpace', (r) => r.outputColorSpace, (r, v) => { r.outputColorSpace = v; }],
+  ['xr', (r) => r.xr?.enabled, (r, v) => { if (r.xr) r.xr.enabled = v; }],
+];
+const snapshot = (renderer) => STATE.map(([, get]) => get(renderer));
+const restore = (renderer, saved) => STATE.forEach(([, , set], i) => set(renderer, saved[i]));
+
 function draw(renderer, scene, camera, key) {
+  const saved = snapshot(renderer);
   try {
     if (!built) build(renderer, scene, camera, key);
-    const b = built, device = renderer.backend?.device;
+    const b = built, device = renderer.backend?.device, e = exposure(renderer);
+    if (b.glow) { b.glow.threshold.value = BLOOM_THRESHOLD / e; b.glow.smoothWidth.value = BLOOM_KNEE / e; b.cap.value = BLOOM_LUMINANCE_CAP / e; }
     const watch = !!device?.pushErrorScope && b.frames++ < WATCH_FRAMES;
     if (watch) device.pushErrorScope('validation');
     try { b.pipe.render(); }
     finally { if (watch) device.popErrorScope().then((err) => { if (err && built === b) fail(err); }, () => {}); }
     active = true; why = null;
   } catch (e) {
+    restore(renderer, saved);   // a pass that threw can leave its target bound and the output transform swapped
     fail(e);
     active = false; why = `failed: ${failed}`;
-    renderer.setRenderTarget(null);   // a pass that threw can leave its target bound
     renderer.render(scene, camera);
   }
 }

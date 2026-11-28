@@ -15,8 +15,9 @@
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/post-test.mjs
 // Mutations (each must go red, run by hand): build on strength 0 (P1); ignore ew-bloom (P1c); rebuild on a strength edit
 // (P2b); keep the pipeline at strength 0 (P2c); XR through the pipeline (P3); dispose on XR (P3b); batching off bypasses
-// the pipeline (P4); outputColorTransform false (P2t); no fallback on a throw (P6); error scope ignored (P6b); world-pass
-// mark dropped (P7).
+// the pipeline (P4); outputColorTransform false (P2t); no fallback on a throw (P6); the renderer's state not put back after a throw (P6d);
+// error scope ignored (P6b); a stale scope
+// fails the newer pipeline (P6c); a scene or camera change keeps the old pipeline (P10); world-pass mark dropped (P7).
 import { fileURLToPath } from "node:url";
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { mock } from 'bun:test';
@@ -68,8 +69,10 @@ check('P0 post.js and render.js import headless', !imported, imported);
 const frame = () => { draws.length = 0; try { R.renderWorld?.(); } catch (e) { draws.push({ threw: e?.message ?? String(e) }); } return draws.slice(); };
 const plain = (d) => d.length === 1 && d[0].sc === scene && d[0].cam === camera;
 const viaPipe = (d) => d.length >= 1 && d.every((x) => x.sc?.isQuadMesh && x.sc.name === 'Render Pipeline') && !d.some((x) => x.sc === scene);
-const dbg = () => { try { return post.postDebug(); } catch (e) { return { error: e?.message ?? String(e) }; } };
-const live = () => dbg()._pipe ?? null;
+// the readout without its live objects: a row's detail goes through JSON.stringify (suite.ts), and _pipe is cyclic (a
+// failing row that carried it threw inside the reporter, and every row after it went unrun)
+const dbg = () => { try { const { _pipe, ...r } = post.postDebug(); return r; } catch (e) { return { error: e?.message ?? String(e) }; } };
+const live = () => { try { return post.postDebug()._pipe ?? null; } catch { return null; } };
 const show = (d) => d.map((x) => x.threw ? `threw ${x.threw}` : x.sc === scene ? 'scene' : x.sc?.name ?? x.sc?.type ?? '?');
 const setBloom = (s) => { try { post.setBloom(s); } catch (e) { return e; } };
 const setPref = (on) => { try { post.setBloomPref(on); } catch (e) { return e; } };
@@ -77,12 +80,18 @@ const setPref = (on) => { try { post.setBloomPref(on); } catch (e) { return e; }
 if (process.argv.includes('--case')) {
   const rows = [];
   const row = (n, ok, d) => rows.push([n, !!ok, d]);
-  setBloom(1); frame();
+  setBloom(1); renderer.xr.enabled = true; frame();   // xr.enabled true: a page with a headset attached, not presenting
   throwOnQuad = new Error('simulated: the output pass failed');
   const d = frame();
   row('P6 the pipeline throws mid-frame: that same frame is drawn plain (renderer.render(scene, camera) after it)', d.some((x) => x.sc === scene && x.cam === camera) && !d.some((x) => x.threw), show(d));
   row('P6 …into the canvas: the target the failed pass left bound is unbound first', bound === null, String(bound));
   row('P6 …the readout: not active, failed, with the message; a clientlog line said it', dbg().active === false && /fail/i.test(String(dbg().why)) && /output pass failed/.test(String(dbg().why)) && tees.some((l) => /post/.test(l) && /output pass failed/.test(l)), { why: dbg().why, tees });
+  // the pipeline swaps the renderer's output transform and xr.enabled around its quad (three RenderPipeline.render, no
+  // try/finally): a throw there must not leave them swapped, or the fallback and every later plain frame are drawn wrong
+  { const fb = d.find((x) => x.sc === scene);
+    row('P6d the fallback frame is drawn with the renderer\'s tone curve and colour space (not the ones the pipeline swapped in)', fb?.toneMapping === THREE.ACESFilmicToneMapping && fb?.colorSpace === THREE.SRGBColorSpace, [fb?.toneMapping, fb?.colorSpace]);
+    row('P6d …and xr.enabled as it was before the frame (true) while it draws', fb?.xr === true, fb?.xr);
+    row('P6d …and the renderer keeps all three after it', renderer.toneMapping === THREE.ACESFilmicToneMapping && renderer.outputColorSpace === THREE.SRGBColorSpace && renderer.xr.enabled === true, [renderer.toneMapping, renderer.outputColorSpace, renderer.xr.enabled]); }
   const made = pipelinesMade, d2 = frame();
   row('P6 …later frames are plain and build nothing (dropped for this page)', plain(d2) && pipelinesMade === made && !live(), { d: show(d2), pipelinesMade });
   setBloom(2); const d3 = frame();
@@ -123,7 +132,7 @@ console.log('WORLD — a world that sets it gets a pipeline with its strength');
   check('P2 sky.bloom 1.2: the frame goes through one RenderPipeline (its output quad), not a bare scene render', viaPipe(d) && pipelinesMade === 1, { d: show(d), pipelinesMade });
   const p = live();
   check('P2 …the pipeline\'s scene pass draws the live scene through the live camera', p?.scenePass?.isPassNode && p.scenePass.scene === scene && p.scenePass.camera === camera, p && Object.keys(p));
-  check('P2 …its BloomNode holds the world\'s strength, radius 0.15 and threshold 2 (render lab 11-02)', p?.glow && Math.abs(p.glow.strength.value - 1.2) < 1e-9 && Math.abs(p.glow.radius.value - 0.15) < 1e-9 && Math.abs(p.glow.threshold.value - 2) < 1e-9,
+  check('P2 …its BloomNode holds the world\'s strength, radius 0.15 and, at exposure 1, threshold 1 (Godot glow_hdr_threshold)', p?.glow && Math.abs(p.glow.strength.value - 1.2) < 1e-9 && Math.abs(p.glow.radius.value - 0.15) < 1e-9 && Math.abs(p.glow.threshold.value - 1) < 1e-9,
     p?.glow && [p.glow.strength.value, p.glow.radius.value, p.glow.threshold.value]);
   check('P2 …the readout: active, the live strength, no reason', dbg().active === true && dbg().bloom === 1.2 && dbg().why == null, dbg());
   check('P2t tone mapping and colour space once, after bloom: the pipeline\'s output transform is on, with the renderer\'s curve', p?.pipe?.outputColorTransform === true && p.pipe._toneMapping === THREE.ACESFilmicToneMapping && p.pipe._outputColorSpace === THREE.SRGBColorSpace,
@@ -152,14 +161,24 @@ console.log('WORLD — a world that sets it gets a pipeline with its strength');
   check('P2d …and on again: through a new pipeline, the strength kept', viaPipe(d) && pipelinesMade === 3 && Math.abs(live()?.glow?.strength.value - 1) < 1e-9, { pipelinesMade });
 }
 
-console.log('CAP — what feeds the bloom is clamped per channel after the threshold (Godot glow_hdr_luminance_cap 12)');
+console.log('CAP — Godot\'s glow first pass: threshold, knee and cap on the exposed colour');
 {
   setBloom(1); frame();
   const p = live();
   const { bloom: bloomNode } = await import('../../client/node_modules/three/examples/jsm/tsl/display/BloomNode.js');
   const { vec4 } = await import('../../client/node_modules/three/build/three.tsl.js');
   const stockNode = bloomNode(vec4(0), 1, 0, 0), stock = stockNode.highPassFn; stockNode.dispose();
-  check('P9 the cap is a named constant at Godot\'s default, 12 (scene linear units before exposure)', post.BLOOM_LUMINANCE_CAP === 12, post.BLOOM_LUMINANCE_CAP);
+  check('P9 Godot\'s glow defaults, named: threshold 1 (glow_hdr_threshold), knee 2 (glow_hdr_scale), cap 12 (glow_hdr_luminance_cap)', post.BLOOM_THRESHOLD === 1 && post.BLOOM_KNEE === 2 && post.BLOOM_LUMINANCE_CAP === 12, [post.BLOOM_THRESHOLD, post.BLOOM_KNEE, post.BLOOM_LUMINANCE_CAP]);
+  // Godot compares and caps the EXPOSED colour (copy.glsl: color *= glow_exposure, then the threshold and the cap); three
+  // applies exposure later, in the output pass's tone curve, so the uniforms carry each value / exposure, every frame
+  const at = (e, tm = THREE.ACESFilmicToneMapping) => { renderer.toneMappingExposure = e; renderer.toneMapping = tm; frame(); const g = live()?.glow, c = live()?.cap;
+    return g && c ? [g.threshold.value, g.smoothWidth.value, c.value].map((v) => Math.round(v * 1e6) / 1e6) : null; };
+  const made = pipelinesMade, e2 = at(2), eHalf = at(0.5), none = at(2, THREE.NoToneMapping), e1 = at(1);
+  renderer.toneMappingExposure = 1; renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  const eq = (a, b) => !!a && a.every((v, i) => Math.abs(v - b[i]) < 1e-6);
+  check('P9b threshold, knee and cap apply after exposure: at exposure 2 the uniforms read 0.5 / 1 / 6, at 0.5 they read 2 / 4 / 24, at 1 they read 1 / 2 / 12', eq(e2, [0.5, 1, 6]) && eq(eHalf, [2, 4, 24]) && eq(e1, [1, 2, 12]), { e2, eHalf, e1 });
+  check('P9b …with no tone curve three applies no exposure, so neither do they (1 / 2 / 12 at exposure 2)', eq(none, [1, 2, 12]), none);
+  check('P9b …an exposure edit moves uniforms and builds nothing', live() === p && pipelinesMade === made, { same: live() === p, built: pipelinesMade - made });
   check('P9 …and the live BloomNode\'s high pass is ours (capped), not three\'s stock one', !!p?.glow && typeof p.glow.highPassFn === 'function' && p.glow.highPassFn !== stock, typeof p?.glow?.highPassFn);
 }
 
@@ -280,6 +299,35 @@ console.log('SYNCGATE — on WebGL the pipeline\'s scene pass is the world\'s ow
   check('P7 a link met on the canvas pass defers (the plain frame, control)', Array.isArray(asked[0]), asked.map(Array.isArray));
   check('P7 …a link met in the pipeline\'s scene pass defers the same way', Array.isArray(asked[1]), asked.map(Array.isArray));
   check('P7 …a link met in someone\'s own target still blocks (a bake, control)', asked[2] === null, asked.map(Array.isArray));
+}
+
+console.log('STALE SCOPE — a WebGPU error scope from a pipeline already gone does not drop the one built after it');
+{
+  setBloom(0); frame(); setBloom(1);
+  const pop0 = device.popErrorScope; let release = null; device.popErrorScope = function () { this.scopes--; return new Promise((q) => { release = q; }); };
+  frame();                                          // pipeline A's first frame: its scope is still open (not resolved)
+  const a = live(); device.popErrorScope = pop0;
+  setBloom(0); frame(); setBloom(1); frame();       // A is torn down, B built and drawing
+  const b = live();
+  release?.({ message: 'simulated: a late validation error from the pipeline before' });
+  for (let i = 0; i < 4; i++) await Promise.resolve();
+  const d = frame();
+  check('P6c a late error from a torn-down pipeline\'s scope leaves the newer pipeline drawing (not failed, not rebuilt)', !!a && !!b && a !== b && live() === b && viaPipe(d) && !dbg().failed, { aB: !!a && !!b && a !== b, same: live() === b, d: show(d), failed: dbg().failed });
+}
+
+console.log('SCENE / CAMERA — a pass asked for another scene or camera builds a pipeline for them');
+{
+  setBloom(1); frame();
+  const p = live(), made = pipelinesMade, cam2 = new THREE.PerspectiveCamera(), scene2 = new THREE.Scene();
+  let gone = false; p?.scenePass?.renderTarget?.addEventListener('dispose', () => { gone = true; });
+  const run = (sc, cam) => { draws.length = 0; try { post.postPass(renderer, sc, cam)?.(); } catch (e) { draws.push({ threw: e?.message ?? String(e) }); } return draws.slice(); };
+  run(scene, cam2);
+  const q = live();
+  check('P10 another camera: the old pipeline is disposed and one new one draws through the new camera', gone && q !== p && q?.scenePass?.camera === cam2 && pipelinesMade === made + 1, { gone, cam: q?.scenePass?.camera === cam2, built: pipelinesMade - made });
+  run(scene2, cam2);
+  check('P10 …another scene: the same, through the new scene', live() !== q && live()?.scenePass?.scene === scene2 && pipelinesMade === made + 2, { scene: live()?.scenePass?.scene === scene2, built: pipelinesMade - made });
+  frame();
+  check('P10 …and the live frame again: its own scene and camera', live()?.scenePass?.scene === scene && live()?.scenePass?.camera === camera && pipelinesMade === made + 3, { built: pipelinesMade - made });
 }
 
 console.log('WEBGPU — a validation error in a new pipeline\'s first frame drops it');
