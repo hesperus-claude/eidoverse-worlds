@@ -615,18 +615,13 @@ export function updateRig(now) {
   }
 }
 
-// ---- governor compatibility: the lights lever maps onto the slot cap -----------
+// ---- how many lamps hold a slot right now (a reader; the governor's 'lights' rung no longer sheds: governor.js) ----
 
 export const litCount = () => {
   let n = 0;
   for (const r of requests.values()) if (r.slot >= 0) n++;
   return n;
 };
-export function shedALight() {
-  if (slotCap === 0 || litCount() === 0) return false;
-  setSlotCap(slotCap - 1);
-  return true;
-}
 
 export const rigDebug = () => ({
   spots: spotSlots.map((sl) => ({ intensity: +sl.intensity.toFixed(3), angle: +sl.angle.toFixed(4), penumbra: +sl.penumbra.toFixed(4),
