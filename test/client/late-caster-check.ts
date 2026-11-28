@@ -12,6 +12,10 @@
 //       and it casts (three refreshes a classic material's bind group only in the frame mapSize changes, and the map is
 //       redrawn only when drawn: a map not drawing at the resize kept the two apart, render lab 2026-11-27 night)
 //   LC3 shadows switched off, the resolution changed, shadows on again: no GL error
+//   LC4 a lamp's cube map resized live (2048 -> 4096 setting: 256 -> 512) shows the picture a boot at that size shows,
+//       against the noise floor of two boots at one size (three r186's RenderTarget.setSize writes the new size onto the
+//       cube texture's image array but the faces are recreated at their birth size: cold read 2026-11-28, 10,306 of
+//       57,600 pixels differed)
 //   bun test/client/late-caster-check.ts   (its own scratch server, library, world and Chromium)
 // Where there is no WebGL 2 to force (Windows: headless Chromium there gives a null forced context; any host whose
 // browser falls back to nothing) it prints an OPTIONAL line and checks nothing: these rows need a GL context to read.
@@ -110,6 +114,23 @@ try {
       rig.setShadows(true); await g.raf(40); const on = g.errs(); await g.raf(20); return { off, on, on2: g.errs(), cast: g.cast() };`);
     check("LC3 shadows off, the resolution changed, shadows on: it casts again, and no GL error follows",
       s3.cast.casting === true && s3.off.k === 0 && s3.on.k === 0 && s3.on2.k === 0 && consoleGl.length === 0, JSON.stringify({ ...s3, console: consoleGl.slice(0, 2) }));
+    // LC4: three pages; the frames are kept in the page's storage between them (same origin)
+    const LUMA = `const g = globalThis; g.keep = async (k) => { const d = await g.luma(); let t = ''; for (let i = 0; i < d.length; i++) t += String.fromCharCode(d[i]); localStorage.setItem('lc-' + k, t); return d; };
+      g.kept = (k) => { const t = localStorage.getItem('lc-' + k) ?? ''; const d = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) d[i] = t.charCodeAt(i); return d; };`;
+    await page("lc4a");
+    const a = await js(`${LUMA} const rig = g.rig; ${LATE} await g.raf(60); const base = await g.keep('base');
+      rig.updateRequest('lab:late', { shadows: false }); await g.raf(30); const seen = g.diff(base, await g.luma());
+      rig.updateRequest('lab:late', { shadows: true }); await g.raf(30);
+      rig.setShadowRes(4096); await g.raf(30); const live = await g.keep('live'); return { seen, liveVsBase: g.diff(base, live), errs: g.errs() };`);
+    await page("lc4b", { "ew-shadow-res": "4096" });
+    const b4 = await js(`${LUMA} const rig = g.rig; ${LATE} await g.raf(60); const boot = await g.luma(); const live = g.kept('live');
+      return { bootVsLive: live.length === boot.length ? g.diff(boot, live) : { n: -1 } };`);
+    await page("lc4c");
+    const c4 = await js(`${LUMA} const rig = g.rig; ${LATE} await g.raf(60); const again = await g.luma(); const base = g.kept('base');
+      const r = base.length === again.length ? g.diff(again, base) : { n: -1 }; for (const k of ['base', 'live']) localStorage.removeItem('lc-' + k); return { noise: r };`);
+    check("LC4 a lamp's cube map resized live shows what a boot at that size shows (the lamp's shadow is in the frame; two boots at one size agree)",
+      a.seen.n > 50 && c4.noise.n >= 0 && c4.noise.n < a.seen.n / 10 && b4.bootVsLive.n >= 0 && b4.bootVsLive.n <= Math.max(5, 2 * c4.noise.n) && a.errs.k === 0,
+      JSON.stringify({ seen: a.seen, liveVsBase: a.liveVsBase, bootVsLive: b4.bootVsLive, noise: c4.noise, errs: a.errs }));
   }
 } catch (e) { check("the run threw", false, String((e as any)?.stack ?? e)); }
 console.log(`[late-caster-check] ${tally.passed} passed, ${tally.failed} failed${tally.note()}`);
