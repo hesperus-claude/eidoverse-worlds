@@ -638,8 +638,9 @@ time.
 | 457 | party-probe | browser | `test/protocol/party-probe.ts` | Chromium | 486 s | 2430 s |
 | 458 | colour-picker | browser | `test/client/colour-picker-bench.ts` | Chromium | 8.1 s | 180 s |
 | 459 | vrmic-exec | browser | `test/client/vrmic-exec-test.mjs` | Chromium | 0.5 s | 180 s |
-| 460 | xr-nullfb | browser | `test/client/xr-nullfb-test.mjs` | Chromium | 0.3 s | 180 s |
-| 461 | client-tools | browser | `test/harness/run-client.ts --import-only --skip-suites --strict-env` | Chromium | 202 s | 1010 s |
+| 460 | late-caster | browser | `test/client/late-caster-check.ts` | Chromium | ? | 300 s |
+| 461 | xr-nullfb | browser | `test/client/xr-nullfb-test.mjs` | Chromium | 0.3 s | 180 s |
+| 462 | client-tools | browser | `test/harness/run-client.ts --import-only --skip-suites --strict-env` | Chromium | 202 s | 1010 s |
 
-Lanes: core 18 suites (~79 s), main 422 (~2287 s), browser 21 (~1228 s); 461 suites in all.
+Lanes: core 18 suites (~79 s), main 422 (~2287 s), browser 22 (~1228 s); 462 suites in all.
 <!-- END GENERATED -->
