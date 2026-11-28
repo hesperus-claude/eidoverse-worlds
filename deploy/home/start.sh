@@ -18,7 +18,7 @@ die() { echo "start: $*" >&2; exit 1; }
 [ "$(systemctl --version | awk 'NR==1 { print $2 }')" -ge 248 ] || die "systemd 248 or later is needed (this is $(systemctl --version | head -1))"
 [ -x /usr/lib/systemd/systemd-socket-proxyd ] || die "no /usr/lib/systemd/systemd-socket-proxyd (Debian and Ubuntu ship it in the systemd package)"
 [ -d /usr/lib/x86_64-linux-gnu ] && [ -e /usr/lib64/ld-linux-x86-64.so.2 ] || die "sandbox.conf binds glibc where Debian and Ubuntu keep it on x86_64; this machine differs, so its two glibc lines need editing first"
-command -v rsync >/dev/null || die "rsync is not installed"
+command -v rsync >/dev/null && command -v git >/dev/null || die "rsync and git are needed"
 home_of() { getent passwd "$1" | cut -d: -f6; }
 # sudo's PATH leaves out the places bun installs itself for one user
 BUN="${BUN:-$(PATH="$PATH:$(home_of "${SUDO_USER:-root}")/.bun/bin:$(home_of "${SUDO_USER:-root}")/.local/bin" command -v bun || true)}"
@@ -28,45 +28,47 @@ LIB="$(realpath -e "${EIDOVERSE_DIR:-$ROOT/../eidoverse-video}" 2>/dev/null)" ||
 [ -d "$LIB/eidoverse/assets" ] || die "$LIB is not the asset library (no eidoverse/assets in it)"
 # the path is written into a unit file, where these characters are syntax
 case "$LIB" in *[!A-Za-z0-9_./+@-]*) die "the library's path ($LIB) has a character a unit file can't carry plainly; move or symlink it";; esac
-[ -d "$ROOT/node_modules" ] && [ -d "$ROOT/mcpl/node_modules" ] || die "the checkout's dependencies are not installed: bun install && bun test/gate/run.ts --siblings (as yourself, not root)"
 
 # 1. the service's own user: no home, no shell, no groups
 id -u $U >/dev/null 2>&1 || useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin $U
 
-# 2. the code the sandbox sees: root's, read-only, an export of the checkout less what export-exclude names. A link
-#    that points outside the checkout is copied as what it points at.
-install -d -m 755 $OPT $OPT/app $OPT/bin
-rsync -a --delete --delete-excluded --chown=root:root --chmod=a+rX,go-w --copy-unsafe-links --exclude-from="$KIT/export-exclude" "$ROOT/" $OPT/app/
+# 2. the code the sandbox sees: root's, read-only, an export of what git tracks plus the installed dependencies
+#    (export.sh; it refuses a checkout whose dependencies are missing, before anything is replaced)
+install -d -m 755 $OPT $OPT/bin
+"$KIT/export.sh" "$ROOT" $OPT/app
 install -m 755 -o root -g root "$BUN" $OPT/bin/bun
+# the label /version shows: there is no git inside
 SHA="$(sudo -u "${SUDO_USER:-root}" git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+echo "BUILD_SHA=$SHA" > $OPT/build.env; chmod 644 $OPT/build.env
 
 # 3. settings and secrets, outside the sandbox's view. The join token is generated here and never printed.
-install -d -m 750 -o root -g $U $ETC
+install -d -m 700 -o root -g root $ETC
 if [ ! -f $ETC/home.env ]; then
   ( umask 077; T="$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 28)"
     cat > $ETC/home.env <<ENV
 # The home server's settings (docs/operator/RUNNING-A-SERVER.md). Root's, 0600; systemd reads it for both services.
 # Do not set a path or a port the units set. After an edit: sudo deploy/home/start.sh
-# The key a visitor needs to join (the page loads without it). The door joins with WORLD_TOKEN: keep the two equal.
+# The key a join needs (the page loads without it). The door joins with WORLD_TOKEN: keep the two equal.
 JOIN_TOKEN=$T
 WORLD_TOKEN=$T
-# Once a tunnel or TLS proxy fronts 127.0.0.1:8940, its public address, and the header it writes a visitor's address in:
+# Once a tunnel or TLS proxy fronts 127.0.0.1:8940: its public address, and the header it OVERWRITES with the client's
+# address (every connection reaches the server from loopback, so the server believes whichever header is named here):
 #HN_NATIVE_ORIGIN=https://<the public host>
 #PROXY_ADDRESS_HEADER=x-forwarded-for
 # The operator by account, in place of claiming the setup link the first boot prints:
 #SERVER_OPERATORS=
-# aid1 sign-in: the issuer's PUBLIC key. Unset: no sign-in, and an agent needs a row in agent-tokens.json.
+# aid1 sign-in: the issuer's PUBLIC key. Unset: no sign-in, and an agent needs a row in agents/agent-tokens.json.
 #HN_ISSUER_KEY=ed25519:...
 ENV
   )
   echo "start: wrote $ETC/home.env with a new JOIN_TOKEN (read it with: sudo grep JOIN_TOKEN $ETC/home.env)"
 fi
 chown root:root $ETC/home.env; chmod 600 $ETC/home.env
-# the label /version shows: there is no git inside
-grep -v '^BUILD_SHA=' $ETC/home.env > $ETC/.home.env.new && echo "BUILD_SHA=$SHA" >> $ETC/.home.env.new && chmod 600 $ETC/.home.env.new && mv $ETC/.home.env.new $ETC/home.env
-# agents' tokens: root's, readable by the service's group, bound into the sandbox read-only (shape: mcpl/tokens.example.json)
-[ -f $ETC/agent-tokens.json ] || echo '{}' > $ETC/agent-tokens.json
-chown root:$U $ETC/agent-tokens.json; chmod 640 $ETC/agent-tokens.json
+# agents' tokens: root's, readable by the service's group; their directory is bound into the sandbox read-only, so an
+# edit that replaces the file is still seen inside (shape: mcpl/tokens.example.json)
+install -d -m 750 -o root -g $U $ETC/agents
+[ -f $ETC/agents/agent-tokens.json ] || echo '{}' > $ETC/agents/agent-tokens.json
+chown root:$U $ETC/agents/agent-tokens.json; chmod 640 $ETC/agents/agent-tokens.json
 
 # 4. the state disk: its own filesystem, so "fill the disk" stops at its size and not at this machine's. A filesystem
 #    you mounted here yourself is used as it is; otherwise a tmpfs, which a reboot empties (RUNNING-A-SERVER, "State").
@@ -75,11 +77,12 @@ if ! mountpoint -q $STATE; then
   mount -t tmpfs -o "size=${STATE_SIZE:-1G},nr_inodes=200k,nosuid,nodev,noexec,mode=700" eidoverse-home-state $STATE
   echo "start: state is a ${STATE_SIZE:-1G} tmpfs: worlds survive a restart of the server, NOT a reboot (RUNNING-A-SERVER.md, 'State')"
 fi
-chown $U:$U $STATE; chmod 700 $STATE
 install -d -o $U -g $U -m 700 $STATE/home $STATE/worlds $STATE/backups $STATE/opt
+# everything in it is the service user's, also on a filesystem that outlived a purge (the user's id may be new)
+chown -R $U:$U $STATE; chmod 700 $STATE
 
 # 5. the units, and the sandbox as a drop-in of the two services (yours, from `systemctl edit`, are other files)
-for u in "$KIT"/*.service "$KIT"/*.socket; do install -m 644 "$u" $SD/; done
+for u in "$KIT"/*.service "$KIT"/*.socket "$KIT"/*.slice; do install -m 644 "$u" $SD/; done
 for s in eidoverse-home eidoverse-home-door; do
   install -d -m 755 $SD/$s.service.d
   sed "s|@LIBRARY@|$LIB|" "$KIT/sandbox.conf" > $SD/$s.service.d/10-sandbox.conf; chmod 644 $SD/$s.service.d/10-sandbox.conf
@@ -89,7 +92,7 @@ systemctl reset-failed 'eidoverse-home*' 2>/dev/null || true   # a crash loop th
 # restart, not start: new code, a changed unit or a changed home.env takes a fresh process (worlds replay from their logs)
 systemctl restart eidoverse-home.service eidoverse-home-door.service
 systemctl restart eidoverse-home-web-proxy.socket eidoverse-home-door-proxy.socket
-sleep 2
+sleep 2   # Type=exec has already failed a service that could not start; this catches one that started and fell over
 for s in eidoverse-home.service eidoverse-home-door.service eidoverse-home-web-proxy.socket eidoverse-home-door-proxy.socket; do
   systemctl is-active --quiet $s || die "$s is not active: sudo journalctl -u $s -n 40"
 done

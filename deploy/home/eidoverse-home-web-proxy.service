@@ -15,9 +15,15 @@ ProtectHome=yes
 InaccessiblePaths=-/mnt
 PrivateTmp=yes
 PrivateDevices=yes
+PrivateUsers=yes
+ProtectProc=invisible
 NoNewPrivileges=yes
 CapabilityBoundingSet=
 RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 SystemCallFilter=@system-service
+Slice=eidoverse_home.slice
 MemoryMax=256M
 TasksMax=64
+# a carried connection holds two descriptors
+LimitNOFILE=4096

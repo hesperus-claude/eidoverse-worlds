@@ -1,0 +1,12 @@
+# Everything the home server runs: the world server, the agent door, the two proxies and any inside.sh command. A
+# takeover of all of it together can use this much of the machine and no more. A drop-in moves the numbers
+# (`sudo systemctl edit eidoverse_home.slice`); each service has its own, smaller caps as well. The underscore is
+# deliberate: a dash in a slice's name nests it under a parent slice.
+[Unit]
+Description=eidoverse home server: everything it runs
+
+[Slice]
+MemoryMax=6G
+MemorySwapMax=0
+TasksMax=768
+CPUQuota=400%

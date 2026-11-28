@@ -7,7 +7,6 @@ Description=eidoverse home server: the way in to the world server (127.0.0.1:894
 
 [Socket]
 ListenStream=127.0.0.1:8940
-FreeBind=no
 
 [Install]
 WantedBy=sockets.target

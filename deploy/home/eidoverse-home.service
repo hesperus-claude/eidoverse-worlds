@@ -12,22 +12,26 @@ StartLimitBurst=10
 User=eidoverse-home
 Group=eidoverse-home
 WorkingDirectory=/opt/eidoverse-home/app
+Type=exec
 ExecStart=/opt/eidoverse-home/bin/bun server/server.ts
 Restart=always
 RestartSec=5
-# JOIN_TOKEN and what else is yours to set; root's, 0600, read by systemd and never visible inside the sandbox
+# JOIN_TOKEN and what else is yours to set; root's, 0600, read by systemd. The file does not exist inside the sandbox;
+# its values are the processes' environment
 EnvironmentFile=/etc/eidoverse-home/home.env
+# BUILD_SHA, written by start.sh beside the export
+EnvironmentFile=-/opt/eidoverse-home/build.env
 Environment=HOME=/var/lib/eidoverse-home/home PORT=8940 HOST=127.0.0.1 EIDOVERSE_DIR=/opt/eidoverse-home/library
 Environment=WORLDS_DIR=/var/lib/eidoverse-home/worlds BACKUPS_DIR=/var/lib/eidoverse-home/backups
 Environment=OPT_DIR=/var/lib/eidoverse-home/opt SESSIONS_PATH=/var/lib/eidoverse-home/sessions.json
-Environment=AGENT_TOKENS_PATH=/etc/eidoverse-home/agent-tokens.json BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 TMPDIR=/tmp
+Environment=AGENT_TOKENS_PATH=/etc/eidoverse-home/agents/agent-tokens.json BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
 # no STUN lookups: there is no network to reach one, and no voice in here
 Environment=SFU_ICE_SERVERS=[]
 # the sandbox holds no shell, so the optimizer runs without its `ulimit` wrapper (0); the cgroup below is the cap.
 # No boot sweep: the library's variants would fill a 1 GB state disk.
 Environment=OPT_MEM_BUDGET_MB=0 SKIP_OPT_SWEEP=1
 
-# ---- limits: defaults a drop-in can move ----
+# ---- limits: defaults a drop-in can move; eidoverse_home.slice caps the whole ----
 # no MemoryHigh: with no swap it slows a runaway process to a standstill; MemoryMax ends it and Restart= brings it back
 MemoryMax=4G
 MemorySwapMax=0

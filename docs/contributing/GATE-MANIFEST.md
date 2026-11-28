@@ -376,7 +376,7 @@ time.
 | 195 | served-routes | main | `test/server/served-routes-test.ts` | bun | 2.5 s | 180 s |
 | 196 | native-login | main | `test/server/native-login-test.ts` | bun | 0.2 s | 180 s |
 | 197 | mkconfig | main | `test/server/mkconfig-test.ts` | bun | 0.3 s | 180 s |
-| 198 | home-units | main | `test/server/home-units-test.ts` | bun | 0.2 s | 180 s |
+| 198 | home-units | main | `test/server/home-units-test.ts` | bun | 1 s | 180 s |
 | 199 | heightmap-route | main | `test/server/heightmap-route-test.ts` | bun | 1.2 s | 180 s |
 | 200 | config-env | main | `test/server/config-env-test.ts` | bun | 0.2 s | 180 s |
 | 201 | fork-reset | main | `test/protocol/fork-reset-check.ts` | bun | 6 s | 180 s |
@@ -640,5 +640,5 @@ time.
 | 459 | xr-nullfb | browser | `test/client/xr-nullfb-test.mjs` | Chromium | 0.3 s | 180 s |
 | 460 | client-tools | browser | `test/harness/run-client.ts --import-only --skip-suites --strict-env` | Chromium | 202 s | 1010 s |
 
-Lanes: core 18 suites (~79 s), main 421 (~2287 s), browser 21 (~1228 s); 460 suites in all.
+Lanes: core 18 suites (~79 s), main 421 (~2288 s), browser 21 (~1228 s); 460 suites in all.
 <!-- END GENERATED -->

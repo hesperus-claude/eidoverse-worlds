@@ -1,10 +1,14 @@
 // What could code running as the home server do? This tries: read and write outside its state, reach the machine's
 // loopback, the LAN and the internet, run a shell or a dropped binary, gain privilege, fill the disk, fork without end.
 //   bun deploy/home/sandbox-probe.ts --outside [--also=/a/path,...]
-//       the control, as yourself: every attempt should read "present" here, or its failing inside proves nothing.
+//       the control, as yourself: an attempt that reads "present" here and "blocked" inside is the sandbox's doing; one
+//       that reads "ABSENT" here too is refused by ordinary permissions and proves nothing about the sandbox.
 //       It finds this machine's own network targets and prints the command for the inside run.
+//   sudo -u eidoverse-home /opt/eidoverse-home/bin/bun /opt/eidoverse-home/app/deploy/home/sandbox-probe.ts --outside
+//       the stricter control: the server's own user with no sandbox.
 //   sudo deploy/home/inside.sh deploy/home/sandbox-probe.ts [--also=...] [--net=host:port,...]
-//       inside: every line should read "blocked"; it exits 1 on any BREACH. --only=fs,net,exec,disk,fork picks groups.
+//       inside: every line should read "blocked"; it exits 1 on any BREACH. --only=fs,net,exec,fork picks groups.
+//   sudo deploy/home/inside.sh deploy/home/sandbox-probe.ts --only=disk     (on an idle server: it fills the state)
 //   sudo deploy/home/inside.sh deploy/home/sandbox-probe.ts --only=mem
 //       allocates until the cgroup kills it (so no summary follows); `journalctl -k` shows the kill and its unit.
 // It prints names, sizes and error codes, never a file's contents. docs/research/home-sandbox.md has a run.
@@ -19,7 +23,8 @@ const OUTSIDE = process.argv.includes("--outside");
 const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 const list = (name: string) => (arg(name) ?? "").split(",").filter(Boolean);
 const only = arg("only");
-const want = (group: string) => (only ? only.split(",").includes(group) : group !== "mem");
+const want = (group: string) => (only ? only.split(",").includes(group) : group !== "mem" && group !== "disk");
+if (OUTSIDE && process.getuid!() === 0) { console.error("the control runs as an ordinary user, not root: its attempts are real"); process.exit(2); }
 const STATE = "/var/lib/eidoverse-home", OPT = "/opt/eidoverse-home";
 let bad = 0, blocked = 0;
 // inside, an attempt that got through is a breach; outside, it is the control passing
@@ -60,7 +65,8 @@ function udpDns(host: string, ms = 2000): Promise<void> {
     s.send(q, 53, host, (e) => { if (e) end(false, String(code(e))); });
   });
 }
-/** This machine's own targets, read outside: the default gateway, and every TCP port something here listens on. */
+/** This machine's own targets, read outside: the default gateway, and up to 24 TCP ports something here listens on
+ *  (the home server's own two ways in left out: inside, that address is the sandbox's own server). */
 function localTargets(): [string, number, string][] {
   const out: [string, number, string][] = [];
   try {
@@ -70,17 +76,29 @@ function localTargets(): [string, number, string][] {
     }
   } catch { /* no route table */ }
   const own = Object.values(os.networkInterfaces()).flat().filter((a) => a && a.family === "IPv4" && !a.internal).map((a) => a!.address);
+  const any = (port: number) => { out.push(["127.0.0.1", port, "a service on this machine"]); for (const a of own.slice(0, 1)) out.push([a, port, "the same, by this machine's LAN address"]); };
   try {
     for (const row of fs.readFileSync("/proc/net/tcp", "utf8").split("\n").slice(1)) {
       const f = row.trim().split(/\s+/); if (f[3] !== "0A") continue;                                 // 0A: listening
       const [hex, portHex] = f[1].split(":"), port = parseInt(portHex, 16);
       const ip = hex.match(/../g)!.reverse().map((h) => parseInt(h, 16)).join(".");
-      if (ip === "0.0.0.0") { out.push(["127.0.0.1", port, "a service on this machine"]); for (const a of own.slice(0, 1)) out.push([a, port, "the same, by this machine's LAN address"]); }
-      else out.push([ip, port, ip.startsWith("127.") ? "a loopback service on this machine" : "a service on this machine"]);
+      if (ip === "0.0.0.0") any(port); else out.push([ip, port, ip.startsWith("127.") ? "a loopback service on this machine" : "a service on this machine"]);
     }
   } catch { /* no /proc/net/tcp */ }
+  try {   // a listener on :: takes IPv4 too; ::1 is the machine's IPv6 loopback
+    for (const row of fs.readFileSync("/proc/net/tcp6", "utf8").split("\n").slice(1)) {
+      const f = row.trim().split(/\s+/); if (f[3] !== "0A") continue;
+      const [hex, portHex] = f[1].split(":"), port = parseInt(portHex, 16);
+      if (/^0+$/.test(hex)) any(port); else if (/^0+01000000$/.test(hex)) out.push(["::1", port, "an IPv6 loopback service on this machine"]);
+    }
+  } catch { /* no IPv6 */ }
+  const mine = new Set<string>();
+  for (const unit of ["eidoverse-home-web-proxy.socket", "eidoverse-home-door-proxy.socket"]) {
+    const r = spawnSync("systemctl", ["show", "-p", "Listen", "--value", unit], { encoding: "utf8" });
+    for (const m of (r.stdout ?? "").matchAll(/(\S+:\d+) \(Stream\)/g)) mine.add(m[1]);
+  }
   const seen = new Set<string>();
-  return out.filter(([h, p]) => !seen.has(`${h}:${p}`) && !!seen.add(`${h}:${p}`)).slice(0, 12);
+  return out.filter(([h, p]) => !mine.has(`${h}:${p}`) && !seen.has(`${h}:${p}`) && !!seen.add(`${h}:${p}`)).slice(0, 24);
 }
 
 console.log(`== probe ${OUTSIDE ? "OUTSIDE (the control)" : "INSIDE the sandbox"}: uid=${process.getuid!()} gid=${process.getgid!()} groups=[${process.getgroups!()}] cwd=${process.cwd()}`);
@@ -93,19 +111,22 @@ if (want("fs")) {
   for (const p of [...also, "/home", "/root", "/mnt", "/media", "/srv", "/etc/passwd", "/etc/shadow", "/etc/ssh", "/etc/systemd", "/etc/eidoverse-home/home.env",
     `${OPT}/app/.git`, "/var/log", "/var/lib/systemd", "/bin/sh", "/usr/bin", "/usr/sbin", "/run/user", "/run/systemd/private", "/proc/1/environ", "/proc/1/root",
     "/sys/fs/cgroup", "/sys/class/net", "/sys/kernel"]) read(p);
-  if (!OUTSIDE) {
-    for (const d of ["/sys", "/dev/shm", "/run", "/tmp", STATE]) console.log(`  (info) ${d} holds: ${names(d)}`);
+  if (!OUTSIDE) for (const d of ["/sys", "/dev/shm", "/run", "/tmp", STATE]) console.log(`  (info) ${d} holds: ${names(d)}`);
+  {
     const pids = fs.readdirSync("/proc").filter((n) => /^\d+$/.test(n));
     const foreign = pids.filter((p) => { try { return fs.readFileSync(`/proc/${p}/status`, "utf8").match(/^Uid:\s+(\d+)/m)?.[1] !== String(process.getuid!()); } catch { return false; } });
     line("see another user's process in /proc", foreign.length > 0, `${pids.length} pids visible, ${foreign.length} not this uid's`);
     console.log("-- filesystem: write outside the state");
-    for (const p of ["/x", `${OPT}/app/x`, `${OPT}/app/server/server.ts`, `${OPT}/bin/bun`, `${OPT}/library/x`, "/etc/eidoverse-home/agent-tokens.json", "/usr/lib/x86_64-linux-gnu/x",
+    for (const p of ["/x", `${OPT}/app/x`, `${OPT}/app/server/server.ts`, `${OPT}/bin/bun`, `${OPT}/library/x`, "/etc/eidoverse-home/agents/agent-tokens.json", "/etc/eidoverse-home/agents/x", "/usr/lib/x86_64-linux-gnu/x",
       "/etc/x", "/home/x", "/run/x", "/dev/x", "/dev/shm/x", "/dev/mqueue/x", "/dev/hugepages/x", "/sys/x", "/proc/sys/kernel/hostname"]) {
-      try { fs.closeSync(fs.openSync(p, "a")); line(`write ${p}`, true, "opened for append"); } catch (e) { line(`write ${p}`, false, code(e)); }
+      const was = fs.existsSync(p);
+      try { fs.closeSync(fs.openSync(p, "a")); line(`write ${p}`, true, "opened for append"); if (!was) fs.unlinkSync(p); } catch (e) { line(`write ${p}`, false, code(e)); }
     }
-    try { fs.mkdirSync("/home/x", { recursive: true }); line("mkdir /home/x", true, "created"); } catch (e) { line("mkdir /home/x", false, code(e)); }
-    try { fs.writeFileSync(`${STATE}/worlds/.probe`, "ok"); fs.unlinkSync(`${STATE}/worlds/.probe`); console.log(`  (control) write ${STATE}/worlds/.probe: ok, the one place it may write`); }
-    catch (e) { console.log(`  (control) write ${STATE}/worlds FAILED: ${code(e)}; the server could not run`); bad++; }
+    try { fs.mkdirSync("/home/x"); line("mkdir /home/x", true, "created"); fs.rmdirSync("/home/x"); } catch (e) { line("mkdir /home/x", false, code(e)); }
+    if (!OUTSIDE) {
+      try { fs.writeFileSync(`${STATE}/worlds/.probe`, "ok"); fs.unlinkSync(`${STATE}/worlds/.probe`); console.log(`  (control) write ${STATE}/worlds/.probe: ok, the one place it may write`); }
+      catch (e) { console.log(`  (control) write ${STATE}/worlds FAILED: ${code(e)}; the server could not run`); bad++; }
+    }
   }
 }
 
@@ -130,7 +151,7 @@ if (want("net")) {
   }
 }
 
-if (want("exec") && !OUTSIDE) {
+if (want("exec")) {
   console.log("-- exec and privilege");
   for (const c of ["/bin/sh", "/usr/bin/sudo", "/usr/bin/curl", "/usr/bin/python3"]) { const r = spawnSync(c, ["-c", "id"], { timeout: 4000 }); line(`exec ${c}`, !r.error, r.error ? String(code(r.error)) : `ran, status ${r.status}`); }
   for (const dir of [STATE, "/tmp", "/run", "/dev/shm", "/dev"]) {   // bring your own binary: copy bun where it may write, then run it
@@ -143,31 +164,34 @@ if (want("exec") && !OUTSIDE) {
   }
   try { process.kill(1, 0); line("signal pid 1", true, "allowed"); } catch (e) { line("signal pid 1", false, code(e)); }
   const st = fs.readFileSync("/proc/self/status", "utf8"), g = (k: string) => st.match(new RegExp(`^${k}:\\s+(.*)$`, "m"))?.[1];
-  console.log(`  /proc/self/status: CapEff=${g("CapEff")} CapBnd=${g("CapBnd")} NoNewPrivs=${g("NoNewPrivs")} Seccomp=${g("Seccomp")} Seccomp_filters=${g("Seccomp_filters")}`);
+  // the kernel's own account of this process: systemd turns a sandbox feature off without a word where the kernel lacks it
+  line("hold a capability", !/^0+$/.test(g("CapEff") ?? "") || !/^0+$/.test(g("CapBnd") ?? ""), `CapEff=${g("CapEff")} CapBnd=${g("CapBnd")}`);
+  line("gain privilege through exec (no NoNewPrivs)", g("NoNewPrivs") !== "1", `NoNewPrivs=${g("NoNewPrivs")}`);
+  line("make any syscall (no seccomp filter)", g("Seccomp") !== "2", `Seccomp=${g("Seccomp")} Seccomp_filters=${g("Seccomp_filters")}`);
   try {   // raw syscalls through libc: what a native exploit would reach for
     const { dlopen, FFIType, ptr, read: mem } = await import("bun:ffi");
     const libc = dlopen("libc.so.6", {
       unshare: { args: [FFIType.i32], returns: FFIType.i32 }, mount: { args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
       socket: { args: [FFIType.i32, FFIType.i32, FFIType.i32], returns: FFIType.i32 }, ptrace: { args: [FFIType.i64, FFIType.i32, FFIType.ptr, FFIType.ptr], returns: FFIType.i64 },
-      chroot: { args: [FFIType.ptr], returns: FFIType.i32 }, __errno_location: { args: [], returns: FFIType.ptr },
+      __errno_location: { args: [], returns: FFIType.ptr },
     });
     const errno = () => mem.i32(libc.symbols.__errno_location() as any, 0);
     const cs = (s: string) => ptr(Buffer.from(s + "\0"));
     const sys = (name: string, r: number | bigint) => line(`syscall ${name}`, Number(r) >= 0, Number(r) >= 0 ? `returned ${r}` : `errno ${errno()}`);
-    sys("unshare(CLONE_NEWUSER)", libc.symbols.unshare(0x10000000));
-    sys("unshare(CLONE_NEWNET)", libc.symbols.unshare(0x40000000));
-    sys("unshare(CLONE_NEWNS)", libc.symbols.unshare(0x00020000));
-    sys(`mount(tmpfs on ${OPT}/app)`, libc.symbols.mount(cs("none"), cs(`${OPT}/app`), cs("tmpfs"), 0n, null));
-    sys(`chroot(${STATE})`, libc.symbols.chroot(cs(STATE)));
     sys("socket(AF_PACKET, SOCK_RAW)", libc.symbols.socket(17, 3, 0x0300));
     sys("socket(AF_INET, SOCK_RAW, ICMP)", libc.symbols.socket(2, 3, 1));
     sys("ptrace(PTRACE_ATTACH, pid 1)", libc.symbols.ptrace(16n, 1, null, null));
+    // last: outside, a new user namespace succeeds on most machines and changes what the calls after it may do
+    sys("unshare(CLONE_NEWUSER)", libc.symbols.unshare(0x10000000));
+    sys("unshare(CLONE_NEWNET)", libc.symbols.unshare(0x40000000));
+    sys("unshare(CLONE_NEWNS)", libc.symbols.unshare(0x00020000));
+    sys("mount(tmpfs on /tmp)", libc.symbols.mount(cs("none"), cs("/tmp"), cs("tmpfs"), 0n, null));
   } catch (e) { console.log(`  the raw-syscall attempts did not run: ${code(e)}`); bad++; }
 }
 
 if (want("disk") && !OUTSIDE) {
   console.log("-- fill the disk");
-  for (const dir of [STATE, "/tmp"]) {
+  for (const dir of [STATE, "/tmp"]) {   // the caps are the mounts' own sizes: nothing outside to compare with
     const f = `${dir}/.probe-fill`, chunk = Buffer.alloc(32 << 20, 1); let wrote = 0, err = "";
     try { const fd = fs.openSync(f, "w"); try { while (wrote < 64 * 2 ** 30) wrote += fs.writeSync(fd, chunk); } finally { fs.closeSync(fd); } } catch (e) { err = String(code(e)); } finally { try { fs.unlinkSync(f); } catch { /* never written */ } }
     line(`write without end to ${dir}`, !err, err ? `stopped by ${err} after ${(wrote / 2 ** 20).toFixed(0)} MB; file removed` : `wrote ${(wrote / 2 ** 30).toFixed(0)} GB unchecked; file removed`);
@@ -189,5 +213,5 @@ if (want("mem") && !OUTSIDE) {
   const hog: Buffer[] = []; for (;;) { hog.push(Buffer.alloc(256 << 20, 1)); console.log(`  holding ${hog.length * 256} MB`); }
 }
 
-console.log(OUTSIDE ? "== control done" : bad ? `== ${bad} BREACH(ES), ${blocked} blocked` : `== no breach: ${blocked} attempts, every one blocked`);
+console.log(OUTSIDE ? "== control done: a line that reads ABSENT here is refused by ordinary permissions, with or without the sandbox" : bad ? `== ${bad} BREACH(ES), ${blocked} blocked` : `== no breach: ${blocked} attempts, every one blocked`);
 process.exit(bad ? 1 : 0);

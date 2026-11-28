@@ -70,44 +70,50 @@ the internet ── a tunnel or TLS proxy on this machine (yours; nothing here t
 ```
 
 It needs Linux with systemd 248 or later, on x86_64 with glibc where Debian and Ubuntu keep it (WSL2 with
-`systemd=true` counts), `rsync`, the checkout's dependencies installed (`bun install`, `bun test/gate/run.ts --siblings`)
+`systemd=true` counts), `rsync` and `git`, the checkout's dependencies installed (`bun install`, `bun test/gate/run.ts --siblings`)
 and the library beside the checkout.
 
 | | |
 |---|---|
-| `sudo deploy/home/start.sh` | install or update, then start or restart. It serves an export of the checkout as it is now, from `/opt/eidoverse-home`; run it again after a pull, a changed setting, or a reboot. `EIDOVERSE_DIR=<path>` names a library elsewhere |
+| `sudo deploy/home/start.sh` | install or update, then start or restart. It serves an export of the checkout as it is now, from `/opt/eidoverse-home`: the files git tracks and the installed dependencies, so a file git ignores or doesn't know (a `.env`, a voice dropped into `client/voices/`) is not served. Run it again after a pull, a changed setting, or a reboot. `EIDOVERSE_DIR=<path>` names a library elsewhere |
 | `sudo deploy/home/stop.sh` | stop: the two ways in first, then the servers. Everything stays installed |
 | `sudo deploy/home/stop.sh --purge` | also remove the units, `/opt/eidoverse-home`, `/etc/eidoverse-home`, the user, and a state disk `start.sh` made |
 | `sudo deploy/home/inside.sh <bun arguments>` | one command inside the sandbox, as the server's user: `sudo deploy/home/inside.sh tools/world.ts found <name> --owner <account>` |
 | `sudo journalctl -fu eidoverse-home` | the world server's log (`-u eidoverse-home-door` for the door) |
 
-**Settings.** `/etc/eidoverse-home/home.env` (root's, 0600; the sandbox never sees the file) holds the variables above.
+**Settings.** `/etc/eidoverse-home/home.env` (root's, 0600; the file does not exist inside the sandbox, its values are
+the two services' environment) holds the variables above.
 `start.sh` writes it once with a random `JOIN_TOKEN`, which it never prints: `sudo grep JOIN_TOKEN /etc/eidoverse-home/home.env`.
 The page loads without the key; a join needs it (`http://127.0.0.1:8940/?key=<JOIN_TOKEN>`). Leave the paths and ports to
-the units. Limits (`MemoryMax=4G`, `TasksMax=256`, `CPUQuota=400%`; the door 2G and 200%) and the two ports are unit
-settings: change one with `sudo systemctl edit eidoverse-home` (for a port, `eidoverse-home-web-proxy.socket`), which
-`start.sh` leaves alone.
+the units. Limits and the two ports are unit settings: the world server has `MemoryMax=4G`, `TasksMax=256`,
+`CPUQuota=400%`, the door 2G and 200%, and `eidoverse_home.slice` caps everything the home server runs together
+(6 GB, 768 tasks, 400%). Change one with `sudo systemctl edit eidoverse-home` (for a port,
+`eidoverse-home-web-proxy.socket`), which `start.sh` leaves alone.
 
-**Agents.** A row in `/etc/eidoverse-home/agent-tokens.json` (`sudoedit` it; the shape is `mcpl/tokens.example.json`)
-enrols an agent, with no restart; it connects to `ws://127.0.0.1:8941/?token=<its token>`. Its account is
+**Agents.** A row in `/etc/eidoverse-home/agents/agent-tokens.json` (`sudoedit` it; the shape is
+`mcpl/tokens.example.json`) enrols an agent, and removing the row turns it away, with no restart; it connects to `ws://127.0.0.1:8941/?token=<its token>`. Its account is
 `agent:token:<id>`, and that is the form `--owner` and `SERVER_OPERATORS` take for it. A bare name there is a
 `TRUST_NAMES` account, which nobody holds on this server.
 
 **State.** Worlds, backups, uploads and sessions live in `/var/lib/eidoverse-home`, which must be a filesystem of its
 own so that a full state disk is not a full machine. If nothing is mounted there, `start.sh` mounts a 1 GB tmpfs
-(`STATE_SIZE=4G` for another size): worlds survive a restart of the server and are **lost at a reboot**, and its pages
-count against the world server's `MemoryMax`. For worlds that last, mount a filesystem of the size you choose there
+(`STATE_SIZE=2G` for another size): worlds survive a restart of the server and are **lost at a reboot**, and its pages
+count as memory against the caps above, so keep it well under them. For worlds that last, mount a filesystem of the size you choose there
 yourself before `start.sh`, with `nosuid,nodev,noexec`; `start.sh` uses what it finds and `stop.sh --purge` leaves it.
 Nothing starts at boot unless you enable it (`sudo systemctl enable eidoverse-home eidoverse-home-door
 eidoverse-home-web-proxy.socket eidoverse-home-door-proxy.socket`), and then only once the state is mounted.
 
-**Check it.** `bun deploy/home/sandbox-probe.ts --outside` tries, as you, to read your files and reach your network, and
-prints the command that tries the same from inside. Inside, every line should read `blocked`.
+**Check it.** `bun deploy/home/sandbox-probe.ts --outside` tries, as you, to read your files, reach your network and
+run what you can run, and prints the command that tries the same from inside. Inside, every line should read
+`blocked`; the ones that read `present` for you outside are the sandbox's doing. `--only=disk` (it fills the state: on
+an idle server) and `--only=mem` test the caps.
 
 **Making it public.** Point a tunnel or a TLS reverse proxy that runs on this machine at `127.0.0.1:8940`, and at
 `127.0.0.1:8941` for agents (a path such as `/mcpl` works: the door answers on any path). Before you do: set
-`HN_NATIVE_ORIGIN=https://<the public host>` and `PROXY_ADDRESS_HEADER` to the header your proxy writes ("Behind a
-reverse proxy", above), name an operator (`SERVER_OPERATORS=<account>`, or claim the setup link from the log: it names
+`HN_NATIVE_ORIGIN=https://<the public host>`, and `PROXY_ADDRESS_HEADER` to a header your proxy **overwrites** with
+the client's address ("Behind a reverse proxy", above). Every connection reaches the server from the sandbox's loopback,
+so the server always believes that header: one the proxy passes through as the client sent it lets a client choose
+its own address, and with it dodge the per-address limits and bans. Name an operator (`SERVER_OPERATORS=<account>`, or claim the setup link from the log: it names
 port 8940 inside the sandbox, which is the same port on this machine unless you moved it), and keep `JOIN_TOKEN` set.
 Never set `TRUST_NAMES` here. With Tailscale Funnel, for one:
 
@@ -121,8 +127,8 @@ tailscale funnel status                    # and, to take it down: tailscale fun
 whatever next listens on that port: turn it off when you stop hosting.
 
 **What the sandbox does not cover.** A kernel exploit that works without capabilities through the syscall filter: the
-sandbox shares the machine's kernel, and a rented box does not. A flood: it can use the server's own caps (4 cores, 4 GB,
-the state disk; worlds then stop saving), and no more of the machine than that. Voice: the SFU needs UDP and the sandbox
+sandbox shares the machine's kernel, and a rented box does not. A flood: it can use the slice's caps (4 cores, 6 GB)
+and fill the state disk (worlds then stop saving), and no more of the machine than that. Voice: the SFU needs UDP and the sandbox
 has no network, so there is none. And a setting you loosen later (`TRUST_NAMES`, an empty `JOIN_TOKEN`, another bind
 in a drop-in): the probe tests only the paths it lists.
 

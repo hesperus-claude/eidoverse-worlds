@@ -13,14 +13,15 @@ StartLimitBurst=10
 User=eidoverse-home
 Group=eidoverse-home
 WorkingDirectory=/opt/eidoverse-home/app
+Type=exec
 ExecStart=/opt/eidoverse-home/bin/bun mcpl/net-server.ts
 Restart=always
 RestartSec=5
 # WORLD_TOKEN, the door's own key to the world server (the same value as JOIN_TOKEN)
 EnvironmentFile=/etc/eidoverse-home/home.env
 Environment=HOME=/var/lib/eidoverse-home/home MCPL_PORT=8941 WORLD_URL=ws://127.0.0.1:8940/ws
-Environment=MCPL_TOKENS=/etc/eidoverse-home/agent-tokens.json MCPL_STATE=/var/lib/eidoverse-home/mcpl-state.json
-Environment=EIDOVERSE_DIR=/opt/eidoverse-home/library BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 TMPDIR=/tmp
+Environment=MCPL_TOKENS=/etc/eidoverse-home/agents/agent-tokens.json MCPL_STATE=/var/lib/eidoverse-home/mcpl-state.json
+Environment=EIDOVERSE_DIR=/opt/eidoverse-home/library BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
 
 MemoryMax=2G
 MemorySwapMax=0

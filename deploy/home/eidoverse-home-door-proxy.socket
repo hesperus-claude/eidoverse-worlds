@@ -7,7 +7,6 @@ Description=eidoverse home server: the way in to the agent door (127.0.0.1:8941)
 
 [Socket]
 ListenStream=127.0.0.1:8941
-FreeBind=no
 
 [Install]
 WantedBy=sockets.target
