@@ -123,6 +123,11 @@ onWorldChange((ev) => {
 onGiPref(touch);
 bus.on?.('lanes-idle', () => { if (live.size || job) touch(); });   // models finished loading: what the proxy sees changed
 
+/** A grid's box from its plan (three's LightProbeGrid: position, width/height/depth, and the box its node reads). */
+function place(grid, { center, size }) {
+  grid.width = size[0]; grid.height = size[1]; grid.depth = size[2];
+  grid.position.set(...center); grid.updateMatrixWorld(true); grid.updateBoundingBox?.();
+}
 function drop(id) { const l = live.get(id); if (!l) return; scene.remove(l.grid); l.grid.dispose(); live.delete(id); }
 
 // What moves is no part of a static bake (Godot's gi_mode: Static bakes, Dynamic is only lit). Main has no per-thing flag, so
@@ -240,13 +245,11 @@ async function replan() {
   if (sig === baked && plans.every((p) => live.has(p.id))) return;   // the same room, baked or baking: nothing to do
   baked = sig; job = null;
   const queue = plans.map((plan) => {
-    const key = JSON.stringify([plan.center, plan.size, plan.counts]);
+    const key = JSON.stringify(plan.counts);   // the atlas's size: only new probe counts need a new grid
     let l = live.get(plan.id);
     if (l && l.key !== key) { drop(plan.id); l = null; }   // a new grid recompiles every lit material once (its light id); a rebake in place doesn't
-    if (!l) {
-      const grid = new LPG(...plan.size, ...plan.counts); grid.position.set(...plan.center); grid.updateMatrixWorld(true);
-      l = { grid, key, added: false }; live.set(plan.id, l);
-    }
+    if (!l) { l = { grid: new LPG(...plan.size, ...plan.counts), key, added: false }; live.set(plan.id, l); }
+    place(l.grid, plan);   // moved or resized with the same counts: the same grid, in place (it shows its old bake there until the rebake lands)
     l.plan = plan; l.grid.falloff = plan.falloff;
     return { l, steps: bakeSteps(plan.counts[0] * plan.counts[1] * plan.counts[2], plan.bounces), i: 0 };
   });
