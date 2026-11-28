@@ -447,6 +447,25 @@ try {
     await put({});
   }
 
+  // ---- 8. exposure is exactly the owner's (R 11-02, LAB.md "world owns the LOOK, viewer owns the COST"), on BOTH sky paths,
+  // at every hour: dawn (6), noon (12), dusk (18), night (0). Godot's Environment.tonemap_exposure is applied as written too.
+  {
+    if (renderer.xr.isPresenting) leave();
+    const HOURS = { dawn: 6, noon: 12, dusk: 18, night: 0 };
+    const got = {};
+    for (const system of ['eidoverse', 'skymesh']) {
+      for (const [when, hours] of Object.entries(HOURS)) {
+        await sky.applySky({ ...ARGS, system, hours, rate: 0, exposure: 1.25, ts: ++T }); await settle();
+        got[`${system} ${when}`] = { exp: renderer.toneMappingExposure, impl: sky.skyImpl?.() ?? null };
+      }
+    }
+    for (const system of ['eidoverse', 'skymesh']) {
+      const rows = Object.entries(got).filter(([k]) => k.startsWith(system));
+      check(`exposure on the ${system} sky is the owner's 1.25 exactly at dawn, noon, dusk and night`, rows.every(([, v]) => v.exp === 1.25), Object.fromEntries(rows));
+    }
+    await sky.applySky({ ...ARGS, ts: ++T }); await settle();
+  }
+
   check('no reported errors', reports.length === 0, reports.slice(0, 3));
 } catch (e) { check('ran', false, e?.stack ?? String(e)); }
 

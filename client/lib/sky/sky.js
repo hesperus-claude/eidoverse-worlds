@@ -1102,8 +1102,9 @@ function applyTuning(a, day, warmth = Math.pow(1 - day, 1.5), sunPos = null, sky
   // fog density is the world's on both paths (the real sky drives only its colour)
   if (scene.fog) scene.fog.density = 0.018 * (a.fog ?? 1);
 
-  // exposure is the world's, not the sky's: one global knob, the same on both implementations
-  renderer.toneMappingExposure = (skyOwnsLights ? 1 : (1.0 - 0.22 * warmth)) * (a.exposure ?? 1);
+  // exposure is the world's, not the sky's: exactly the owner's value, on both implementations at every hour (R 11-02;
+  // Godot's tonemap_exposure). The basic sky's dusk reads dim through its own lights and haze, never through this knob
+  renderer.toneMappingExposure = a.exposure ?? 1;
   setTonemap(renderer, a.tonemap);   // and so is its curve (render/tonemap.js): set together, so they change together
 
   dayness = day;
