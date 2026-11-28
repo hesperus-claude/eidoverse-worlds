@@ -15,6 +15,10 @@
 //   · no clamp to getMaxAnisotropy                               → A4
 //   · queueTexturePrime without the assignment (assets.js)      → I1, I2, I3
 //   · queueTexturePrime writing the renderer's 0 (no floor at 1) → I5
+//   · loadImageTexture ignoring a caller's { anisotropy }        → C1, C2, C4, C5, V1, V2, V3
+//   · a stated level not clamped / not floored at 1             → C2, C2b
+//   · the cache not keyed on the stated level                   → C5
+//   · vegetation.js not stating its level (writing it after the load) → V1, V2, V3 (the upload says the dial)
 //   · setAnisotropy writing a value not in the list              → M2
 //
 //   BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 bun test/client/texture-filter-test.ts
@@ -168,6 +172,105 @@ async function image(pref: string | null, max = 16) {
   // a WebGL 2 context without EXT_texture_filter_anisotropic reports 0: the door must not write that 0 (A4c's twin)
   const z = await image('8', 0);
   check('I5 the image door on a renderer that reports 0 (no EXT_texture_filter_anisotropic): it stays three\'s 1', z.at[0] === 1 && z.now === 1, z); }
+
+// A caller that knows what its texture is states the level itself (loadImageTexture(bytes, { anisotropy })): vegetation's
+// atlases (4, and 1 for the fast-shade albedo), a particle sprite or a data mask (1). The door applies it before the upload
+// in place of the dial, clamped as the dial is. A caller writing tex.anisotropy AFTER the load cannot do this: on WebGL 2
+// the sampler's parameters are set at the upload, which happens inside loadImageTexture (C0), so the write is lost there,
+// and on WebGPU the sampler is built at first bind, so the same write wins there: the two backends disagree.
+console.log('CALLER — a caller\'s own level is what uploads, in place of the dial');
+async function stated(level: unknown, pref = '16', max = 16) {
+  localStorage.setItem('ew-anisotropy', pref); stub.gpu.maxAnisotropy = max;
+  const from = stub.uploads.length;
+  const tex: any = await (globalThis as any).loadImageTexture(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xc0, n++ & 255]), { srgb: true, anisotropy: level });
+  const before = stub.uploads.slice(from).filter((u: any) => u.tex === tex).length;   // uploads done before the promise resolved
+  for (let i = 0; i < 4; i++) await Promise.resolve();
+  const up = stub.uploads.slice(from).filter((u: any) => u.tex === tex);
+  return { at: up.map((u: any) => u.anisotropy), now: tex.anisotropy, before, uploads: up.length };
+}
+{ const a = await stated(4);
+  check('C0 (order) the image is uploaded before loadImageTexture resolves: a caller\'s write after it is post-upload', a.before === 1 && a.uploads === 1, a);
+  check('C1 dial 16, the caller states 4: it uploads at 4', a.at[0] === 4 && a.now === 4, a);
+  const b = await stated(1);
+  check('C1b dial 16, the caller states 1: it uploads at 1', b.at[0] === 1 && b.now === 1, b);
+  const c = await stated(16, '1');
+  check('C1c dial 1, the caller states 16: 16 (the caller\'s level stands in place of the dial)', c.at[0] === 16 && c.now === 16, c);
+  const d = await stated(16, '4', 8);
+  check('C2 the caller states 16 on a renderer that reports 8: 8', d.at[0] === 8 && d.now === 8, d);
+  const e = await stated(4, '4', 0);
+  check('C2b the caller states 4 on a renderer that reports 0: three\'s 1', e.at[0] === 1 && e.now === 1, e);
+  for (const junk of [0, -2, NaN, Infinity, '4', null]) {
+    const j = await stated(junk, '8');
+    check(`C3 a stated level that is not a finite number >= 1 (${typeof junk === 'string' ? JSON.stringify(junk) : String(junk)}): the dial's 8`, j.at[0] === 8 && j.now === 8, j);
+  } }
+{ // the other order: several images landing together, the first far over a frame's byte budget, so the prime queue's
+  // frame wait is the only thing that could hold the rest. Each still uploads before its own promise resolves, at its
+  // own level: the queue drains as each image is pushed, so today no image waits a frame (and the level is set before
+  // the push, so a wait could not change it)
+  localStorage.setItem('ew-anisotropy', '16'); stub.gpu.maxAnisotropy = 16;
+  const realBitmap = (globalThis as any).createImageBitmap;
+  let first = true;
+  (globalThis as any).createImageBitmap = async () => (first ? (first = false, { width: 4096, height: 4096, close() {} }) : { width: 4, height: 4, close() {} });
+  const from = stub.uploads.length;
+  const order: string[] = [];
+  const one = (lvl: number | undefined, tag: string) => (globalThis as any).loadImageTexture(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xc2, n++ & 255]), lvl === undefined ? {} : { anisotropy: lvl })
+    .then((t: any) => { order.push(`${tag}:${stub.uploads.slice(from).some((u: any) => u.tex === t) ? 'up' : 'waiting'}`); return t; });
+  const [big, s1, s4] = await Promise.all([one(undefined, 'big'), one(1, 'one'), one(4, 'four')]);
+  (globalThis as any).createImageBitmap = realBitmap;
+  for (let i = 0; i < 4; i++) await Promise.resolve();
+  const lv = (t: any) => stub.uploads.slice(from).filter((u: any) => u.tex === t).map((u: any) => u.anisotropy);
+  check('C4 three images at once, the first a 4096² far over the frame budget: each uploaded before it resolved, at its own level (16, 1, 4)',
+    order.every((o) => o.endsWith(':up')) && lv(big).join() === '16' && lv(s1).join() === '1' && lv(s4).join() === '4', { order, big: lv(big), one: lv(s1), four: lv(s4)}); }
+{ // the cache: the same bytes object asked for at two levels is two textures, each at its own (one shared texture
+  // cannot be both, and the second ask would get the first's sampler); the same level again is the cached one
+  localStorage.setItem('ew-anisotropy', '16'); stub.gpu.maxAnisotropy = 16;
+  const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xc1, n++ & 255]);
+  const L = (globalThis as any).loadImageTexture;
+  const t1 = await L(bytes, { srgb: true, anisotropy: 1 }), t4 = await L(bytes, { srgb: true, anisotropy: 4 });
+  const again = await L(bytes, { srgb: true, anisotropy: 1 }), dial = await L(bytes, { srgb: true });
+  check('C5 the cache keys on a stated level: 1 and 4 are two textures at 1 and 4, 1 again is the first, the dial\'s is its own at 16',
+    t1 !== t4 && again === t1 && dial !== t1 && dial !== t4 && t1.anisotropy === 1 && t4.anisotropy === 4 && dial.anisotropy === 16,
+    { same14: t1 === t4, again: again === t1, levels: [t1.anisotropy, t4.anisotropy, dial.anisotropy] }); }
+
+// The grass: the REAL client/lib/vegetation/vegetation.js createFlora, its atlases read through a Deno.readFile shim and
+// loaded through the real door above. It states its own level: 4, and 1 for the albedo when the field is fast-shaded
+// (flora.js passes fastShade at build, before any map loads, so the level is known before the upload on both backends).
+console.log('VEGETATION — the grass atlases upload at vegetation\'s own level (4; the fast-shade albedo 1), never the dial');
+const VEG: any = await (async () => {
+  const W: any = await import('../../client/node_modules/three/build/three.webgpu.js');
+  const TSL: any = await import('../../client/node_modules/three/build/three.tsl.js');
+  const prev = (globalThis as any).THREE;
+  (globalThis as any).THREE = { ...W, ...TSL };   // vegetation.js reads THREE (node build + TSL) at module scope, as the page gives it
+  try { return await import('../../client/lib/vegetation/vegetation.js'); } finally { (globalThis as any).THREE = prev; }
+})();
+const GRASS = JSON.parse(await Bun.file(fileURLToPath(new URL('../../defs/flora/grass.json', import.meta.url))).text());
+async function flora(fastShade: boolean, pref = '16') {
+  localStorage.setItem('ew-anisotropy', pref); stub.gpu.maxAnisotropy = 16;
+  const g: any = globalThis, D = g.Deno;
+  const saved = { readFile: D.readFile, readTextFile: D.readTextFile, fetch: g.fetch, door: g.loadImageTexture };
+  const pathOf = new WeakMap<object, string>();
+  const maps = new Map<string, any>();   // albedo / normal / roughness / translucency -> the texture the door returned
+  D.readFile = async (p: string) => { const b = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xd0, n++ & 255]); pathOf.set(b, p); return b; };
+  D.readTextFile = async () => { throw new Error('no fit data in this suite'); };
+  g.fetch = async (u: any, i?: any) => (String(typeof u === 'string' ? u : u.url).endsWith('/defs') ? new Response(JSON.stringify({ flora: { grass: GRASS } })) : saved.fetch(u, i));
+  g.loadImageTexture = async (bytes: any, opts: any) => { const t = await saved.door(bytes, opts); maps.set(String(pathOf.get(bytes)).split('_').pop()!.replace('.png', ''), t); return t; };
+  const from = stub.uploads.length;
+  let error = '';
+  try { await VEG.createFlora({ species: 'grass', width: 2, depth: 2, fastShade }); } catch (e: any) { error = String(e?.stack ?? e).split('\n')[0]; }
+  finally { Object.assign(D, { readFile: saved.readFile, readTextFile: saved.readTextFile }); g.fetch = saved.fetch; g.loadImageTexture = saved.door; }
+  const up = stub.uploads.slice(from);
+  const out: Record<string, { at: number[]; now: number }> = {};
+  for (const [name, t] of maps) out[name] = { at: up.filter((u: any) => u.tex === t).map((u: any) => u.anisotropy), now: t.anisotropy };
+  return { out, error };
+}
+const at = (r: any, name: string, v: number) => r.out[name]?.at.length === 1 && r.out[name].at[0] === v && r.out[name].now === v;
+{ const r = await flora(false);
+  check('V0 (setup) createFlora builds a grass field and loads its four atlases through the door', !r.error && ['albedo', 'normal', 'roughness', 'translucency'].every((k) => r.out[k]), r);
+  check('V1 dial 16, full shade: all four atlases upload at 4 and still say 4 after the build (upload and texture agree)', ['albedo', 'normal', 'roughness', 'translucency'].every((k) => at(r, k, 4)), r.out);
+  const f = await flora(true);
+  check('V2 dial 16, fast shade: the albedo uploads at 1 and still says 1; the other three at 4', at(f, 'albedo', 1) && ['normal', 'roughness', 'translucency'].every((k) => at(f, k, 4)), f.out);
+  const low = await flora(false, '1');
+  check('V3 dial 1, full shade: vegetation\'s own 4 (its level stands in place of the dial)', ['albedo', 'normal', 'roughness', 'translucency'].every((k) => at(low, k, 4)), low.out); }
 
 console.log('MODULE — render/anisotropy.js: the levels, the getter and the setter the Settings rows call');
 { let M: any = null, why = '';

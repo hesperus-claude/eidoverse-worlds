@@ -6,10 +6,10 @@
 import { renderer as base } from './lod-loader-stub.mjs';
 export * from './lod-loader-stub.mjs';
 
-export const uploads = [];   // [{ name, anisotropy }] per initTexture call, in order
+export const uploads = [];   // [{ name, anisotropy, tex }] per initTexture call, in order (tex: the texture itself, to match by identity)
 export const gpu = { maxAnisotropy: 16 };
 export const renderer = {
   ...base,
   getMaxAnisotropy: () => gpu.maxAnisotropy,
-  initTexture(t) { uploads.push({ name: t.name, anisotropy: t.anisotropy }); },
+  initTexture(t) { uploads.push({ name: t.name, anisotropy: t.anisotropy, tex: t }); },
 };

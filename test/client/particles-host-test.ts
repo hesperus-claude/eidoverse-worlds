@@ -128,4 +128,23 @@ check('world teardown takes every emitter and every hook back', emitterCount() =
   && hooks.length === 0 && groups(hearth).length + groups(candle).length + groups(lantern).length === 0, `${emitterCount()} ${hooks.length}`);
 check('...disposing what each built', disposed === built.length, `${disposed} disposed of ${built.length} built`);
 
+// ---- 4. a sprite asks the image door for its own texture filtering -----------
+// A particle is a camera-facing card, sampled about 1:1: anisotropic filtering buys it nothing, so its sprite states 1 to
+// the door (loadImageTexture's { anisotropy }) rather than taking the viewer's dial, which exists for surfaces at a
+// grazing angle (render/anisotropy.js).
+console.log('\nsprite — a particle sprite asks the image door for anisotropy 1\n');
+{ const g: any = globalThis;
+  const asks: any[] = [];
+  const saved = { Deno: g.Deno, door: g.loadImageTexture };
+  g.Deno = { ...(g.Deno ?? {}), readFileSync: (p: string) => new TextEncoder().encode(p) };
+  g.loadImageTexture = async (bytes: Uint8Array, opts: any) => { asks.push({ path: new TextDecoder().decode(bytes), opts }); return new THREE.Texture(); };
+  const torch = new THREE.Group(); entities.set('torch', torch);
+  emit('entity', { id: 'torch', kind: 'spawn' });
+  await comp('torch', { effect: 'fire', params: { texture: 'eidoverse/assets/particle_textures/spark_01.png' } });
+  g.Deno = saved.Deno; g.loadImageTexture = saved.door;
+  check('S1 (setup) the sprite is read through the image door', asks.length === 1 && asks[0].path === 'eidoverse/assets/particle_textures/spark_01.png', asks);
+  check('S2 ...stating anisotropy 1 (and sRGB, as before)', asks[0]?.opts?.anisotropy === 1 && asks[0]?.opts?.srgb === true, asks[0]?.opts);
+  clearEmitters();
+  check('S3 ...and teardown takes it back', emitterCount() === 0 && hooks.length === 0, `${emitterCount()} ${hooks.length}`); }
+
 S.done();
