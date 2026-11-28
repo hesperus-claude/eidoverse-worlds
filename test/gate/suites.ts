@@ -205,6 +205,7 @@ export const SUITES: [string, string, number][] = [ // name, file, tail lines to
   ["served-routes", "server/served-routes-test.ts", 1], // a route per family the client needs (a sample), really served, every response isolated (COOP/COEP)
   ["native-login", "server/native-login-test.ts", 1], // the native login HTTP handler, isolated
   ["mkconfig", "server/mkconfig-test.ts", 1], // deploy/projector/mkconfig.sh renders mediamtx.template.yml
+  ["home-units", "server/home-units-test.ts", 1], // deploy/home: loopback-only ways in, the sandbox drop-in, what the export leaves out
   ["heightmap-route", "server/heightmap-route-test.ts", 1], // GET /heightmap: the export door's budget gates before the work
   ["harness", "client/harness-test.ts", 1], // the bench harness itself: failures keep their evidence, a foreign nonce is refused, a port squatter moves us to a fresh port
   ["config-env", "server/config-env-test.ts", 1], // env numbers are validated (limits.ts envNumber): unset, junk and out-of-range fall back
